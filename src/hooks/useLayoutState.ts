@@ -7,48 +7,43 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import {
-  applySplitMode,
-  defaultLayoutV2,
-  normalizeLayoutV2,
+  defaultLayoutV3,
+  increaseSideSlots,
+  normalizeLayoutConfig,
+  sideSlotKey,
 } from "@/layout/model";
 import type {
-  LayoutConfigV2,
+  LayoutConfigV3,
   WidgetGroup,
   WidgetSide,
-  WidgetSlot as LayoutWidgetSlot,
+  WidgetSlot,
 } from "@/layout/types";
 import type { PanelKey } from "@/types";
 
 type LayoutState = {
-  layoutSplit: Record<WidgetSide, boolean>;
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
-  layoutSplitRatio: Record<WidgetSide, number>;
-  slotGroups: Record<LayoutWidgetSlot, WidgetGroup>;
+  sideSlotCounts: Record<WidgetSide, number>;
+  slotGroups: Record<string, WidgetGroup>;
   panelSizes: { left: number; right: number; bottom: number };
   leftVisible: boolean;
   rightVisible: boolean;
   bottomVisible: boolean;
   layoutVars: React.CSSProperties;
   setSlotGroups: React.Dispatch<
-    React.SetStateAction<Record<LayoutWidgetSlot, WidgetGroup>>
+    React.SetStateAction<Record<string, WidgetGroup>>
   >;
   handleToggleSplit: (side: WidgetSide) => void;
+  handleCloseSlot: (slot: WidgetSlot) => void;
   handleToggleCollapsed: (side: WidgetSide | "bottom") => void;
   startResize: (
     mode: "left" | "right" | "bottom",
-    event: React.MouseEvent<HTMLDivElement>,
-  ) => void;
-  startSlotResize: (
-    side: WidgetSide,
     event: React.MouseEvent<HTMLDivElement>,
   ) => void;
 };
 
 type UseLayoutStateProps = {
   floatingPanelKey: PanelKey | null;
-  floatingOriginRef: React.MutableRefObject<
-    Partial<Record<PanelKey, LayoutWidgetSlot>>
-  >;
+  floatingOriginRef: React.MutableRefObject<Partial<Record<PanelKey, WidgetSlot>>>;
 };
 
 /** 布局状态管理（读取/保存/拖拽调整）。 */
@@ -56,25 +51,18 @@ export default function useLayoutState({
   floatingPanelKey,
   floatingOriginRef,
 }: UseLayoutStateProps): LayoutState {
-  const [layoutSplit, setLayoutSplit] = useState(defaultLayoutV2.split);
-  const [layoutCollapsed, setLayoutCollapsed] = useState(
-    defaultLayoutV2.collapsed,
-  );
-  const [layoutSplitRatio, setLayoutSplitRatio] = useState(
-    defaultLayoutV2.splitRatio,
-  );
-  const [slotGroups, setSlotGroups] = useState(defaultLayoutV2.slots);
-  const [panelSizes, setPanelSizes] = useState(defaultLayoutV2.sizes);
+  const [layoutCollapsed, setLayoutCollapsed] = useState(defaultLayoutV3.collapsed);
+  const [sideSlotCounts, setSideSlotCounts] = useState(defaultLayoutV3.sideSlotCounts);
+  const [slotGroups, setSlotGroups] = useState(defaultLayoutV3.slots);
+  const [panelSizes, setPanelSizes] = useState(defaultLayoutV3.sizes);
 
   const dragState = useRef<{
-    mode: "left" | "right" | "bottom" | "leftSlot" | "rightSlot";
+    mode: "left" | "right" | "bottom";
     startX: number;
     startY: number;
     startLeft: number;
     startRight: number;
     startBottom: number;
-    startRatio: number;
-    slotContainerHeight: number;
   } | null>(null);
   const layoutPathRef = useRef<string | null>(null);
   const layoutLoadedRef = useRef(false);
@@ -82,34 +70,30 @@ export default function useLayoutState({
   const configDirRef = useRef<string | null>(null);
 
   function buildPersistentSlots(
-    slots: Record<LayoutWidgetSlot, WidgetGroup>,
-  ): Record<LayoutWidgetSlot, WidgetGroup> {
-    const next: Record<LayoutWidgetSlot, WidgetGroup> = {
-      leftTop: { ...slots.leftTop, widgets: [...slots.leftTop.widgets] },
-      leftBottom: {
-        ...slots.leftBottom,
-        widgets: [...slots.leftBottom.widgets],
-      },
-      rightTop: { ...slots.rightTop, widgets: [...slots.rightTop.widgets] },
-      rightBottom: {
-        ...slots.rightBottom,
-        widgets: [...slots.rightBottom.widgets],
-      },
-      bottom: { ...slots.bottom, widgets: [...slots.bottom.widgets] },
-    };
+    slots: Record<string, WidgetGroup>,
+  ): Record<string, WidgetGroup> {
+    const next: Record<string, WidgetGroup> = {};
+    Object.entries(slots).forEach(([slot, group]) => {
+      next[slot as WidgetSlot] = { ...group, widgets: [...group.widgets] };
+    });
     (Object.keys(floatingOriginRef.current) as PanelKey[]).forEach((panel) => {
       const origin = floatingOriginRef.current[panel];
       if (!origin) return;
-      (Object.keys(next) as LayoutWidgetSlot[]).forEach((slot) => {
-        const group = next[slot];
+      Object.values(next).forEach((group) => {
         group.widgets = group.widgets.filter((item) => item !== panel);
         if (group.active === panel) {
           group.active = group.widgets[0] ?? null;
         }
       });
-      const target = next[origin];
-      target.widgets.push(panel);
-      target.active = target.active ?? panel;
+      if (!next[origin]) {
+        next[origin] = {
+          widgets: [],
+          active: null,
+          floating: false,
+        };
+      }
+      next[origin].widgets.push(panel);
+      next[origin].active = next[origin].active ?? panel;
     });
     return next;
   }
@@ -143,7 +127,7 @@ export default function useLayoutState({
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
-      const normalized = normalizeLayoutV2(parsed);
+      const normalized = normalizeLayoutConfig(parsed);
       if (!normalized) {
         layoutLoadedRef.current = true;
         return;
@@ -153,17 +137,15 @@ export default function useLayoutState({
         0,
       );
       if (totalWidgets === 0) {
-        setLayoutSplit(defaultLayoutV2.split);
-        setLayoutCollapsed(defaultLayoutV2.collapsed);
-        setLayoutSplitRatio(defaultLayoutV2.splitRatio);
-        setSlotGroups(defaultLayoutV2.slots);
-        setPanelSizes(defaultLayoutV2.sizes);
+        setLayoutCollapsed(defaultLayoutV3.collapsed);
+        setSideSlotCounts(defaultLayoutV3.sideSlotCounts);
+        setSlotGroups(defaultLayoutV3.slots);
+        setPanelSizes(defaultLayoutV3.sizes);
         layoutLoadedRef.current = true;
         return;
       }
-      setLayoutSplit(normalized.split);
       setLayoutCollapsed(normalized.collapsed);
-      setLayoutSplitRatio(normalized.splitRatio);
+      setSideSlotCounts(normalized.sideSlotCounts);
       setSlotGroups(normalized.slots);
       setPanelSizes(normalized.sizes);
     } catch {
@@ -173,7 +155,7 @@ export default function useLayoutState({
     }
   }
 
-  async function saveLayoutConfig(payload: LayoutConfigV2) {
+  async function saveLayoutConfig(payload: LayoutConfigV3) {
     const dir = await getConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getLayoutConfigPath();
@@ -181,9 +163,75 @@ export default function useLayoutState({
   }
 
   function handleToggleSplit(side: WidgetSide) {
-    const nextSplit = !layoutSplit[side];
-    setLayoutSplit((prev) => ({ ...prev, [side]: nextSplit }));
-    setSlotGroups((prev) => applySplitMode(prev, side, nextSplit));
+    setSideSlotCounts((prev) => {
+      const currentCount = prev[side];
+      const result = increaseSideSlots(slotGroups, side, currentCount);
+      setSlotGroups(result.slots);
+      return { ...prev, [side]: result.nextCount };
+    });
+  }
+
+  function handleCloseSlot(slot: WidgetSlot) {
+    if (slot === "bottom") {
+      setSlotGroups((prev) => {
+        const group = prev.bottom;
+        if (!group?.active) return prev;
+        const widgets = group.widgets.filter((item) => item !== group.active);
+        return {
+          ...prev,
+          bottom: { ...group, widgets, active: widgets[0] ?? null },
+        };
+      });
+      return;
+    }
+
+    const match = slot.match(/^(left|right):(\d+)$/);
+    if (!match) return;
+    const side = match[1] as WidgetSide;
+    const index = Number(match[2]);
+    if (!Number.isInteger(index) || index < 0) return;
+
+    const currentCount = sideSlotCounts[side];
+    if (index >= currentCount) return;
+
+    if (currentCount <= 1) {
+      setSlotGroups((prev) => {
+        const group = prev[slot];
+        if (!group?.active) return prev;
+        const widgets = group.widgets.filter((item) => item !== group.active);
+        return {
+          ...prev,
+          [slot]: { ...group, widgets, active: widgets[0] ?? null },
+        };
+      });
+      return;
+    }
+
+    setSlotGroups((prev) => {
+      const next: Record<string, WidgetGroup> = {};
+      Object.entries(prev).forEach(([key, group]) => {
+        if (key === "bottom") {
+          next.bottom = { ...group, widgets: [...group.widgets] };
+          return;
+        }
+        const item = key.match(/^(left|right):(\d+)$/);
+        if (!item) return;
+        const itemSide = item[1] as WidgetSide;
+        const itemIndex = Number(item[2]);
+        if (itemSide !== side) {
+          next[key] = { ...group, widgets: [...group.widgets] };
+          return;
+        }
+        if (itemIndex === index) return;
+        const targetIndex = itemIndex > index ? itemIndex - 1 : itemIndex;
+        next[`${side}:${targetIndex}`] = {
+          ...group,
+          widgets: [...group.widgets],
+        };
+      });
+      return next;
+    });
+    setSideSlotCounts((prev) => ({ ...prev, [side]: Math.max(1, prev[side] - 1) }));
   }
 
   function handleToggleCollapsed(side: WidgetSide | "bottom") {
@@ -203,12 +251,9 @@ export default function useLayoutState({
       startLeft: panelSizes.left,
       startRight: panelSizes.right,
       startBottom: panelSizes.bottom,
-      startRatio: 0.5,
-      slotContainerHeight: 1,
     };
     document.body.style.userSelect = "none";
-    document.body.style.cursor =
-      mode === "bottom" ? "row-resize" : "col-resize";
+    document.body.style.cursor = mode === "bottom" ? "row-resize" : "col-resize";
     window.addEventListener("mousemove", handleResizeMove);
     window.addEventListener("mouseup", stopResize);
   }
@@ -219,26 +264,17 @@ export default function useLayoutState({
     if (drag.mode === "left") {
       const min = 220;
       const max = Math.max(min, Math.min(520, window.innerWidth * 0.5));
-      const next = Math.min(
-        max,
-        Math.max(min, drag.startLeft + (event.clientX - drag.startX)),
-      );
+      const next = Math.min(max, Math.max(min, drag.startLeft + (event.clientX - drag.startX)));
       setPanelSizes((prev) => ({ ...prev, left: next }));
     } else if (drag.mode === "right") {
       const min = 260;
       const max = Math.max(min, Math.min(560, window.innerWidth * 0.5));
-      const next = Math.min(
-        max,
-        Math.max(min, drag.startRight - (event.clientX - drag.startX)),
-      );
+      const next = Math.min(max, Math.max(min, drag.startRight - (event.clientX - drag.startX)));
       setPanelSizes((prev) => ({ ...prev, right: next }));
     } else if (drag.mode === "bottom") {
       const min = 160;
       const max = Math.max(min, Math.min(420, window.innerHeight * 0.6));
-      const next = Math.min(
-        max,
-        Math.max(min, drag.startBottom - (event.clientY - drag.startY)),
-      );
+      const next = Math.min(max, Math.max(min, drag.startBottom - (event.clientY - drag.startY)));
       setPanelSizes((prev) => ({ ...prev, bottom: next }));
     }
   }
@@ -249,52 +285,6 @@ export default function useLayoutState({
     document.body.style.cursor = "";
     window.removeEventListener("mousemove", handleResizeMove);
     window.removeEventListener("mouseup", stopResize);
-  }
-
-  function startSlotResize(
-    side: WidgetSide,
-    event: React.MouseEvent<HTMLDivElement>,
-  ) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    const container = event.currentTarget.parentElement;
-    if (!container) return;
-    dragState.current = {
-      mode: side === "left" ? "leftSlot" : "rightSlot",
-      startX: event.clientX,
-      startY: event.clientY,
-      startLeft: panelSizes.left,
-      startRight: panelSizes.right,
-      startBottom: panelSizes.bottom,
-      startRatio: layoutSplitRatio[side],
-      slotContainerHeight: container.getBoundingClientRect().height,
-    };
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "row-resize";
-    window.addEventListener("mousemove", handleSlotResizeMove);
-    window.addEventListener("mouseup", stopSlotResize);
-  }
-
-  function handleSlotResizeMove(event: MouseEvent) {
-    const drag = dragState.current;
-    if (!drag) return;
-    if (drag.mode !== "leftSlot" && drag.mode !== "rightSlot") return;
-    const next =
-      drag.startRatio +
-      (event.clientY - drag.startY) / drag.slotContainerHeight;
-    const clamped = Math.min(0.8, Math.max(0.2, next));
-    setLayoutSplitRatio((prev) => ({
-      ...prev,
-      [drag.mode === "leftSlot" ? "left" : "right"]: clamped,
-    }));
-  }
-
-  function stopSlotResize() {
-    dragState.current = null;
-    document.body.style.userSelect = "";
-    document.body.style.cursor = "";
-    window.removeEventListener("mousemove", handleSlotResizeMove);
-    window.removeEventListener("mouseup", stopSlotResize);
   }
 
   const leftVisible = !layoutCollapsed.left;
@@ -327,11 +317,25 @@ export default function useLayoutState({
     }
     layoutSaveTimerRef.current = window.setTimeout(() => {
       const persistedSlots = buildPersistentSlots(slotGroups);
+      const normalizedCounts = {
+        left: Math.max(1, sideSlotCounts.left),
+        right: Math.max(1, sideSlotCounts.right),
+      };
+      for (let i = 0; i < normalizedCounts.left; i += 1) {
+        const key = sideSlotKey("left", i);
+        if (!persistedSlots[key]) persistedSlots[key] = { widgets: [], active: null, floating: false };
+      }
+      for (let i = 0; i < normalizedCounts.right; i += 1) {
+        const key = sideSlotKey("right", i);
+        if (!persistedSlots[key]) persistedSlots[key] = { widgets: [], active: null, floating: false };
+      }
+      if (!persistedSlots.bottom) {
+        persistedSlots.bottom = { widgets: [], active: null, floating: false };
+      }
       saveLayoutConfig({
-        version: 2,
+        version: 3,
         collapsed: layoutCollapsed,
-        split: layoutSplit,
-        splitRatio: layoutSplitRatio,
+        sideSlotCounts: normalizedCounts,
         slots: persistedSlots,
         sizes: panelSizes,
       }).catch(() => {});
@@ -342,19 +346,11 @@ export default function useLayoutState({
         layoutSaveTimerRef.current = null;
       }
     };
-  }, [
-    floatingPanelKey,
-    layoutCollapsed,
-    layoutSplit,
-    layoutSplitRatio,
-    slotGroups,
-    panelSizes,
-  ]);
+  }, [floatingPanelKey, layoutCollapsed, sideSlotCounts, slotGroups, panelSizes]);
 
   return {
-    layoutSplit,
     layoutCollapsed,
-    layoutSplitRatio,
+    sideSlotCounts,
     slotGroups,
     panelSizes,
     leftVisible,
@@ -363,8 +359,8 @@ export default function useLayoutState({
     layoutVars,
     setSlotGroups,
     handleToggleSplit,
+    handleCloseSlot,
     handleToggleCollapsed,
     startResize,
-    startSlotResize,
   };
 }

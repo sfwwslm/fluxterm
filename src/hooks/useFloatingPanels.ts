@@ -14,14 +14,12 @@ type UseFloatingPanelsProps = {
   floatingOriginRef?: React.MutableRefObject<
     Partial<Record<PanelKey, LayoutWidgetSlot>>
   >;
-  slotGroups: Record<LayoutWidgetSlot, WidgetGroup>;
+  slotGroups: Record<string, WidgetGroup>;
   setSlotGroups: React.Dispatch<
-    React.SetStateAction<Record<LayoutWidgetSlot, WidgetGroup>>
+    React.SetStateAction<Record<string, WidgetGroup>>
   >;
   panelLabels: Record<PanelKey, string>;
-  layoutSplit: Record<"left" | "right", boolean>;
   layoutCollapsed: Record<"left" | "right" | "bottom", boolean>;
-  layoutSplitRatio: Record<"left" | "right", number>;
   locale: Locale;
   themeId: ThemeId;
   setLocale: (locale: Locale) => void;
@@ -59,9 +57,7 @@ export default function useFloatingPanels({
   slotGroups,
   setSlotGroups,
   panelLabels,
-  layoutSplit,
   layoutCollapsed,
-  layoutSplitRatio,
   locale,
   themeId,
   setLocale,
@@ -93,18 +89,9 @@ export default function useFloatingPanels({
       locale,
       themeId,
       collapsed: layoutCollapsed,
-      split: layoutSplit,
-      splitRatio: layoutSplitRatio,
       slots: slotGroups,
     });
-  }, [
-    layoutCollapsed,
-    layoutSplit,
-    layoutSplitRatio,
-    locale,
-    slotGroups,
-    themeId,
-  ]);
+  }, [layoutCollapsed, locale, slotGroups, themeId]);
 
   const restoreFloating = useCallback((panel: PanelKey) => {
     floatSyncChannelRef.current?.postMessage({

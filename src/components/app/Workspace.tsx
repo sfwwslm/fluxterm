@@ -1,19 +1,15 @@
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { PanelKey } from "@/types";
-import type {
-  WidgetGroup,
-  WidgetSide,
-  WidgetSlot as LayoutWidgetSlot,
-} from "@/layout/types";
+import type { WidgetGroup, WidgetSide, WidgetSlot } from "@/layout/types";
+import { sideSlotKey } from "@/layout/model";
 import WidgetContainer from "@/components/layout/WidgetContainer";
-import WidgetSlot from "@/components/layout/WidgetSlot";
+import WidgetSlotView from "@/components/layout/WidgetSlot";
 
 type WorkspaceProps = {
-  layoutSplit: Record<WidgetSide, boolean>;
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
-  layoutSplitRatio: Record<WidgetSide, number>;
-  slotGroups: Record<LayoutWidgetSlot, WidgetGroup>;
+  sideSlotCounts: Record<WidgetSide, number>;
+  slotGroups: Record<string, WidgetGroup>;
   panelLabels: Record<PanelKey, string>;
   panels: Record<PanelKey, React.ReactNode>;
   terminalPanel: React.ReactNode;
@@ -21,21 +17,17 @@ type WorkspaceProps = {
   leftVisible: boolean;
   rightVisible: boolean;
   bottomVisible: boolean;
-  onSelect: (slot: LayoutWidgetSlot, key: PanelKey) => void;
-  onAdd: (slot: LayoutWidgetSlot, key: PanelKey) => void;
-  onFloat: (slot: LayoutWidgetSlot) => void;
-  onDropWidget: (slot: LayoutWidgetSlot, key: PanelKey) => void;
+  onSelect: (slot: WidgetSlot, key: PanelKey) => void;
+  onAdd: (slot: WidgetSlot, key: PanelKey) => void;
+  onFloat: (slot: WidgetSlot) => void;
+  onCloseWidget: (slot: WidgetSlot) => void;
+  onDropWidget: (slot: WidgetSlot, key: PanelKey) => void;
   onDragWidget: (
     event: React.DragEvent<HTMLDivElement>,
-    slot: LayoutWidgetSlot,
+    slot: WidgetSlot,
     key: PanelKey,
   ) => void;
   onToggleSplit: (side: WidgetSide) => void;
-  onToggleCollapsed: (side: WidgetSide | "bottom") => void;
-  onStartSplitResize: (
-    side: WidgetSide,
-    event: React.MouseEvent<HTMLDivElement>,
-  ) => void;
   onStartResize: (
     mode: "left" | "right" | "bottom",
     event: React.MouseEvent<HTMLDivElement>,
@@ -45,9 +37,8 @@ type WorkspaceProps = {
 
 /** 主工作区布局（左右面板 + 底部面板）。 */
 export default function Workspace({
-  layoutSplit,
   layoutCollapsed,
-  layoutSplitRatio,
+  sideSlotCounts,
   slotGroups,
   panelLabels,
   panels,
@@ -59,49 +50,48 @@ export default function Workspace({
   onSelect,
   onAdd,
   onFloat,
+  onCloseWidget,
   onDropWidget,
   onDragWidget,
   onToggleSplit,
-  onToggleCollapsed,
-  onStartSplitResize,
   onStartResize,
   t,
 }: WorkspaceProps) {
+  const sideSlots = (side: WidgetSide) => {
+    const count = Math.max(1, sideSlotCounts[side]);
+    return Array.from({ length: count }, (_, index) => {
+      const slot = sideSlotKey(side, index);
+      const group = slotGroups[slot] ?? { widgets: [], active: null, floating: false };
+      return {
+        slot,
+        widgets: group.widgets,
+        active: group.active,
+        body: group.active ? panels[group.active] : null,
+      };
+    });
+  };
+
+  const leftSlots = sideSlots("left");
+  const rightSlots = sideSlots("right");
+  const bottomGroup = slotGroups.bottom ?? { widgets: [], active: null, floating: false };
+
   return (
     <>
       <div className={`workspace ${bottomVisible ? "with-bottom" : ""}`}>
         <WidgetContainer
           side="left"
-          split={layoutSplit.left}
           visible={leftVisible}
           collapsed={layoutCollapsed.left}
-          splitRatio={layoutSplitRatio.left}
-          primary={{
-            slot: "leftTop",
-            widgets: slotGroups.leftTop.widgets,
-            active: slotGroups.leftTop.active,
-            body: slotGroups.leftTop.active
-              ? panels[slotGroups.leftTop.active]
-              : null,
-          }}
-          secondary={{
-            slot: "leftBottom",
-            widgets: slotGroups.leftBottom.widgets,
-            active: slotGroups.leftBottom.active,
-            body: slotGroups.leftBottom.active
-              ? panels[slotGroups.leftBottom.active]
-              : null,
-          }}
+          slots={leftSlots}
           available={availableWidgets}
           labels={panelLabels}
           onSelect={onSelect}
           onAdd={onAdd}
           onFloat={onFloat}
+          onCloseWidget={onCloseWidget}
           onDropWidget={onDropWidget}
           onDragWidget={onDragWidget}
           onToggleSplit={onToggleSplit}
-          onToggleCollapsed={onToggleCollapsed}
-          onStartSplitResize={onStartSplitResize}
           t={t}
         />
         {leftVisible && (
@@ -119,36 +109,18 @@ export default function Workspace({
         )}
         <WidgetContainer
           side="right"
-          split={layoutSplit.right}
           visible={rightVisible}
           collapsed={layoutCollapsed.right}
-          splitRatio={layoutSplitRatio.right}
-          primary={{
-            slot: "rightTop",
-            widgets: slotGroups.rightTop.widgets,
-            active: slotGroups.rightTop.active,
-            body: slotGroups.rightTop.active
-              ? panels[slotGroups.rightTop.active]
-              : null,
-          }}
-          secondary={{
-            slot: "rightBottom",
-            widgets: slotGroups.rightBottom.widgets,
-            active: slotGroups.rightBottom.active,
-            body: slotGroups.rightBottom.active
-              ? panels[slotGroups.rightBottom.active]
-              : null,
-          }}
+          slots={rightSlots}
           available={availableWidgets}
           labels={panelLabels}
           onSelect={onSelect}
           onAdd={onAdd}
           onFloat={onFloat}
+          onCloseWidget={onCloseWidget}
           onDropWidget={onDropWidget}
           onDragWidget={onDragWidget}
           onToggleSplit={onToggleSplit}
-          onToggleCollapsed={onToggleCollapsed}
-          onStartSplitResize={onStartSplitResize}
           t={t}
         />
       </div>
@@ -164,25 +136,19 @@ export default function Workspace({
         <footer className="bottom-panel">
           <div className="bottom-panel-toolbar">
             <span>{t("layout.bottom")}</span>
-            <button
-              className="ghost mini"
-              onClick={() => onToggleCollapsed("bottom")}
-            >
-              {t("layout.collapse")}
-            </button>
           </div>
-          <WidgetSlot
+          <WidgetSlotView
             slot="bottom"
-            widgets={slotGroups.bottom.widgets}
-            active={slotGroups.bottom.active}
-            unassigned={availableWidgets}
+            widgets={bottomGroup.widgets}
+            active={bottomGroup.active}
+            allWidgets={availableWidgets}
             labels={panelLabels}
-            body={
-              slotGroups.bottom.active ? panels[slotGroups.bottom.active] : null
-            }
+            body={bottomGroup.active ? panels[bottomGroup.active] : null}
             onSelect={onSelect}
             onAdd={onAdd}
             onFloat={onFloat}
+            onClose={onCloseWidget}
+            closeDisabled={!bottomGroup.active}
             onDropWidget={onDropWidget}
             onDragWidget={onDragWidget}
             t={t}

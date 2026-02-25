@@ -1,10 +1,14 @@
 import type { PanelKey } from "@/types";
 import type {
   LayoutConfigV2,
+  LayoutConfigV3,
   WidgetGroup,
   WidgetSide,
   WidgetSlot,
 } from "./types";
+
+/** 每侧最大槽位数量。 */
+export const MAX_SIDE_SLOTS = 10;
 
 /** 所有可用组件键。 */
 export const allPanelKeys: PanelKey[] = [
@@ -14,9 +18,9 @@ export const allPanelKeys: PanelKey[] = [
   "events",
 ];
 
-/** 默认布局（v2）。 */
-export const defaultLayoutV2: LayoutConfigV2 = {
-  version: 2,
+/** 默认布局（v3）。 */
+export const defaultLayoutV3: LayoutConfigV3 = {
+  version: 3,
   sizes: {
     left: 320,
     right: 360,
@@ -27,19 +31,13 @@ export const defaultLayoutV2: LayoutConfigV2 = {
     right: false,
     bottom: false,
   },
-  split: {
-    left: true,
-    right: true,
-  },
-  splitRatio: {
-    left: 0.5,
-    right: 0.5,
+  sideSlotCounts: {
+    left: 1,
+    right: 1,
   },
   slots: {
-    leftTop: { widgets: ["profiles"], active: "profiles", floating: false },
-    leftBottom: { widgets: [], active: null, floating: false },
-    rightTop: { widgets: ["files"], active: "files", floating: false },
-    rightBottom: { widgets: [], active: null, floating: false },
+    "left:0": { widgets: ["profiles"], active: "profiles", floating: false },
+    "right:0": { widgets: ["files"], active: "files", floating: false },
     bottom: {
       widgets: ["transfers", "events"],
       active: "transfers",
@@ -48,21 +46,14 @@ export const defaultLayoutV2: LayoutConfigV2 = {
   },
 };
 
+/** 创建侧边槽位 key。 */
+export function sideSlotKey(side: WidgetSide, index: number): WidgetSlot {
+  return `${side}:${index}`;
+}
+
 /** 创建空组件组。 */
 export function createEmptyGroup(): WidgetGroup {
   return { widgets: [], active: null, floating: false };
-}
-
-/** 判断槽位组件组是否可显示。 */
-export function hasVisibleWidget(group: WidgetGroup) {
-  return !group.floating && group.widgets.length > 0 && group.active !== null;
-}
-
-/** 获取左右区域包含的槽位。 */
-export function sideSlots(side: WidgetSide): [WidgetSlot, WidgetSlot] {
-  return side === "left"
-    ? ["leftTop", "leftBottom"]
-    : ["rightTop", "rightBottom"];
 }
 
 /** 统一规范组件组，确保 active 合法。 */
@@ -83,163 +74,237 @@ export function normalizeGroup(group: unknown): WidgetGroup {
   return {
     widgets: deduped,
     active,
-    // 浮动窗口是运行时状态，不应持久化恢复为 true。
     floating: false,
   };
 }
 
-/** 规范布局配置。 */
-export function normalizeLayoutV2(raw: unknown): LayoutConfigV2 | null {
-  if (!raw || typeof raw !== "object") return null;
-  const value = raw as Partial<LayoutConfigV2>;
-  if (value.version !== 2) return null;
-  if (!value.sizes || !value.split || !value.slots) return null;
-  const slots: Record<WidgetSlot, WidgetGroup> = {
-    leftTop: normalizeGroup(value.slots.leftTop),
-    leftBottom: normalizeGroup(value.slots.leftBottom),
-    rightTop: normalizeGroup(value.slots.rightTop),
-    rightBottom: normalizeGroup(value.slots.rightBottom),
-    bottom: normalizeGroup(value.slots.bottom),
-  };
-  const used = new Set<PanelKey>();
-  (Object.keys(slots) as WidgetSlot[]).forEach((slot) => {
-    const next = slots[slot].widgets.filter((item) => {
-      if (used.has(item)) return false;
-      used.add(item);
-      return true;
-    });
-    slots[slot] = {
-      ...slots[slot],
-      widgets: next,
-      active: next.includes(slots[slot].active as PanelKey)
-        ? slots[slot].active
-        : (next[0] ?? null),
-    };
+/** 获取某侧槽位 key（按索引升序）。 */
+export function getSideSlotKeys(
+  slots: Record<string, WidgetGroup>,
+  side: WidgetSide,
+) {
+  return Object.keys(slots)
+    .map((key) => parseSideSlotKey(key))
+    .filter(
+      (item): item is { side: WidgetSide; index: number } =>
+        item !== null && item.side === side,
+    )
+    .sort((a, b) => a.index - b.index)
+    .map((item) => sideSlotKey(item.side, item.index));
+}
+
+/** 深拷贝槽位集合。 */
+export function cloneSlots(slots: Record<string, WidgetGroup>) {
+  const next: Record<string, WidgetGroup> = {};
+  Object.entries(slots).forEach(([slot, group]) => {
+    next[slot as WidgetSlot] = { ...group, widgets: [...group.widgets] };
   });
+  return next;
+}
+
+/** 保证左右槽位索引连续且数量满足 sideSlotCounts。 */
+export function normalizeSideSlotStructure(
+  slots: Record<string, WidgetGroup>,
+  sideSlotCounts: Record<WidgetSide, number>,
+) {
+  const next: Record<string, WidgetGroup> = {};
+  const normalizedCounts: Record<WidgetSide, number> = {
+    left: clampNumber(sideSlotCounts.left, 1, MAX_SIDE_SLOTS, 1),
+    right: clampNumber(sideSlotCounts.right, 1, MAX_SIDE_SLOTS, 1),
+  };
+  (["left", "right"] as WidgetSide[]).forEach((side) => {
+    const keys = getSideSlotKeys(slots, side);
+    for (let index = 0; index < normalizedCounts[side]; index += 1) {
+      const source = keys[index];
+      next[sideSlotKey(side, index)] = source
+        ? normalizeGroup(slots[source])
+        : createEmptyGroup();
+    }
+  });
+  next.bottom = normalizeGroup(slots.bottom);
+  return { slots: next, sideSlotCounts: normalizedCounts };
+}
+
+/** 规范布局配置（兼容 v2/v3）。 */
+export function normalizeLayoutConfig(raw: unknown): LayoutConfigV3 | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as any;
+  if (value.version !== 2 && value.version !== 3) return null;
+  if (!value.sizes || !value.slots) return null;
+
+  const baseSlots: Record<string, WidgetGroup> =
+    value.version === 3
+      ? normalizeV3Slots(value.slots as Record<string, unknown>)
+      : normalizeV2Slots(value as LayoutConfigV2);
+
+  const initialCounts: Record<WidgetSide, number> =
+    value.version === 3
+      ? {
+          left: clampNumber(value.sideSlotCounts?.left, 1, MAX_SIDE_SLOTS, 1),
+          right: clampNumber(value.sideSlotCounts?.right, 1, MAX_SIDE_SLOTS, 1),
+        }
+      : deriveCountsFromV2(value as LayoutConfigV2);
+
+  const structured = normalizeSideSlotStructure(baseSlots, initialCounts);
+  const dedupedSlots = dedupeWidgets(structured.slots);
+
   return {
-    version: 2,
+    version: 3,
     sizes: {
-      left: clampNumber(value.sizes.left, 220, 520, defaultLayoutV2.sizes.left),
+      left: clampNumber(value.sizes.left, 220, 520, defaultLayoutV3.sizes.left),
       right: clampNumber(
         value.sizes.right,
         260,
         560,
-        defaultLayoutV2.sizes.right,
+        defaultLayoutV3.sizes.right,
       ),
       bottom: clampNumber(
         value.sizes.bottom,
         160,
         420,
-        defaultLayoutV2.sizes.bottom,
+        defaultLayoutV3.sizes.bottom,
       ),
     },
     collapsed: {
       left:
         typeof value.collapsed?.left === "boolean"
           ? value.collapsed.left
-          : defaultLayoutV2.collapsed.left,
+          : defaultLayoutV3.collapsed.left,
       right:
         typeof value.collapsed?.right === "boolean"
           ? value.collapsed.right
-          : defaultLayoutV2.collapsed.right,
+          : defaultLayoutV3.collapsed.right,
       bottom:
         typeof value.collapsed?.bottom === "boolean"
           ? value.collapsed.bottom
-          : defaultLayoutV2.collapsed.bottom,
+          : defaultLayoutV3.collapsed.bottom,
     },
-    split: {
-      left:
-        typeof value.split.left === "boolean"
-          ? value.split.left
-          : defaultLayoutV2.split.left,
-      right:
-        typeof value.split.right === "boolean"
-          ? value.split.right
-          : defaultLayoutV2.split.right,
-    },
-    splitRatio: {
-      left: clampNumber(
-        value.splitRatio?.left,
-        0.2,
-        0.8,
-        defaultLayoutV2.splitRatio.left,
-      ),
-      right: clampNumber(
-        value.splitRatio?.right,
-        0.2,
-        0.8,
-        defaultLayoutV2.splitRatio.right,
-      ),
-    },
-    slots,
+    sideSlotCounts: structured.sideSlotCounts,
+    slots: dedupedSlots,
   };
-}
-
-/** 获取当前未被使用的组件。 */
-export function getUnassignedWidgets(slots: Record<WidgetSlot, WidgetGroup>) {
-  const used = new Set<PanelKey>();
-  (Object.keys(slots) as WidgetSlot[]).forEach((slot) => {
-    slots[slot].widgets.forEach((item) => used.add(item));
-  });
-  return allPanelKeys.filter((item) => !used.has(item));
 }
 
 /** 将组件放入槽位：空槽迁移，非空合并。 */
 export function moveWidgetToSlot(
-  slots: Record<WidgetSlot, WidgetGroup>,
+  slots: Record<string, WidgetGroup>,
   widget: PanelKey,
   target: WidgetSlot,
 ) {
-  const next: Record<WidgetSlot, WidgetGroup> = {
-    leftTop: { ...slots.leftTop, widgets: [...slots.leftTop.widgets] },
-    leftBottom: { ...slots.leftBottom, widgets: [...slots.leftBottom.widgets] },
-    rightTop: { ...slots.rightTop, widgets: [...slots.rightTop.widgets] },
-    rightBottom: {
-      ...slots.rightBottom,
-      widgets: [...slots.rightBottom.widgets],
-    },
-    bottom: { ...slots.bottom, widgets: [...slots.bottom.widgets] },
-  };
-  (Object.keys(next) as WidgetSlot[]).forEach((slot) => {
-    const current = next[slot];
-    current.widgets = current.widgets.filter((item) => item !== widget);
-    if (current.active === widget) {
-      current.active = current.widgets[0] ?? null;
+  const next = cloneSlots(slots);
+  Object.values(next).forEach((group) => {
+    group.widgets = group.widgets.filter((item) => item !== widget);
+    if (group.active === widget) {
+      group.active = group.widgets[0] ?? null;
     }
   });
+  if (!next[target]) next[target] = createEmptyGroup();
   next[target].widgets.push(widget);
   next[target].active = next[target].active ?? widget;
   next[target].floating = false;
   return next;
 }
 
-/** 切换左右区域单槽/双槽。 */
-export function applySplitMode(
-  slots: Record<WidgetSlot, WidgetGroup>,
+/** 某一侧增加一个槽位（上限 MAX_SIDE_SLOTS）。 */
+export function increaseSideSlots(
+  slots: Record<string, WidgetGroup>,
   side: WidgetSide,
-  split: boolean,
+  currentCount: number,
 ) {
-  const next: Record<WidgetSlot, WidgetGroup> = {
-    leftTop: { ...slots.leftTop, widgets: [...slots.leftTop.widgets] },
-    leftBottom: { ...slots.leftBottom, widgets: [...slots.leftBottom.widgets] },
-    rightTop: { ...slots.rightTop, widgets: [...slots.rightTop.widgets] },
-    rightBottom: {
-      ...slots.rightBottom,
-      widgets: [...slots.rightBottom.widgets],
-    },
-    bottom: { ...slots.bottom, widgets: [...slots.bottom.widgets] },
-  };
-  if (split) return next;
-  const [top, bottom] = sideSlots(side);
-  const merged = Array.from(
-    new Set([...next[top].widgets, ...next[bottom].widgets]),
-  );
-  next[top].widgets = merged;
-  next[top].active = merged.includes(next[top].active as PanelKey)
-    ? next[top].active
-    : (merged[0] ?? null);
-  next[bottom] = createEmptyGroup();
+  const nextCount = Math.min(MAX_SIDE_SLOTS, currentCount + 1);
+  if (nextCount === currentCount) {
+    return { slots: cloneSlots(slots), nextCount };
+  }
+  const next = cloneSlots(slots);
+  next[sideSlotKey(side, nextCount - 1)] = createEmptyGroup();
+  return { slots: next, nextCount };
+}
+
+/** 关闭槽位中当前激活组件。 */
+export function closeActiveWidgetInSlot(
+  slots: Record<string, WidgetGroup>,
+  slot: WidgetSlot,
+) {
+  const next = cloneSlots(slots);
+  const group = next[slot];
+  if (!group || !group.active) return next;
+  group.widgets = group.widgets.filter((item) => item !== group.active);
+  group.active = group.widgets[0] ?? null;
   return next;
+}
+
+function normalizeV3Slots(rawSlots: Record<string, unknown>) {
+  const next: Record<string, WidgetGroup> = { bottom: createEmptyGroup() };
+  Object.entries(rawSlots).forEach(([key, value]) => {
+    if (key === "bottom") {
+      next.bottom = normalizeGroup(value);
+      return;
+    }
+    const parsed = parseSideSlotKey(key);
+    if (!parsed) return;
+    next[sideSlotKey(parsed.side, parsed.index)] = normalizeGroup(value);
+  });
+  return next;
+}
+
+function normalizeV2Slots(value: LayoutConfigV2) {
+  const leftTop = normalizeGroup(value.slots.leftTop);
+  const leftBottom = normalizeGroup(value.slots.leftBottom);
+  const rightTop = normalizeGroup(value.slots.rightTop);
+  const rightBottom = normalizeGroup(value.slots.rightBottom);
+  const bottom = normalizeGroup(value.slots.bottom);
+  return {
+    "left:0": leftTop,
+    "left:1": leftBottom,
+    "right:0": rightTop,
+    "right:1": rightBottom,
+    bottom,
+  } as Record<string, WidgetGroup>;
+}
+
+function deriveCountsFromV2(value: LayoutConfigV2): Record<WidgetSide, number> {
+  const leftBottomHasContent =
+    value.slots.leftBottom.widgets.length > 0 || value.slots.leftBottom.active;
+  const rightBottomHasContent =
+    value.slots.rightBottom.widgets.length > 0 ||
+    value.slots.rightBottom.active;
+  return {
+    left: value.split.left || leftBottomHasContent ? 2 : 1,
+    right: value.split.right || rightBottomHasContent ? 2 : 1,
+  };
+}
+
+function dedupeWidgets(slots: Record<string, WidgetGroup>) {
+  const next = cloneSlots(slots);
+  const used = new Set<PanelKey>();
+  const orderedKeys = [
+    ...getSideSlotKeys(next, "left"),
+    ...getSideSlotKeys(next, "right"),
+    "bottom" as WidgetSlot,
+  ];
+  orderedKeys.forEach((slot) => {
+    const group = next[slot];
+    if (!group) return;
+    group.widgets = group.widgets.filter((item) => {
+      if (used.has(item)) return false;
+      used.add(item);
+      return true;
+    });
+    if (group.active && !group.widgets.includes(group.active)) {
+      group.active = group.widgets[0] ?? null;
+    }
+  });
+  return next;
+}
+
+function parseSideSlotKey(value: string) {
+  const match = value.match(/^(left|right):(\d+)$/);
+  if (!match) return null;
+  const side = match[1] as WidgetSide;
+  const index = Number(match[2]);
+  if (!Number.isInteger(index) || index < 0 || index >= MAX_SIDE_SLOTS) {
+    return null;
+  }
+  return { side, index };
 }
 
 function clampNumber(

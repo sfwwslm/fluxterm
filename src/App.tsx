@@ -329,9 +329,8 @@ function App() {
   });
 
   const {
-    layoutSplit,
     layoutCollapsed,
-    layoutSplitRatio,
+    sideSlotCounts,
     slotGroups,
     leftVisible,
     rightVisible,
@@ -339,9 +338,9 @@ function App() {
     layoutVars,
     setSlotGroups,
     handleToggleSplit,
+    handleCloseSlot,
     handleToggleCollapsed,
     startResize,
-    startSlotResize,
   } = useLayoutState({
     floatingPanelKey,
     floatingOriginRef,
@@ -353,9 +352,7 @@ function App() {
     slotGroups,
     setSlotGroups,
     panelLabels,
-    layoutSplit,
     layoutCollapsed,
-    layoutSplitRatio,
     locale,
     themeId,
     setLocale,
@@ -485,7 +482,17 @@ function App() {
   }
 
   function handleSlotAdd(slot: LayoutWidgetSlot, key: PanelKey) {
-    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
+    setSlotGroups((prev) => {
+      const moved = moveWidgetToSlot(prev, key, slot);
+      const group = moved[slot];
+      return {
+        ...moved,
+        [slot]: {
+          ...group,
+          active: key,
+        },
+      };
+    });
   }
 
   function handleDropWidget(slot: LayoutWidgetSlot, key: PanelKey) {
@@ -547,9 +554,8 @@ function App() {
       />
 
       <Workspace
-        layoutSplit={layoutSplit}
         layoutCollapsed={layoutCollapsed}
-        layoutSplitRatio={layoutSplitRatio}
+        sideSlotCounts={sideSlotCounts}
         slotGroups={slotGroups}
         panelLabels={panelLabels}
         panels={panels}
@@ -579,11 +585,10 @@ function App() {
         onSelect={handleSlotSelect}
         onAdd={handleSlotAdd}
         onFloat={handleFloat}
+        onCloseWidget={handleCloseSlot}
         onDropWidget={handleDropWidget}
         onDragWidget={handleDragWidget}
         onToggleSplit={handleToggleSplit}
-        onToggleCollapsed={handleToggleCollapsed}
-        onStartSplitResize={startSlotResize}
         onStartResize={startResize}
         t={t}
       />

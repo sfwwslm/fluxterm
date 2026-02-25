@@ -26,6 +26,8 @@ export const en = {
   "panel.empty": "Empty Slot",
   "panel.add": "Add Widget",
   "panel.float": "Float",
+  "panel.group.actions": "Actions",
+  "panel.group.components": "Components",
   "panel.emptyHint":
     "No widget in this slot. Add one from the dropdown or drag one here.",
   "terminal.title": "Remote Session",
@@ -72,6 +74,7 @@ export const en = {
   "actions.cancel": "Cancel",
   "actions.save": "Save",
   "actions.close": "Close",
+  "actions.settings": "Settings",
   "actions.refresh": "Refresh",
   "actions.more": "More",
   "actions.new": "New",

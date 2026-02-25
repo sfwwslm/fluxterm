@@ -8,12 +8,16 @@ type WidgetSlotProps = {
   slot: WidgetSlotKey;
   widgets: PanelKey[];
   active: PanelKey | null;
-  unassigned: PanelKey[];
+  allWidgets: PanelKey[];
   labels: Record<PanelKey, string>;
   body: React.ReactNode;
   onSelect: (slot: WidgetSlotKey, key: PanelKey) => void;
   onAdd: (slot: WidgetSlotKey, key: PanelKey) => void;
   onFloat: (slot: WidgetSlotKey) => void;
+  onClose?: (slot: WidgetSlotKey) => void;
+  onSplit?: (slot: WidgetSlotKey) => void;
+  splitDisabled?: boolean;
+  closeDisabled?: boolean;
   onDropWidget: (target: WidgetSlotKey, widget: PanelKey) => void;
   onDragWidget: (
     event: React.DragEvent<HTMLDivElement>,
@@ -28,20 +32,20 @@ export default function WidgetSlot({
   slot,
   widgets,
   active,
-  unassigned,
+  allWidgets,
   labels,
   body,
   onSelect,
   onAdd,
   onFloat,
+  onClose,
+  onSplit,
+  splitDisabled,
+  closeDisabled,
   onDropWidget,
   onDragWidget,
   t,
 }: WidgetSlotProps) {
-  const selectableWidgets = unassigned.filter(
-    (item) => !widgets.includes(item),
-  );
-
   return (
     <section
       className={`panel widget-slot ${!widgets.length ? "empty" : ""}`}
@@ -63,12 +67,16 @@ export default function WidgetSlot({
       <WidgetTitleBar
         widgets={widgets}
         active={active}
-        unassigned={selectableWidgets}
+        allWidgets={allWidgets}
         labels={labels}
         draggableWidget={active}
         onSelect={(key) => onSelect(slot, key)}
         onAdd={(key) => onAdd(slot, key)}
         onFloat={() => onFloat(slot)}
+        onSplit={onSplit ? () => onSplit(slot) : undefined}
+        splitDisabled={splitDisabled}
+        onClose={onClose ? () => onClose(slot) : undefined}
+        closeDisabled={closeDisabled}
         onDragStart={(event, key) => onDragWidget(event, slot, key)}
         t={t}
       />
