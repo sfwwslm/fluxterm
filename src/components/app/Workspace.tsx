@@ -61,7 +61,11 @@ export default function Workspace({
     const count = Math.max(1, sideSlotCounts[side]);
     return Array.from({ length: count }, (_, index) => {
       const slot = sideSlotKey(side, index);
-      const group = slotGroups[slot] ?? { widgets: [], active: null, floating: false };
+      const group = slotGroups[slot] ?? {
+        widgets: [],
+        active: null,
+        floating: false,
+      };
       return {
         slot,
         widgets: group.widgets,
@@ -73,7 +77,11 @@ export default function Workspace({
 
   const leftSlots = sideSlots("left");
   const rightSlots = sideSlots("right");
-  const bottomGroup = slotGroups.bottom ?? { widgets: [], active: null, floating: false };
+  const bottomGroup = slotGroups.bottom ?? {
+    widgets: [],
+    active: null,
+    floating: false,
+  };
 
   return (
     <>
