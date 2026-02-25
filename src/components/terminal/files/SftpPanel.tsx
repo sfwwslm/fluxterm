@@ -3,8 +3,8 @@ import type { Locale, Translate } from "@/i18n";
 import type { SftpEntry } from "@/types";
 import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
-import ContextMenu from "@/components/shared/ContextMenu";
-import Tooltip from "@/components/shared/Tooltip";
+import ContextMenu from "@/components/terminal/menu/ContextMenu";
+import Tooltip from "@/components/terminal/menu/Tooltip";
 import { FiMoreVertical, FiRefreshCw } from "react-icons/fi";
 
 type SftpPanelProps = {

@@ -1,13 +1,29 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { execSync } from "node:child_process";
 import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+const getGitHash = () => {
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+};
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  define: {
+    "import.meta.env.VITE_GIT_HASH": JSON.stringify(getGitHash()),
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

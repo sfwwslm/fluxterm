@@ -7,7 +7,8 @@
     "beforeDevCommand": "pnpm web:dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm web:build",
-    "frontendDist": "../../dist"
+    "frontendDist": "../../dist",
+    "removeUnusedCommands": true
   },
   "app": {
     "macOSPrivateApi": true,
@@ -18,7 +19,7 @@
         "height": 768,
         "minWidth": 1024,
         "minHeight": 768,
-        "decorations": true,
+        "decorations": false,
         "visible": false,
         "transparent": true
       }

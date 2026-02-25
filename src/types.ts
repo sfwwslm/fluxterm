@@ -59,7 +59,7 @@ export type LogEntry = {
 };
 
 /** 功能面板类型。 */
-export type PanelKey = "profiles" | "files" | "logs";
+export type PanelKey = "profiles" | "files" | "transfers" | "events";
 /** 功能面板区域。 */
 export type PanelArea = "left" | "right" | "bottom";
 

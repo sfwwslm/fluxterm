@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
 import type { HostProfile, LocalShellProfile } from "@/types";
 import type { Translate } from "@/i18n";
+import ContextMenu from "@/components/terminal/menu/ContextMenu";
 
 type HostPanelProps = {
   profiles: HostProfile[];
   activeProfileId: string | null;
   onPick: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
+  onOpenNewProfile: () => void;
+  onOpenEditProfile: (profile: HostProfile) => void;
+  onRemoveProfile: (profile: HostProfile) => void;
   localShells: LocalShellProfile[];
   onConnectLocalShell: (shell: LocalShellProfile) => void;
   t: Translate;
@@ -18,6 +22,9 @@ export default function HostPanel({
   activeProfileId,
   onPick,
   onConnectProfile,
+  onOpenNewProfile,
+  onOpenEditProfile,
+  onRemoveProfile,
   localShells,
   onConnectLocalShell,
   t,
@@ -51,6 +58,10 @@ export default function HostPanel({
     () => new Set(),
   );
   const [query, setQuery] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const selectedProfile =
+    activeProfileId &&
+    profiles.find((profile) => profile.id === activeProfileId);
 
   const normalizedQuery = query.trim().toLowerCase();
   const queryActive = normalizedQuery.length > 0;
@@ -125,7 +136,13 @@ export default function HostPanel({
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <div className="host-list-body">
+        <div
+          className="host-list-body"
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setMenu({ x: event.clientX, y: event.clientY });
+          }}
+        >
           {localShells.length > 0 &&
             (!queryActive ||
               matchesGroup(localShellLabel) ||
@@ -212,6 +229,41 @@ export default function HostPanel({
               <div className="empty-hint">{t("host.noMatch")}</div>
             )}
         </div>
+        {menu && (
+          <ContextMenu
+            x={menu.x}
+            y={menu.y}
+            items={[
+              {
+                label: t("profile.menu.new"),
+                disabled: false,
+                onClick: () => {
+                  setMenu(null);
+                  onOpenNewProfile();
+                },
+              },
+              {
+                label: t("profile.menu.edit"),
+                disabled: !selectedProfile,
+                onClick: () => {
+                  if (!selectedProfile) return;
+                  setMenu(null);
+                  onOpenEditProfile(selectedProfile);
+                },
+              },
+              {
+                label: t("profile.menu.delete"),
+                disabled: !selectedProfile,
+                onClick: () => {
+                  if (!selectedProfile) return;
+                  setMenu(null);
+                  onRemoveProfile(selectedProfile);
+                },
+              },
+            ]}
+            onClose={() => setMenu(null)}
+          />
+        )}
       </div>
     </div>
   );

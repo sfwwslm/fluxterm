@@ -1,38 +1,31 @@
 import type { Locale, Translate } from "@/i18n";
-import type {
-  DisconnectReason,
-  LogEntry,
-  SessionStateUi,
-  SftpProgress,
-} from "@/types";
-import { formatBytes } from "@/utils/format";
+import type { DisconnectReason, LogEntry, SessionStateUi } from "@/types";
 
-type LogPanelProps = {
+type EventsPanelProps = {
   sessionState: SessionStateUi;
   sessionReason: DisconnectReason | null;
   reconnectInfo: { attempt: number; delayMs: number } | null;
   onReconnect: () => void;
   canReconnect: boolean;
-  progress: SftpProgress | null;
-  busyMessage: string | null;
   entries: LogEntry[];
   locale: Locale;
   t: Translate;
 };
 
-/** 会话日志与传输状态面板。 */
-export default function LogPanel({
+const isTransferKey = (key: string) =>
+  key.includes("upload") || key.includes("download");
+
+/** 事件与连接状态面板。 */
+export default function EventsPanel({
   sessionState,
   sessionReason,
   reconnectInfo,
   onReconnect,
   canReconnect,
-  progress,
-  busyMessage,
   entries,
   locale,
   t,
-}: LogPanelProps) {
+}: EventsPanelProps) {
   const sessionLabelMap: Record<SessionStateUi, string> = {
     connected: t("session.connected"),
     disconnected: t("session.disconnected"),
@@ -51,6 +44,8 @@ export default function LogPanel({
   const reasonLabel = sessionReason
     ? reasonLabelMap[sessionReason]
     : t("session.reason.unknown");
+
+  const eventEntries = entries.filter((entry) => !isTransferKey(entry.key));
 
   const formatLogTime = (timestamp: number) =>
     new Date(timestamp).toLocaleTimeString(locale, {
@@ -89,42 +84,11 @@ export default function LogPanel({
           </strong>
         </div>
       )}
-      <div className="log-row">
-        <span>{t("log.currentTask")}</span>
-        <strong>{busyMessage ?? t("log.idle")}</strong>
-      </div>
-      {progress && (
-        <div className="log-progress">
-          <div className="log-row">
-            <span>
-              {progress.op === "upload" ? t("log.upload") : t("log.download")}
-            </span>
-            <strong>{progress.path}</strong>
-          </div>
-          <div className="progress-bar">
-            <span
-              style={{
-                width: progress.total
-                  ? `${Math.min(100, (progress.transferred / progress.total) * 100)}%`
-                  : "30%",
-              }}
-            />
-          </div>
-          <div className="log-row small">
-            <span>{formatBytes(progress.transferred)}</span>
-            <span>
-              {progress.total
-                ? formatBytes(progress.total)
-                : t("log.unknownSize")}
-            </span>
-          </div>
-        </div>
-      )}
-      {!!entries.length && (
+      {!!eventEntries.length && (
         <div className="log-list">
           <div className="log-list-header">{t("log.history")}</div>
           <div className="log-list-body">
-            {entries.map((entry) => (
+            {eventEntries.map((entry) => (
               <div
                 key={entry.id}
                 className={`log-item ${entry.level ?? "info"}`}

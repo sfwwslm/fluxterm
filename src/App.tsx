@@ -1,16 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { appConfigDir, join } from "@tauri-apps/api/path";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import {
-  exists,
-  mkdir,
-  readTextFile,
-  writeTextFile,
-} from "@tauri-apps/plugin-fs";
-import type { Terminal } from "@xterm/xterm";
-import type { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import {
@@ -19,54 +7,33 @@ import {
   type Translate,
   type TranslationKey,
 } from "@/i18n";
-import ContextMenu from "@/components/shared/ContextMenu";
-import HostPanel from "@/components/host/HostPanel";
-import LogPanel from "@/components/log/LogPanel";
-import Modal from "@/components/shared/Modal";
-import PanelHeader from "@/components/shared/PanelHeader";
-import SftpPanel from "@/components/sftp/SftpPanel";
+import HostPanel from "@/components/terminal/profiles/HostPanel";
+import TitleBar from "@/components/layout/TitleBar";
+import FloatingShell from "@/components/app/FloatingShell";
+import Workspace from "@/components/app/Workspace";
+import TerminalPanel from "@/components/terminal/sessions/TerminalPanel";
+import AboutModal from "@/components/terminal/modals/AboutModal";
+import ProfileModal from "@/components/terminal/modals/ProfileModal";
+import EventsPanel from "@/components/terminal/events/EventsPanel";
+import SftpPanel from "@/components/terminal/files/SftpPanel";
+import TransfersPanel from "@/components/terminal/transfers/TransfersPanel";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
-import type {
-  AuthType,
-  DisconnectReason,
-  HostProfile,
-  LocalShellProfile,
-  LogEntry,
-  LogLevel,
-  PanelArea,
-  PanelKey,
-  Session,
-  SessionStateUi,
-  SftpEntry,
-  SftpProgress,
-  ThemeId,
-} from "@/types";
-
-type LayoutConfig = {
-  version: 1;
-  visible: Record<PanelArea, boolean>;
-  assignments: Record<PanelArea, PanelKey>;
-  sizes: Record<PanelArea, number>;
-};
-
-type LayoutConfigPayload = Omit<LayoutConfig, "version">;
-
-type AppSettings = {
-  version: 1;
-  shellId?: string | null;
-  locale?: Locale;
-  themeId?: ThemeId;
-};
-
-type XtermModules = {
-  Terminal: typeof import("@xterm/xterm").Terminal;
-  FitAddon: typeof import("@xterm/addon-fit").FitAddon;
-};
+import useProfiles from "@/hooks/profile/useProfiles";
+import useAppSettings from "@/hooks/settings/useAppSettings";
+import useSessionState from "@/hooks/session/useSessionState";
+import useTerminalRuntime from "@/hooks/terminal/useTerminalRuntime";
+import useSftpState from "@/hooks/sftp/useSftpState";
+import useLayoutState from "@/hooks/useLayoutState";
+import useFloatingPanels from "@/hooks/useFloatingPanels";
+import { allPanelKeys, moveWidgetToSlot } from "@/layout/model";
+import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
+import type { HostProfile, PanelKey, ThemeId } from "@/types";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   profiles: "panel.profiles",
   files: "panel.files",
-  logs: "panel.logs",
+  transfers: "panel.transfers",
+  events: "panel.events",
 };
 
 const themes: Record<
@@ -239,737 +206,59 @@ function formatMessage(
   );
 }
 
-const defaultProfile: HostProfile = {
-  id: "",
-  name: "",
-  host: "",
-  port: 22,
-  username: "",
-  authType: "password",
-  keyPath: null,
-  keyPassphraseRef: null,
-  passwordRef: null,
-  knownHost: null,
-  tags: null,
-};
-
-const defaultLayout: LayoutConfigPayload = {
-  visible: {
-    left: true,
-    right: true,
-    bottom: false,
-  },
-  assignments: {
-    left: "profiles",
-    right: "files",
-    bottom: "logs",
-  },
-  sizes: {
-    left: 320,
-    right: 360,
-    bottom: 240,
-  },
-};
-
-const logStorageKey = "fluxterm.logs";
-const maxLogEntries = 10;
-
 /** 应用主界面组件。 */
 function App() {
   useDisableBrowserShortcuts();
-  const [locale, setLocale] = useState<Locale>(() => {
-    const saved = localStorage.getItem("fluxterm.locale");
-    if (saved === "zh" || saved === "en") return saved;
-    return navigator.language?.startsWith("zh") ? "zh" : "en";
+  const themeIds = useMemo(() => Object.keys(themes) as ThemeId[], []);
+  const {
+    locale,
+    setLocale,
+    themeId,
+    setThemeId,
+    shellId,
+    setShellId,
+    availableShells,
+    settingsLoaded,
+  } = useAppSettings({
+    themeIds,
+    defaultThemeId: "aurora",
   });
-  const [themeId, setThemeId] = useState<ThemeId>(() => {
-    const saved = localStorage.getItem("fluxterm.theme");
-    if (saved === "aurora" || saved === "sahara" || saved === "dawn") {
-      return saved;
-    }
-    return "aurora";
-  });
-  const [profiles, setProfiles] = useState<HostProfile[]>([]);
-  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const [editingProfile, setEditingProfile] =
-    useState<HostProfile>(defaultProfile);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [sessionStates, setSessionStates] = useState<
-    Record<string, SessionStateUi>
-  >({});
-  const [sessionReasons, setSessionReasons] = useState<
-    Record<string, DisconnectReason>
-  >({});
-  const [localSessionMeta, setLocalSessionMeta] = useState<
-    Record<string, { shellId: string | null; label: string }>
-  >({});
-  const [availableShells, setAvailableShells] = useState<LocalShellProfile[]>(
-    [],
-  );
-  const [shellId, setShellId] = useState<string | null>(null);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [reconnectInfoBySession, setReconnectInfoBySession] = useState<
-    Record<string, { attempt: number; delayMs: number }>
-  >({});
-  const [terminalReady, setTerminalReady] = useState(false);
-  const [fileViews, setFileViews] = useState<
-    Record<string, { path: string; entries: SftpEntry[] }>
-  >({});
-  const [busyMessage, setBusyMessage] = useState<string | null>(null);
-  const [progressBySession, setProgressBySession] = useState<
-    Record<string, SftpProgress>
-  >({});
-  const [logEntries, setLogEntries] = useState<LogEntry[]>(() => {
-    const raw = localStorage.getItem(logStorageKey);
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter(
-          (item): item is LogEntry =>
-            isRecord(item) &&
-            typeof item.id === "string" &&
-            typeof item.timestamp === "number" &&
-            typeof item.key === "string",
-        )
-        .slice(0, maxLogEntries);
-    } catch {
-      return [];
-    }
-  });
-
-  const [panelVisible, setPanelVisible] = useState(defaultLayout.visible);
-  const [panelAssignments, setPanelAssignments] = useState<
-    Record<PanelArea, PanelKey>
-  >(defaultLayout.assignments);
-  const [panelSizes, setPanelSizes] = useState(defaultLayout.sizes);
+  const {
+    profiles,
+    activeProfileId,
+    editingProfile,
+    defaultProfile,
+    pickProfile,
+    saveProfile,
+    removeProfile,
+  } = useProfiles();
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalMode, setProfileModalMode] = useState<"new" | "edit">(
     "new",
   );
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
-  const [profileMenu, setProfileMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
 
   const t: Translate = useMemo(
     () => (key, vars) => formatMessage(translations[locale][key] ?? key, vars),
     [locale],
   );
-
-  const terminalRef = useRef<HTMLDivElement | null>(null);
-  const terminalInstance = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null);
-  const sessionRef = useRef<Session | null>(null);
-  const sessionBuffersRef = useRef<Record<string, string>>({});
-  const sessionsRef = useRef<Session[]>([]);
-  const profilesRef = useRef<HostProfile[]>([]);
-  const sessionStatesRef = useRef<Record<string, SessionStateUi>>({});
-  const sessionReasonsRef = useRef<Record<string, DisconnectReason>>({});
-  const activeSessionIdRef = useRef<string | null>(null);
-  const inputBufferRef = useRef<Record<string, string>>({});
-  const lastCommandRef = useRef<Record<string, string>>({});
-  const reconnectTimersRef = useRef<Record<string, number>>({});
-  const reconnectAttemptsRef = useRef<Record<string, number>>({});
-  const sessionCloseHandledRef = useRef<Record<string, boolean>>({});
-  const localSessionIdsRef = useRef<Set<string>>(new Set());
-  const localShellStartedRef = useRef(false);
-  const localSessionMetaRef = useRef<
-    Record<string, { shellId: string | null; label: string }>
-  >({});
-  const xtermModulesRef = useRef<XtermModules | null>(null);
-  const dragState = useRef<{
-    mode: "left" | "right" | "bottom";
-    startX: number;
-    startY: number;
-    startLeft: number;
-    startRight: number;
-    startBottom: number;
-  } | null>(null);
-  const layoutPathRef = useRef<string | null>(null);
-  const legacyLayoutPathRef = useRef<string | null>(null);
-  const settingsPathRef = useRef<string | null>(null);
-  const layoutLoadedRef = useRef(false);
-  const layoutSaveTimerRef = useRef<number | null>(null);
-  const configDirRef = useRef<string | null>(null);
-  const pendingShellIdRef = useRef<string | null>(null);
-
-  function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
-    if (
-      !container ||
-      container.clientWidth === 0 ||
-      container.clientHeight === 0
-    ) {
-      return;
-    }
-    try {
-      fitter.fit();
-    } catch {
-      // Ignore transient xterm render errors during initialization.
-    }
-  }
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-  }
-
-  function appendLog(
-    key: TranslationKey,
-    vars?: Record<string, string | number>,
-    level: LogLevel = "info",
-  ) {
-    const entry: LogEntry = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      timestamp: Date.now(),
-      key,
-      vars,
-      level,
-    };
-    setLogEntries((prev) => [entry, ...prev].slice(0, maxLogEntries));
-  }
-
-  function resolveSessionLabel(sessionId: string) {
-    const session = sessionsRef.current.find(
-      (item) => item.sessionId === sessionId,
-    );
-    if (!session) return t("session.defaultName");
-    if (isLocalSession(sessionId)) {
-      return (
-        localSessionMetaRef.current[sessionId]?.label ?? t("session.local")
-      );
-    }
-    const profile =
-      profilesRef.current.find((item) => item.id === session.profileId) ?? null;
-    return profile?.name || profile?.host || t("session.defaultName");
-  }
-
-  function isPanelKey(value: unknown): value is PanelKey {
-    return value === "profiles" || value === "files" || value === "logs";
-  }
-
-  function clampNumber(
-    value: unknown,
-    min: number,
-    max: number,
-    fallback: number,
-  ) {
-    if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-    return Math.min(max, Math.max(min, value));
-  }
-
-  function normalizeLayoutConfig(raw: unknown): LayoutConfigPayload | null {
-    if (!isRecord(raw)) return null;
-    if (
-      !isRecord(raw.visible) ||
-      !isRecord(raw.assignments) ||
-      !isRecord(raw.sizes)
-    ) {
-      return null;
-    }
-    const visible = raw.visible;
-    const assignments = raw.assignments;
-    const sizes = raw.sizes;
-    const nextVisible = {
-      left:
-        typeof visible.left === "boolean"
-          ? visible.left
-          : defaultLayout.visible.left,
-      right:
-        typeof visible.right === "boolean"
-          ? visible.right
-          : defaultLayout.visible.right,
-      bottom:
-        typeof visible.bottom === "boolean"
-          ? visible.bottom
-          : defaultLayout.visible.bottom,
-    };
-    const nextAssignments: Record<PanelArea, PanelKey> = {
-      left: isPanelKey(assignments.left)
-        ? assignments.left
-        : defaultLayout.assignments.left,
-      right: isPanelKey(assignments.right)
-        ? assignments.right
-        : defaultLayout.assignments.right,
-      bottom: isPanelKey(assignments.bottom)
-        ? assignments.bottom
-        : defaultLayout.assignments.bottom,
-    };
-    const usedKeys = new Set<PanelKey>();
-    (["left", "right", "bottom"] as PanelArea[]).forEach((area) => {
-      const key = nextAssignments[area];
-      if (usedKeys.has(key)) {
-        nextAssignments[area] = defaultLayout.assignments[area];
-      }
-      usedKeys.add(nextAssignments[area]);
-    });
-    const nextSizes = {
-      left: clampNumber(sizes.left, 220, 520, defaultLayout.sizes.left),
-      right: clampNumber(sizes.right, 260, 560, defaultLayout.sizes.right),
-      bottom: clampNumber(sizes.bottom, 160, 420, defaultLayout.sizes.bottom),
-    };
-    return {
-      visible: nextVisible,
-      assignments: nextAssignments,
-      sizes: nextSizes,
-    };
-  }
-
-  async function loadXtermModules() {
-    if (xtermModulesRef.current) return xtermModulesRef.current;
-    const [xtermModule, fitModule] = await Promise.all([
-      import("@xterm/xterm"),
-      import("@xterm/addon-fit"),
-    ]);
-    const modules: XtermModules = {
-      Terminal: xtermModule.Terminal,
-      FitAddon: fitModule.FitAddon,
-    };
-    xtermModulesRef.current = modules;
-    return modules;
-  }
-
-  async function getConfigDir() {
-    if (configDirRef.current) return configDirRef.current;
-    const dir = await appConfigDir();
-    const path = await join(dir, "flux-term");
-    configDirRef.current = path;
-    return path;
-  }
-
-  async function getLayoutConfigPath() {
-    if (layoutPathRef.current) return layoutPathRef.current;
-    const dir = await getConfigDir();
-    const path = await join(dir, "layout.json");
-    layoutPathRef.current = path;
-    return path;
-  }
-
-  async function getLegacyLayoutConfigPath() {
-    if (legacyLayoutPathRef.current) return legacyLayoutPathRef.current;
-    const dir = await appConfigDir();
-    const path = await join(dir, "layout.json");
-    legacyLayoutPathRef.current = path;
-    return path;
-  }
-
-  async function getSettingsPath() {
-    if (settingsPathRef.current) return settingsPathRef.current;
-    const dir = await getConfigDir();
-    const path = await join(dir, "settings.json");
-    settingsPathRef.current = path;
-    return path;
-  }
-
-  async function loadLayoutConfig() {
-    try {
-      const path = await getLayoutConfigPath();
-      const existsFile = await exists(path);
-      let raw: string | null = null;
-      if (existsFile) {
-        raw = await readTextFile(path);
-      } else {
-        const legacyPath = await getLegacyLayoutConfigPath();
-        if (await exists(legacyPath)) {
-          raw = await readTextFile(legacyPath);
-        }
-      }
-      if (!raw) {
-        layoutLoadedRef.current = true;
-        return;
-      }
-      const parsed = JSON.parse(raw) as unknown;
-      const normalized = normalizeLayoutConfig(parsed);
-      if (!normalized) {
-        layoutLoadedRef.current = true;
-        return;
-      }
-      setPanelVisible(normalized.visible);
-      setPanelAssignments(normalized.assignments);
-      setPanelSizes(normalized.sizes);
-    } catch {
-      // Ignore invalid layout config.
-    } finally {
-      layoutLoadedRef.current = true;
-    }
-  }
-
-  async function saveLayoutConfig(payload: LayoutConfigPayload) {
-    const dir = await getConfigDir();
-    await mkdir(dir, { recursive: true });
-    const path = await getLayoutConfigPath();
-    const data: LayoutConfig = {
-      version: 1,
-      ...payload,
-    };
-    await writeTextFile(path, JSON.stringify(data, null, 2));
-  }
-
-  async function loadSettings() {
-    try {
-      const path = await getSettingsPath();
-      if (!(await exists(path))) {
-        return;
-      }
-      const raw = await readTextFile(path);
-      const parsed = JSON.parse(raw) as AppSettings;
-      if (parsed?.shellId) {
-        pendingShellIdRef.current = parsed.shellId;
-      }
-      if (parsed?.locale === "zh" || parsed?.locale === "en") {
-        setLocale(parsed.locale);
-      }
-      if (parsed?.themeId && parsed.themeId in themes) {
-        setThemeId(parsed.themeId);
-      }
-    } catch {
-      // Ignore invalid settings.
-    } finally {
-      setSettingsLoaded(true);
-    }
-  }
-
-  async function saveSettings(payload: AppSettings) {
-    const dir = await getConfigDir();
-    await mkdir(dir, { recursive: true });
-    const path = await getSettingsPath();
-    await writeTextFile(path, JSON.stringify(payload, null, 2));
-  }
-
-  const activeSession = useMemo(() => {
-    if (!activeSessionId) return null;
-    return sessions.find((item) => item.sessionId === activeSessionId) ?? null;
-  }, [sessions, activeSessionId]);
-
-  const activeFileView = useMemo(() => {
-    if (!activeSessionId) return null;
-    return fileViews[activeSessionId] ?? null;
-  }, [fileViews, activeSessionId]);
-
-  const currentPath = activeFileView?.path ?? "";
-  const entries = activeFileView?.entries ?? [];
-
-  const activeSessionState = activeSessionId
-    ? sessionStates[activeSessionId]
-    : undefined;
-
-  function updateFileView(
-    sessionId: string,
-    path: string,
-    entries: SftpEntry[],
-  ) {
-    setFileViews((prev) => ({
-      ...prev,
-      [sessionId]: { path, entries },
-    }));
-  }
-
-  function clearFileView(sessionId: string) {
-    setFileViews((prev) => {
-      const next = { ...prev };
-      delete next[sessionId];
-      return next;
-    });
-  }
-  function isLocalSession(sessionId: string | null) {
-    return !!sessionId && localSessionIdsRef.current.has(sessionId);
-  }
-
-  function normalizeLocalPath(path: string) {
-    if (!path) return path;
-    if (path === "drives://") return path;
-    if (/^[A-Za-z]:$/.test(path)) {
-      return `${path}\\`;
-    }
-    return path;
-  }
-
-  const isRemoteConnected =
-    !!activeSession &&
-    activeSessionState === "connected" &&
-    !isLocalSession(activeSession.sessionId);
-  const activeSessionReason = activeSessionId
-    ? (sessionReasons[activeSessionId] ?? null)
-    : null;
-  const activeReconnectInfo = activeSessionId
-    ? (reconnectInfoBySession[activeSessionId] ?? null)
-    : null;
-  const activeSessionProfile =
-    activeSession && !isLocalSession(activeSession.sessionId)
-      ? (profiles.find((item) => item.id === activeSession.profileId) ?? null)
-      : null;
-  const isRemoteSession =
-    !!activeSession && !isLocalSession(activeSession.sessionId);
-  const canReconnect =
-    !!activeSessionProfile &&
-    activeSessionState !== "connected" &&
-    activeSessionState !== "connecting" &&
-    activeSessionState !== "reconnecting";
-
-  const maxReconnectAttempts = 6;
-  const baseReconnectDelayMs = 2000;
-  const maxReconnectDelayMs = 30000;
-
-  function normalizeCommand(command: string) {
-    const tokens = command.trim().split(/\s+/).filter(Boolean);
-    if (!tokens.length) return "";
-    if (tokens[0] === "sudo" && tokens.length > 1) {
-      return tokens[1];
-    }
-    return tokens[0];
-  }
-
-  function recordCommandInput(sessionId: string, data: string) {
-    const cleaned = data.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
-    let buffer = inputBufferRef.current[sessionId] ?? "";
-    for (const char of cleaned) {
-      if (char === "\r" || char === "\n") {
-        const command = buffer.trim();
-        if (command) {
-          lastCommandRef.current[sessionId] = command;
-        }
-        buffer = "";
-      } else if (char === "\u007f" || char === "\b") {
-        buffer = buffer.slice(0, -1);
-      } else if (char >= " ") {
-        buffer += char;
-      }
-    }
-    inputBufferRef.current[sessionId] = buffer;
-  }
-
-  function inferDisconnectReason(sessionId: string): DisconnectReason {
-    const lastCommand = lastCommandRef.current[sessionId];
-    if (!lastCommand) return "network";
-    const command = normalizeCommand(lastCommand);
-    if (command === "exit") return "exit";
-    if (command === "poweroff") return "poweroff";
-    if (command === "reboot") return "reboot";
-    return "network";
-  }
-
-  function clearReconnectState(sessionId: string) {
-    const timer = reconnectTimersRef.current[sessionId];
-    if (timer) {
-      window.clearTimeout(timer);
-    }
-    delete reconnectTimersRef.current[sessionId];
-    delete reconnectAttemptsRef.current[sessionId];
-    setReconnectInfoBySession((prev) => {
-      const next = { ...prev };
-      delete next[sessionId];
-      return next;
-    });
-  }
-
-  function replaceSessionConnection(
-    oldSessionId: string,
-    nextSession: Session,
-    nextState: SessionStateUi = "connecting",
-    nextLocalMeta?: { shellId: string | null; label: string },
-  ) {
-    clearReconnectState(oldSessionId);
-    delete sessionCloseHandledRef.current[oldSessionId];
-    if (localSessionIdsRef.current.has(oldSessionId)) {
-      localSessionIdsRef.current.delete(oldSessionId);
-      localSessionIdsRef.current.add(nextSession.sessionId);
-      setLocalSessionMeta((prev) => {
-        const next = { ...prev };
-        const meta = nextLocalMeta ?? next[oldSessionId];
-        delete next[oldSessionId];
-        if (meta) {
-          next[nextSession.sessionId] = meta;
-        }
-        return next;
-      });
-    }
-    setSessions((prev) =>
-      prev.map((item) =>
-        item.sessionId === oldSessionId ? nextSession : item,
-      ),
-    );
-    setSessionStates((prev) => {
-      const next = { ...prev };
-      delete next[oldSessionId];
-      next[nextSession.sessionId] = nextState;
-      return next;
-    });
-    setSessionReasons((prev) => {
-      const next = { ...prev };
-      delete next[oldSessionId];
-      return next;
-    });
-    setProgressBySession((prev) => {
-      const next = { ...prev };
-      delete next[oldSessionId];
-      return next;
-    });
-    setFileViews((prev) => {
-      if (!prev[oldSessionId]) return prev;
-      const next = { ...prev };
-      next[nextSession.sessionId] = next[oldSessionId];
-      delete next[oldSessionId];
-      return next;
-    });
-    delete sessionBuffersRef.current[oldSessionId];
-    delete inputBufferRef.current[oldSessionId];
-    delete lastCommandRef.current[oldSessionId];
-    if (activeSessionIdRef.current === oldSessionId) {
-      setActiveSessionId(nextSession.sessionId);
-    }
-  }
-
-  async function createSshSession(profile: HostProfile) {
-    const term = terminalInstance.current;
-    const cols = term?.cols ?? 80;
-    const rows = term?.rows ?? 24;
-    return await invoke<Session>("ssh_connect", {
-      profile,
-      size: { cols, rows },
-    });
-  }
-
-  async function createLocalShellSession(shellOverride: string | null = null) {
-    const term = terminalInstance.current;
-    const cols = term?.cols ?? 80;
-    const rows = term?.rows ?? 24;
-    const payload: Record<string, unknown> = { size: { cols, rows } };
-    const resolvedShell = shellOverride ?? shellId;
-    if (resolvedShell) {
-      payload.shellId = resolvedShell;
-    }
-    return await invoke<Session>("local_shell_connect", payload);
-  }
-
-  function sessionCommand(
-    sessionId: string,
-    sshCommand: string,
-    localCommand: string,
-  ) {
-    return isLocalSession(sessionId) ? localCommand : sshCommand;
-  }
-
-  function writeToSession(sessionId: string, data: string) {
-    return invoke(sessionCommand(sessionId, "ssh_write", "local_shell_write"), {
-      sessionId,
-      data,
-    });
-  }
-
-  function resizeSession(sessionId: string, cols: number, rows: number) {
-    return invoke(
-      sessionCommand(sessionId, "ssh_resize", "local_shell_resize"),
-      {
-        sessionId,
-        cols,
-        rows,
-      },
-    );
-  }
-
-  function resolveDefaultShellId(shells: LocalShellProfile[]) {
-    if (!shells.length) return null;
-    const preferred = shells.find((shell) => shell.id === "powershell");
-    if (preferred) return preferred.id;
-    return shells[0].id;
-  }
-
-  function findShellById(id: string | null) {
-    if (!id) return null;
-    return availableShells.find((shell) => shell.id === id) ?? null;
-  }
-
-  async function attemptReconnect(sessionId: string) {
-    const session = sessionsRef.current.find(
-      (item) => item.sessionId === sessionId,
-    );
-    if (!session) {
-      clearReconnectState(sessionId);
-      return;
-    }
-    const profile = profilesRef.current.find(
-      (item) => item.id === session.profileId,
-    );
-    if (!profile) {
-      clearReconnectState(sessionId);
-      return;
-    }
-    try {
-      const result = await createSshSession(profile);
-      replaceSessionConnection(sessionId, result);
-    } catch {
-      const attempts = reconnectAttemptsRef.current[sessionId] ?? 0;
-      if (attempts >= maxReconnectAttempts) {
-        clearReconnectState(sessionId);
-        setSessionStates((prev) => ({
-          ...prev,
-          [sessionId]: "disconnected",
-        }));
-        return;
-      }
-      scheduleReconnect(sessionId);
-    }
-  }
-
-  function scheduleReconnect(sessionId: string) {
-    const attempts = (reconnectAttemptsRef.current[sessionId] ?? 0) + 1;
-    reconnectAttemptsRef.current[sessionId] = attempts;
-    const delayMs = Math.min(
-      maxReconnectDelayMs,
-      baseReconnectDelayMs * 2 ** (attempts - 1),
-    );
-    setReconnectInfoBySession((prev) => ({
-      ...prev,
-      [sessionId]: { attempt: attempts, delayMs },
-    }));
-    setSessionStates((prev) => ({
-      ...prev,
-      [sessionId]: "reconnecting",
-    }));
-    const timer = window.setTimeout(() => {
-      delete reconnectTimersRef.current[sessionId];
-      attemptReconnect(sessionId).catch(() => {});
-    }, delayMs);
-    reconnectTimersRef.current[sessionId] = timer;
-  }
-
-  function handleSessionDisconnected(sessionId: string) {
-    if (sessionCloseHandledRef.current[sessionId]) return;
-    const session = sessionsRef.current.find(
-      (item) => item.sessionId === sessionId,
-    );
-    if (!session) return;
-    sessionCloseHandledRef.current[sessionId] = true;
-    const reason = inferDisconnectReason(sessionId);
-    setSessionReasons((prev) => ({ ...prev, [sessionId]: reason }));
-    setSessionStates((prev) => ({
-      ...prev,
-      [sessionId]: "disconnected",
-    }));
-    appendLog(
-      "log.event.disconnected",
-      { name: resolveSessionLabel(sessionId) },
-      "error",
-    );
-    if (reason === "poweroff" || reason === "reboot") {
-      scheduleReconnect(sessionId);
-    }
-  }
-
-  useEffect(() => {
-    document.documentElement.lang = locale;
-    localStorage.setItem("fluxterm.locale", locale);
-  }, [locale]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(logStorageKey, JSON.stringify(logEntries));
-    } catch {
-      // Ignore localStorage write errors.
-    }
-  }, [logEntries]);
+  const floatingPanelKey = useMemo<PanelKey | null>(() => {
+    const match = window.location.hash.match(/float=([a-z]+)/i);
+    if (!match) return null;
+    const value = match[1];
+    if (value === "profiles") return "profiles";
+    if (value === "files") return "files";
+    if (value === "transfers") return "transfers";
+    if (value === "events") return "events";
+    if (value === "logs") return "events";
+    return null;
+  }, []);
+  const layoutMenuDisabled = Boolean(floatingPanelKey);
+  const floatingOriginRef = useRef<Partial<Record<PanelKey, LayoutWidgetSlot>>>(
+    {},
+  );
+  const terminalSizeRef = useRef({ cols: 80, rows: 24 });
 
   useEffect(() => {
     const theme = themes[themeId];
@@ -978,469 +267,7 @@ function App() {
     Object.entries(theme.vars).forEach(([key, value]) => {
       root.style.setProperty(key, value);
     });
-    localStorage.setItem("fluxterm.theme", themeId);
-    if (terminalInstance.current) {
-      terminalInstance.current.options.theme = theme.terminal;
-    }
   }, [themeId]);
-
-  useEffect(() => {
-    sessionRef.current = activeSession;
-  }, [activeSession]);
-
-  useEffect(() => {
-    loadLayoutConfig().catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!layoutLoadedRef.current) return;
-    if (layoutSaveTimerRef.current) {
-      window.clearTimeout(layoutSaveTimerRef.current);
-    }
-    layoutSaveTimerRef.current = window.setTimeout(() => {
-      saveLayoutConfig({
-        visible: panelVisible,
-        assignments: panelAssignments,
-        sizes: panelSizes,
-      }).catch(() => {});
-    }, 300);
-    return () => {
-      if (layoutSaveTimerRef.current) {
-        window.clearTimeout(layoutSaveTimerRef.current);
-        layoutSaveTimerRef.current = null;
-      }
-    };
-  }, [panelVisible, panelAssignments, panelSizes]);
-
-  useEffect(() => {
-    activeSessionIdRef.current = activeSessionId;
-  }, [activeSessionId]);
-
-  useEffect(() => {
-    sessionsRef.current = sessions;
-  }, [sessions]);
-
-  useEffect(() => {
-    profilesRef.current = profiles;
-  }, [profiles]);
-
-  useEffect(() => {
-    sessionStatesRef.current = sessionStates;
-  }, [sessionStates]);
-
-  useEffect(() => {
-    sessionReasonsRef.current = sessionReasons;
-  }, [sessionReasons]);
-
-  useEffect(() => {
-    localSessionMetaRef.current = localSessionMeta;
-  }, [localSessionMeta]);
-
-  useEffect(() => {
-    loadProfiles();
-    loadSettings().catch(() => {});
-    invoke<LocalShellProfile[]>("local_shell_list")
-      .then((shells) => {
-        setAvailableShells(shells);
-        const fallbackId = resolveDefaultShellId(shells);
-        const preferred = pendingShellIdRef.current;
-        const selected =
-          (preferred && shells.some((shell) => shell.id === preferred)
-            ? preferred
-            : fallbackId) ?? null;
-        setShellId(selected);
-      })
-      .catch(() => {
-        setAvailableShells([]);
-        setShellId(null);
-      });
-    let cancelled = false;
-    const unlisteners: Array<() => void> = [];
-
-    const registerListeners = async () => {
-      const outputUnlisten = await listen<{ sessionId: string; data: string }>(
-        "terminal:output",
-        (event) => {
-          const sessionId = event.payload.sessionId;
-          const buffer = sessionBuffersRef.current[sessionId] ?? "";
-          sessionBuffersRef.current[sessionId] = buffer + event.payload.data;
-          if (
-            terminalInstance.current &&
-            sessionRef.current?.sessionId === sessionId
-          ) {
-            terminalInstance.current.write(event.payload.data);
-          }
-        },
-      );
-      if (cancelled) {
-        outputUnlisten();
-        return;
-      }
-      unlisteners.push(outputUnlisten);
-
-      const exitUnlisten = await listen<{ sessionId: string }>(
-        "terminal:exit",
-        (event) => {
-          handleSessionDisconnected(event.payload.sessionId);
-        },
-      );
-      if (cancelled) {
-        exitUnlisten();
-        return;
-      }
-      unlisteners.push(exitUnlisten);
-
-      const statusUnlisten = await listen<{
-        sessionId: string;
-        state: SessionStateUi;
-        error?: { message: string };
-      }>("session:status", (event) => {
-        const label = resolveSessionLabel(event.payload.sessionId);
-        setSessionStates((prev) => ({
-          ...prev,
-          [event.payload.sessionId]: event.payload.state,
-        }));
-        if (event.payload.state === "error" && event.payload.error?.message) {
-          setBusyMessage(event.payload.error.message);
-        }
-        if (event.payload.state === "error") {
-          setSessionReasons((prev) => ({
-            ...prev,
-            [event.payload.sessionId]: "network",
-          }));
-          appendLog(
-            "log.event.error",
-            {
-              name: label,
-              detail: event.payload.error?.message ?? t("log.unknownError"),
-            },
-            "error",
-          );
-        }
-        if (event.payload.state === "connected") {
-          appendLog("log.event.connected", { name: label }, "success");
-        }
-        if (event.payload.state === "connecting") {
-          appendLog("log.event.connecting", { name: label });
-        }
-        if (event.payload.state === "disconnected") {
-          handleSessionDisconnected(event.payload.sessionId);
-        }
-      });
-      if (cancelled) {
-        statusUnlisten();
-        return;
-      }
-      unlisteners.push(statusUnlisten);
-
-      const progressUnlisten = await listen<SftpProgress>(
-        "sftp:progress",
-        (event) => {
-          setProgressBySession((prev) => ({
-            ...prev,
-            [event.payload.sessionId]: event.payload,
-          }));
-        },
-      );
-      if (cancelled) {
-        progressUnlisten();
-        return;
-      }
-      unlisteners.push(progressUnlisten);
-    };
-
-    registerListeners().catch(() => {});
-
-    return () => {
-      cancelled = true;
-      unlisteners.forEach((unlisten) => unlisten());
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!terminalRef.current || terminalInstance.current) {
-      return;
-    }
-    let term: Terminal | null = null;
-    let fitter: FitAddon | null = null;
-    let rafId: number | null = null;
-    let disposed = false;
-    let initTimer: number | null = null;
-    let initAttempts = 0;
-    let handleResize: (() => void) | null = null;
-
-    const initializeTerminal = async () => {
-      if (disposed || terminalInstance.current) return;
-      const container = terminalRef.current;
-      if (!container) return;
-      if (container.clientWidth === 0 || container.clientHeight === 0) {
-        initAttempts += 1;
-        if (initAttempts < 10) {
-          initTimer = window.setTimeout(() => {
-            initializeTerminal().catch(() => {});
-          }, 50);
-        }
-        return;
-      }
-
-      const { Terminal, FitAddon } = await loadXtermModules();
-      if (disposed || terminalInstance.current) return;
-      term = new Terminal({
-        fontFamily: "JetBrains Mono, Consolas, Monaco, monospace",
-        fontSize: 14,
-        cursorBlink: true,
-        theme: themes[themeId].terminal,
-      });
-      fitter = new FitAddon();
-      term.loadAddon(fitter);
-      term.open(container);
-      rafId = window.requestAnimationFrame(() => {
-        if (disposed || !term?.element) return;
-        safeFit(fitter as FitAddon, container);
-        term?.focus();
-      });
-      term.onData((data: string) => {
-        const activeSession = sessionRef.current;
-        if (!activeSession) return;
-        const state = sessionStatesRef.current[activeSession.sessionId];
-        if (state !== "connected") {
-          if (
-            state === "disconnected" &&
-            (data.includes("\r") || data.includes("\n"))
-          ) {
-            const reason = sessionReasonsRef.current[activeSession.sessionId];
-            if (reason === "exit") {
-              if (isLocalSession(activeSession.sessionId)) {
-                reconnectLocalShell(activeSession.sessionId).catch(() => {});
-              } else {
-                reconnectSession(activeSession.sessionId).catch(() => {});
-              }
-            }
-          }
-          return;
-        }
-        recordCommandInput(activeSession.sessionId, data);
-        writeToSession(activeSession.sessionId, data).catch(() => {});
-      });
-
-      terminalInstance.current = term;
-      fitAddon.current = fitter;
-      setTerminalReady(true);
-
-      handleResize = () => {
-        const activeSession = sessionRef.current;
-        if (!activeSession || !fitAddon.current || !terminalInstance.current) {
-          return;
-        }
-        safeFit(fitAddon.current, terminalRef.current);
-        resizeSession(
-          activeSession.sessionId,
-          terminalInstance.current.cols,
-          terminalInstance.current.rows,
-        ).catch(() => {});
-      };
-      window.addEventListener("resize", handleResize);
-    };
-
-    initTimer = window.setTimeout(() => {
-      initializeTerminal().catch(() => {});
-    }, 50);
-
-    return () => {
-      disposed = true;
-      if (initTimer !== null) {
-        window.clearTimeout(initTimer);
-      }
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-      if (handleResize) {
-        window.removeEventListener("resize", handleResize);
-      }
-      term?.dispose();
-      if (terminalInstance.current === term) {
-        terminalInstance.current = null;
-      }
-      if (fitAddon.current === fitter) {
-        fitAddon.current = null;
-      }
-      setTerminalReady(false);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (
-      !terminalRef.current ||
-      !terminalInstance.current ||
-      !fitAddon.current
-    ) {
-      return;
-    }
-    let rafId: number | null = null;
-    const observer = new ResizeObserver(() => {
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-      rafId = window.requestAnimationFrame(() => {
-        if (!fitAddon.current || !terminalInstance.current) return;
-        safeFit(fitAddon.current, terminalRef.current);
-        const activeSession = sessionRef.current;
-        if (!activeSession) return;
-        resizeSession(
-          activeSession.sessionId,
-          terminalInstance.current.cols,
-          terminalInstance.current.rows,
-        ).catch(() => {});
-      });
-    });
-    observer.observe(terminalRef.current);
-    return () => {
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-      observer.disconnect();
-    };
-  }, [terminalReady]);
-
-  useEffect(() => {
-    if (!terminalReady || localShellStartedRef.current) return;
-    if (!settingsLoaded) return;
-    localShellStartedRef.current = true;
-    connectLocalShell(null, false).catch(() => {
-      localShellStartedRef.current = false;
-    });
-  }, [terminalReady, availableShells, shellId, settingsLoaded]);
-
-  useEffect(() => {
-    if (!settingsLoaded) return;
-    saveSettings({
-      version: 1,
-      shellId,
-      locale,
-      themeId,
-    }).catch(() => {});
-  }, [shellId, locale, themeId, settingsLoaded]);
-
-  useEffect(() => {
-    if (!terminalInstance.current) return;
-    terminalInstance.current.reset();
-    if (activeSessionId) {
-      terminalInstance.current.write(
-        sessionBuffersRef.current[activeSessionId] ?? "",
-      );
-    }
-  }, [activeSessionId]);
-
-  useEffect(() => {
-    if (!activeSessionId) return;
-    loadHomePath(activeSessionId).catch(() => {});
-  }, [activeSessionId, activeSessionState]);
-
-  async function loadProfiles() {
-    const list = await invoke<HostProfile[]>("profile_list");
-    setProfiles(list);
-    if (list.length && !activeProfileId) {
-      setActiveProfileId(list[0].id);
-      setEditingProfile(list[0]);
-    }
-  }
-
-  function pickProfile(profileId: string) {
-    setActiveProfileId(profileId);
-    const profile = profiles.find((item) => item.id === profileId);
-    if (profile) {
-      setEditingProfile(profile);
-    }
-  }
-
-  async function saveProfile(profile: HostProfile) {
-    const saved = await invoke<HostProfile>("profile_save", { profile });
-    const nextProfiles = profiles
-      .filter((item) => item.id !== saved.id)
-      .concat(saved);
-    setProfiles(nextProfiles);
-    setActiveProfileId(saved.id);
-    setEditingProfile(saved);
-  }
-
-  async function removeProfile(profileId: string) {
-    await invoke("profile_remove", { profileId });
-    const next = profiles.filter((item) => item.id !== profileId);
-    setProfiles(next);
-    if (activeProfileId === profileId) {
-      setActiveProfileId(next[0]?.id ?? null);
-      setEditingProfile(next[0] ?? defaultProfile);
-    }
-  }
-
-  async function connectWithProfile(profileInput: HostProfile) {
-    if (!profileInput.host || !profileInput.username) {
-      setBusyMessage(t("messages.missingHostUser"));
-      return;
-    }
-    setBusyMessage(t("messages.connecting"));
-    try {
-      const profile = profileInput.id
-        ? profileInput
-        : await invoke<HostProfile>("profile_save", {
-            profile: profileInput,
-          });
-      if (!profileInput.id) {
-        setProfiles((prev) => prev.concat(profile));
-        setEditingProfile(profile);
-        setActiveProfileId(profile.id);
-      }
-      const result = await createSshSession(profile);
-      setSessions((prev) => prev.concat(result));
-      setActiveSessionId(result.sessionId);
-      setSessionStates((prev) => ({
-        ...prev,
-        [result.sessionId]: "connected",
-      }));
-      setSessionReasons((prev) => {
-        const next = { ...prev };
-        delete next[result.sessionId];
-        return next;
-      });
-      setBusyMessage(null);
-    } catch (error: any) {
-      setBusyMessage(error?.message ?? t("messages.connectFailed"));
-    }
-  }
-
-  function connectProfile(profile: HostProfile) {
-    setActiveProfileId(profile.id);
-    setEditingProfile(profile);
-    connectWithProfile(profile).catch(() => {});
-  }
-
-  async function connectLocalShell(
-    targetShell: LocalShellProfile | null,
-    activate: boolean,
-  ) {
-    const shellProfile =
-      targetShell ?? findShellById(shellId) ?? availableShells[0] ?? null;
-    const session = await createLocalShellSession(shellProfile?.id ?? null);
-    const label = shellProfile?.label ?? t("session.local");
-    localSessionIdsRef.current.add(session.sessionId);
-    setLocalSessionMeta((prev) => ({
-      ...prev,
-      [session.sessionId]: { shellId: shellProfile?.id ?? null, label },
-    }));
-    setSessions((prev) => [session, ...prev]);
-    if (activate) {
-      setActiveSessionId(session.sessionId);
-    } else {
-      setActiveSessionId((prev) => prev ?? session.sessionId);
-    }
-    setSessionStates((prev) => ({ ...prev, [session.sessionId]: "connected" }));
-    setSessionReasons((prev) => {
-      const next = { ...prev };
-      delete next[session.sessionId];
-      return next;
-    });
-    appendLog("log.event.connected", { name: label }, "success");
-  }
 
   function openNewProfile() {
     setProfileModalMode("new");
@@ -1448,10 +275,10 @@ function App() {
     setProfileModalOpen(true);
   }
 
-  function openEditProfile() {
-    if (!editingProfile.id) return;
+  function openEditProfile(profile: HostProfile) {
+    if (!profile.id) return;
     setProfileModalMode("edit");
-    setProfileDraft(editingProfile);
+    setProfileDraft(profile);
     setProfileModalOpen(true);
   }
 
@@ -1460,230 +287,149 @@ function App() {
     setProfileModalOpen(false);
   }
 
-  function openProfileMenu(event: React.MouseEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setProfileMenu({ x: event.clientX, y: event.clientY });
-  }
+  const availableWidgets = allPanelKeys;
+  const panelLabels = useMemo(
+    () => ({
+      profiles: t(panelLabelKeys.profiles),
+      files: t(panelLabelKeys.files),
+      transfers: t(panelLabelKeys.transfers),
+      events: t(panelLabelKeys.events),
+    }),
+    [t],
+  );
 
-  function closeProfileMenu() {
-    setProfileMenu(null);
-  }
+  const {
+    sessions,
+    activeSessionId,
+    sessionStates,
+    localSessionMeta,
+    logEntries,
+    busyMessage,
+    activeSession,
+    activeSessionState,
+    activeSessionReason,
+    activeReconnectInfo,
+    isRemoteSession,
+    isRemoteConnected,
+    canReconnect,
+    sessionRef,
+    sessionStatesRef,
+    sessionReasonsRef,
+    sessionBuffersRef,
+    appendLog,
+    setBusyMessage,
+    isLocalSession,
+    recordCommandInput,
+    writeToSession,
+    resizeSession,
+    connectProfile,
+    connectLocalShell,
+    disconnectSession,
+    reconnectSession,
+    reconnectLocalShell,
+    switchSession,
+  } = useSessionState({
+    profiles,
+    t,
+    shellId,
+    availableShells,
+    settingsLoaded,
+    getTerminalSize: () => terminalSizeRef.current,
+  });
 
-  async function disconnectSession(sessionId: string) {
-    const state = sessionStatesRef.current[sessionId];
-    const localSession = isLocalSession(sessionId);
-    if (
-      state === "connected" ||
-      state === "connecting" ||
-      state === "reconnecting"
-    ) {
-      try {
-        await invoke(
-          localSession ? "local_shell_disconnect" : "ssh_disconnect",
-          { sessionId },
-        );
-      } catch {
-        // Ignore if the backend session is already closed.
-      }
-    }
-    if (localSession) {
-      localSessionIdsRef.current.delete(sessionId);
-      setLocalSessionMeta((prev) => {
-        const next = { ...prev };
-        delete next[sessionId];
-        return next;
-      });
-    }
-    setSessions((prev) => {
-      const remaining = prev.filter((item) => item.sessionId !== sessionId);
-      if (activeSessionId === sessionId) {
-        setActiveSessionId(remaining[0]?.sessionId ?? null);
-      }
-      return remaining;
-    });
-    setSessionStates((prev) => {
-      const next = { ...prev };
-      delete next[sessionId];
-      return next;
-    });
-    setSessionReasons((prev) => {
-      const next = { ...prev };
-      delete next[sessionId];
-      return next;
-    });
-    clearReconnectState(sessionId);
-    clearFileView(sessionId);
-    delete sessionBuffersRef.current[sessionId];
-    delete inputBufferRef.current[sessionId];
-    delete lastCommandRef.current[sessionId];
-    delete sessionCloseHandledRef.current[sessionId];
-    setProgressBySession((prev) => {
-      const next = { ...prev };
-      delete next[sessionId];
-      return next;
-    });
-    setBusyMessage(null);
-  }
+  const { terminalRef, terminalReady } = useTerminalRuntime({
+    theme: themes[themeId].terminal,
+    activeSessionId,
+    activeSession,
+    sessionRef,
+    sessionStatesRef,
+    sessionReasonsRef,
+    sessionBuffersRef,
+    recordCommandInput,
+    writeToSession,
+    resizeSession,
+    isLocalSession,
+    reconnectSession,
+    reconnectLocalShell,
+    onSizeChange: (size) => {
+      terminalSizeRef.current = size;
+    },
+  });
 
-  async function reconnectSession(sessionId: string) {
-    if (isLocalSession(sessionId)) {
-      await reconnectLocalShell(sessionId);
+  const {
+    currentPath,
+    entries,
+    progressBySession,
+    refreshList,
+    openRemoteDir,
+    uploadFile,
+    downloadFile,
+    createFolder,
+    rename,
+    remove,
+  } = useSftpState({
+    activeSessionId,
+    activeSession,
+    activeSessionState,
+    sessionStatesRef,
+    isLocalSession,
+    appendLog,
+    setBusyMessage,
+    t,
+  });
+
+  const {
+    layoutSplit,
+    layoutCollapsed,
+    layoutSplitRatio,
+    slotGroups,
+    leftVisible,
+    rightVisible,
+    bottomVisible,
+    layoutVars,
+    setSlotGroups,
+    handleToggleSplit,
+    handleToggleCollapsed,
+    startResize,
+    startSlotResize,
+  } = useLayoutState({
+    floatingPanelKey,
+    floatingOriginRef,
+  });
+
+  const { handleFloat } = useFloatingPanels({
+    floatingPanelKey,
+    floatingOriginRef,
+    slotGroups,
+    setSlotGroups,
+    panelLabels,
+    layoutSplit,
+    layoutCollapsed,
+    layoutSplitRatio,
+    locale,
+    themeId,
+    setLocale,
+    setThemeId,
+  });
+
+  async function handleConnectProfile(profileInput: HostProfile) {
+    if (!profileInput.host || !profileInput.username) {
+      setBusyMessage(t("messages.missingHostUser"));
       return;
     }
-    clearReconnectState(sessionId);
-    setSessionStates((prev) => ({
-      ...prev,
-      [sessionId]: "reconnecting",
-    }));
-    await attemptReconnect(sessionId);
-  }
-
-  async function reconnectLocalShell(sessionId: string) {
-    clearReconnectState(sessionId);
-    setSessionStates((prev) => ({
-      ...prev,
-      [sessionId]: "reconnecting",
-    }));
+    if (profileInput.id) {
+      pickProfile(profileInput.id);
+    }
+    setBusyMessage(t("messages.connecting"));
     try {
-      const meta = localSessionMetaRef.current[sessionId];
-      const shellProfile =
-        findShellById(meta?.shellId ?? null) ?? availableShells[0] ?? null;
-      const label = meta?.label ?? shellProfile?.label ?? t("session.local");
-      const result = await createLocalShellSession(shellProfile?.id ?? null);
-      replaceSessionConnection(sessionId, result, "connected", {
-        shellId: shellProfile?.id ?? meta?.shellId ?? null,
-        label,
-      });
-    } catch {
-      setSessionStates((prev) => ({
-        ...prev,
-        [sessionId]: "disconnected",
-      }));
-    }
-  }
-
-  async function refreshList(path = currentPath, sessionId = activeSessionId) {
-    if (!sessionId) return;
-    if (isLocalSession(sessionId)) {
-      const normalizedPath = normalizeLocalPath(path);
-      const list = await invoke<SftpEntry[]>("local_list", {
-        path: normalizedPath,
-      });
-      updateFileView(sessionId, normalizedPath, list);
-      return;
-    }
-    if (sessionStatesRef.current[sessionId] !== "connected") {
-      updateFileView(sessionId, "", []);
-      return;
-    }
-    const list = await invoke<SftpEntry[]>("sftp_list", {
-      sessionId,
-      path,
-    });
-    updateFileView(sessionId, path, list);
-  }
-
-  async function loadHomePath(sessionId = activeSessionId) {
-    if (!sessionId) return;
-    if (isLocalSession(sessionId)) {
-      const home = await invoke<string>("local_home");
-      await refreshList(home, sessionId);
-      return;
-    }
-    if (sessionStatesRef.current[sessionId] !== "connected") {
-      updateFileView(sessionId, "", []);
-      return;
-    }
-    const home = await invoke<string>("sftp_home", {
-      sessionId,
-    });
-    await refreshList(home, sessionId);
-  }
-
-  async function openRemoteDir(path: string) {
-    await refreshList(path);
-  }
-
-  async function uploadFile() {
-    if (!activeSession) return;
-    const file = await open({ multiple: false });
-    if (!file || Array.isArray(file)) return;
-    const fileName = file.split(/[\\/]/).pop() ?? "upload.bin";
-    const remotePath = currentPath.endsWith("/")
-      ? `${currentPath}${fileName}`
-      : `${currentPath}/${fileName}`;
-    appendLog("log.event.uploadStart", { name: fileName });
-    setBusyMessage(t("messages.uploading"));
-    try {
-      await invoke("sftp_upload", {
-        sessionId: activeSession.sessionId,
-        localPath: file,
-        remotePath,
-      });
-      await refreshList();
+      const profile = profileInput.id
+        ? profileInput
+        : await saveProfile(profileInput);
+      await connectProfile(profile);
       setBusyMessage(null);
-      appendLog("log.event.uploadDone", { name: fileName }, "success");
     } catch (error: any) {
-      setBusyMessage(error?.message ?? "上传失败");
-      appendLog("log.event.uploadFailed", { name: fileName }, "error");
+      setBusyMessage(error?.message ?? t("messages.connectFailed"));
     }
-  }
-
-  async function downloadFile(entry: SftpEntry) {
-    if (!activeSession) return;
-    const target = await save({ defaultPath: entry.name });
-    if (!target) return;
-    appendLog("log.event.downloadStart", { name: entry.name });
-    setBusyMessage(t("messages.downloading"));
-    try {
-      await invoke("sftp_download", {
-        sessionId: activeSession.sessionId,
-        remotePath: entry.path,
-        localPath: target,
-      });
-      setBusyMessage(null);
-      appendLog("log.event.downloadDone", { name: entry.name }, "success");
-    } catch (error: any) {
-      setBusyMessage(error?.message ?? "下载失败");
-      appendLog("log.event.downloadFailed", { name: entry.name }, "error");
-    }
-  }
-
-  async function createFolder() {
-    if (!activeSession) return;
-    const name = window.prompt(t("prompts.newFolder"));
-    if (!name) return;
-    const path = currentPath.endsWith("/")
-      ? `${currentPath}${name}`
-      : `${currentPath}/${name}`;
-    await invoke("sftp_mkdir", { sessionId: activeSession.sessionId, path });
-    await refreshList();
-  }
-
-  async function rename(entry: SftpEntry) {
-    if (!activeSession) return;
-    const name = window.prompt(t("prompts.rename"), entry.name);
-    if (!name || name === entry.name) return;
-    const base = currentPath.endsWith("/") ? currentPath : `${currentPath}/`;
-    const to = `${base}${name}`;
-    await invoke("sftp_rename", {
-      sessionId: activeSession.sessionId,
-      from: entry.path,
-      to,
-    });
-    await refreshList();
-  }
-
-  async function remove(entry: SftpEntry) {
-    if (!activeSession) return;
-    if (!window.confirm(t("prompts.confirmDelete", { name: entry.name }))) {
-      return;
-    }
-    await invoke("sftp_remove", {
-      sessionId: activeSession.sessionId,
-      path: entry.path,
-    });
-    await refreshList();
   }
 
   const panels = useMemo(() => {
@@ -1693,11 +439,27 @@ function App() {
           profiles={profiles}
           activeProfileId={activeProfileId}
           onPick={pickProfile}
-          onConnectProfile={connectProfile}
+          onConnectProfile={handleConnectProfile}
+          onOpenNewProfile={openNewProfile}
+          onOpenEditProfile={openEditProfile}
+          onRemoveProfile={(profile) => removeProfile(profile.id)}
           localShells={availableShells}
           onConnectLocalShell={(shell) => {
             connectLocalShell(shell, true).catch(() => {});
           }}
+          t={t}
+        />
+      ),
+      transfers: (
+        <TransfersPanel
+          progress={
+            activeSessionId
+              ? (progressBySession[activeSessionId] ?? null)
+              : null
+          }
+          busyMessage={busyMessage}
+          entries={logEntries}
+          locale={locale}
           t={t}
         />
       ),
@@ -1718,8 +480,8 @@ function App() {
           t={t}
         />
       ),
-      logs: (
-        <LogPanel
+      events: (
+        <EventsPanel
           sessionState={activeSessionState ?? "disconnected"}
           sessionReason={activeSessionReason}
           reconnectInfo={activeReconnectInfo}
@@ -1728,12 +490,6 @@ function App() {
             reconnectSession(activeSessionId).catch(() => {});
           }}
           canReconnect={canReconnect}
-          progress={
-            activeSessionId
-              ? (progressBySession[activeSessionId] ?? null)
-              : null
-          }
-          busyMessage={busyMessage}
           entries={logEntries}
           locale={locale}
           t={t}
@@ -1743,498 +499,155 @@ function App() {
   }, [
     profiles,
     activeProfileId,
-    editingProfile,
-    activeSession,
+    availableShells,
     activeSessionId,
-    sessionStates,
-    currentPath,
-    entries,
-    isRemoteSession,
-    progressBySession,
-    busyMessage,
-    logEntries,
-    locale,
-    sessionReasons,
-    reconnectInfoBySession,
     activeSessionState,
     activeSessionReason,
     activeReconnectInfo,
+    isRemoteSession,
     isRemoteConnected,
+    progressBySession,
+    busyMessage,
+    logEntries,
+    currentPath,
+    entries,
+    locale,
     canReconnect,
     t,
+    handleConnectProfile,
+    connectLocalShell,
+    refreshList,
+    openRemoteDir,
+    uploadFile,
+    downloadFile,
+    createFolder,
+    rename,
+    remove,
+    reconnectSession,
   ]);
 
-  function handlePanelSelect(area: PanelArea, next: PanelKey) {
-    if (
-      Object.values(panelAssignments).includes(next) &&
-      panelAssignments[area] !== next
-    ) {
-      return;
-    }
-    setPanelAssignments((prev) => ({ ...prev, [area]: next }));
+  function handleSlotSelect(slot: LayoutWidgetSlot, key: PanelKey) {
+    setSlotGroups((prev) => {
+      const group = prev[slot];
+      if (!group.widgets.includes(key)) return prev;
+      return { ...prev, [slot]: { ...group, active: key } };
+    });
   }
 
-  function startResize(
-    mode: "left" | "right" | "bottom",
-    event: React.MouseEvent<HTMLDivElement>,
+  function handleSlotAdd(slot: LayoutWidgetSlot, key: PanelKey) {
+    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
+  }
+
+  function handleDropWidget(slot: LayoutWidgetSlot, key: PanelKey) {
+    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
+  }
+
+  function handleDragWidget(
+    event: React.DragEvent<HTMLDivElement>,
+    _slot: LayoutWidgetSlot,
+    key: PanelKey,
   ) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    dragState.current = {
-      mode,
-      startX: event.clientX,
-      startY: event.clientY,
-      startLeft: panelSizes.left,
-      startRight: panelSizes.right,
-      startBottom: panelSizes.bottom,
-    };
-    document.body.style.userSelect = "none";
-    document.body.style.cursor =
-      mode === "bottom" ? "row-resize" : "col-resize";
-    window.addEventListener("mousemove", handleResizeMove);
-    window.addEventListener("mouseup", stopResize);
+    event.dataTransfer.setData(
+      "application/x-flux-widget",
+      JSON.stringify({ key }),
+    );
   }
 
-  function handleResizeMove(event: MouseEvent) {
-    const drag = dragState.current;
-    if (!drag) return;
-    if (drag.mode === "left") {
-      const min = 220;
-      const max = Math.max(min, Math.min(520, window.innerWidth * 0.5));
-      const next = Math.min(
-        max,
-        Math.max(min, drag.startLeft + (event.clientX - drag.startX)),
-      );
-      setPanelSizes((prev) => ({ ...prev, left: next }));
-    }
-    if (drag.mode === "right") {
-      const min = 260;
-      const max = Math.max(min, Math.min(560, window.innerWidth * 0.5));
-      const next = Math.min(
-        max,
-        Math.max(min, drag.startRight - (event.clientX - drag.startX)),
-      );
-      setPanelSizes((prev) => ({ ...prev, right: next }));
-    }
-    if (drag.mode === "bottom") {
-      const min = 160;
-      const max = Math.max(min, Math.min(420, window.innerHeight * 0.6));
-      const next = Math.min(
-        max,
-        Math.max(min, drag.startBottom - (event.clientY - drag.startY)),
-      );
-      setPanelSizes((prev) => ({ ...prev, bottom: next }));
-    }
+  if (floatingPanelKey) {
+    return (
+      <FloatingShell
+        floatingPanelKey={floatingPanelKey}
+        panelLabels={panelLabels}
+        panelBody={panels[floatingPanelKey]}
+        layoutCollapsed={layoutCollapsed}
+        onToggleCollapsed={handleToggleCollapsed}
+        layoutMenuDisabled={layoutMenuDisabled}
+        aboutOpen={aboutOpen}
+        onOpenAbout={() => setAboutOpen(true)}
+        onCloseAbout={() => setAboutOpen(false)}
+        locale={locale}
+        themeId={themeId}
+        shellId={shellId}
+        availableShells={availableShells}
+        themes={themes}
+        onLocaleChange={(next) => setLocale(next)}
+        onShellChange={(next) => setShellId(next)}
+        onThemeChange={(next) => setThemeId(next)}
+        t={t}
+      />
+    );
   }
-
-  function stopResize() {
-    dragState.current = null;
-    document.body.style.userSelect = "";
-    document.body.style.cursor = "";
-    window.removeEventListener("mousemove", handleResizeMove);
-    window.removeEventListener("mouseup", stopResize);
-  }
-
-  function switchSession(sessionId: string) {
-    setActiveSessionId(sessionId);
-  }
-
-  const layoutVars = useMemo(() => {
-    const hasSidePanels = panelVisible.left || panelVisible.right;
-    const hasAnyPanels = hasSidePanels || panelVisible.bottom;
-    return {
-      "--left-width": panelVisible.left ? `${panelSizes.left}px` : "0px",
-      "--right-width": panelVisible.right ? `${panelSizes.right}px` : "0px",
-      "--left-resizer": panelVisible.left ? "8px" : "0px",
-      "--right-resizer": panelVisible.right ? "8px" : "0px",
-      "--bottom-resizer": panelVisible.bottom ? "8px" : "0px",
-      "--bottom-height": panelVisible.bottom ? `${panelSizes.bottom}px` : "0px",
-      "--workspace-pad": hasAnyPanels ? "16px" : "0px",
-    } as React.CSSProperties;
-  }, [panelVisible, panelSizes]);
-
-  const selectedProfile = editingProfile.id ? editingProfile : null;
-  const profileMenuItems = [
-    {
-      label: t("profile.menu.new"),
-      disabled: false,
-      onClick: () => {
-        closeProfileMenu();
-        openNewProfile();
-      },
-    },
-    {
-      label: t("profile.menu.edit"),
-      disabled: !selectedProfile,
-      onClick: () => {
-        if (!selectedProfile) return;
-        closeProfileMenu();
-        openEditProfile();
-      },
-    },
-    {
-      label: t("profile.menu.delete"),
-      disabled: !selectedProfile,
-      onClick: () => {
-        if (!selectedProfile) return;
-        closeProfileMenu();
-        removeProfile(selectedProfile.id);
-      },
-    },
-  ];
 
   return (
     <div className="app-shell" style={layoutVars}>
-      <header className="top-bar">
-        <div className="brand">
-          <span className="brand-dot" />
-          FluxTerm
-          <span className="brand-sub">{t("app.brandSub")}</span>
-        </div>
-        <div className="top-actions">
-          <div className="panel-toggles">
-            <button
-              className={panelVisible.left ? "active" : ""}
-              onClick={() =>
-                setPanelVisible((prev) => ({ ...prev, left: !prev.left }))
-              }
-            >
-              {t("layout.left")}
-            </button>
-            <button
-              className={panelVisible.right ? "active" : ""}
-              onClick={() =>
-                setPanelVisible((prev) => ({ ...prev, right: !prev.right }))
-              }
-            >
-              {t("layout.right")}
-            </button>
-            <button
-              className={panelVisible.bottom ? "active" : ""}
-              onClick={() =>
-                setPanelVisible((prev) => ({ ...prev, bottom: !prev.bottom }))
-              }
-            >
-              {t("layout.bottom")}
-            </button>
-          </div>
-          <div className="top-selects">
-            <label className="top-select">
-              <span>{t("settings.language")}</span>
-              <select
-                value={locale}
-                onChange={(event) => setLocale(event.target.value as Locale)}
-              >
-                <option value="zh">中文</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <label className="top-select">
-              <span>{t("settings.shell")}</span>
-              <select
-                value={shellId ?? ""}
-                onChange={(event) => setShellId(event.target.value || null)}
-                disabled={!availableShells.length}
-              >
-                {!availableShells.length && <option value="">-</option>}
-                {availableShells.map((shell) => (
-                  <option key={shell.id} value={shell.id}>
-                    {shell.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="top-select">
-              <span>{t("settings.theme")}</span>
-              <select
-                value={themeId}
-                onChange={(event) => setThemeId(event.target.value as ThemeId)}
-              >
-                {Object.entries(themes).map(([key, theme]) => (
-                  <option key={key} value={key}>
-                    {theme.label[locale]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-      </header>
+      <TitleBar
+        layoutCollapsed={layoutCollapsed}
+        onToggleCollapsed={handleToggleCollapsed}
+        onOpenAbout={() => setAboutOpen(true)}
+        layoutDisabled={layoutMenuDisabled}
+        locale={locale}
+        themeId={themeId}
+        shellId={shellId}
+        availableShells={availableShells}
+        themes={themes}
+        onLocaleChange={(next) => setLocale(next)}
+        onShellChange={(next) => setShellId(next)}
+        onThemeChange={(next) => setThemeId(next)}
+        t={t}
+      />
 
-      <div className={`workspace ${panelVisible.bottom ? "with-bottom" : ""}`}>
-        {panelVisible.left && (
-          <aside className="panel left-panel">
-            <PanelHeader
-              area="left"
-              selection={panelAssignments.left}
-              lockedKeys={Object.values(panelAssignments)}
-              labels={panelLabelKeys}
-              onSelect={handlePanelSelect}
-              onContextMenu={
-                panelAssignments.left === "profiles"
-                  ? openProfileMenu
-                  : undefined
-              }
-              t={t}
-            />
-            <div className="panel-body">{panels[panelAssignments.left]}</div>
-          </aside>
-        )}
-        {panelVisible.left && (
-          <div
-            className="panel-resizer vertical left-resizer"
-            onMouseDown={(event) => startResize("left", event)}
-          />
-        )}
-        <main className="terminal-panel">
-          <div className="terminal-header">
-            <div className="terminal-title">{t("terminal.title")}</div>
-            <div className="session-tabs">
-              {sessions.map((item) => {
-                const localSession = isLocalSession(item.sessionId);
-                const profile =
-                  profiles.find((entry) => entry.id === item.profileId) ??
-                  editingProfile;
-                const localLabel =
-                  localSessionMeta[item.sessionId]?.label ?? t("session.local");
-                const label = localSession
-                  ? localLabel
-                  : profile.name || profile.host || t("session.defaultName");
-                const active = item.sessionId === activeSessionId;
-                const state = sessionStates[item.sessionId];
-                return (
-                  <div
-                    key={item.sessionId}
-                    className={`session-tab ${active ? "active" : ""} ${
-                      state === "disconnected" ? "disconnected" : ""
-                    }`}
-                  >
-                    <button onClick={() => switchSession(item.sessionId)}>
-                      {label}
-                    </button>
-                    <button
-                      className="close"
-                      onClick={() => disconnectSession(item.sessionId)}
-                    >
-                      x
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="terminal-body">
-            <div
-              className={`terminal-container ${terminalReady ? "ready" : ""}`}
-              ref={terminalRef}
-            />
-            {activeSessionState === "disconnected" &&
-              activeSessionReason === "exit" && (
-                <div className="terminal-banner">{t("terminal.exitHint")}</div>
-              )}
-            {!activeSession && (
-              <div className="terminal-empty">{t("terminal.empty")}</div>
-            )}
-          </div>
-        </main>
-        {panelVisible.right && (
-          <div
-            className="panel-resizer vertical right-resizer"
-            onMouseDown={(event) => startResize("right", event)}
-          />
-        )}
-        {panelVisible.right && (
-          <aside className="panel right-panel">
-            <PanelHeader
-              area="right"
-              selection={panelAssignments.right}
-              lockedKeys={Object.values(panelAssignments)}
-              labels={panelLabelKeys}
-              onSelect={handlePanelSelect}
-              t={t}
-            />
-            <div className="panel-body">{panels[panelAssignments.right]}</div>
-          </aside>
-        )}
-      </div>
-
-      {panelVisible.bottom && (
-        <div
-          className="panel-resizer horizontal bottom-resizer"
-          onMouseDown={(event) => startResize("bottom", event)}
-        />
-      )}
-
-      {panelVisible.bottom && (
-        <footer className="panel bottom-panel">
-          <PanelHeader
-            area="bottom"
-            selection={panelAssignments.bottom}
-            lockedKeys={Object.values(panelAssignments)}
-            labels={panelLabelKeys}
-            onSelect={handlePanelSelect}
+      <Workspace
+        layoutSplit={layoutSplit}
+        layoutCollapsed={layoutCollapsed}
+        layoutSplitRatio={layoutSplitRatio}
+        slotGroups={slotGroups}
+        panelLabels={panelLabels}
+        panels={panels}
+        terminalPanel={
+          <TerminalPanel
+            sessions={sessions}
+            profiles={profiles}
+            editingProfile={editingProfile}
+            localSessionMeta={localSessionMeta}
+            activeSessionId={activeSessionId}
+            activeSession={activeSession}
+            activeSessionState={activeSessionState}
+            activeSessionReason={activeSessionReason}
+            sessionStates={sessionStates}
+            terminalReady={terminalReady}
+            terminalRef={terminalRef}
+            isLocalSession={isLocalSession}
+            onSwitchSession={switchSession}
+            onDisconnectSession={disconnectSession}
             t={t}
           />
-          <div className="panel-body">{panels[panelAssignments.bottom]}</div>
-        </footer>
-      )}
+        }
+        availableWidgets={availableWidgets}
+        leftVisible={leftVisible}
+        rightVisible={rightVisible}
+        bottomVisible={bottomVisible}
+        onSelect={handleSlotSelect}
+        onAdd={handleSlotAdd}
+        onFloat={handleFloat}
+        onDropWidget={handleDropWidget}
+        onDragWidget={handleDragWidget}
+        onToggleSplit={handleToggleSplit}
+        onToggleCollapsed={handleToggleCollapsed}
+        onStartSplitResize={startSlotResize}
+        onStartResize={startResize}
+        t={t}
+      />
 
-      <Modal
+      <ProfileModal
         open={profileModalOpen}
-        title={
-          profileModalMode === "new"
-            ? t("profile.modal.newTitle")
-            : t("profile.modal.editTitle")
-        }
-        closeLabel={t("actions.close")}
+        mode={profileModalMode}
+        draft={profileDraft}
+        onDraftChange={setProfileDraft}
         onClose={() => setProfileModalOpen(false)}
-        actions={
-          <>
-            <button
-              className="ghost"
-              onClick={() => setProfileModalOpen(false)}
-            >
-              {t("actions.cancel")}
-            </button>
-            <button className="primary" onClick={submitProfile}>
-              {t("actions.save")}
-            </button>
-          </>
-        }
-      >
-        <div className="host-editor">
-          <div className="form-row">
-            <label>{t("profile.form.name")}</label>
-            <input
-              value={profileDraft.name}
-              onChange={(event) =>
-                setProfileDraft({ ...profileDraft, name: event.target.value })
-              }
-              placeholder={t("profile.placeholder.name")}
-            />
-          </div>
-          <div className="form-row">
-            <label>{t("profile.form.host")}</label>
-            <input
-              value={profileDraft.host}
-              onChange={(event) =>
-                setProfileDraft({ ...profileDraft, host: event.target.value })
-              }
-              placeholder={t("profile.placeholder.host")}
-            />
-          </div>
-          <div className="form-row split">
-            <div>
-              <label>{t("profile.form.port")}</label>
-              <input
-                type="number"
-                value={profileDraft.port}
-                onChange={(event) =>
-                  setProfileDraft({
-                    ...profileDraft,
-                    port: Number(event.target.value),
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label>{t("profile.form.username")}</label>
-              <input
-                value={profileDraft.username}
-                onChange={(event) =>
-                  setProfileDraft({
-                    ...profileDraft,
-                    username: event.target.value,
-                  })
-                }
-              />
-            </div>
-          </div>
-          <div className="form-row">
-            <label>{t("profile.form.authType")}</label>
-            <select
-              value={profileDraft.authType}
-              onChange={(event) =>
-                setProfileDraft({
-                  ...profileDraft,
-                  authType: event.target.value as AuthType,
-                })
-              }
-            >
-              <option value="password">{t("profile.auth.password")}</option>
-              <option value="key">{t("profile.auth.key")}</option>
-              <option value="agent">{t("profile.auth.agent")}</option>
-            </select>
-          </div>
-          <div className="form-row">
-            <label>{t("profile.form.group")}</label>
-            <input
-              value={profileDraft.tags?.[0] ?? ""}
-              onChange={(event) =>
-                setProfileDraft({
-                  ...profileDraft,
-                  tags: event.target.value ? [event.target.value] : null,
-                })
-              }
-              placeholder={t("profile.placeholder.group")}
-            />
-          </div>
-          {profileDraft.authType === "password" && (
-            <div className="form-row">
-              <label>{t("profile.form.password")}</label>
-              <input
-                type="password"
-                value={profileDraft.passwordRef ?? ""}
-                onChange={(event) =>
-                  setProfileDraft({
-                    ...profileDraft,
-                    passwordRef: event.target.value,
-                  })
-                }
-              />
-            </div>
-          )}
-          {profileDraft.authType === "key" && (
-            <>
-              <div className="form-row">
-                <label>{t("profile.form.keyPath")}</label>
-                <input
-                  value={profileDraft.keyPath ?? ""}
-                  onChange={(event) =>
-                    setProfileDraft({
-                      ...profileDraft,
-                      keyPath: event.target.value,
-                    })
-                  }
-                  placeholder="~/.ssh/id_ed25519"
-                />
-              </div>
-              <div className="form-row">
-                <label>{t("profile.form.keyPassphrase")}</label>
-                <input
-                  type="password"
-                  value={profileDraft.keyPassphraseRef ?? ""}
-                  onChange={(event) =>
-                    setProfileDraft({
-                      ...profileDraft,
-                      keyPassphraseRef: event.target.value,
-                    })
-                  }
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </Modal>
-
-      {profileMenu && (
-        <ContextMenu
-          x={profileMenu.x}
-          y={profileMenu.y}
-          items={profileMenuItems}
-          onClose={closeProfileMenu}
-        />
-      )}
+        onSubmit={submitProfile}
+        t={t}
+      />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} t={t} />
     </div>
   );
 }
