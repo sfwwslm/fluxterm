@@ -68,6 +68,7 @@ For pull requests:
 
 - If a task requires modifying more than three files, pause first and break it down into updated tasks.
 - Before writing any code, please describe your proposed approach and wait for approval. If the requirements are unclear, make sure to ask clarifying questions before writing any code.
+- During this development-stage refactor, compatibility is not required; prioritize a clean redesign.
 
 ## Communication
 
