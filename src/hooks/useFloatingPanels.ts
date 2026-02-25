@@ -45,6 +45,13 @@ function normalizePanelKey(value: unknown): PanelKey | null {
   return null;
 }
 
+function normalizeThemeId(value: unknown): ThemeId | null {
+  if (value === "dark" || value === "light") return value;
+  if (value === "aurora" || value === "sahara") return "dark";
+  if (value === "dawn") return "light";
+  return null;
+}
+
 /** 悬浮窗口控制与同步。 */
 export default function useFloatingPanels({
   floatingPanelKey: floatingPanelKeyProp,
@@ -143,13 +150,9 @@ export default function useFloatingPanels({
         if (payload.locale === "zh" || payload.locale === "en") {
           setLocale(payload.locale);
         }
-        if (
-          payload.themeId &&
-          (payload.themeId === "aurora" ||
-            payload.themeId === "sahara" ||
-            payload.themeId === "dawn")
-        ) {
-          setThemeId(payload.themeId);
+        const normalizedThemeId = normalizeThemeId(payload.themeId);
+        if (normalizedThemeId) {
+          setThemeId(normalizedThemeId);
         }
       }
     };

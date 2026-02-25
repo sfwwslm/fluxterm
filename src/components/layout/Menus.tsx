@@ -3,6 +3,8 @@ import type React from "react";
 import type { Locale, Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { ThemeId } from "@/types";
+import Button from "@/components/ui/button";
+import Select from "@/components/ui/select";
 
 type MenuAction = {
   id: string;
@@ -114,7 +116,7 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.language")}</span>
-                <select
+                <Select
                   value={locale}
                   onChange={(event) =>
                     onLocaleChange(event.target.value as Locale)
@@ -122,7 +124,7 @@ export default function Menus({
                 >
                   <option value="zh">中文</option>
                   <option value="en">English</option>
-                </select>
+                </Select>
               </label>
             ),
           },
@@ -131,7 +133,7 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.shell")}</span>
-                <select
+                <Select
                   value={shellId ?? ""}
                   onChange={(event) =>
                     onShellChange(event.target.value || null)
@@ -144,7 +146,7 @@ export default function Menus({
                       {shell.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             ),
           },
@@ -153,7 +155,7 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.theme")}</span>
-                <select
+                <Select
                   value={themeId}
                   onChange={(event) =>
                     onThemeChange(event.target.value as ThemeId)
@@ -164,7 +166,7 @@ export default function Menus({
                       {theme.label[locale]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             ),
           },
@@ -239,9 +241,11 @@ export default function Menus({
                     );
                   }
                   return (
-                    <button
+                    <Button
                       key={action.id}
                       className="menu-sub-item"
+                      variant="ghost"
+                      size="sm"
                       data-tauri-drag-region="false"
                       onClick={() => {
                         if (action.disabled) return;
@@ -251,7 +255,7 @@ export default function Menus({
                       disabled={action.disabled}
                     >
                       {action.label}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

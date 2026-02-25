@@ -6,6 +6,7 @@ import { isRootPath, parentPath } from "@/utils/path";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
 import { FiMoreVertical, FiRefreshCw } from "react-icons/fi";
+import Button from "@/components/ui/button";
 
 type SftpPanelProps = {
   isRemote: boolean;
@@ -75,23 +76,27 @@ export default function SftpPanel({
         {!showUnavailable && (
           <div className="sftp-actions">
             <Tooltip content={t("actions.refresh")}>
-              <button
+              <Button
                 className="icon-button"
+                variant="ghost"
+                size="icon"
                 onClick={() => onRefresh()}
                 aria-label={t("actions.refresh")}
               >
                 <FiRefreshCw />
-              </button>
+              </Button>
             </Tooltip>
             <Tooltip content={t("actions.more")}>
-              <button
+              <Button
                 className="icon-button"
+                variant="ghost"
+                size="icon"
                 onClick={openActionsMenu}
                 aria-label={t("actions.more")}
                 disabled={!isRemote}
               >
                 <FiMoreVertical />
-              </button>
+              </Button>
             </Tooltip>
           </div>
         )}
@@ -109,8 +114,10 @@ export default function SftpPanel({
           </div>
         )}
         {!isRootPath(currentPath) && (
-          <button
+          <Button
             className="entry-row entry-item"
+            variant="ghost"
+            size="sm"
             onClick={() => onOpen(parentPath(currentPath))}
           >
             <span className="entry-cell entry-name">..</span>
@@ -120,13 +127,15 @@ export default function SftpPanel({
             <span className="entry-cell">-</span>
             <span className="entry-cell">-</span>
             <span className="entry-cell">-</span>
-          </button>
+          </Button>
         )}
         {!showUnavailable &&
           entries.map((entry) => (
-            <button
+            <Button
               key={entry.path}
               className={`entry-row entry-item ${entry.kind}`}
+              variant="ghost"
+              size="sm"
               onClick={() => entry.kind === "dir" && onOpen(entry.path)}
               onContextMenu={(event) => openMenu(event, entry)}
             >
@@ -147,7 +156,7 @@ export default function SftpPanel({
               <span className="entry-cell">{entry.permissions ?? "-"}</span>
               <span className="entry-cell">{entry.owner ?? "-"}</span>
               <span className="entry-cell">{entry.group ?? "-"}</span>
-            </button>
+            </Button>
           ))}
         {showUnavailable && (
           <div className="empty-hint">{t("sftp.emptyUnavailable")}</div>

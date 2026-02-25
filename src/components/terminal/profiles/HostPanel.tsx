@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { HostProfile, LocalShellProfile } from "@/types";
 import type { Translate } from "@/i18n";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
+import Button from "@/components/ui/button";
 
 type HostPanelProps = {
   profiles: HostProfile[];
@@ -148,10 +149,12 @@ export default function HostPanel({
               matchesGroup(localShellLabel) ||
               filteredLocalShells.length > 0) && (
               <div key={localShellKey} className="host-group">
-                <button
+                <Button
                   className={`host-group-title ${
                     expandedGroups.has(localShellKey) ? "expanded" : ""
                   }`}
+                  variant="ghost"
+                  size="sm"
                   onClick={() => toggleGroup(localShellKey)}
                 >
                   <span>{localShellLabel}</span>
@@ -160,26 +163,30 @@ export default function HostPanel({
                       count: filteredLocalShells.length,
                     })}
                   </em>
-                </button>
+                </Button>
                 {(queryActive || expandedGroups.has(localShellKey)) && (
                   <div className="host-group-list">
                     {filteredLocalShells.map((shell) => (
-                      <button
+                      <Button
                         key={shell.id}
+                        variant="ghost"
+                        size="sm"
                         onDoubleClick={() => onConnectLocalShell(shell)}
                       >
                         <span>{shell.label}</span>
                         <em>{shell.path}</em>
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}
               </div>
             )}
           {filteredUngrouped.map((profile) => (
-            <button
+            <Button
               key={profile.id}
               className={profile.id === activeProfileId ? "active" : ""}
+              variant="ghost"
+              size="sm"
               onClick={() => onPick(profile.id)}
               onDoubleClick={() => onConnectProfile(profile)}
             >
@@ -187,25 +194,29 @@ export default function HostPanel({
               <em>
                 {profile.username}@{profile.host}
               </em>
-            </button>
+            </Button>
           ))}
           {filteredGroups.map((group) => (
             <div key={group.label} className="host-group">
-              <button
+              <Button
                 className={`host-group-title ${
                   expandedGroups.has(group.label) ? "expanded" : ""
                 }`}
+                variant="ghost"
+                size="sm"
                 onClick={() => toggleGroup(group.label)}
               >
                 <span>{group.label}</span>
                 <em>{t("host.groupCount", { count: group.items.length })}</em>
-              </button>
+              </Button>
               {(queryActive || expandedGroups.has(group.label)) && (
                 <div className="host-group-list">
                   {group.items.map((profile) => (
-                    <button
+                    <Button
                       key={profile.id}
                       className={profile.id === activeProfileId ? "active" : ""}
+                      variant="ghost"
+                      size="sm"
                       onClick={() => onPick(profile.id)}
                       onDoubleClick={() => onConnectProfile(profile)}
                     >
@@ -213,7 +224,7 @@ export default function HostPanel({
                       <em>
                         {profile.username}@{profile.host}
                       </em>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}

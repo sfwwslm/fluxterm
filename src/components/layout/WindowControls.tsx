@@ -6,6 +6,7 @@ import {
   VscChromeMinimize,
   VscChromeRestore,
 } from "react-icons/vsc";
+import Button from "@/components/ui/button";
 
 type WindowControlsProps = {
   disabled?: boolean;
@@ -61,33 +62,39 @@ export default function WindowControls({ disabled }: WindowControlsProps) {
 
   return (
     <div className="window-controls">
-      <button
+      <Button
         className="window-control"
+        variant="ghost"
+        size="icon"
         data-tauri-drag-region="false"
         onClick={handleMinimize}
         disabled={isDisabled}
         aria-label="Minimize window"
       >
         <VscChromeMinimize />
-      </button>
-      <button
+      </Button>
+      <Button
         className="window-control"
+        variant="ghost"
+        size="icon"
         data-tauri-drag-region="false"
         onClick={handleToggleMaximize}
         disabled={isDisabled}
         aria-label={isMaximized ? "Restore window" : "Maximize window"}
       >
         {isMaximized ? <VscChromeRestore /> : <VscChromeMaximize />}
-      </button>
-      <button
+      </Button>
+      <Button
         className="window-control danger"
+        variant="danger"
+        size="icon"
         data-tauri-drag-region="false"
         onClick={handleClose}
         disabled={isDisabled}
         aria-label="Close window"
       >
         <VscChromeClose />
-      </button>
+      </Button>
     </div>
   );
 }

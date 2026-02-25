@@ -33,6 +33,13 @@ type UseAppSettingsResult = {
   settingsLoaded: boolean;
 };
 
+function normalizeThemeId(value: unknown): ThemeId | null {
+  if (value === "dark" || value === "light") return value;
+  if (value === "aurora" || value === "sahara") return "dark";
+  if (value === "dawn") return "light";
+  return null;
+}
+
 /** 应用设置持久化与系统 shell 列表加载。 */
 export default function useAppSettings({
   themeIds,
@@ -44,7 +51,7 @@ export default function useAppSettings({
     return navigator.language?.startsWith("zh") ? "zh" : "en";
   });
   const [themeId, setThemeId] = useState<ThemeId>(() => {
-    const saved = localStorage.getItem("fluxterm.theme") as ThemeId | null;
+    const saved = normalizeThemeId(localStorage.getItem("fluxterm.theme"));
     if (saved && themeIds.includes(saved)) return saved;
     return defaultThemeId;
   });
@@ -95,8 +102,9 @@ export default function useAppSettings({
       if (parsed?.locale === "zh" || parsed?.locale === "en") {
         setLocale(parsed.locale);
       }
-      if (parsed?.themeId && themeIds.includes(parsed.themeId)) {
-        setThemeId(parsed.themeId);
+      const normalizedThemeId = normalizeThemeId(parsed?.themeId);
+      if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
+        setThemeId(normalizedThemeId);
       }
     } catch {
       // Ignore invalid settings.

@@ -64,7 +64,7 @@ export type PanelKey = "profiles" | "files" | "transfers" | "events";
 export type PanelArea = "left" | "right" | "bottom";
 
 /** 主题标识。 */
-export type ThemeId = "aurora" | "sahara" | "dawn";
+export type ThemeId = "dark" | "light";
 /** 会话 UI 状态。 */
 export type SessionStateUi =
   | "connecting"

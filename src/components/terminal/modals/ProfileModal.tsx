@@ -1,6 +1,8 @@
 import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
 import Modal from "@/components/terminal/modals/Modal";
+import Button from "@/components/ui/button";
+import Select from "@/components/ui/select";
 
 type ProfileModalProps = {
   open: boolean;
@@ -34,12 +36,12 @@ export default function ProfileModal({
       onClose={onClose}
       actions={
         <>
-          <button className="ghost" onClick={onClose}>
+          <Button className="ghost" variant="ghost" onClick={onClose}>
             {t("actions.cancel")}
-          </button>
-          <button className="primary" onClick={onSubmit}>
+          </Button>
+          <Button className="primary" variant="primary" onClick={onSubmit}>
             {t("actions.save")}
-          </button>
+          </Button>
         </>
       }
     >
@@ -90,7 +92,7 @@ export default function ProfileModal({
         </div>
         <div className="form-row">
           <label>{t("profile.form.authType")}</label>
-          <select
+          <Select
             value={draft.authType}
             onChange={(event) =>
               onDraftChange({
@@ -102,7 +104,7 @@ export default function ProfileModal({
             <option value="password">{t("profile.auth.password")}</option>
             <option value="key">{t("profile.auth.key")}</option>
             <option value="agent">{t("profile.auth.agent")}</option>
-          </select>
+          </Select>
         </div>
         {draft.authType === "password" && (
           <div className="form-row">

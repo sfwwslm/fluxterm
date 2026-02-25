@@ -54,6 +54,71 @@ body,
   --progress-gradient: linear-gradient(120deg, #7affa2, #f8d254);
   --shadow-strong: 0 16px 32px rgba(0, 0, 0, 0.35);
   --brand-glow: 0 0 12px rgba(248, 210, 84, 0.6);
+  --ui-radius: 10px;
+  --ui-ring: var(--accent-soft);
+  --ui-border: var(--border-input);
+  --ui-bg: var(--button-bg-strong);
+  --ui-fg: var(--text-primary);
+  --ui-select-bg: color-mix(in srgb, var(--surface-menu) 72%, transparent);
+  --ui-select-bg-hover: color-mix(
+    in srgb,
+    var(--surface-menu) 82%,
+    transparent
+  );
+  --ui-select-border: color-mix(
+    in srgb,
+    var(--accent-soft) 28%,
+    var(--border-input)
+  );
+  --ui-select-border-hover: color-mix(
+    in srgb,
+    var(--accent-soft) 56%,
+    var(--border-input)
+  );
+  --ui-select-glow: 0 10px 24px color-mix(in srgb, #000 36%, transparent);
+  --ui-select-inner-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent),
+    inset 0 -10px 16px color-mix(in srgb, #000 18%, transparent);
+  --ui-button-bg: color-mix(
+    in srgb,
+    var(--surface-header-strong) 72%,
+    transparent
+  );
+  --ui-button-bg-hover: color-mix(
+    in srgb,
+    var(--surface-header-strong) 82%,
+    transparent
+  );
+  --ui-button-border: color-mix(
+    in srgb,
+    var(--accent-soft) 24%,
+    var(--border-input)
+  );
+  --ui-button-border-hover: color-mix(
+    in srgb,
+    var(--accent-soft) 54%,
+    var(--border-input)
+  );
+  --ui-button-glow: 0 10px 24px color-mix(in srgb, #000 36%, transparent);
+  --ui-button-inner-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent),
+    inset 0 -8px 14px color-mix(in srgb, #000 20%, transparent);
+  --ui-input-bg: color-mix(in srgb, var(--surface-menu) 70%, transparent);
+  --ui-input-bg-hover: color-mix(in srgb, var(--surface-menu) 80%, transparent);
+  --ui-input-border: color-mix(
+    in srgb,
+    var(--accent-soft) 22%,
+    var(--border-input)
+  );
+  --ui-input-border-hover: color-mix(
+    in srgb,
+    var(--accent-soft) 48%,
+    var(--border-input)
+  );
+  --ui-input-glow: 0 10px 22px color-mix(in srgb, #000 34%, transparent);
+  --ui-input-inner-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent),
+    inset 0 -8px 14px color-mix(in srgb, #000 18%, transparent);
 }
 
 * {
@@ -71,6 +136,410 @@ button,
 input,
 select {
   font-family: inherit;
+}
+
+.ui-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--ui-button-border);
+  border-radius: var(--ui-radius);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 10%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-button-bg);
+  color: var(--ui-fg);
+  transition:
+    border-color 0.22s ease,
+    color 0.2s ease,
+    background-color 0.22s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+  box-shadow: var(--ui-button-glow);
+  text-shadow: 0 1px 0 color-mix(in srgb, #000 26%, transparent);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+}
+
+.ui-button::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: calc(var(--ui-radius) - 1px);
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #fff 14%, transparent) 0%,
+      transparent 42%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, #000 14%, transparent) 0%,
+      transparent 44%
+    );
+  box-shadow: var(--ui-button-inner-shadow);
+}
+
+.ui-button:hover {
+  border-color: var(--ui-button-border-hover);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 15%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-button-bg-hover);
+  transform: translateY(-1px);
+}
+
+.ui-button:focus-visible,
+.ui-select-native:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 58%, transparent),
+    0 14px 28px color-mix(in srgb, var(--accent-soft) 24%, transparent),
+    var(--ui-button-glow);
+}
+
+.ui-button:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 8px color-mix(in srgb, #000 30%, transparent),
+    0 6px 14px color-mix(in srgb, #000 35%, transparent);
+}
+
+.ui-button:disabled {
+  opacity: 0.55;
+  filter: saturate(0.7);
+  cursor: not-allowed;
+  transform: none;
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+) {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--ui-input-border);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 9%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-input-bg);
+  color: var(--input-text);
+  padding: 8px 10px;
+  box-shadow: var(--ui-input-glow);
+  text-shadow: 0 1px 0 color-mix(in srgb, #000 28%, transparent);
+  backdrop-filter: blur(12px) saturate(126%);
+  -webkit-backdrop-filter: blur(12px) saturate(126%);
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background-color 0.22s ease,
+    transform 0.2s ease;
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+)::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+):hover {
+  border-color: var(--ui-input-border-hover);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 12%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-input-bg-hover);
+  transform: translateY(-1px);
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+):focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 74%, #ffffff 10%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 50%, transparent),
+    0 14px 28px color-mix(in srgb, var(--accent-soft) 22%, transparent),
+    var(--ui-input-glow);
+  transform: none;
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+):disabled {
+  opacity: 0.55;
+  filter: saturate(0.72);
+  cursor: not-allowed;
+  transform: none;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.ui-button--sm {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.ui-button--md {
+  font-size: 13px;
+  padding: 8px 14px;
+}
+
+.ui-button--icon {
+  width: 34px;
+  height: 32px;
+  padding: 0;
+}
+
+.ui-button--default {
+  color: var(--text-primary);
+}
+
+.ui-button--default:hover {
+  color: color-mix(in srgb, var(--text-primary) 92%, var(--accent) 8%);
+}
+
+.ui-button--primary {
+  border-color: color-mix(in srgb, var(--accent) 68%, #fff 16%);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 24%, transparent) 0%,
+      transparent 56%
+    ),
+    linear-gradient(
+      130deg,
+      color-mix(in srgb, var(--accent) 92%, #fff 8%),
+      color-mix(in srgb, var(--accent-strong) 88%, #000 12%)
+    );
+  box-shadow:
+    0 12px 26px color-mix(in srgb, var(--accent-soft) 34%, transparent),
+    0 8px 18px color-mix(in srgb, #000 30%, transparent);
+  color: var(--text-primary);
+}
+
+.ui-button--primary::before {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #fff 26%, transparent) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, #000 16%, transparent) 0%,
+      transparent 50%
+    );
+}
+
+.ui-button--primary:hover {
+  border-color: color-mix(in srgb, var(--accent) 76%, #fff 24%);
+  box-shadow:
+    0 16px 28px color-mix(in srgb, var(--accent-soft) 42%, transparent),
+    0 10px 20px color-mix(in srgb, #000 34%, transparent);
+}
+
+.ui-button--primary:focus-visible {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 76%, transparent),
+    0 16px 30px color-mix(in srgb, var(--accent-soft) 38%, transparent);
+}
+
+.ui-button--primary,
+.host-actions .ui-button.primary,
+.modal-actions .ui-button.primary {
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.ui-button--ghost {
+  border-color: color-mix(in srgb, var(--border-input) 86%, transparent);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 7%, transparent) 0%,
+      transparent 58%
+    ),
+    color-mix(in srgb, var(--surface-header) 46%, transparent);
+  color: var(--text-secondary);
+}
+
+.ui-button--danger {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--border-input));
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 8%, transparent) 0%,
+      transparent 60%
+    ),
+    color-mix(in srgb, var(--surface-header) 72%, transparent);
+  color: var(--danger);
+}
+
+.ui-button--danger:hover {
+  border-color: color-mix(in srgb, var(--danger) 72%, var(--border-input));
+  box-shadow:
+    0 14px 26px color-mix(in srgb, var(--danger) 24%, transparent),
+    0 8px 18px color-mix(in srgb, #000 32%, transparent);
+}
+
+.ui-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--ui-select-border);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 9%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-select-bg);
+  box-shadow: var(--ui-select-glow);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.ui-select-native {
+  width: 100%;
+  appearance: none;
+  background: transparent;
+  color: var(--input-text);
+  border-radius: 10px;
+  border: none;
+  padding: 0 36px 0 12px;
+  height: 34px;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 1px 0 color-mix(in srgb, #000 30%, transparent);
+}
+
+.ui-select--sm .ui-select-native {
+  height: 30px;
+  padding-left: 10px;
+  font-size: 12px;
+}
+
+.ui-select--md .ui-select-native {
+  height: 34px;
+  font-size: 13px;
+}
+
+.ui-select:hover {
+  border-color: var(--ui-select-border-hover);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 14%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-select-bg-hover);
+  transform: translateY(-1px);
+}
+
+.ui-select-gloss {
+  position: absolute;
+  inset: 1px;
+  border-radius: 9px;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #fff 15%, transparent) 0%,
+      transparent 40%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, #000 12%, transparent) 0%,
+      transparent 45%
+    );
+  box-shadow: var(--ui-select-inner-shadow);
+}
+
+.ui-select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 10px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
+  z-index: 3;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.ui-select:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 78%, #ffffff 10%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 52%, transparent),
+    0 16px 30px color-mix(in srgb, var(--accent-soft) 22%, transparent),
+    var(--ui-select-glow);
+  transform: none;
+}
+
+.ui-select--disabled {
+  opacity: 0.58;
+  filter: saturate(0.72);
+  transform: none;
+}
+
+.ui-select--disabled:hover {
+  border-color: var(--ui-select-border);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 9%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-select-bg);
+  transform: none;
 }
 
 .app-shell {
@@ -210,11 +679,7 @@ select {
 }
 
 .menu-field select {
-  background: var(--input-bg);
-  color: var(--input-text);
-  border-radius: 8px;
-  border: 1px solid var(--border-input);
-  padding: 4px 8px;
+  width: 100%;
 }
 
 .window-controls {
@@ -225,18 +690,10 @@ select {
 }
 
 .window-control {
-  width: 34px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid transparent;
+  border-color: transparent;
   background: var(--button-bg);
   color: var(--text-primary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   font-size: 16px;
-  transition: 0.2s ease;
 }
 
 .window-control:hover {
@@ -574,12 +1031,8 @@ button:disabled {
 }
 
 .host-search {
-  width: 100%;
-  background: var(--input-bg);
-  border-radius: 10px;
-  border: 1px solid var(--border-input);
-  color: var(--input-text);
-  padding: 8px 10px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
 }
 
 .host-list-actions {
@@ -703,11 +1156,7 @@ button:disabled {
 
 input,
 select {
-  background: var(--input-bg);
-  border-radius: 10px;
-  border: 1px solid var(--border-input);
   color: var(--input-text);
-  padding: 8px 10px;
 }
 
 .host-actions {

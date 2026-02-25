@@ -1,4 +1,5 @@
 import type React from "react";
+import Button from "@/components/ui/button";
 
 type ModalProps = {
   open: boolean;
@@ -24,9 +25,9 @@ export default function Modal({
       <div className="modal" onMouseDown={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <span>{title}</span>
-          <button className="ghost" onClick={onClose}>
+          <Button className="ghost" variant="ghost" size="sm" onClick={onClose}>
             {closeLabel}
-          </button>
+          </Button>
         </div>
         <div className="modal-body">{children}</div>
         {actions && <div className="modal-actions">{actions}</div>}
