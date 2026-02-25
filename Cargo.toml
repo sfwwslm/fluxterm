@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+
+[workspace.package]
+edition = "2024"
+authors = ["sfwwslm"]
+
+
+[profile.dev]
+incremental = true
+
+
+[profile.release]
+strip = true
+lto = "fat"

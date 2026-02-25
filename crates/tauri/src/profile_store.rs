@@ -1,0 +1,94 @@
+//! 主机配置的本地存储。
+use std::fs;
+use std::path::PathBuf;
+
+use engine::{EngineError, HostProfile};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
+
+/// 主机配置存储结构。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileStore {
+    pub version: u32,
+    pub updated_at: u64,
+    pub profiles: Vec<HostProfile>,
+}
+
+impl Default for ProfileStore {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            updated_at: now_epoch(),
+            profiles: Vec::new(),
+        }
+    }
+}
+
+/// 读取配置文件并解析为存储结构。
+pub fn read_profiles(app: &AppHandle) -> Result<ProfileStore, EngineError> {
+    let path = profiles_path(app)?;
+    let content = if path.exists() {
+        fs::read_to_string(&path)
+    } else {
+        let legacy = legacy_profiles_path(app)?;
+        if !legacy.exists() {
+            return Ok(ProfileStore::default());
+        }
+        fs::read_to_string(&legacy)
+    }
+    .map_err(|err| {
+        EngineError::with_detail("profile_read_failed", "无法读取配置文件", err.to_string())
+    })?;
+    serde_json::from_str(&content).map_err(|err| {
+        EngineError::with_detail("profile_parse_failed", "配置文件解析失败", err.to_string())
+    })
+}
+
+/// 写入配置文件。
+pub fn write_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), EngineError> {
+    let path = profiles_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            EngineError::with_detail("profile_write_failed", "无法创建配置目录", err.to_string())
+        })?;
+    }
+    let content = serde_json::to_string_pretty(store).map_err(|err| {
+        EngineError::with_detail(
+            "profile_write_failed",
+            "无法序列化配置文件",
+            err.to_string(),
+        )
+    })?;
+    fs::write(&path, content).map_err(|err| {
+        EngineError::with_detail("profile_write_failed", "无法写入配置文件", err.to_string())
+    })
+}
+
+fn profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = app.path().app_config_dir().map_err(|err| {
+        EngineError::with_detail(
+            "profile_path_failed",
+            "无法获取应用配置目录",
+            err.to_string(),
+        )
+    })?;
+    Ok(dir.join("flux-term").join("profiles.json"))
+}
+
+fn legacy_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = app.path().app_data_dir().map_err(|err| {
+        EngineError::with_detail(
+            "profile_path_failed",
+            "无法获取应用数据目录",
+            err.to_string(),
+        )
+    })?;
+    Ok(dir.join("profiles.json"))
+}
+
+fn now_epoch() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
