@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { appConfigDir, join } from "@tauri-apps/api/path";
+import { homeDir, join } from "@tauri-apps/api/path";
 import {
   exists,
   mkdir,
@@ -67,8 +67,8 @@ export default function useAppSettings({
 
   async function getConfigDir() {
     if (configDirRef.current) return configDirRef.current;
-    const dir = await appConfigDir();
-    const path = await join(dir, "flux-term");
+    const dir = await homeDir();
+    const path = await join(dir, ".flux-term");
     configDirRef.current = path;
     return path;
   }

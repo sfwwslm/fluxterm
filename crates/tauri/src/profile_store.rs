@@ -65,14 +65,10 @@ pub fn write_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), Engin
 }
 
 fn profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = app.path().app_config_dir().map_err(|err| {
-        EngineError::with_detail(
-            "profile_path_failed",
-            "无法获取应用配置目录",
-            err.to_string(),
-        )
+    let dir = app.path().home_dir().map_err(|err| {
+        EngineError::with_detail("profile_path_failed", "无法获取用户主目录", err.to_string())
     })?;
-    Ok(dir.join("flux-term").join("profiles.json"))
+    Ok(dir.join(".flux-term").join("profiles.json"))
 }
 
 fn legacy_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { appConfigDir, join } from "@tauri-apps/api/path";
+import { homeDir, join } from "@tauri-apps/api/path";
 import {
   exists,
   mkdir,
@@ -43,7 +43,9 @@ type LayoutState = {
 
 type UseLayoutStateProps = {
   floatingPanelKey: PanelKey | null;
-  floatingOriginRef: React.MutableRefObject<Partial<Record<PanelKey, WidgetSlot>>>;
+  floatingOriginRef: React.MutableRefObject<
+    Partial<Record<PanelKey, WidgetSlot>>
+  >;
 };
 
 /** 布局状态管理（读取/保存/拖拽调整）。 */
@@ -51,8 +53,12 @@ export default function useLayoutState({
   floatingPanelKey,
   floatingOriginRef,
 }: UseLayoutStateProps): LayoutState {
-  const [layoutCollapsed, setLayoutCollapsed] = useState(defaultLayoutV3.collapsed);
-  const [sideSlotCounts, setSideSlotCounts] = useState(defaultLayoutV3.sideSlotCounts);
+  const [layoutCollapsed, setLayoutCollapsed] = useState(
+    defaultLayoutV3.collapsed,
+  );
+  const [sideSlotCounts, setSideSlotCounts] = useState(
+    defaultLayoutV3.sideSlotCounts,
+  );
   const [slotGroups, setSlotGroups] = useState(defaultLayoutV3.slots);
   const [panelSizes, setPanelSizes] = useState(defaultLayoutV3.sizes);
 
@@ -100,8 +106,8 @@ export default function useLayoutState({
 
   async function getConfigDir() {
     if (configDirRef.current) return configDirRef.current;
-    const dir = await appConfigDir();
-    const path = await join(dir, "flux-term");
+    const dir = await homeDir();
+    const path = await join(dir, ".flux-term");
     configDirRef.current = path;
     return path;
   }
@@ -231,7 +237,10 @@ export default function useLayoutState({
       });
       return next;
     });
-    setSideSlotCounts((prev) => ({ ...prev, [side]: Math.max(1, prev[side] - 1) }));
+    setSideSlotCounts((prev) => ({
+      ...prev,
+      [side]: Math.max(1, prev[side] - 1),
+    }));
   }
 
   function handleToggleCollapsed(side: WidgetSide | "bottom") {
@@ -253,7 +262,8 @@ export default function useLayoutState({
       startBottom: panelSizes.bottom,
     };
     document.body.style.userSelect = "none";
-    document.body.style.cursor = mode === "bottom" ? "row-resize" : "col-resize";
+    document.body.style.cursor =
+      mode === "bottom" ? "row-resize" : "col-resize";
     window.addEventListener("mousemove", handleResizeMove);
     window.addEventListener("mouseup", stopResize);
   }
@@ -264,17 +274,26 @@ export default function useLayoutState({
     if (drag.mode === "left") {
       const min = 220;
       const max = Math.max(min, Math.min(520, window.innerWidth * 0.5));
-      const next = Math.min(max, Math.max(min, drag.startLeft + (event.clientX - drag.startX)));
+      const next = Math.min(
+        max,
+        Math.max(min, drag.startLeft + (event.clientX - drag.startX)),
+      );
       setPanelSizes((prev) => ({ ...prev, left: next }));
     } else if (drag.mode === "right") {
       const min = 260;
       const max = Math.max(min, Math.min(560, window.innerWidth * 0.5));
-      const next = Math.min(max, Math.max(min, drag.startRight - (event.clientX - drag.startX)));
+      const next = Math.min(
+        max,
+        Math.max(min, drag.startRight - (event.clientX - drag.startX)),
+      );
       setPanelSizes((prev) => ({ ...prev, right: next }));
     } else if (drag.mode === "bottom") {
       const min = 160;
       const max = Math.max(min, Math.min(420, window.innerHeight * 0.6));
-      const next = Math.min(max, Math.max(min, drag.startBottom - (event.clientY - drag.startY)));
+      const next = Math.min(
+        max,
+        Math.max(min, drag.startBottom - (event.clientY - drag.startY)),
+      );
       setPanelSizes((prev) => ({ ...prev, bottom: next }));
     }
   }
@@ -323,11 +342,13 @@ export default function useLayoutState({
       };
       for (let i = 0; i < normalizedCounts.left; i += 1) {
         const key = sideSlotKey("left", i);
-        if (!persistedSlots[key]) persistedSlots[key] = { widgets: [], active: null, floating: false };
+        if (!persistedSlots[key])
+          persistedSlots[key] = { widgets: [], active: null, floating: false };
       }
       for (let i = 0; i < normalizedCounts.right; i += 1) {
         const key = sideSlotKey("right", i);
-        if (!persistedSlots[key]) persistedSlots[key] = { widgets: [], active: null, floating: false };
+        if (!persistedSlots[key])
+          persistedSlots[key] = { widgets: [], active: null, floating: false };
       }
       if (!persistedSlots.bottom) {
         persistedSlots.bottom = { widgets: [], active: null, floating: false };
@@ -346,7 +367,13 @@ export default function useLayoutState({
         layoutSaveTimerRef.current = null;
       }
     };
-  }, [floatingPanelKey, layoutCollapsed, sideSlotCounts, slotGroups, panelSizes]);
+  }, [
+    floatingPanelKey,
+    layoutCollapsed,
+    sideSlotCounts,
+    slotGroups,
+    panelSizes,
+  ]);
 
   return {
     layoutCollapsed,
