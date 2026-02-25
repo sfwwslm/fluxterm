@@ -27,89 +27,12 @@ type UseMacAppMenuOptions = {
 async function createAppMenu({
   appName,
   t,
-  locale,
-  themeId,
-  shellId,
-  availableShells,
-  setLocale,
-  setThemeId,
-  setShellId,
   onOpenAbout,
 }: {
   appName: string;
   t: Translate;
-  locale: Locale;
-  themeId: ThemeId;
-  shellId: string | null;
-  availableShells: Array<{ id: string; label: string }>;
-  setLocale: (locale: Locale) => void;
-  setThemeId: (themeId: ThemeId) => void;
-  setShellId: (shellId: string | null) => void;
   onOpenAbout: () => void;
 }) {
-  const languageMenu = await Submenu.new({
-    id: "app-language",
-    text: t("menu.app.language"),
-    items: [
-      await MenuItem.new({
-        id: "app-language-zh",
-        text: t("language.zh"),
-        action: () => setLocale("zh"),
-        enabled: locale !== "zh",
-      }),
-      await MenuItem.new({
-        id: "app-language-en",
-        text: t("language.en"),
-        action: () => setLocale("en"),
-        enabled: locale !== "en",
-      }),
-    ],
-  });
-
-  const themeMenu = await Submenu.new({
-    id: "app-theme",
-    text: t("menu.app.theme"),
-    items: [
-      await MenuItem.new({
-        id: "app-theme-dark",
-        text: t("theme.dark"),
-        action: () => setThemeId("dark"),
-        enabled: themeId !== "dark",
-      }),
-      await MenuItem.new({
-        id: "app-theme-light",
-        text: t("theme.light"),
-        action: () => setThemeId("light"),
-        enabled: themeId !== "light",
-      }),
-    ],
-  });
-
-  const shellItems = availableShells.length
-    ? await Promise.all(
-        availableShells.map((shell) =>
-          MenuItem.new({
-            id: `app-shell-${shell.id}`,
-            text: shell.label,
-            action: () => setShellId(shell.id),
-            enabled: shellId !== shell.id,
-          }),
-        ),
-      )
-    : [
-        await MenuItem.new({
-          id: "app-shell-empty",
-          text: t("menu.app.shellEmpty"),
-          enabled: false,
-        }),
-      ];
-
-  const shellMenu = await Submenu.new({
-    id: "app-shell",
-    text: t("menu.app.shell"),
-    items: shellItems,
-  });
-
   return Submenu.new({
     id: "app-menu",
     text: appName,
@@ -305,13 +228,6 @@ export default function useMacAppMenu({
         const appMenu = await createAppMenu({
           appName: t("app.name"),
           t,
-          locale,
-          themeId,
-          shellId,
-          availableShells,
-          setLocale,
-          setThemeId,
-          setShellId,
           onOpenAbout,
         });
         const layoutMenu = await createLayoutMenu(
