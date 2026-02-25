@@ -25,9 +25,11 @@ import useTerminalRuntime from "@/hooks/terminal/useTerminalRuntime";
 import useSftpState from "@/hooks/sftp/useSftpState";
 import useLayoutState from "@/hooks/useLayoutState";
 import useFloatingPanels from "@/hooks/useFloatingPanels";
+import useMacAppMenu from "@/hooks/useMacAppMenu";
 import { allPanelKeys, moveWidgetToSlot } from "@/layout/model";
 import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
 import type { HostProfile, PanelKey, ThemeId } from "@/types";
+import { isMacOS } from "@/utils/platform";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   profiles: "panel.profiles",
@@ -188,6 +190,7 @@ function App() {
     "new",
   );
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
+  const isMac = useMemo(() => isMacOS(), []);
 
   const t: Translate = useMemo(
     () => (key, vars) => formatMessage(translations[locale][key] ?? key, vars),
@@ -357,6 +360,20 @@ function App() {
     themeId,
     setLocale,
     setThemeId,
+  });
+
+  useMacAppMenu({
+    locale,
+    themeId,
+    shellId,
+    availableShells,
+    layoutCollapsed,
+    onToggleCollapsed: handleToggleCollapsed,
+    setLocale,
+    setThemeId,
+    setShellId,
+    onOpenAbout: () => setAboutOpen(true),
+    t,
   });
 
   async function handleConnectProfile(profileInput: HostProfile) {
@@ -537,21 +554,23 @@ function App() {
 
   return (
     <div className="app-shell" style={layoutVars}>
-      <TitleBar
-        layoutCollapsed={layoutCollapsed}
-        onToggleCollapsed={handleToggleCollapsed}
-        onOpenAbout={() => setAboutOpen(true)}
-        layoutDisabled={layoutMenuDisabled}
-        locale={locale}
-        themeId={themeId}
-        shellId={shellId}
-        availableShells={availableShells}
-        themes={themes}
-        onLocaleChange={(next) => setLocale(next)}
-        onShellChange={(next) => setShellId(next)}
-        onThemeChange={(next) => setThemeId(next)}
-        t={t}
-      />
+      {!isMac && (
+        <TitleBar
+          layoutCollapsed={layoutCollapsed}
+          onToggleCollapsed={handleToggleCollapsed}
+          onOpenAbout={() => setAboutOpen(true)}
+          layoutDisabled={layoutMenuDisabled}
+          locale={locale}
+          themeId={themeId}
+          shellId={shellId}
+          availableShells={availableShells}
+          themes={themes}
+          onLocaleChange={(next) => setLocale(next)}
+          onShellChange={(next) => setShellId(next)}
+          onThemeChange={(next) => setThemeId(next)}
+          t={t}
+        />
+      )}
 
       <Workspace
         layoutCollapsed={layoutCollapsed}

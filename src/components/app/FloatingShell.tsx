@@ -4,6 +4,7 @@ import type { PanelKey, ThemeId } from "@/types";
 import type { WidgetSide } from "@/layout/types";
 import TitleBar from "@/components/layout/TitleBar";
 import AboutModal from "@/components/terminal/modals/AboutModal";
+import { isMacOS } from "@/utils/platform";
 
 type FloatingShellProps = {
   floatingPanelKey: PanelKey;
@@ -47,24 +48,28 @@ export default function FloatingShell({
   onThemeChange,
   t,
 }: FloatingShellProps) {
+  const isMac = isMacOS();
+
   return (
     <div className="floating-shell">
-      <TitleBar
-        layoutCollapsed={layoutCollapsed}
-        onToggleCollapsed={onToggleCollapsed}
-        onOpenAbout={onOpenAbout}
-        layoutDisabled={layoutMenuDisabled}
-        showMenus={false}
-        locale={locale}
-        themeId={themeId}
-        shellId={shellId}
-        availableShells={availableShells}
-        themes={themes}
-        onLocaleChange={onLocaleChange}
-        onShellChange={onShellChange}
-        onThemeChange={onThemeChange}
-        t={t}
-      />
+      {!isMac && (
+        <TitleBar
+          layoutCollapsed={layoutCollapsed}
+          onToggleCollapsed={onToggleCollapsed}
+          onOpenAbout={onOpenAbout}
+          layoutDisabled={layoutMenuDisabled}
+          showMenus={false}
+          locale={locale}
+          themeId={themeId}
+          shellId={shellId}
+          availableShells={availableShells}
+          themes={themes}
+          onLocaleChange={onLocaleChange}
+          onShellChange={onShellChange}
+          onThemeChange={onThemeChange}
+          t={t}
+        />
+      )}
       <div className="floating-body">
         <section className="panel floating-widget">
           <div className="panel-header floating-header">
