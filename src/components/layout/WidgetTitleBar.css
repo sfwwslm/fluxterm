@@ -1,0 +1,89 @@
+.widget-titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-header);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.widget-title-name {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.widget-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.widget-title-actions .icon-settings,
+.widget-title-actions .icon-close {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+}
+
+.widget-settings {
+  position: relative;
+}
+
+.widget-settings-menu {
+  position: fixed;
+  min-width: 176px;
+  z-index: 2200;
+  border-radius: 12px;
+  border: 1px solid var(--border-input);
+  background: var(--surface-menu);
+  box-shadow: var(--shadow-strong);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.widget-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.widget-settings-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 2px 4px;
+}
+
+.widget-settings-divider {
+  height: 1px;
+  background: var(--border-soft);
+}
+
+.widget-settings-item {
+  width: 100%;
+  justify-content: flex-start;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.widget-settings-item.selected {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.widget-title-actions .ghost.mini {
+  padding: 0;
+}
