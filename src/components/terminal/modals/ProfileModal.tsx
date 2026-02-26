@@ -2,7 +2,7 @@ import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
-import SelectMenu from "@/components/ui/select-menu";
+import Select from "@/components/ui/select";
 
 type ProfileModalProps = {
   open: boolean;
@@ -92,7 +92,7 @@ export default function ProfileModal({
         </div>
         <div className="form-row">
           <label>{t("profile.form.authType")}</label>
-          <SelectMenu
+          <Select
             value={draft.authType}
             options={[
               { value: "password", label: t("profile.auth.password") },

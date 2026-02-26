@@ -59,26 +59,6 @@ body,
   --ui-border: var(--border-input);
   --ui-bg: var(--button-bg-strong);
   --ui-fg: var(--text-primary);
-  --ui-select-bg: color-mix(in srgb, var(--surface-menu) 72%, transparent);
-  --ui-select-bg-hover: color-mix(
-    in srgb,
-    var(--surface-menu) 82%,
-    transparent
-  );
-  --ui-select-border: color-mix(
-    in srgb,
-    var(--accent-soft) 28%,
-    var(--border-input)
-  );
-  --ui-select-border-hover: color-mix(
-    in srgb,
-    var(--accent-soft) 56%,
-    var(--border-input)
-  );
-  --ui-select-glow: 0 10px 24px color-mix(in srgb, #000 36%, transparent);
-  --ui-select-inner-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent),
-    inset 0 -10px 16px color-mix(in srgb, #000 18%, transparent);
   --ui-button-bg: color-mix(
     in srgb,
     var(--surface-header-strong) 72%,
@@ -203,8 +183,7 @@ select {
   transform: translateY(-1px);
 }
 
-.ui-button:focus-visible,
-.ui-select-native:focus-visible {
+.ui-button:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--accent-soft) 58%, transparent),
@@ -420,126 +399,6 @@ textarea {
   box-shadow:
     0 14px 26px color-mix(in srgb, var(--danger) 24%, transparent),
     0 8px 18px color-mix(in srgb, #000 32%, transparent);
-}
-
-.ui-select {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid var(--ui-select-border);
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, #fff 9%, transparent) 0%,
-      transparent 58%
-    ),
-    var(--ui-select-bg);
-  box-shadow: var(--ui-select-glow);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.25s ease,
-    background-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.ui-select-native {
-  width: 100%;
-  appearance: none;
-  background: transparent;
-  color: var(--input-text);
-  border-radius: 10px;
-  border: none;
-  padding: 0 36px 0 12px;
-  height: 34px;
-  position: relative;
-  z-index: 2;
-  text-shadow: 0 1px 0 color-mix(in srgb, #000 30%, transparent);
-}
-
-.ui-select--sm .ui-select-native {
-  height: 30px;
-  padding-left: 10px;
-  font-size: 12px;
-}
-
-.ui-select--md .ui-select-native {
-  height: 34px;
-  font-size: 13px;
-}
-
-.ui-select:hover {
-  border-color: var(--ui-select-border-hover);
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, #fff 14%, transparent) 0%,
-      transparent 58%
-    ),
-    var(--ui-select-bg-hover);
-  transform: translateY(-1px);
-}
-
-.ui-select-gloss {
-  position: absolute;
-  inset: 1px;
-  border-radius: 9px;
-  pointer-events: none;
-  z-index: 1;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, #fff 15%, transparent) 0%,
-      transparent 40%
-    ),
-    linear-gradient(
-      0deg,
-      color-mix(in srgb, #000 12%, transparent) 0%,
-      transparent 45%
-    );
-  box-shadow: var(--ui-select-inner-shadow);
-}
-
-.ui-select-arrow {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  font-size: 10px;
-  color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
-  z-index: 3;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-soft) 55%, transparent);
-}
-
-.ui-select:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 78%, #ffffff 10%);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--accent-soft) 52%, transparent),
-    0 16px 30px color-mix(in srgb, var(--accent-soft) 22%, transparent),
-    var(--ui-select-glow);
-  transform: none;
-}
-
-.ui-select--disabled {
-  opacity: 0.58;
-  filter: saturate(0.72);
-  transform: none;
-}
-
-.ui-select--disabled:hover {
-  border-color: var(--ui-select-border);
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, #fff 9%, transparent) 0%,
-      transparent 58%
-    ),
-    var(--ui-select-bg);
-  transform: none;
 }
 
 .select-menu {

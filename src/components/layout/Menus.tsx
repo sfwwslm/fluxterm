@@ -4,7 +4,7 @@ import type { Locale, Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { ThemeId } from "@/types";
 import Button from "@/components/ui/button";
-import SelectMenu from "@/components/ui/select-menu";
+import Select from "@/components/ui/select";
 
 type MenuAction = {
   id: string;
@@ -116,7 +116,7 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.language")}</span>
-                <SelectMenu
+                <Select
                   value={locale}
                   options={[
                     { value: "zh", label: "中文" },
@@ -133,7 +133,7 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.shell")}</span>
-                <SelectMenu
+                <Select
                   value={shellId}
                   options={availableShells.map((shell) => ({
                     value: shell.id,
@@ -152,7 +152,7 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.theme")}</span>
-                <SelectMenu
+                <Select
                   value={themeId}
                   options={Object.entries(themes).map(([key, theme]) => ({
                     value: key,
