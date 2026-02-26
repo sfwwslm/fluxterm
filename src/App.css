@@ -1427,6 +1427,17 @@ select {
   color: var(--input-text);
 }
 
+/* 移除 number 输入框的原生增减按钮，保持统一视觉。 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .host-actions {
   display: flex;
   gap: 8px;
