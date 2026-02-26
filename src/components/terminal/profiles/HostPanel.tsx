@@ -431,9 +431,6 @@ export default function HostPanel({
                       onDoubleClick={() => onConnectProfile(profile)}
                     >
                       <span>{profile.name || profile.host}</span>
-                      <em>
-                        {profile.username}@{profile.host}
-                      </em>
                     </Button>
                   ))}
                 </div>
@@ -546,9 +543,6 @@ export default function HostPanel({
                       onDoubleClick={() => onConnectProfile(profile)}
                     >
                       <span>{profile.name || profile.host}</span>
-                      <em>
-                        {profile.username}@{profile.host}
-                      </em>
                     </Button>
                   ))}
                 </div>
