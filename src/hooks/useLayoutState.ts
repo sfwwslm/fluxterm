@@ -43,9 +43,7 @@ type LayoutState = {
 
 type UseLayoutStateProps = {
   floatingPanelKey: PanelKey | null;
-  floatingOriginRef: React.MutableRefObject<
-    Partial<Record<PanelKey, WidgetSlot>>
-  >;
+  floatingOriginRef: React.RefObject<Partial<Record<PanelKey, WidgetSlot>>>;
 };
 
 /** 布局状态管理（读取/保存/拖拽调整）。 */

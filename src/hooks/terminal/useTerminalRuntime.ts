@@ -18,9 +18,9 @@ type UseTerminalRuntimeProps = {
   activeSession: Session | null;
   sessions: Session[];
   onSizeChange?: (size: { cols: number; rows: number }) => void;
-  sessionStatesRef: React.MutableRefObject<Record<string, SessionStateUi>>;
-  sessionReasonsRef: React.MutableRefObject<Record<string, DisconnectReason>>;
-  sessionBuffersRef: React.MutableRefObject<Record<string, string>>;
+  sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
+  sessionReasonsRef: React.RefObject<Record<string, DisconnectReason>>;
+  sessionBuffersRef: React.RefObject<Record<string, string>>;
   recordCommandInput: (sessionId: string, data: string) => void;
   writeToSession: (sessionId: string, data: string) => Promise<unknown>;
   resizeSession: (

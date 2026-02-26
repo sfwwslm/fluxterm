@@ -15,7 +15,7 @@ type UseSftpStateProps = {
   activeSessionId: string | null;
   activeSession: Session | null;
   activeSessionState: SessionStateUi | null;
-  sessionStatesRef: React.MutableRefObject<Record<string, SessionStateUi>>;
+  sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
   isLocalSession: (sessionId: string | null) => boolean;
   appendLog: (
     key: TranslationKey,

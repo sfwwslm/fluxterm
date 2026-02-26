@@ -45,16 +45,16 @@ type UseSessionStateResult = {
   isRemoteSession: boolean;
   isRemoteConnected: boolean;
   canReconnect: boolean;
-  sessionRef: React.MutableRefObject<Session | null>;
-  sessionsRef: React.MutableRefObject<Session[]>;
-  sessionStatesRef: React.MutableRefObject<Record<string, SessionStateUi>>;
-  sessionReasonsRef: React.MutableRefObject<Record<string, DisconnectReason>>;
-  sessionBuffersRef: React.MutableRefObject<Record<string, string>>;
-  localSessionMetaRef: React.MutableRefObject<
+  sessionRef: React.RefObject<Session | null>;
+  sessionsRef: React.RefObject<Session[]>;
+  sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
+  sessionReasonsRef: React.RefObject<Record<string, DisconnectReason>>;
+  sessionBuffersRef: React.RefObject<Record<string, string>>;
+  localSessionMetaRef: React.RefObject<
     Record<string, { shellId: string | null; label: string }>
   >;
-  localSessionIdsRef: React.MutableRefObject<Set<string>>;
-  activeSessionIdRef: React.MutableRefObject<string | null>;
+  localSessionIdsRef: React.RefObject<Set<string>>;
+  activeSessionIdRef: React.RefObject<string | null>;
   appendLog: (
     key: TranslationKey,
     vars?: Record<string, string | number>,
