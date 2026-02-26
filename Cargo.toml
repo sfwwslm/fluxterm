@@ -1,11 +1,20 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = [
+    "crates/*",
+]
 
 
 [workspace.package]
 edition = "2024"
-authors = ["sfwwslm"]
+authors = [
+    "sfwwslm",
+]
+
+
+[workspace.dependencies]
+log = { version = "0.4" }
+serde = { version = "1", features = ["derive"] }
 
 
 [profile.dev]

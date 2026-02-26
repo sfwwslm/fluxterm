@@ -7,10 +7,11 @@ use crate::error::EngineError;
 
 /// 认证方式。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum AuthType {
     Password,
-    Key,
+    #[serde(alias = "key", alias = "public_key", alias = "publicKey")]
+    PrivateKey,
     Agent,
 }
 
@@ -24,8 +25,10 @@ pub struct HostProfile {
     pub port: u16,
     pub username: String,
     pub auth_type: AuthType,
-    pub key_path: Option<String>,
-    pub key_passphrase_ref: Option<String>,
+    #[serde(alias = "keyPath", alias = "publicKeyPath")]
+    pub private_key_path: Option<String>,
+    #[serde(alias = "keyPassphraseRef", alias = "publicKeyPassphraseRef")]
+    pub private_key_passphrase_ref: Option<String>,
     pub password_ref: Option<String>,
     pub known_host: Option<String>,
     pub tags: Option<Vec<String>>,

@@ -1,5 +1,5 @@
 /** 认证方式。 */
-export type AuthType = "password" | "key" | "agent";
+export type AuthType = "password" | "privateKey" | "agent";
 
 /** 主机配置数据。 */
 export type HostProfile = {
@@ -9,8 +9,8 @@ export type HostProfile = {
   port: number;
   username: string;
   authType: AuthType;
-  keyPath?: string | null;
-  keyPassphraseRef?: string | null;
+  privateKeyPath?: string | null;
+  privateKeyPassphraseRef?: string | null;
   passwordRef?: string | null;
   knownHost?: string | null;
   tags?: string[] | null;

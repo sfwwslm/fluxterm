@@ -12,7 +12,7 @@ use engine::Engine;
 use log::LevelFilter;
 use tauri_plugin_log::{Target, TargetKind};
 
-use crate::commands::local::{local_home, local_list};
+use crate::commands::local::{local_home, local_list, local_ssh_keys};
 use crate::commands::local_shell::{
     local_shell_connect, local_shell_disconnect, local_shell_list, local_shell_resize,
     local_shell_write,
@@ -69,6 +69,7 @@ pub fn run() {
             sftp_mkdir,
             local_home,
             local_list,
+            local_ssh_keys,
             local_shell_connect,
             local_shell_disconnect,
             local_shell_list,

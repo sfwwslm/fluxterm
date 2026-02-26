@@ -10,6 +10,7 @@ use crate::error::EngineError;
 use crate::session::{SessionCommand, SessionHandle, run_session_loop};
 use crate::types::{EventCallback, HostProfile, Session, SessionState, SftpEntry, TerminalSize};
 use crate::util::now_epoch;
+use log::info;
 
 /// 会话引擎，负责连接管理与命令分发。
 pub struct Engine {
@@ -44,6 +45,10 @@ impl Engine {
         let created_at = now_epoch();
         let (tx, rx) = mpsc::unbounded_channel();
 
+        info!(
+            "ssh_connect_start profile_id={} host={} user={}",
+            profile.id, profile.host, profile.username
+        );
         on_event(crate::types::EngineEvent::SessionStatus {
             session_id: session_id.clone(),
             state: SessionState::Connecting,

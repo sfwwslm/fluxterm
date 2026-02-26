@@ -17,6 +17,7 @@ import ProfileModal from "@/components/terminal/modals/ProfileModal";
 import EventsPanel from "@/components/terminal/events/EventsPanel";
 import SftpPanel from "@/components/terminal/files/SftpPanel";
 import TransfersPanel from "@/components/terminal/transfers/TransfersPanel";
+import NoticeHost from "@/components/ui/notice-host";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import useProfiles from "@/hooks/profile/useProfiles";
 import useAppSettings from "@/hooks/settings/useAppSettings";
@@ -527,39 +528,19 @@ function App() {
     );
   }
 
-  if (floatingPanelKey) {
-    return (
-      <FloatingShell
-        floatingPanelKey={floatingPanelKey}
-        panelLabels={panelLabels}
-        panelBody={panels[floatingPanelKey]}
-        layoutCollapsed={layoutCollapsed}
-        onToggleCollapsed={handleToggleCollapsed}
-        layoutMenuDisabled={layoutMenuDisabled}
-        aboutOpen={aboutOpen}
-        onOpenAbout={() => setAboutOpen(true)}
-        onCloseAbout={() => setAboutOpen(false)}
-        locale={locale}
-        themeId={themeId}
-        shellId={shellId}
-        availableShells={availableShells}
-        themes={themes}
-        onLocaleChange={(next) => setLocale(next)}
-        onShellChange={(next) => setShellId(next)}
-        onThemeChange={(next) => setThemeId(next)}
-        t={t}
-      />
-    );
-  }
-
   return (
-    <div className="app-shell" style={layoutVars}>
-      {!isMac && (
-        <TitleBar
+    <>
+      {floatingPanelKey ? (
+        <FloatingShell
+          floatingPanelKey={floatingPanelKey}
+          panelLabels={panelLabels}
+          panelBody={panels[floatingPanelKey]}
           layoutCollapsed={layoutCollapsed}
           onToggleCollapsed={handleToggleCollapsed}
+          layoutMenuDisabled={layoutMenuDisabled}
+          aboutOpen={aboutOpen}
           onOpenAbout={() => setAboutOpen(true)}
-          layoutDisabled={layoutMenuDisabled}
+          onCloseAbout={() => setAboutOpen(false)}
           locale={locale}
           themeId={themeId}
           shellId={shellId}
@@ -570,59 +551,84 @@ function App() {
           onThemeChange={(next) => setThemeId(next)}
           t={t}
         />
-      )}
+      ) : (
+        <div className="app-shell" style={layoutVars}>
+          {!isMac && (
+            <TitleBar
+              layoutCollapsed={layoutCollapsed}
+              onToggleCollapsed={handleToggleCollapsed}
+              onOpenAbout={() => setAboutOpen(true)}
+              layoutDisabled={layoutMenuDisabled}
+              locale={locale}
+              themeId={themeId}
+              shellId={shellId}
+              availableShells={availableShells}
+              themes={themes}
+              onLocaleChange={(next) => setLocale(next)}
+              onShellChange={(next) => setShellId(next)}
+              onThemeChange={(next) => setThemeId(next)}
+              t={t}
+            />
+          )}
 
-      <Workspace
-        layoutCollapsed={layoutCollapsed}
-        sideSlotCounts={sideSlotCounts}
-        slotGroups={slotGroups}
-        panelLabels={panelLabels}
-        panels={panels}
-        terminalPanel={
-          <TerminalPanel
-            sessions={sessions}
-            profiles={profiles}
-            editingProfile={editingProfile}
-            localSessionMeta={localSessionMeta}
-            activeSessionId={activeSessionId}
-            activeSession={activeSession}
-            activeSessionState={activeSessionState}
-            activeSessionReason={activeSessionReason}
-            sessionStates={sessionStates}
-            terminalReady={terminalReady}
-            terminalRef={terminalRef}
-            isLocalSession={isLocalSession}
-            onSwitchSession={switchSession}
-            onDisconnectSession={disconnectSession}
+          <Workspace
+            layoutCollapsed={layoutCollapsed}
+            sideSlotCounts={sideSlotCounts}
+            slotGroups={slotGroups}
+            panelLabels={panelLabels}
+            panels={panels}
+            terminalPanel={
+              <TerminalPanel
+                sessions={sessions}
+                profiles={profiles}
+                editingProfile={editingProfile}
+                localSessionMeta={localSessionMeta}
+                activeSessionId={activeSessionId}
+                activeSession={activeSession}
+                activeSessionState={activeSessionState}
+                activeSessionReason={activeSessionReason}
+                sessionStates={sessionStates}
+                terminalReady={terminalReady}
+                terminalRef={terminalRef}
+                isLocalSession={isLocalSession}
+                onSwitchSession={switchSession}
+                onDisconnectSession={disconnectSession}
+                t={t}
+              />
+            }
+            availableWidgets={availableWidgets}
+            leftVisible={leftVisible}
+            rightVisible={rightVisible}
+            bottomVisible={bottomVisible}
+            onSelect={handleSlotSelect}
+            onAdd={handleSlotAdd}
+            onFloat={handleFloat}
+            onCloseWidget={handleCloseSlot}
+            onDropWidget={handleDropWidget}
+            onDragWidget={handleDragWidget}
+            onToggleSplit={handleToggleSplit}
+            onStartResize={startResize}
             t={t}
           />
-        }
-        availableWidgets={availableWidgets}
-        leftVisible={leftVisible}
-        rightVisible={rightVisible}
-        bottomVisible={bottomVisible}
-        onSelect={handleSlotSelect}
-        onAdd={handleSlotAdd}
-        onFloat={handleFloat}
-        onCloseWidget={handleCloseSlot}
-        onDropWidget={handleDropWidget}
-        onDragWidget={handleDragWidget}
-        onToggleSplit={handleToggleSplit}
-        onStartResize={startResize}
-        t={t}
-      />
 
-      <ProfileModal
-        open={profileModalOpen}
-        mode={profileModalMode}
-        draft={profileDraft}
-        onDraftChange={setProfileDraft}
-        onClose={() => setProfileModalOpen(false)}
-        onSubmit={submitProfile}
-        t={t}
-      />
-      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} t={t} />
-    </div>
+          <ProfileModal
+            open={profileModalOpen}
+            mode={profileModalMode}
+            draft={profileDraft}
+            onDraftChange={setProfileDraft}
+            onClose={() => setProfileModalOpen(false)}
+            onSubmit={submitProfile}
+            t={t}
+          />
+          <AboutModal
+            open={aboutOpen}
+            onClose={() => setAboutOpen(false)}
+            t={t}
+          />
+        </div>
+      )}
+      <NoticeHost />
+    </>
   );
 }
 

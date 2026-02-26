@@ -19,8 +19,8 @@ const defaultProfile: HostProfile = {
   port: 22,
   username: "",
   authType: "password",
-  keyPath: null,
-  keyPassphraseRef: null,
+  privateKeyPath: null,
+  privateKeyPassphraseRef: null,
   passwordRef: null,
   knownHost: null,
   tags: null,
@@ -35,10 +35,30 @@ export default function useProfiles(): UseProfilesResult {
 
   async function loadProfiles() {
     const list = await invoke<HostProfile[]>("profile_list");
-    setProfiles(list);
-    if (list.length && !activeProfileId) {
-      setActiveProfileId(list[0].id);
-      setEditingProfile(list[0]);
+    const normalized = list.map((profile) => {
+      const rawAuth = profile.authType as string;
+      if (
+        rawAuth === "key" ||
+        rawAuth === "public_key" ||
+        rawAuth === "publicKey"
+      ) {
+        return {
+          ...profile,
+          authType: "privateKey" as HostProfile["authType"],
+        };
+      }
+      if (rawAuth === "agent") {
+        return {
+          ...profile,
+          authType: "privateKey" as HostProfile["authType"],
+        };
+      }
+      return profile;
+    });
+    setProfiles(normalized);
+    if (normalized.length && !activeProfileId) {
+      setActiveProfileId(normalized[0].id);
+      setEditingProfile(normalized[0]);
     }
   }
 

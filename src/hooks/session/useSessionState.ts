@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { error as logError, info as logInfo } from "@tauri-apps/plugin-log";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
   DisconnectReason,
@@ -11,6 +12,7 @@ import type {
   Session,
   SessionStateUi,
 } from "@/types";
+import { useNotices } from "@/hooks/useNotices";
 
 const logStorageKey = "fluxterm.logs";
 const maxLogEntries = 10;
@@ -87,6 +89,7 @@ export default function useSessionState({
   settingsLoaded,
   getTerminalSize,
 }: UseSessionStateProps): UseSessionStateResult {
+  const { openDialog } = useNotices();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessionStates, setSessionStates] = useState<
@@ -134,6 +137,7 @@ export default function useSessionState({
   const reconnectTimersRef = useRef<Record<string, number>>({});
   const reconnectAttemptsRef = useRef<Record<string, number>>({});
   const sessionCloseHandledRef = useRef<Record<string, boolean>>({});
+  const errorDialogShownRef = useRef<Record<string, boolean>>({});
   const localSessionIdsRef = useRef<Set<string>>(new Set());
   const localShellStartedRef = useRef(false);
   const localSessionMetaRef = useRef<
@@ -316,6 +320,14 @@ export default function useSessionState({
 
   async function createSshSession(profile: HostProfile) {
     const { cols, rows } = getTerminalSize();
+    logInfo(
+      JSON.stringify({
+        event: "ssh.connect.invoke",
+        profileId: profile.id,
+        host: profile.host,
+        authType: profile.authType,
+      }),
+    );
     return await invoke<Session>("ssh_connect", {
       profile,
       size: { cols, rows },
@@ -436,18 +448,53 @@ export default function useSessionState({
   }
 
   async function connectProfile(profile: HostProfile) {
-    const result = await createSshSession(profile);
-    setSessions((prev) => prev.concat(result));
-    setActiveSessionId(result.sessionId);
-    setSessionStates((prev) => ({
-      ...prev,
-      [result.sessionId]: "connecting",
-    }));
-    setSessionReasons((prev) => {
-      const next = { ...prev };
-      delete next[result.sessionId];
-      return next;
-    });
+    logInfo(
+      JSON.stringify({
+        event: "ssh.connect.start",
+        profileId: profile.id,
+        host: profile.host,
+        authType: profile.authType,
+      }),
+    );
+    try {
+      const result = await createSshSession(profile);
+      const existingState = sessionStatesRef.current[result.sessionId];
+      logInfo(
+        JSON.stringify({
+          event: "ssh.connect.session-created",
+          profileId: profile.id,
+          sessionId: result.sessionId,
+        }),
+      );
+      setSessions((prev) => prev.concat(result));
+      setActiveSessionId(result.sessionId);
+      if (existingState !== "error" && existingState !== "disconnected") {
+        setSessionStates((prev) => ({
+          ...prev,
+          [result.sessionId]: "connecting",
+        }));
+      }
+      setSessionReasons((prev) => {
+        const next = { ...prev };
+        delete next[result.sessionId];
+        return next;
+      });
+    } catch (err: any) {
+      logError(
+        JSON.stringify({
+          event: "ssh.connect.failed",
+          profileId: profile.id,
+          host: profile.host,
+          error: err?.message ?? String(err),
+        }),
+      );
+      openDialog({
+        title: t("dialog.sshErrorTitle"),
+        message: err?.message ?? t("dialog.sshErrorBody"),
+        confirmLabel: t("actions.close"),
+      });
+      throw err;
+    }
   }
 
   async function connectLocalShell(
@@ -651,12 +698,42 @@ export default function useSessionState({
             },
             "error",
           );
+          logError(
+            JSON.stringify({
+              event: "ssh.session.error",
+              sessionId: event.payload.sessionId,
+              message: event.payload.error?.message ?? "unknown",
+            }),
+          );
+          if (!isLocalSession(event.payload.sessionId)) {
+            disconnectSession(event.payload.sessionId).catch(() => {});
+          }
+          if (!errorDialogShownRef.current[event.payload.sessionId]) {
+            errorDialogShownRef.current[event.payload.sessionId] = true;
+            openDialog({
+              title: t("dialog.sshErrorTitle"),
+              message: event.payload.error?.message ?? t("dialog.sshErrorBody"),
+              confirmLabel: t("actions.close"),
+            });
+          }
         }
         if (event.payload.state === "connected") {
           appendLog("log.event.connected", { name: label }, "success");
+          logInfo(
+            JSON.stringify({
+              event: "ssh.session.connected",
+              sessionId: event.payload.sessionId,
+            }),
+          );
         }
         if (event.payload.state === "connecting") {
           appendLog("log.event.connecting", { name: label });
+          logInfo(
+            JSON.stringify({
+              event: "ssh.session.connecting",
+              sessionId: event.payload.sessionId,
+            }),
+          );
         }
         if (event.payload.state === "disconnected") {
           handleSessionDisconnected(event.payload.sessionId);
@@ -675,7 +752,7 @@ export default function useSessionState({
       cancelled = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [appendLog, t]);
+  }, [appendLog, openDialog, t]);
 
   return {
     sessions,

@@ -1,5 +1,8 @@
+import { useEffect, useRef } from "react";
 import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
+import { invoke } from "@tauri-apps/api/core";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
@@ -24,6 +27,42 @@ export default function ProfileModal({
   onSubmit,
   t,
 }: ProfileModalProps) {
+  const autoFilledRef = useRef(false);
+
+  useEffect(() => {
+    if (open) {
+      autoFilledRef.current = false;
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (draft.authType !== "privateKey") return;
+    if (draft.privateKeyPath) return;
+    if (autoFilledRef.current) return;
+    autoFilledRef.current = true;
+    invoke<string[]>("local_ssh_keys")
+      .then((keys) => {
+        if (!keys.length) return;
+        onDraftChange({ ...draft, privateKeyPath: keys[0] });
+      })
+      .catch(() => {});
+  }, [draft, onDraftChange]);
+
+  /** 打开文件选择器并写入私钥路径。 */
+  async function handlePickPrivateKey() {
+    try {
+      const selection = await openFileDialog({
+        title: t("profile.form.privateKeyPath"),
+        multiple: false,
+        directory: false,
+      });
+      if (!selection || Array.isArray(selection)) return;
+      onDraftChange({ ...draft, privateKeyPath: selection });
+    } catch {
+      // 忽略选择器异常。
+    }
+  }
+
   return (
     <Modal
       open={open}
@@ -96,8 +135,7 @@ export default function ProfileModal({
             value={draft.authType}
             options={[
               { value: "password", label: t("profile.auth.password") },
-              { value: "key", label: t("profile.auth.key") },
-              { value: "agent", label: t("profile.auth.agent") },
+              { value: "privateKey", label: t("profile.auth.privateKey") },
             ]}
             onChange={(next) =>
               onDraftChange({
@@ -120,27 +158,34 @@ export default function ProfileModal({
             />
           </div>
         )}
-        {draft.authType === "key" && (
+        {draft.authType === "privateKey" && (
           <>
             <div className="form-row">
-              <label>{t("profile.form.keyPath")}</label>
-              <input
-                value={draft.keyPath ?? ""}
-                onChange={(event) =>
-                  onDraftChange({ ...draft, keyPath: event.target.value })
-                }
-                placeholder="~/.ssh/id_ed25519"
-              />
+              <label>{t("profile.form.privateKeyPath")}</label>
+              <div className="form-file">
+                <input
+                  value={draft.privateKeyPath ?? ""}
+                  placeholder={t("profile.placeholder.privateKeyPath")}
+                  readOnly
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePickPrivateKey}
+                >
+                  {t("profile.actions.pickKey")}
+                </Button>
+              </div>
             </div>
             <div className="form-row">
-              <label>{t("profile.form.keyPassphrase")}</label>
+              <label>{t("profile.form.privateKeyPassphrase")}</label>
               <input
                 type="password"
-                value={draft.keyPassphraseRef ?? ""}
+                value={draft.privateKeyPassphraseRef ?? ""}
                 onChange={(event) =>
                   onDraftChange({
                     ...draft,
-                    keyPassphraseRef: event.target.value,
+                    privateKeyPassphraseRef: event.target.value,
                   })
                 }
               />
