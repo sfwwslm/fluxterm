@@ -229,6 +229,10 @@ function App() {
     setProfileModalOpen(true);
   }
 
+  function closeProfileModal() {
+    setProfileModalOpen(false);
+  }
+
   function openEditProfile(profile: HostProfile) {
     if (!profile.id) return;
     setProfileModalMode("edit");
@@ -610,15 +614,6 @@ function App() {
             t={t}
           />
 
-          <ProfileModal
-            open={profileModalOpen}
-            mode={profileModalMode}
-            draft={profileDraft}
-            onDraftChange={setProfileDraft}
-            onClose={() => setProfileModalOpen(false)}
-            onSubmit={submitProfile}
-            t={t}
-          />
           <AboutModal
             open={aboutOpen}
             onClose={() => setAboutOpen(false)}
@@ -626,6 +621,16 @@ function App() {
           />
         </div>
       )}
+      {/* 置于根部，确保主窗口与浮动窗口共享同一弹窗实例。 */}
+      <ProfileModal
+        open={profileModalOpen}
+        mode={profileModalMode}
+        draft={profileDraft}
+        onDraftChange={setProfileDraft}
+        onClose={closeProfileModal}
+        onSubmit={submitProfile}
+        t={t}
+      />
       <NoticeHost />
     </>
   );
