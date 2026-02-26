@@ -2,7 +2,7 @@ import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
-import Select from "@/components/ui/select";
+import SelectMenu from "@/components/ui/select-menu";
 
 type ProfileModalProps = {
   open: boolean;
@@ -92,19 +92,21 @@ export default function ProfileModal({
         </div>
         <div className="form-row">
           <label>{t("profile.form.authType")}</label>
-          <Select
+          <SelectMenu
             value={draft.authType}
-            onChange={(event) =>
+            options={[
+              { value: "password", label: t("profile.auth.password") },
+              { value: "key", label: t("profile.auth.key") },
+              { value: "agent", label: t("profile.auth.agent") },
+            ]}
+            onChange={(next) =>
               onDraftChange({
                 ...draft,
-                authType: event.target.value as HostProfile["authType"],
+                authType: next as HostProfile["authType"],
               })
             }
-          >
-            <option value="password">{t("profile.auth.password")}</option>
-            <option value="key">{t("profile.auth.key")}</option>
-            <option value="agent">{t("profile.auth.agent")}</option>
-          </Select>
+            aria-label={t("profile.form.authType")}
+          />
         </div>
         {draft.authType === "password" && (
           <div className="form-row">
