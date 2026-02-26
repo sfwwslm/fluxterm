@@ -106,6 +106,58 @@
   transition: opacity 0.2s ease;
 }
 
+.terminal-runtime {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.terminal-gutter {
+  width: 106px;
+  flex: 0 0 106px;
+  border-right: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-header-strong) 74%, transparent);
+  overflow: hidden;
+  user-select: none;
+  font-family: "JetBrains Mono", "Cascadia Mono", monospace;
+  font-size: 12px;
+}
+
+.terminal-gutter-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 0 8px 0 6px;
+  white-space: nowrap;
+}
+
+.terminal-gutter-spacer {
+  width: 100%;
+}
+
+.terminal-gutter-time {
+  color: var(--text-muted);
+}
+
+.terminal-gutter-line {
+  color: var(--accent-soft);
+  min-width: 2ch;
+  text-align: right;
+}
+
+.terminal-xterm-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.terminal-xterm-host .xterm {
+  height: 100%;
+}
+
 .terminal-container.active {
   opacity: 0.65;
   visibility: visible;
