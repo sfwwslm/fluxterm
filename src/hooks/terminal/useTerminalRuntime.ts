@@ -363,7 +363,11 @@ export default function useTerminalRuntime({
         : wrappedContinuation && lineMeta
           ? formatGutterTime(lineMeta.timestamp)
           : "";
-      const lineText = meta ? String(meta.number) : wrappedContinuation ? "-" : "";
+      const lineText = meta
+        ? String(meta.number)
+        : wrappedContinuation
+          ? "-"
+          : "";
       html +=
         `<div class="terminal-gutter-row" style="height:${rowHeight}px;line-height:${rowHeight}px;">` +
         `<span class="terminal-gutter-time">${timeText}</span>` +
@@ -447,7 +451,8 @@ export default function useTerminalRuntime({
         const state = sessionStatesRef.current[sessionId];
         if (state === "disconnected") {
           const reason = sessionReasonsRef.current[sessionId];
-          if (reason === "exit") {
+          const requestReconnect = data.includes("\r") || data.includes("\n");
+          if (reason === "exit" && requestReconnect) {
             if (handlersRef.current.isLocalSession(sessionId)) {
               handlersRef.current
                 .reconnectLocalShell(sessionId)
