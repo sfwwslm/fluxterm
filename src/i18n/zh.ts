@@ -31,7 +31,7 @@ export const zh = {
   "about.toolchain": "工具链",
   "theme.dark": "深色",
   "theme.light": "浅色",
-  "panel.profiles": "主机管理",
+  "panel.profiles": "会话管理",
   "panel.files": "文件管理器",
   "panel.transfers": "传输",
   "panel.events": "事件",

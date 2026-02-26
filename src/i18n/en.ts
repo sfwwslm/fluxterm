@@ -31,7 +31,7 @@ export const en = {
   "about.toolchain": "Toolchain",
   "theme.dark": "Dark",
   "theme.light": "Light",
-  "panel.profiles": "Hosts",
+  "panel.profiles": "Sessions",
   "panel.files": "File Manager",
   "panel.transfers": "Transfers",
   "panel.events": "Events",
