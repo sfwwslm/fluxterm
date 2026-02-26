@@ -15,6 +15,14 @@
   color: var(--text-soft);
 }
 
+.path {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sftp-actions button {
   margin-left: 0;
   background: var(--button-bg-strong);
@@ -29,6 +37,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .sftp-actions .icon-button {

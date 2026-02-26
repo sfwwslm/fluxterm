@@ -73,7 +73,9 @@ export default function SftpPanel({
   return (
     <div className="sftp-panel">
       <div className="sftp-toolbar">
-        <div className="path">{showUnavailable ? "-" : currentPath}</div>
+        <div className="path" title={showUnavailable ? "-" : currentPath}>
+          {showUnavailable ? "-" : currentPath}
+        </div>
         {!showUnavailable && (
           <div className="sftp-actions">
             <Tooltip content={t("actions.refresh")}>
