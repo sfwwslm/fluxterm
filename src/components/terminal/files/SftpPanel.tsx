@@ -5,8 +5,9 @@ import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
-import { FiMoreVertical, FiRefreshCw } from "react-icons/fi";
+import { FiCornerLeftUp, FiMoreVertical, FiRefreshCw } from "react-icons/fi";
 import Button from "@/components/ui/button";
+import "./SftpPanel.css";
 
 type SftpPanelProps = {
   isRemote: boolean;
@@ -86,6 +87,18 @@ export default function SftpPanel({
                 <FiRefreshCw />
               </Button>
             </Tooltip>
+            <Tooltip content={t("sftp.back")}>
+              <Button
+                className="icon-button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpen(parentPath(currentPath))}
+                aria-label={t("sftp.back")}
+                disabled={isRootPath(currentPath)}
+              >
+                <FiCornerLeftUp />
+              </Button>
+            </Tooltip>
             <Tooltip content={t("actions.more")}>
               <Button
                 className="icon-button"
@@ -103,67 +116,62 @@ export default function SftpPanel({
       </div>
       <div className="sftp-list">
         {!showUnavailable && (
-          <div className="entry-row entry-header">
-            <span>{t("sftp.columns.name")}</span>
-            <span>{t("sftp.columns.mtime")}</span>
-            <span>{t("sftp.columns.type")}</span>
-            <span>{t("sftp.columns.size")}</span>
-            <span>{t("sftp.columns.perm")}</span>
-            <span>{t("sftp.columns.owner")}</span>
-            <span>{t("sftp.columns.group")}</span>
+          <div className="sftp-table-row sftp-table-header">
+            <span className="sftp-cell sftp-cell-name">
+              {t("sftp.columns.name")}
+            </span>
+            <span className="sftp-cell">{t("sftp.columns.mtime")}</span>
+            <span className="sftp-cell">{t("sftp.columns.type")}</span>
+            <span className="sftp-cell">{t("sftp.columns.size")}</span>
+            <span className="sftp-cell">{t("sftp.columns.perm")}</span>
+            <span className="sftp-cell sftp-cell-owner">
+              {t("sftp.columns.owner")}
+            </span>
+            <span className="sftp-cell sftp-cell-group">
+              {t("sftp.columns.group")}
+            </span>
           </div>
         )}
-        {!isRootPath(currentPath) && (
-          <Button
-            className="entry-row entry-item"
-            variant="ghost"
-            size="sm"
-            onClick={() => onOpen(parentPath(currentPath))}
-          >
-            <span className="entry-cell entry-name">..</span>
-            <span className="entry-cell">{t("sftp.back")}</span>
-            <span className="entry-cell">-</span>
-            <span className="entry-cell">-</span>
-            <span className="entry-cell">-</span>
-            <span className="entry-cell">-</span>
-            <span className="entry-cell">-</span>
-          </Button>
-        )}
-        {!showUnavailable &&
-          entries.map((entry) => (
-            <Button
-              key={entry.path}
-              className={`entry-row entry-item ${entry.kind}`}
-              variant="ghost"
-              size="sm"
-              onClick={() => entry.kind === "dir" && onOpen(entry.path)}
-              onContextMenu={(event) => openMenu(event, entry)}
-            >
-              <span className="entry-cell entry-name">{entry.name}</span>
-              <span className="entry-cell">
-                {entry.mtime ? formatTime(entry.mtime, locale) : "-"}
-              </span>
-              <span className="entry-cell">
-                {entry.kind === "dir"
-                  ? t("sftp.kind.dir")
-                  : entry.kind === "link"
-                    ? t("sftp.kind.link")
-                    : t("sftp.kind.file")}
-              </span>
-              <span className="entry-cell">
-                {entry.kind === "dir" ? "-" : formatBytes(entry.size ?? 0)}
-              </span>
-              <span className="entry-cell">{entry.permissions ?? "-"}</span>
-              <span className="entry-cell">{entry.owner ?? "-"}</span>
-              <span className="entry-cell">{entry.group ?? "-"}</span>
-            </Button>
-          ))}
-        {showUnavailable && (
-          <div className="empty-hint">{t("sftp.emptyUnavailable")}</div>
-        )}
-        {!showUnavailable && !entries.length && (
-          <div className="empty-hint">{t("sftp.empty")}</div>
-        )}
+        <div className="sftp-list-body">
+          {!showUnavailable &&
+            entries.map((entry) => (
+              <button
+                key={entry.path}
+                type="button"
+                className={`sftp-table-row sftp-table-item ${entry.kind}`}
+                onClick={() => entry.kind === "dir" && onOpen(entry.path)}
+                onContextMenu={(event) => openMenu(event, entry)}
+              >
+                <span className="sftp-cell sftp-cell-name">{entry.name}</span>
+                <span className="sftp-cell">
+                  {entry.mtime ? formatTime(entry.mtime, locale) : "-"}
+                </span>
+                <span className={`sftp-cell sftp-kind ${entry.kind}`}>
+                  {entry.kind === "dir"
+                    ? t("sftp.kind.dir")
+                    : entry.kind === "link"
+                      ? t("sftp.kind.link")
+                      : t("sftp.kind.file")}
+                </span>
+                <span className="sftp-cell">
+                  {entry.kind === "dir" ? "-" : formatBytes(entry.size ?? 0)}
+                </span>
+                <span className="sftp-cell">{entry.permissions ?? "-"}</span>
+                <span className="sftp-cell sftp-cell-owner">
+                  {entry.owner ?? "-"}
+                </span>
+                <span className="sftp-cell sftp-cell-group">
+                  {entry.group ?? "-"}
+                </span>
+              </button>
+            ))}
+          {showUnavailable && (
+            <div className="empty-hint">{t("sftp.emptyUnavailable")}</div>
+          )}
+          {!showUnavailable && !entries.length && (
+            <div className="empty-hint">{t("sftp.empty")}</div>
+          )}
+        </div>
       </div>
       {menu && (
         <ContextMenu
