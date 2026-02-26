@@ -4,7 +4,7 @@ import type { Locale, Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { ThemeId } from "@/types";
 import Button from "@/components/ui/button";
-import Select from "@/components/ui/select";
+import SelectMenu from "@/components/ui/select-menu";
 
 type MenuAction = {
   id: string;
@@ -116,15 +116,15 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.language")}</span>
-                <Select
+                <SelectMenu
                   value={locale}
-                  onChange={(event) =>
-                    onLocaleChange(event.target.value as Locale)
-                  }
-                >
-                  <option value="zh">中文</option>
-                  <option value="en">English</option>
-                </Select>
+                  options={[
+                    { value: "zh", label: "中文" },
+                    { value: "en", label: "English" },
+                  ]}
+                  onChange={(next) => onLocaleChange(next as Locale)}
+                  aria-label={t("settings.language")}
+                />
               </label>
             ),
           },
@@ -133,20 +133,17 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.shell")}</span>
-                <Select
-                  value={shellId ?? ""}
-                  onChange={(event) =>
-                    onShellChange(event.target.value || null)
-                  }
+                <SelectMenu
+                  value={shellId}
+                  options={availableShells.map((shell) => ({
+                    value: shell.id,
+                    label: shell.label,
+                  }))}
+                  placeholder={t("menu.app.shellEmpty")}
                   disabled={!availableShells.length}
-                >
-                  {!availableShells.length && <option value="">-</option>}
-                  {availableShells.map((shell) => (
-                    <option key={shell.id} value={shell.id}>
-                      {shell.label}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(next) => onShellChange(next || null)}
+                  aria-label={t("settings.shell")}
+                />
               </label>
             ),
           },
@@ -155,18 +152,15 @@ export default function Menus({
             render: (
               <label className="menu-field">
                 <span>{t("settings.theme")}</span>
-                <Select
+                <SelectMenu
                   value={themeId}
-                  onChange={(event) =>
-                    onThemeChange(event.target.value as ThemeId)
-                  }
-                >
-                  {Object.entries(themes).map(([key, theme]) => (
-                    <option key={key} value={key}>
-                      {theme.label[locale]}
-                    </option>
-                  ))}
-                </Select>
+                  options={Object.entries(themes).map(([key, theme]) => ({
+                    value: key,
+                    label: theme.label[locale],
+                  }))}
+                  onChange={(next) => onThemeChange(next as ThemeId)}
+                  aria-label={t("settings.theme")}
+                />
               </label>
             ),
           },
