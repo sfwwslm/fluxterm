@@ -1,6 +1,15 @@
+/**
+ * @module useFloatingPanels
+ * @description
+ * 管理小组件“浮动窗口”生命周期与主窗口联动：
+ * 1) 将当前槽位激活组件拆出并创建独立浮动窗口；
+ * 2) 通过 BroadcastChannel 同步主题/语言与恢复事件；
+ * 3) 在浮动窗口关闭、异常或销毁时回收到原槽位；
+ * 4) 主窗口关闭时先关闭全部浮动窗口，再关闭主窗口。
+ */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getAllWindows, getCurrentWindow } from "@tauri-apps/api/window";
 import type { Locale } from "@/i18n";
 import type { ThemeId, PanelKey } from "@/types";
 import type {
@@ -11,7 +20,7 @@ import { moveWidgetToSlot } from "@/layout/model";
 
 type UseFloatingPanelsProps = {
   floatingPanelKey?: PanelKey | null;
-  floatingOriginRef?: React.MutableRefObject<
+  floatingOriginRef?: React.RefObject<
     Partial<Record<PanelKey, LayoutWidgetSlot>>
   >;
   slotGroups: Record<string, WidgetGroup>;
@@ -27,7 +36,7 @@ type UseFloatingPanelsProps = {
 };
 
 type FloatingPanelsState = {
-  floatingOriginRef: React.MutableRefObject<
+  floatingOriginRef: React.RefObject<
     Partial<Record<PanelKey, LayoutWidgetSlot>>
   >;
   handleFloat: (slot: LayoutWidgetSlot) => Promise<void>;
@@ -80,6 +89,7 @@ export default function useFloatingPanels({
   );
   const floatSyncChannelRef = useRef<BroadcastChannel | null>(null);
 
+  /** 主窗口向浮动窗口广播布局与外观状态，保证视觉与语言一致。 */
   const broadcastFloatState = useCallback(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const channel = floatSyncChannelRef.current;
@@ -101,6 +111,7 @@ export default function useFloatingPanels({
   }, []);
 
   useEffect(() => {
+    /** 浮动窗口主动关闭或刷新时，通知主窗口将组件还原到原槽位。 */
     if (!floatingPanelKey) return;
     const onUnload = () => {
       restoreFloating(floatingPanelKey);
@@ -112,6 +123,7 @@ export default function useFloatingPanels({
   }, [floatingPanelKey, restoreFloating]);
 
   useEffect(() => {
+    /** 主窗口/浮动窗口之间通过 BroadcastChannel 协调恢复与主题同步。 */
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel("fluxterm-float-sync");
     floatSyncChannelRef.current = channel;
@@ -126,6 +138,7 @@ export default function useFloatingPanels({
         | undefined;
       if (!payload) return;
       if (payload.type === "restore") {
+        // 收到恢复事件后，将组件放回其原始槽位。
         const panel = normalizePanelKey(payload.panel);
         if (!panel) return;
         const origin = floatingOriginRef.current[panel] ?? "bottom";
@@ -134,6 +147,7 @@ export default function useFloatingPanels({
         setSlotGroups((prev) => moveWidgetToSlot(prev, panel, origin));
       }
       if (payload.type === "layout" && floatingPanelKey) {
+        // 浮动窗口仅消费主窗口广播的外观设置，不改动布局数据。
         if (payload.locale === "zh" || payload.locale === "en") {
           setLocale(payload.locale);
         }
@@ -156,11 +170,20 @@ export default function useFloatingPanels({
   }, [broadcastFloatState]);
 
   useEffect(() => {
+    /**
+     * 主窗口关闭时先关闭所有浮动窗口，再关闭主窗口自身。
+     * 这里同时使用内存引用和运行时窗口枚举，避免遗漏未记录窗口。
+     */
     const current = getCurrentWindow();
     if (current.label !== "main") return () => {};
     const closingRef = { current: false };
 
-    const closeWindowAndWait = (win?: WebviewWindow | null) =>
+    const closeWindowAndWait = (
+      win?: {
+        close: () => Promise<unknown>;
+        once?: (event: string, handler: () => void) => unknown;
+      } | null,
+    ) =>
       new Promise<void>((resolve) => {
         if (!win) {
           resolve();
@@ -172,12 +195,18 @@ export default function useFloatingPanels({
           settled = true;
           resolve();
         }, 1200);
-        win.once("tauri://destroyed", () => {
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timer);
-          resolve();
-        });
+        if (typeof win.once === "function") {
+          try {
+            win.once("tauri://destroyed", () => {
+              if (settled) return;
+              settled = true;
+              window.clearTimeout(timer);
+              resolve();
+            });
+          } catch {
+            // ignore listener errors and fallback to timeout
+          }
+        }
         win.close().catch(() => {
           if (settled) return;
           settled = true;
@@ -189,8 +218,26 @@ export default function useFloatingPanels({
       if (closingRef.current) return;
       closingRef.current = true;
       event.preventDefault();
-      const windows = Object.values(floatingWindowRef.current);
-      await Promise.all(windows.map((win) => closeWindowAndWait(win)));
+      const merged = new Map<
+        string,
+        {
+          close: () => Promise<unknown>;
+          once?: (event: string, handler: () => void) => unknown;
+        }
+      >();
+      Object.values(floatingWindowRef.current).forEach((win) => {
+        if (!win) return;
+        merged.set(win.label, win);
+      });
+      const runtimeWindows = await getAllWindows().catch(() => []);
+      runtimeWindows
+        .filter((win) => win.label.startsWith("float-"))
+        .forEach((win) => {
+          merged.set(win.label, win);
+        });
+      await Promise.all(
+        Array.from(merged.values()).map((win) => closeWindowAndWait(win)),
+      );
       current.close().catch(() => {});
     });
     return () => {
@@ -200,6 +247,7 @@ export default function useFloatingPanels({
 
   const handleFloat = useCallback(
     async (slot: LayoutWidgetSlot) => {
+      // 1) 从当前槽位取出激活组件；2) 创建浮动窗口；3) 绑定关闭/销毁时的还原逻辑。
       const widget = slotGroups[slot].active;
       if (!widget) return;
       const hasTauriRuntime =
@@ -212,6 +260,7 @@ export default function useFloatingPanels({
       }
       floatingOriginRef.current[widget] = slot;
       setSlotGroups((prev) => {
+        // 悬浮后立即从当前槽位移除该组件，避免主窗口和浮动窗口重复渲染。
         const group = prev[slot];
         const widgets = group.widgets.filter((item) => item !== widget);
         return {
@@ -238,6 +287,7 @@ export default function useFloatingPanels({
         });
         floatingWindowRef.current[widget] = win;
         win.once("tauri://close-requested", async () => {
+          // 用户关闭浮动窗口时，把组件放回原槽位。
           delete floatingWindowRef.current[widget];
           const origin = floatingOriginRef.current[widget] ?? slot;
           delete floatingOriginRef.current[widget];
@@ -245,18 +295,21 @@ export default function useFloatingPanels({
           await win.close();
         });
         win.once("tauri://error", () => {
+          // 创建失败时回滚状态，保证组件不丢失。
           delete floatingWindowRef.current[widget];
           const origin = floatingOriginRef.current[widget] ?? slot;
           delete floatingOriginRef.current[widget];
           setSlotGroups((prev) => moveWidgetToSlot(prev, widget, origin));
         });
         win.once("tauri://destroyed", () => {
+          // 窗口被系统销毁时同样执行回收。
           delete floatingWindowRef.current[widget];
           const origin = floatingOriginRef.current[widget] ?? slot;
           delete floatingOriginRef.current[widget];
           setSlotGroups((prev) => moveWidgetToSlot(prev, widget, origin));
         });
       } catch {
+        // 创建过程中抛错时兜底恢复组件位置。
         const origin = floatingOriginRef.current[widget] ?? slot;
         delete floatingOriginRef.current[widget];
         setSlotGroups((prev) => moveWidgetToSlot(prev, widget, origin));
