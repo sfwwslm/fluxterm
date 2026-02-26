@@ -351,13 +351,19 @@ export default function useTerminalRuntime({
     }
     for (let viewRow = 0; viewRow < rowCount; viewRow += 1) {
       const bufferRow = viewportY + viewRow;
+      const bufferLine = buffer.getLine(bufferRow);
       const isLogicalStart = bundle.logicalLineStartByRow[bufferRow];
       const logicalIndex = bundle.logicalLineIndexByRow[bufferRow];
-      const meta = isLogicalStart
-        ? bundle.lineMetaByLogicalIndex.get(logicalIndex)
-        : null;
-      const timeText = meta ? formatGutterTime(meta.timestamp) : "";
-      const lineText = meta ? String(meta.number) : "";
+      const lineMeta = bundle.lineMetaByLogicalIndex.get(logicalIndex) ?? null;
+      const wrappedContinuation =
+        !!bufferLine && bufferLine.isWrapped && !isLogicalStart && !!lineMeta;
+      const meta = isLogicalStart ? lineMeta : null;
+      const timeText = meta
+        ? formatGutterTime(meta.timestamp)
+        : wrappedContinuation && lineMeta
+          ? formatGutterTime(lineMeta.timestamp)
+          : "";
+      const lineText = meta ? String(meta.number) : wrappedContinuation ? "-" : "";
       html +=
         `<div class="terminal-gutter-row" style="height:${rowHeight}px;line-height:${rowHeight}px;">` +
         `<span class="terminal-gutter-time">${timeText}</span>` +
