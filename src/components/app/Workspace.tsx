@@ -5,6 +5,7 @@ import type { WidgetGroup, WidgetSide, WidgetSlot } from "@/layout/types";
 import { sideSlotKey } from "@/layout/model";
 import WidgetContainer from "@/components/layout/WidgetContainer";
 import WidgetSlotView from "@/components/layout/WidgetSlot";
+import "@/components/app/Workspace.css";
 
 type WorkspaceProps = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
@@ -142,9 +143,6 @@ export default function Workspace({
 
       {bottomVisible && (
         <footer className="bottom-panel">
-          <div className="bottom-panel-toolbar">
-            <span>{t("layout.bottom")}</span>
-          </div>
           <WidgetSlotView
             slot="bottom"
             widgets={bottomGroup.widgets}

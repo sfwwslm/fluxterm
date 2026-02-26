@@ -991,6 +991,39 @@ button:disabled {
   min-height: 0;
 }
 
+/* 小组件滚动容器统一滚动条样式（SFTP 列表使用其独立样式）。 */
+.panel-body,
+.host-list-body {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
+    transparent;
+}
+
+.panel-body::-webkit-scrollbar,
+.host-list-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.panel-body::-webkit-scrollbar-track,
+.host-list-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-body::-webkit-scrollbar-thumb,
+.host-list-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+.panel-body::-webkit-scrollbar-thumb:hover,
+.host-list-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
+}
+
 .host-panel {
   display: flex;
   flex-direction: column;
@@ -1383,20 +1416,6 @@ input[type="number"] {
   font-size: 12px;
   color: var(--text-quiet);
   padding: 12px 10px;
-}
-
-.bottom-panel {
-  height: var(--bottom-height, 240px);
-  margin: 0 var(--workspace-pad, 16px) var(--workspace-pad, 16px);
-}
-
-.bottom-panel-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--text-soft);
-  font-size: 12px;
-  padding: 0 2px 8px;
 }
 
 .log-panel {
