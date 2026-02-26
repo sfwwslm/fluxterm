@@ -11,7 +11,7 @@ use std::thread;
 use std::path::PathBuf;
 
 use engine::{EngineError, Session, SessionState, TerminalSize, util::now_epoch};
-use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -44,8 +44,9 @@ struct TerminalExitPayload {
 struct LocalShellHandle {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
-    child: Box<dyn portable_pty::Child + Send>,
+    killer: Box<dyn ChildKiller + Send + Sync>,
     _reader_thread: thread::JoinHandle<()>,
+    _waiter_thread: thread::JoinHandle<()>,
 }
 
 /// 本地 Shell 共享状态。
@@ -214,7 +215,7 @@ pub fn start_local_shell(
     for arg in &shell.args {
         command.arg(arg);
     }
-    let child = pair.slave.spawn_command(command).map_err(|err| {
+    let mut child = pair.slave.spawn_command(command).map_err(|err| {
         EngineError::with_detail("local_shell_failed", "无法启动本地 Shell", err.to_string())
     })?;
     drop(pair.slave);
@@ -229,6 +230,7 @@ pub fn start_local_shell(
     let writer = pair.master.take_writer().map_err(|err| {
         EngineError::with_detail("local_shell_failed", "无法写入本地终端", err.to_string())
     })?;
+    let killer = child.clone_killer();
 
     let session_id_clone = session_id.clone();
     let app_clone = app.clone();
@@ -250,10 +252,17 @@ pub fn start_local_shell(
                 Err(_) => break,
             }
         }
-        let _ = app_clone.emit(
+        let _ = session_id_clone;
+    });
+
+    let session_id_wait = session_id.clone();
+    let app_wait = app.clone();
+    let waiter_thread = thread::spawn(move || {
+        let _ = child.wait();
+        let _ = app_wait.emit(
             "terminal:exit",
             TerminalExitPayload {
-                session_id: session_id_clone,
+                session_id: session_id_wait,
             },
         );
     });
@@ -261,8 +270,9 @@ pub fn start_local_shell(
     let handle = LocalShellHandle {
         master: pair.master,
         writer,
-        child,
+        killer,
         _reader_thread: reader_thread,
+        _waiter_thread: waiter_thread,
     };
 
     let mut sessions = state
@@ -351,7 +361,6 @@ pub fn stop_local_shell(state: &LocalShellState, session_id: &str) -> Result<(),
     let mut handle = sessions
         .remove(session_id)
         .ok_or_else(|| EngineError::new("local_shell_missing", "本地 Shell 会话不存在"))?;
-    let _ = handle.child.kill();
-    let _ = handle.child.wait();
+    let _ = handle.killer.kill();
     Ok(())
 }

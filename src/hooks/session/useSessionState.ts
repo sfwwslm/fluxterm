@@ -249,12 +249,14 @@ export default function useSessionState({
 
   function inferDisconnectReason(sessionId: string): DisconnectReason {
     const lastCommand = lastCommandRef.current[sessionId];
-    if (!lastCommand) return "network";
+    if (!lastCommand) {
+      return isLocalSession(sessionId) ? "exit" : "network";
+    }
     const command = normalizeCommand(lastCommand);
     if (command === "exit") return "exit";
     if (command === "poweroff") return "poweroff";
     if (command === "reboot") return "reboot";
-    return "network";
+    return isLocalSession(sessionId) ? "exit" : "network";
   }
 
   function clearReconnectState(sessionId: string) {
@@ -352,11 +354,23 @@ export default function useSessionState({
     return isLocalSession(sessionId) ? localCommand : sshCommand;
   }
 
-  function writeToSession(sessionId: string, data: string) {
-    return invoke(sessionCommand(sessionId, "ssh_write", "local_shell_write"), {
-      sessionId,
-      data,
-    });
+  async function writeToSession(sessionId: string, data: string) {
+    try {
+      return await invoke(
+        sessionCommand(sessionId, "ssh_write", "local_shell_write"),
+        {
+          sessionId,
+          data,
+        },
+      );
+    } catch (err) {
+      // 本地 Shell 进程退出后，若 terminal:exit 事件未及时到达，
+      // 这里以写入失败作为兜底信号，确保会话进入断开状态并可回车重连。
+      if (isLocalSession(sessionId)) {
+        handleSessionDisconnected(sessionId);
+      }
+      throw err;
+    }
   }
 
   function resizeSession(sessionId: string, cols: number, rows: number) {
