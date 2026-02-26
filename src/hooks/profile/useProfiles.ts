@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { HostProfile } from "@/types";
 
-const hostGroupsStorageKey = "fluxterm.host.groups";
-
 type UseProfilesResult = {
   profiles: HostProfile[];
   sshGroups: string[];
@@ -57,25 +55,21 @@ function dedupeGroups(values: string[]) {
 /** 主机配置管理与持久化。 */
 export default function useProfiles(): UseProfilesResult {
   const [profiles, setProfiles] = useState<HostProfile[]>([]);
-  const [sshGroups, setSshGroups] = useState<string[]>(() => {
-    const raw = localStorage.getItem(hostGroupsStorageKey);
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return [];
-      return dedupeGroups(
-        parsed.filter((item): item is string => typeof item === "string"),
-      );
-    } catch {
-      return [];
-    }
-  });
+  const [sshGroups, setSshGroups] = useState<string[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] =
     useState<HostProfile>(defaultProfile);
 
+  function persistGroups(nextGroups: string[]) {
+    setSshGroups(nextGroups);
+    return invoke<string[]>("profile_groups_save", { groups: nextGroups });
+  }
+
   async function loadProfiles() {
-    const list = await invoke<HostProfile[]>("profile_list");
+    const [list, persistedGroups] = await Promise.all([
+      invoke<HostProfile[]>("profile_list"),
+      invoke<string[]>("profile_groups_list"),
+    ]);
     const normalized = list.map((profile) => {
       const rawAuth = profile.authType as string;
       if (
@@ -99,7 +93,7 @@ export default function useProfiles(): UseProfilesResult {
     const discoveredGroups = normalized
       .map((item) => normalizeGroupName(item.tags?.[0] ?? ""))
       .filter(Boolean);
-    setSshGroups((prev) => dedupeGroups([...prev, ...discoveredGroups]));
+    setSshGroups(dedupeGroups([...persistedGroups, ...discoveredGroups]));
     setProfiles(normalized);
     if (normalized.length && !activeProfileId) {
       setActiveProfileId(normalized[0].id);
@@ -119,7 +113,8 @@ export default function useProfiles(): UseProfilesResult {
     const saved = await invoke<HostProfile>("profile_save", { profile });
     const groupName = normalizeGroupName(saved.tags?.[0] ?? "");
     if (groupName) {
-      setSshGroups((prev) => dedupeGroups([...prev, groupName]));
+      const nextGroups = dedupeGroups([...sshGroups, groupName]);
+      await persistGroups(nextGroups).catch(() => {});
     }
     const nextProfiles = profiles
       .filter((item) => item.id !== saved.id)
@@ -148,7 +143,8 @@ export default function useProfiles(): UseProfilesResult {
     ) {
       return false;
     }
-    setSshGroups((prev) => dedupeGroups([...prev, normalized]));
+    const nextGroups = dedupeGroups([...sshGroups, normalized]);
+    persistGroups(nextGroups).catch(() => {});
     return true;
   }
 
@@ -167,13 +163,12 @@ export default function useProfiles(): UseProfilesResult {
         source.toLowerCase(),
     );
     if (!affected.length) {
-      setSshGroups((prev) =>
-        dedupeGroups(
-          prev.map((item) =>
-            item.toLowerCase() === source.toLowerCase() ? target : item,
-          ),
+      const nextGroups = dedupeGroups(
+        sshGroups.map((item) =>
+          item.toLowerCase() === source.toLowerCase() ? target : item,
         ),
       );
+      await persistGroups(nextGroups);
       return true;
     }
     try {
@@ -187,13 +182,12 @@ export default function useProfiles(): UseProfilesResult {
       const map = new Map(
         savedProfiles.map((item) => [item.id, item] as const),
       );
-      setSshGroups((prev) =>
-        dedupeGroups(
-          prev.map((item) =>
-            item.toLowerCase() === source.toLowerCase() ? target : item,
-          ),
+      const nextGroups = dedupeGroups(
+        sshGroups.map((item) =>
+          item.toLowerCase() === source.toLowerCase() ? target : item,
         ),
       );
+      await persistGroups(nextGroups);
       setProfiles((prev) => prev.map((item) => map.get(item.id) ?? item));
       setEditingProfile((prev) => map.get(prev.id) ?? prev);
       return true;
@@ -214,9 +208,10 @@ export default function useProfiles(): UseProfilesResult {
         normalizeGroupName(item.tags?.[0] ?? "").toLowerCase() === targetKey,
     );
     if (!affected.length) {
-      setSshGroups((prev) =>
-        prev.filter((item) => item.toLowerCase() !== targetKey),
+      const nextGroups = sshGroups.filter(
+        (item) => item.toLowerCase() !== targetKey,
       );
+      await persistGroups(nextGroups);
       return true;
     }
 
@@ -231,9 +226,10 @@ export default function useProfiles(): UseProfilesResult {
       const map = new Map(
         savedProfiles.map((item) => [item.id, item] as const),
       );
-      setSshGroups((prev) =>
-        prev.filter((item) => item.toLowerCase() !== targetKey),
+      const nextGroups = sshGroups.filter(
+        (item) => item.toLowerCase() !== targetKey,
       );
+      await persistGroups(nextGroups);
       setProfiles((prev) => prev.map((item) => map.get(item.id) ?? item));
       setEditingProfile((prev) => map.get(prev.id) ?? prev);
       return true;
@@ -258,7 +254,8 @@ export default function useProfiles(): UseProfilesResult {
         profile: payload,
       });
       if (nextGroup) {
-        setSshGroups((prev) => dedupeGroups([...prev, nextGroup]));
+        const nextGroups = dedupeGroups([...sshGroups, nextGroup]);
+        await persistGroups(nextGroups);
       }
       setProfiles((prev) =>
         prev.map((item) => (item.id === saved.id ? saved : item)),
@@ -273,10 +270,6 @@ export default function useProfiles(): UseProfilesResult {
   useEffect(() => {
     loadProfiles().catch(() => {});
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(hostGroupsStorageKey, JSON.stringify(sshGroups));
-  }, [sshGroups]);
 
   return {
     profiles,
