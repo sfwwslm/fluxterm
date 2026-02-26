@@ -6,6 +6,7 @@ type ModalProps = {
   title: string;
   actions?: React.ReactNode;
   closeLabel: string;
+  bodyClassName?: string;
   onClose: () => void;
   children: React.ReactNode;
 };
@@ -16,6 +17,7 @@ export default function Modal({
   title,
   actions,
   closeLabel,
+  bodyClassName,
   onClose,
   children,
 }: ModalProps) {
@@ -29,7 +31,9 @@ export default function Modal({
             {closeLabel}
           </Button>
         </div>
-        <div className="modal-body">{children}</div>
+        <div className={`modal-body ${bodyClassName ?? ""}`.trim()}>
+          {children}
+        </div>
         {actions && <div className="modal-actions">{actions}</div>}
       </div>
     </div>

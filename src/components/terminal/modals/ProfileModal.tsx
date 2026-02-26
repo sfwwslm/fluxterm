@@ -1,16 +1,19 @@
 import { useEffect, useRef } from "react";
 import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
+import { DEFAULT_SSH_GROUP_VALUE } from "@/constants/hostGroups";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
+import "@/components/terminal/modals/ProfileModal.css";
 
 type ProfileModalProps = {
   open: boolean;
   mode: "new" | "edit";
   draft: HostProfile;
+  sshGroups: string[];
   onDraftChange: (draft: HostProfile) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -22,6 +25,7 @@ export default function ProfileModal({
   open,
   mode,
   draft,
+  sshGroups,
   onDraftChange,
   onClose,
   onSubmit,
@@ -194,15 +198,25 @@ export default function ProfileModal({
         )}
         <div className="form-row">
           <label>{t("profile.form.group")}</label>
-          <input
-            value={draft.tags?.[0] ?? ""}
-            onChange={(event) =>
+          <Select
+            value={draft.tags?.[0]?.trim() || DEFAULT_SSH_GROUP_VALUE}
+            options={[
+              {
+                value: DEFAULT_SSH_GROUP_VALUE,
+                label: t("host.defaultSshGroup"),
+              },
+              ...sshGroups.map((group) => ({
+                value: group,
+                label: group,
+              })),
+            ]}
+            onChange={(value) =>
               onDraftChange({
                 ...draft,
-                tags: event.target.value ? [event.target.value] : null,
+                tags: value === DEFAULT_SSH_GROUP_VALUE ? null : [value],
               })
             }
-            placeholder={t("profile.placeholder.group")}
+            aria-label={t("profile.form.group")}
           />
         </div>
       </div>

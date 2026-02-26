@@ -178,12 +178,17 @@ function App() {
   });
   const {
     profiles,
+    sshGroups,
     activeProfileId,
     editingProfile,
     defaultProfile,
     pickProfile,
     saveProfile,
     removeProfile,
+    addGroup,
+    renameGroup,
+    removeGroup,
+    moveProfileToGroup,
   } = useProfiles();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -414,12 +419,17 @@ function App() {
       profiles: (
         <HostPanel
           profiles={profiles}
+          sshGroups={sshGroups}
           activeProfileId={activeProfileId}
           onPick={pickProfile}
           onConnectProfile={handleConnectProfile}
           onOpenNewProfile={openNewProfile}
           onOpenEditProfile={openEditProfile}
           onRemoveProfile={(profile) => removeProfile(profile.id)}
+          onAddGroup={addGroup}
+          onRenameGroup={renameGroup}
+          onRemoveGroup={removeGroup}
+          onMoveProfileToGroup={moveProfileToGroup}
           localShells={availableShells}
           onConnectLocalShell={(shell) => {
             connectLocalShell(shell, true).catch(() => {});
@@ -475,6 +485,7 @@ function App() {
     };
   }, [
     profiles,
+    sshGroups,
     activeProfileId,
     availableShells,
     activeSessionId,
@@ -492,6 +503,10 @@ function App() {
     canReconnect,
     t,
     handleConnectProfile,
+    addGroup,
+    renameGroup,
+    removeGroup,
+    moveProfileToGroup,
     connectLocalShell,
     refreshList,
     openRemoteDir,
@@ -641,6 +656,7 @@ function App() {
         open={profileModalOpen}
         mode={profileModalMode}
         draft={profileDraft}
+        sshGroups={sshGroups}
         onDraftChange={setProfileDraft}
         onClose={closeProfileModal}
         onSubmit={submitProfile}

@@ -77,11 +77,20 @@ export default function Select({
         setOpen(false);
       }
     };
+    const handleOutsideTouch = (event: TouchEvent) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
     const handleWindowBlur = () => setOpen(false);
-    document.addEventListener("mousedown", handleOutsideClick);
+    // 使用捕获阶段，避免被 Modal 内部 stopPropagation 阻断，确保点击弹窗其它区域也能关闭下拉。
+    document.addEventListener("mousedown", handleOutsideClick, true);
+    document.addEventListener("touchstart", handleOutsideTouch, true);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("mousedown", handleOutsideClick, true);
+      document.removeEventListener("touchstart", handleOutsideTouch, true);
       window.removeEventListener("blur", handleWindowBlur);
     };
   }, []);

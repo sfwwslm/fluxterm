@@ -2,14 +2,24 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { HostProfile } from "@/types";
 
+const hostGroupsStorageKey = "fluxterm.host.groups";
+
 type UseProfilesResult = {
   profiles: HostProfile[];
+  sshGroups: string[];
   activeProfileId: string | null;
   editingProfile: HostProfile;
   defaultProfile: HostProfile;
   pickProfile: (profileId: string) => void;
   saveProfile: (profile: HostProfile) => Promise<HostProfile>;
   removeProfile: (profileId: string) => Promise<void>;
+  addGroup: (groupName: string) => boolean;
+  renameGroup: (from: string, to: string) => Promise<boolean>;
+  removeGroup: (groupName: string) => Promise<boolean>;
+  moveProfileToGroup: (
+    profileId: string,
+    targetGroup: string | null,
+  ) => Promise<boolean>;
 };
 
 const defaultProfile: HostProfile = {
@@ -26,9 +36,40 @@ const defaultProfile: HostProfile = {
   tags: null,
 };
 
+function normalizeGroupName(value: string) {
+  return value.trim();
+}
+
+function dedupeGroups(values: string[]) {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  values.forEach((item) => {
+    const normalized = normalizeGroupName(item);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push(normalized);
+  });
+  return list.sort((a, b) => a.localeCompare(b));
+}
+
 /** 主机配置管理与持久化。 */
 export default function useProfiles(): UseProfilesResult {
   const [profiles, setProfiles] = useState<HostProfile[]>([]);
+  const [sshGroups, setSshGroups] = useState<string[]>(() => {
+    const raw = localStorage.getItem(hostGroupsStorageKey);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      return dedupeGroups(
+        parsed.filter((item): item is string => typeof item === "string"),
+      );
+    } catch {
+      return [];
+    }
+  });
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] =
     useState<HostProfile>(defaultProfile);
@@ -55,6 +96,10 @@ export default function useProfiles(): UseProfilesResult {
       }
       return profile;
     });
+    const discoveredGroups = normalized
+      .map((item) => normalizeGroupName(item.tags?.[0] ?? ""))
+      .filter(Boolean);
+    setSshGroups((prev) => dedupeGroups([...prev, ...discoveredGroups]));
     setProfiles(normalized);
     if (normalized.length && !activeProfileId) {
       setActiveProfileId(normalized[0].id);
@@ -72,6 +117,10 @@ export default function useProfiles(): UseProfilesResult {
 
   async function saveProfile(profile: HostProfile) {
     const saved = await invoke<HostProfile>("profile_save", { profile });
+    const groupName = normalizeGroupName(saved.tags?.[0] ?? "");
+    if (groupName) {
+      setSshGroups((prev) => dedupeGroups([...prev, groupName]));
+    }
     const nextProfiles = profiles
       .filter((item) => item.id !== saved.id)
       .concat(saved);
@@ -91,17 +140,156 @@ export default function useProfiles(): UseProfilesResult {
     }
   }
 
+  function addGroup(groupName: string) {
+    const normalized = normalizeGroupName(groupName);
+    if (!normalized) return false;
+    if (
+      sshGroups.some((item) => item.toLowerCase() === normalized.toLowerCase())
+    ) {
+      return false;
+    }
+    setSshGroups((prev) => dedupeGroups([...prev, normalized]));
+    return true;
+  }
+
+  async function renameGroup(from: string, to: string) {
+    const source = normalizeGroupName(from);
+    const target = normalizeGroupName(to);
+    if (!source || !target) return false;
+    if (source.toLowerCase() === target.toLowerCase()) return false;
+    if (sshGroups.some((item) => item.toLowerCase() === target.toLowerCase())) {
+      return false;
+    }
+
+    const affected = profiles.filter(
+      (item) =>
+        normalizeGroupName(item.tags?.[0] ?? "").toLowerCase() ===
+        source.toLowerCase(),
+    );
+    if (!affected.length) {
+      setSshGroups((prev) =>
+        dedupeGroups(
+          prev.map((item) =>
+            item.toLowerCase() === source.toLowerCase() ? target : item,
+          ),
+        ),
+      );
+      return true;
+    }
+    try {
+      const savedProfiles = await Promise.all(
+        affected.map((item) =>
+          invoke<HostProfile>("profile_save", {
+            profile: { ...item, tags: [target] },
+          }),
+        ),
+      );
+      const map = new Map(
+        savedProfiles.map((item) => [item.id, item] as const),
+      );
+      setSshGroups((prev) =>
+        dedupeGroups(
+          prev.map((item) =>
+            item.toLowerCase() === source.toLowerCase() ? target : item,
+          ),
+        ),
+      );
+      setProfiles((prev) => prev.map((item) => map.get(item.id) ?? item));
+      setEditingProfile((prev) => map.get(prev.id) ?? prev);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function removeGroup(groupName: string) {
+    const target = normalizeGroupName(groupName);
+    if (!target) return false;
+    const targetKey = target.toLowerCase();
+    const exists = sshGroups.some((item) => item.toLowerCase() === targetKey);
+    if (!exists) return false;
+
+    const affected = profiles.filter(
+      (item) =>
+        normalizeGroupName(item.tags?.[0] ?? "").toLowerCase() === targetKey,
+    );
+    if (!affected.length) {
+      setSshGroups((prev) =>
+        prev.filter((item) => item.toLowerCase() !== targetKey),
+      );
+      return true;
+    }
+
+    try {
+      const savedProfiles = await Promise.all(
+        affected.map((item) =>
+          invoke<HostProfile>("profile_save", {
+            profile: { ...item, tags: null },
+          }),
+        ),
+      );
+      const map = new Map(
+        savedProfiles.map((item) => [item.id, item] as const),
+      );
+      setSshGroups((prev) =>
+        prev.filter((item) => item.toLowerCase() !== targetKey),
+      );
+      setProfiles((prev) => prev.map((item) => map.get(item.id) ?? item));
+      setEditingProfile((prev) => map.get(prev.id) ?? prev);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function moveProfileToGroup(
+    profileId: string,
+    targetGroup: string | null,
+  ) {
+    const profile = profiles.find((item) => item.id === profileId);
+    if (!profile) return false;
+    const nextGroup = normalizeGroupName(targetGroup ?? "");
+    const payload: HostProfile = {
+      ...profile,
+      tags: nextGroup ? [nextGroup] : null,
+    };
+    try {
+      const saved = await invoke<HostProfile>("profile_save", {
+        profile: payload,
+      });
+      if (nextGroup) {
+        setSshGroups((prev) => dedupeGroups([...prev, nextGroup]));
+      }
+      setProfiles((prev) =>
+        prev.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setEditingProfile((prev) => (prev.id === saved.id ? saved : prev));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   useEffect(() => {
     loadProfiles().catch(() => {});
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem(hostGroupsStorageKey, JSON.stringify(sshGroups));
+  }, [sshGroups]);
+
   return {
     profiles,
+    sshGroups,
     activeProfileId,
     editingProfile,
     defaultProfile,
     pickProfile,
     saveProfile,
     removeProfile,
+    addGroup,
+    renameGroup,
+    removeGroup,
+    moveProfileToGroup,
   };
 }

@@ -1,17 +1,34 @@
 import { useMemo, useState } from "react";
 import type { HostProfile, LocalShellProfile } from "@/types";
 import type { Translate } from "@/i18n";
+import {
+  DEFAULT_SSH_GROUP_VALUE,
+  LOCAL_SHELL_GROUP_VALUE,
+} from "@/constants/hostGroups";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
+import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
+import InputDialog from "@/components/ui/InputDialog";
+import PathViewDialog from "@/components/ui/PathViewDialog";
+import Select from "@/components/ui/select";
+import "@/components/terminal/profiles/HostPanel.css";
 
 type HostPanelProps = {
   profiles: HostProfile[];
+  sshGroups: string[];
   activeProfileId: string | null;
   onPick: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
   onOpenNewProfile: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
   onRemoveProfile: (profile: HostProfile) => void;
+  onAddGroup: (groupName: string) => boolean;
+  onRenameGroup: (from: string, to: string) => Promise<boolean>;
+  onRemoveGroup: (groupName: string) => Promise<boolean>;
+  onMoveProfileToGroup: (
+    profileId: string,
+    targetGroup: string | null,
+  ) => Promise<boolean>;
   localShells: LocalShellProfile[];
   onConnectLocalShell: (shell: LocalShellProfile) => void;
   t: Translate;
@@ -20,34 +37,45 @@ type HostPanelProps = {
 /** 主机管理与分组列表。 */
 export default function HostPanel({
   profiles,
+  sshGroups,
   activeProfileId,
   onPick,
   onConnectProfile,
   onOpenNewProfile,
   onOpenEditProfile,
   onRemoveProfile,
+  onAddGroup,
+  onRenameGroup,
+  onRemoveGroup,
+  onMoveProfileToGroup,
   localShells,
   onConnectLocalShell,
   t,
 }: HostPanelProps) {
-  const localShellKey = "__local_shells__";
+  const localShellKey = LOCAL_SHELL_GROUP_VALUE;
+  const defaultSshKey = DEFAULT_SSH_GROUP_VALUE;
   const localShellLabel = t("host.shellGroup");
-  const grouped = useMemo(() => {
+  const defaultSshLabel = t("host.defaultSshGroup");
+  const customGroups = useMemo(() => {
     const map = new Map<string, { label: string; items: HostProfile[] }>();
+    sshGroups.forEach((group) => {
+      const label = group.trim();
+      if (!label) return;
+      map.set(label.toLowerCase(), { label, items: [] });
+    });
     profiles.forEach((profile) => {
-      const raw = profile.tags?.[0] ?? "";
-      const label = raw.trim();
+      const label = (profile.tags?.[0] ?? "").trim();
       if (!label) return;
       const key = label.toLowerCase();
-      const entry = map.get(key) ?? { label, items: [] };
-      entry.items.push(profile);
-      map.set(key, entry);
+      const group = map.get(key) ?? { label, items: [] };
+      group.items.push(profile);
+      map.set(key, group);
     });
     return Array.from(map.values()).sort((a, b) =>
       a.label.localeCompare(b.label),
     );
-  }, [profiles]);
-  const ungrouped = useMemo(
+  }, [profiles, sshGroups]);
+  const defaultSshProfiles = useMemo(
     () =>
       profiles.filter((profile) => {
         const tag = profile.tags?.[0]?.trim() ?? "";
@@ -59,10 +87,32 @@ export default function HostPanel({
     () => new Set(),
   );
   const [query, setQuery] = useState("");
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const selectedProfile =
-    activeProfileId &&
-    profiles.find((profile) => profile.id === activeProfileId);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    items: Array<{
+      label: string;
+      disabled: boolean;
+      onClick: () => void;
+    }>;
+  } | null>(null);
+  const [groupDialog, setGroupDialog] = useState<{
+    mode: "add" | "rename";
+    sourceGroup?: string;
+    initialValue?: string;
+  } | null>(null);
+  const [pathDialog, setPathDialog] = useState<{
+    title: string;
+    path: string;
+  } | null>(null);
+  const [removeGroupDialog, setRemoveGroupDialog] = useState<{
+    name: string;
+    hostCount: number;
+  } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<HostProfile | null>(null);
+  const [moveGroupValue, setMoveGroupValue] = useState<string>(
+    DEFAULT_SSH_GROUP_VALUE,
+  );
 
   const normalizedQuery = query.trim().toLowerCase();
   const queryActive = normalizedQuery.length > 0;
@@ -87,8 +137,8 @@ export default function HostPanel({
   }, [localShells, queryActive, normalizedQuery, localShellLabel]);
 
   const filteredGroups = useMemo(() => {
-    if (!queryActive) return grouped;
-    return grouped
+    if (!queryActive) return customGroups;
+    return customGroups
       .map((group) => {
         if (matchesGroup(group.label)) return group;
         const matched = group.items.filter(matchesProfile);
@@ -107,14 +157,66 @@ export default function HostPanel({
           items: HostProfile[];
         } => item !== null,
       );
-  }, [grouped, queryActive, normalizedQuery]);
+  }, [customGroups, queryActive, normalizedQuery]);
 
-  const filteredUngrouped = useMemo(() => {
-    if (!queryActive) return ungrouped;
-    return ungrouped.filter(matchesProfile);
-  }, [ungrouped, queryActive, normalizedQuery]);
+  const filteredDefaultGroup = useMemo(() => {
+    if (!queryActive) return defaultSshProfiles;
+    if (matchesGroup(defaultSshLabel)) return defaultSshProfiles;
+    return defaultSshProfiles.filter(matchesProfile);
+  }, [defaultSshProfiles, queryActive, normalizedQuery, defaultSshLabel]);
 
-  function toggleGroup(group: string) {
+  const showDefaultGroup =
+    !queryActive ||
+    matchesGroup(defaultSshLabel) ||
+    filteredDefaultGroup.length > 0;
+  const showLocalShellGroup =
+    !queryActive ||
+    matchesGroup(localShellLabel) ||
+    filteredLocalShells.length > 0;
+
+  const moveGroupOptions = useMemo(
+    () => [
+      { value: DEFAULT_SSH_GROUP_VALUE, label: defaultSshLabel },
+      ...customGroups.map((group) => ({
+        value: group.label,
+        label: group.label,
+      })),
+    ],
+    [customGroups, defaultSshLabel],
+  );
+
+  const currentMoveGroupValue = useMemo(() => {
+    if (!moveDialog) return DEFAULT_SSH_GROUP_VALUE;
+    return moveDialog.tags?.[0]?.trim() || DEFAULT_SSH_GROUP_VALUE;
+  }, [moveDialog]);
+
+  const getGroupHostCount = (groupName: string) =>
+    profiles.filter(
+      (profile) =>
+        (profile.tags?.[0]?.trim().toLowerCase() ?? "") ===
+        groupName.trim().toLowerCase(),
+    ).length;
+
+  function openMenu(
+    event: {
+      preventDefault: () => void;
+      stopPropagation: () => void;
+      clientX: number;
+      clientY: number;
+    },
+    items: Array<{
+      label: string;
+      disabled: boolean;
+      onClick: () => void;
+    }>,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenu({ x: event.clientX, y: event.clientY, items });
+  }
+
+  function toggleGroup(group: string, expandable: boolean) {
+    if (!expandable) return;
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) {
@@ -124,6 +226,11 @@ export default function HostPanel({
       }
       return next;
     });
+  }
+
+  function openAddGroupDialog() {
+    setMenu(null);
+    setGroupDialog({ mode: "add", initialValue: "" });
   }
 
   return (
@@ -140,79 +247,301 @@ export default function HostPanel({
         <div
           className="host-list-body"
           onContextMenu={(event) => {
-            event.preventDefault();
-            setMenu({ x: event.clientX, y: event.clientY });
+            openMenu(event, [
+              {
+                label: t("host.addGroup"),
+                disabled: false,
+                onClick: openAddGroupDialog,
+              },
+              {
+                label: t("profile.menu.new"),
+                disabled: false,
+                onClick: () => {
+                  setMenu(null);
+                  onOpenNewProfile();
+                },
+              },
+            ]);
           }}
         >
-          {localShells.length > 0 &&
-            (!queryActive ||
-              matchesGroup(localShellLabel) ||
-              filteredLocalShells.length > 0) && (
-              <div key={localShellKey} className="host-group">
-                <Button
-                  className={`host-group-title ${
-                    expandedGroups.has(localShellKey) ? "expanded" : ""
-                  }`}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleGroup(localShellKey)}
-                >
-                  <span>{localShellLabel}</span>
-                  <em>{filteredLocalShells.length}</em>
-                </Button>
-                {(queryActive || expandedGroups.has(localShellKey)) && (
-                  <div className="host-group-list">
-                    {filteredLocalShells.map((shell) => (
-                      <Button
-                        key={shell.id}
-                        variant="ghost"
-                        size="sm"
-                        onDoubleClick={() => onConnectLocalShell(shell)}
-                      >
-                        <span>{shell.label}</span>
-                        <em>{shell.path}</em>
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          {filteredUngrouped.map((profile) => (
-            <Button
-              key={profile.id}
-              className={profile.id === activeProfileId ? "active" : ""}
-              variant="ghost"
-              size="sm"
-              onClick={() => onPick(profile.id)}
-              onDoubleClick={() => onConnectProfile(profile)}
-            >
-              <span>{profile.name || profile.host}</span>
-              <em>
-                {profile.username}@{profile.host}
-              </em>
-            </Button>
-          ))}
+          {showLocalShellGroup && (
+            <div key={localShellKey} className="host-group">
+              <Button
+                className={`host-group-title ${
+                  filteredLocalShells.length > 0 &&
+                  expandedGroups.has(localShellKey)
+                    ? "expanded"
+                    : ""
+                }`}
+                variant="ghost"
+                size="sm"
+                onContextMenu={(event) =>
+                  openMenu(event, [
+                    {
+                      label: t("profile.menu.new"),
+                      disabled: false,
+                      onClick: () => {
+                        setMenu(null);
+                        onOpenNewProfile();
+                      },
+                    },
+                    {
+                      label: t("host.addGroup"),
+                      disabled: false,
+                      onClick: openAddGroupDialog,
+                    },
+                    {
+                      label: t("host.menu.renameGroup"),
+                      disabled: true,
+                      onClick: () => {},
+                    },
+                  ])
+                }
+                onClick={() =>
+                  toggleGroup(localShellKey, filteredLocalShells.length > 0)
+                }
+              >
+                <span>{localShellLabel}</span>
+                <em>{filteredLocalShells.length}</em>
+              </Button>
+              {(queryActive || expandedGroups.has(localShellKey)) && (
+                <div className="host-group-list host-group-list--nested">
+                  {filteredLocalShells.map((shell) => (
+                    <Button
+                      key={shell.id}
+                      variant="ghost"
+                      size="sm"
+                      onContextMenu={(event) =>
+                        openMenu(event, [
+                          {
+                            label: t("host.addGroup"),
+                            disabled: false,
+                            onClick: openAddGroupDialog,
+                          },
+                          {
+                            label: t("host.menu.viewShellPath"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              setPathDialog({
+                                title: t("host.pathDialogTitle", {
+                                  name: shell.label,
+                                }),
+                                path: shell.path,
+                              });
+                            },
+                          },
+                        ])
+                      }
+                      onDoubleClick={() => onConnectLocalShell(shell)}
+                    >
+                      <span>{shell.label}</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {showDefaultGroup && (
+            <div key={defaultSshKey} className="host-group">
+              <Button
+                className={`host-group-title ${
+                  filteredDefaultGroup.length > 0 &&
+                  expandedGroups.has(defaultSshKey)
+                    ? "expanded"
+                    : ""
+                }`}
+                variant="ghost"
+                size="sm"
+                onContextMenu={(event) =>
+                  openMenu(event, [
+                    {
+                      label: t("profile.menu.new"),
+                      disabled: false,
+                      onClick: () => {
+                        setMenu(null);
+                        onOpenNewProfile();
+                      },
+                    },
+                    {
+                      label: t("host.addGroup"),
+                      disabled: false,
+                      onClick: openAddGroupDialog,
+                    },
+                    {
+                      label: t("host.menu.renameGroup"),
+                      disabled: true,
+                      onClick: () => {},
+                    },
+                  ])
+                }
+                onClick={() =>
+                  toggleGroup(defaultSshKey, filteredDefaultGroup.length > 0)
+                }
+              >
+                <span>{defaultSshLabel}</span>
+                <em>{filteredDefaultGroup.length}</em>
+              </Button>
+              {(queryActive || expandedGroups.has(defaultSshKey)) && (
+                <div className="host-group-list host-group-list--nested">
+                  {filteredDefaultGroup.map((profile) => (
+                    <Button
+                      key={profile.id}
+                      className={profile.id === activeProfileId ? "active" : ""}
+                      variant="ghost"
+                      size="sm"
+                      onContextMenu={(event) =>
+                        openMenu(event, [
+                          {
+                            label: t("host.addGroup"),
+                            disabled: false,
+                            onClick: openAddGroupDialog,
+                          },
+                          {
+                            label: t("profile.menu.edit"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              onOpenEditProfile(profile);
+                            },
+                          },
+                          {
+                            label: t("host.menu.moveTo"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              setMoveDialog(profile);
+                              setMoveGroupValue(
+                                profile.tags?.[0]?.trim() ||
+                                  DEFAULT_SSH_GROUP_VALUE,
+                              );
+                            },
+                          },
+                          {
+                            label: t("profile.menu.delete"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              onRemoveProfile(profile);
+                            },
+                          },
+                        ])
+                      }
+                      onClick={() => onPick(profile.id)}
+                      onDoubleClick={() => onConnectProfile(profile)}
+                    >
+                      <span>{profile.name || profile.host}</span>
+                      <em>
+                        {profile.username}@{profile.host}
+                      </em>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {filteredGroups.map((group) => (
             <div key={group.label} className="host-group">
               <Button
                 className={`host-group-title ${
-                  expandedGroups.has(group.label) ? "expanded" : ""
+                  group.items.length > 0 && expandedGroups.has(group.label)
+                    ? "expanded"
+                    : ""
                 }`}
                 variant="ghost"
                 size="sm"
-                onClick={() => toggleGroup(group.label)}
+                onContextMenu={(event) =>
+                  openMenu(event, [
+                    {
+                      label: t("profile.menu.new"),
+                      disabled: false,
+                      onClick: () => {
+                        setMenu(null);
+                        onOpenNewProfile();
+                      },
+                    },
+                    {
+                      label: t("host.addGroup"),
+                      disabled: false,
+                      onClick: openAddGroupDialog,
+                    },
+                    {
+                      label: t("host.menu.renameGroup"),
+                      disabled: false,
+                      onClick: () => {
+                        setMenu(null);
+                        setGroupDialog({
+                          mode: "rename",
+                          sourceGroup: group.label,
+                          initialValue: group.label,
+                        });
+                      },
+                    },
+                    {
+                      label: t("host.menu.deleteGroup"),
+                      disabled: false,
+                      onClick: () => {
+                        setMenu(null);
+                        const hostCount = getGroupHostCount(group.label);
+                        if (hostCount === 0) {
+                          onRemoveGroup(group.label).catch(() => {});
+                          return;
+                        }
+                        setRemoveGroupDialog({ name: group.label, hostCount });
+                      },
+                    },
+                  ])
+                }
+                onClick={() => toggleGroup(group.label, group.items.length > 0)}
               >
                 <span>{group.label}</span>
                 <em>{group.items.length}</em>
               </Button>
               {(queryActive || expandedGroups.has(group.label)) && (
-                <div className="host-group-list">
+                <div className="host-group-list host-group-list--nested">
                   {group.items.map((profile) => (
                     <Button
                       key={profile.id}
                       className={profile.id === activeProfileId ? "active" : ""}
                       variant="ghost"
                       size="sm"
+                      onContextMenu={(event) =>
+                        openMenu(event, [
+                          {
+                            label: t("host.addGroup"),
+                            disabled: false,
+                            onClick: openAddGroupDialog,
+                          },
+                          {
+                            label: t("profile.menu.edit"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              onOpenEditProfile(profile);
+                            },
+                          },
+                          {
+                            label: t("host.menu.moveTo"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              setMoveDialog(profile);
+                              setMoveGroupValue(
+                                profile.tags?.[0]?.trim() ||
+                                  DEFAULT_SSH_GROUP_VALUE,
+                              );
+                            },
+                          },
+                          {
+                            label: t("profile.menu.delete"),
+                            disabled: false,
+                            onClick: () => {
+                              setMenu(null);
+                              onRemoveProfile(profile);
+                            },
+                          },
+                        ])
+                      }
                       onClick={() => onPick(profile.id)}
                       onDoubleClick={() => onConnectProfile(profile)}
                     >
@@ -229,8 +558,10 @@ export default function HostPanel({
           {!profiles.length && localShells.length === 0 && (
             <div className="empty-hint">{t("host.empty")}</div>
           )}
-          {(profiles.length > 0 || localShells.length > 0) &&
-            !filteredUngrouped.length &&
+          {(profiles.length > 0 ||
+            localShells.length > 0 ||
+            customGroups.length > 0) &&
+            !filteredDefaultGroup.length &&
             !filteredGroups.length &&
             !filteredLocalShells.length && (
               <div className="empty-hint">{t("host.noMatch")}</div>
@@ -240,36 +571,149 @@ export default function HostPanel({
           <ContextMenu
             x={menu.x}
             y={menu.y}
-            items={[
-              {
-                label: t("profile.menu.new"),
-                disabled: false,
-                onClick: () => {
-                  setMenu(null);
-                  onOpenNewProfile();
-                },
-              },
-              {
-                label: t("profile.menu.edit"),
-                disabled: !selectedProfile,
-                onClick: () => {
-                  if (!selectedProfile) return;
-                  setMenu(null);
-                  onOpenEditProfile(selectedProfile);
-                },
-              },
-              {
-                label: t("profile.menu.delete"),
-                disabled: !selectedProfile,
-                onClick: () => {
-                  if (!selectedProfile) return;
-                  setMenu(null);
-                  onRemoveProfile(selectedProfile);
-                },
-              },
-            ]}
+            items={menu.items}
             onClose={() => setMenu(null)}
           />
+        )}
+        {groupDialog && (
+          <InputDialog
+            open
+            title={
+              groupDialog.mode === "add"
+                ? t("host.addGroup")
+                : t("host.menu.renameGroup")
+            }
+            label={t("profile.form.group")}
+            placeholder={t("profile.placeholder.group")}
+            initialValue={groupDialog.initialValue ?? ""}
+            confirmText={t("actions.save")}
+            cancelText={t("actions.cancel")}
+            closeText={t("actions.close")}
+            onClose={() => setGroupDialog(null)}
+            onConfirm={(value) => {
+              if (!value) return;
+              if (groupDialog.mode === "add") {
+                onAddGroup(value);
+                setGroupDialog(null);
+                return;
+              }
+              if (
+                !groupDialog.sourceGroup ||
+                value === groupDialog.sourceGroup
+              ) {
+                setGroupDialog(null);
+                return;
+              }
+              onRenameGroup(groupDialog.sourceGroup, value)
+                .then(() => setGroupDialog(null))
+                .catch(() => {});
+            }}
+          />
+        )}
+        {pathDialog && (
+          <PathViewDialog
+            open
+            title={pathDialog.title}
+            path={pathDialog.path}
+            copyText={t("actions.copy")}
+            copiedText={t("actions.copied")}
+            closeText={t("actions.close")}
+            onClose={() => setPathDialog(null)}
+          />
+        )}
+        {moveDialog && (
+          <Modal
+            open
+            title={t("host.moveDialogTitle")}
+            closeLabel={t("actions.close")}
+            bodyClassName="host-move-modal-body"
+            onClose={() => setMoveDialog(null)}
+            actions={
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMoveDialog(null)}
+                >
+                  {t("actions.cancel")}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    onMoveProfileToGroup(
+                      moveDialog.id,
+                      moveGroupValue === DEFAULT_SSH_GROUP_VALUE
+                        ? null
+                        : moveGroupValue,
+                    )
+                      .then(() => setMoveDialog(null))
+                      .catch(() => {});
+                  }}
+                >
+                  {t("actions.save")}
+                </Button>
+              </>
+            }
+          >
+            <div className="host-move-dialog">
+              <label>{t("host.moveTargetLabel")}</label>
+              <Select
+                value={moveGroupValue}
+                options={moveGroupOptions.map((item) => ({
+                  ...item,
+                  disabled: item.value === currentMoveGroupValue,
+                }))}
+                onChange={(value) => setMoveGroupValue(value)}
+                aria-label={t("host.moveTargetLabel")}
+              />
+            </div>
+          </Modal>
+        )}
+        {removeGroupDialog && (
+          <Modal
+            open
+            title={t("host.deleteGroupTitle")}
+            closeLabel={t("actions.close")}
+            bodyClassName="host-remove-group-modal-body"
+            onClose={() => setRemoveGroupDialog(null)}
+            actions={
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRemoveGroupDialog(null)}
+                >
+                  {t("actions.cancel")}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    onRemoveGroup(removeGroupDialog.name)
+                      .then(() => setRemoveGroupDialog(null))
+                      .catch(() => {});
+                  }}
+                >
+                  {t("actions.remove")}
+                </Button>
+              </>
+            }
+          >
+            <div className="host-remove-group-dialog">
+              <p>
+                {t("host.deleteGroupConfirm", {
+                  name: removeGroupDialog.name,
+                })}
+              </p>
+              <p>
+                {t("host.deleteGroupHint", {
+                  target: defaultSshLabel,
+                  count: removeGroupDialog.hostCount,
+                })}
+              </p>
+            </div>
+          </Modal>
         )}
       </div>
     </div>
