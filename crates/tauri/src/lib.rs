@@ -17,7 +17,9 @@ use crate::commands::local_shell::{
     local_shell_connect, local_shell_disconnect, local_shell_list, local_shell_resize,
     local_shell_write,
 };
-use crate::commands::profile::{profile_list, profile_remove, profile_save};
+use crate::commands::profile::{
+    profile_groups_list, profile_groups_save, profile_list, profile_remove, profile_save,
+};
 use crate::commands::sftp::{
     sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_upload,
 };
@@ -55,6 +57,8 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             profile_list,
+            profile_groups_list,
+            profile_groups_save,
             profile_save,
             profile_remove,
             ssh_connect,

@@ -6,11 +6,26 @@ use engine::{EngineError, HostProfile};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+/// 主密码配置。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretConfig {
+    pub version: u32,
+    pub mode: String,
+    #[serde(default)]
+    pub kdf_salt: Option<String>,
+    #[serde(default)]
+    pub verify_hash: Option<String>,
+}
+
 /// 主机配置存储结构。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileStore {
     pub version: u32,
     pub updated_at: u64,
+    #[serde(default)]
+    pub ssh_groups: Vec<String>,
+    #[serde(default)]
+    pub secret: Option<SecretConfig>,
     pub profiles: Vec<HostProfile>,
 }
 
@@ -19,6 +34,8 @@ impl Default for ProfileStore {
         Self {
             version: 1,
             updated_at: now_epoch(),
+            ssh_groups: Vec::new(),
+            secret: None,
             profiles: Vec::new(),
         }
     }
