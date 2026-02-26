@@ -7,6 +7,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { info, warn } from "@tauri-apps/plugin-log";
 import type { Locale } from "@/i18n";
 import type { LocalShellProfile, ThemeId } from "@/types";
 
@@ -109,7 +110,7 @@ export default function useAppSettings({
     } catch {
       // Ignore invalid settings.
     } finally {
-      setSettingsLoaded(true);
+      // 由初始化流程统一设置 settingsLoaded，避免竞态覆盖。
     }
   }
 
@@ -130,22 +131,48 @@ export default function useAppSettings({
   }, [themeId]);
 
   useEffect(() => {
-    loadSettings().catch(() => {});
-    invoke<LocalShellProfile[]>("local_shell_list")
-      .then((shells) => {
+    let active = true;
+    (async () => {
+      try {
+        // 先加载本地设置，再拉取 shell 列表，避免竞态导致默认值覆盖。
+        await loadSettings();
+        const shells = await invoke<LocalShellProfile[]>("local_shell_list");
+        if (!active) return;
         setAvailableShells(shells);
         const fallbackId = resolveDefaultShellId(shells);
         const preferred = pendingShellIdRef.current;
-        const selected =
-          (preferred && shells.some((shell) => shell.id === preferred)
-            ? preferred
-            : fallbackId) ?? null;
+        const preferredAvailable =
+          !!preferred && shells.some((shell) => shell.id === preferred);
+        const selected = (preferredAvailable ? preferred : fallbackId) ?? null;
         setShellId(selected);
-      })
-      .catch(() => {
+        // 记录初始化结果，便于验证持久化与回退是否生效。
+        info(
+          JSON.stringify({
+            event: "settings:init-shell",
+            savedShellId: preferred ?? null,
+            availableShellIds: shells.map((shell) => shell.id),
+            selectedShellId: selected,
+            fallbackUsed: !!preferred && !preferredAvailable,
+          }),
+        );
+      } catch {
+        if (!active) return;
         setAvailableShells([]);
         setShellId(null);
-      });
+        // 初始化失败时记录日志，便于排查。
+        warn(
+          JSON.stringify({
+            event: "settings:init-shell-failed",
+          }),
+        );
+      } finally {
+        if (!active) return;
+        setSettingsLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
