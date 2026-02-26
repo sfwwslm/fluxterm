@@ -510,7 +510,8 @@ export default function useSessionState({
         label: shellProfile?.label ?? t("session.local"),
       },
     }));
-    setSessions((prev) => [session, ...prev]);
+    // 与 SSH 会话保持一致：新会话统一追加到标签末尾，避免本地会话插入到左侧导致顺序不一致。
+    setSessions((prev) => prev.concat(session));
     if (activate) {
       setActiveSessionId(session.sessionId);
     } else {
