@@ -22,6 +22,7 @@
     "core:webview:allow-create-webview-window",
     "core:webview:allow-get-all-webviews",
     "core:webview:allow-webview-show",
+    "log:default",
     "fs:default",
     {
       "identifier": "fs:allow-write-text-file",
