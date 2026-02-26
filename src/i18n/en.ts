@@ -64,7 +64,6 @@ export const en = {
   "host.searchPlaceholder": "Search host or group",
   "host.shellGroup": "Local Shells",
   "host.ungrouped": "Ungrouped",
-  "host.groupCount": "{count} hosts",
   "host.empty": "No saved hosts yet",
   "host.noMatch": "No matching hosts",
   "profile.menu.new": "New",

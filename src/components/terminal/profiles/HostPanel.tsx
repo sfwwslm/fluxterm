@@ -158,11 +158,7 @@ export default function HostPanel({
                   onClick={() => toggleGroup(localShellKey)}
                 >
                   <span>{localShellLabel}</span>
-                  <em>
-                    {t("host.groupCount", {
-                      count: filteredLocalShells.length,
-                    })}
-                  </em>
+                  <em>{filteredLocalShells.length}</em>
                 </Button>
                 {(queryActive || expandedGroups.has(localShellKey)) && (
                   <div className="host-group-list">
@@ -207,7 +203,7 @@ export default function HostPanel({
                 onClick={() => toggleGroup(group.label)}
               >
                 <span>{group.label}</span>
-                <em>{t("host.groupCount", { count: group.items.length })}</em>
+                <em>{group.items.length}</em>
               </Button>
               {(queryActive || expandedGroups.has(group.label)) && (
                 <div className="host-group-list">

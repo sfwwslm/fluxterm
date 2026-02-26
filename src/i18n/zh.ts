@@ -63,7 +63,6 @@ export const zh = {
   "host.searchPlaceholder": "检索主机或分组",
   "host.shellGroup": "本地 Shell",
   "host.ungrouped": "未分组",
-  "host.groupCount": "{count} 台",
   "host.empty": "尚未保存主机配置",
   "host.noMatch": "没有匹配的主机",
   "profile.menu.new": "新建",
