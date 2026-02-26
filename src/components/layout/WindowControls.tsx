@@ -1,3 +1,4 @@
+/** 自定义窗口控制按钮组，适配 Tauri 桌面窗口的最小化/最大化/关闭。 */
 import { useCallback, useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -12,7 +13,6 @@ type WindowControlsProps = {
   disabled?: boolean;
 };
 
-/** 自定义窗口控制按钮组。 */
 export default function WindowControls({ disabled }: WindowControlsProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const hasTauriRuntime =

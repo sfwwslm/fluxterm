@@ -1,3 +1,4 @@
+/** 左右组件容器，承载多个槽位并支持折叠与动态分割的布局渲染。 */
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { PanelKey } from "@/types";
@@ -33,7 +34,6 @@ type WidgetContainerProps = {
   t: Translate;
 };
 
-/** 左右组件容器（支持 1..10 个等高槽位）。 */
 export default function WidgetContainer({
   side,
   visible,

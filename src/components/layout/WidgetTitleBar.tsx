@@ -1,3 +1,4 @@
+/** 组件槽位标题栏，提供切换/浮动/分割/关闭入口，并管理设置菜单状态。 */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Translate } from "@/i18n";
@@ -22,7 +23,6 @@ type WidgetTitleBarProps = {
   t: Translate;
 };
 
-/** 组件槽位标题栏。 */
 export default function WidgetTitleBar({
   widgets,
   active,

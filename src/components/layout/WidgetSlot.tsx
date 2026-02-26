@@ -1,3 +1,4 @@
+/** 单个组件槽位，负责拖拽投放与标题栏操作，并渲染对应的面板内容。 */
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { PanelKey } from "@/types";
@@ -27,7 +28,6 @@ type WidgetSlotProps = {
   t: Translate;
 };
 
-/** 单个组件槽位。 */
 export default function WidgetSlot({
   slot,
   widgets,

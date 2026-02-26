@@ -1,3 +1,4 @@
+/** 顶部菜单栏组件，用于布局折叠与个性化入口，支持下拉子菜单与全局点击关闭。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Locale, Translate } from "@/i18n";
@@ -44,7 +45,6 @@ type MenusProps = {
   t: Translate;
 };
 
-/** 顶部菜单栏组件。 */
 export default function Menus({
   layoutCollapsed,
   onToggleCollapsed,

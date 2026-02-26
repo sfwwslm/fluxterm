@@ -1,3 +1,4 @@
+/** 自定义标题栏组件，包含品牌区、菜单栏与窗口控制，并支持双击切换最大化。 */
 import { useCallback } from "react";
 import type React from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -25,7 +26,6 @@ type TitleBarProps = {
   t: Translate;
 };
 
-/** 自定义标题栏组件。 */
 export default function TitleBar({
   layoutCollapsed,
   onToggleCollapsed,
