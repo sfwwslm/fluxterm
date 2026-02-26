@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { PanelKey } from "@/types";
-import { VscClose, VscSettingsGear } from "react-icons/vsc";
+import { IoClose, IoSettings } from "react-icons/io5";
 import Button from "@/components/ui/button";
 
 type WidgetTitleBarProps = {
@@ -75,14 +75,14 @@ export default function WidgetTitleBar({
       <div className="widget-title-actions">
         <div className="widget-settings" ref={menuRef}>
           <Button
-            className="ghost mini"
+            className="ghost mini icon-settings"
             variant="ghost"
             size="icon"
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-label={t("actions.settings")}
             title={t("actions.settings")}
           >
-            <VscSettingsGear />
+            <IoSettings />
           </Button>
           {menuOpen && (
             <div
@@ -157,7 +157,7 @@ export default function WidgetTitleBar({
           aria-label={t("actions.close")}
           title={t("actions.close")}
         >
-          <VscClose />
+          <IoClose />
         </Button>
       </div>
     </div>

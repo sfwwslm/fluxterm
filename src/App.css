@@ -925,6 +925,13 @@ button:disabled {
   gap: 6px;
 }
 
+.widget-title-actions .icon-settings,
+.widget-title-actions .icon-close {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+}
+
 .widget-settings {
   position: relative;
 }
@@ -975,13 +982,6 @@ button:disabled {
   border-color: var(--accent-soft);
   color: var(--accent);
   background: var(--accent-subtle);
-}
-
-.widget-title-actions .icon-close {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  padding: 0;
 }
 
 .panel-body {
@@ -1966,6 +1966,10 @@ input[type="number"] {
 .ghost.mini {
   padding: 4px 10px;
   font-size: 12px;
+}
+
+.widget-title-actions .ghost.mini {
+  padding: 0;
 }
 
 .floating-shell {
