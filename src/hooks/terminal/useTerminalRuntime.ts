@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { DisconnectReason, Session, SessionStateUi } from "@/types";
@@ -39,12 +40,20 @@ type TerminalRuntime = {
   ) => void;
   isTerminalReady: (sessionId: string) => boolean;
   getTerminalSize: () => { cols: number; rows: number };
+  hasActiveSelection: () => boolean;
+  copyActiveSelection: () => Promise<boolean>;
+  pasteToActiveTerminal: () => Promise<boolean>;
+  clearActiveTerminal: () => boolean;
+  searchActiveTerminalNext: (keyword: string) => boolean;
+  searchActiveTerminalPrev: (keyword: string) => boolean;
 };
 
 type XtermModules = {
   Terminal: typeof import("@xterm/xterm").Terminal;
   FitAddon: typeof import("@xterm/addon-fit").FitAddon;
 };
+
+type SearchDirection = "next" | "prev";
 
 function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
   if (
@@ -100,6 +109,12 @@ export default function useTerminalRuntime({
     reconnectSession,
     reconnectLocalShell,
   });
+  const searchStateRef = useRef<{
+    sessionId: string;
+    keyword: string;
+    row: number;
+    col: number;
+  } | null>(null);
 
   const getTerminalSize = useMemo(
     () => () => {
@@ -314,5 +329,147 @@ export default function useTerminalRuntime({
     return !!terminalReadyBySession[sessionId];
   }
 
-  return { registerTerminalContainer, isTerminalReady, getTerminalSize };
+  function getActiveBundle() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return null;
+    return terminalsRef.current[sessionId] ?? null;
+  }
+
+  function hasActiveSelection() {
+    return !!getActiveBundle()?.terminal.getSelection();
+  }
+
+  async function copyActiveSelection() {
+    const text = getActiveBundle()?.terminal.getSelection() ?? "";
+    if (!text) return false;
+    try {
+      await writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function pasteToActiveTerminal() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return false;
+    try {
+      const text = await readText();
+      if (!text) return false;
+      await handlersRef.current.writeToSession(sessionId, text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function clearActiveTerminal() {
+    const terminal = getActiveBundle()?.terminal;
+    if (!terminal) return false;
+    terminal.clear();
+    return true;
+  }
+
+  function findInTerminal(
+    terminal: Terminal,
+    keyword: string,
+    direction: SearchDirection,
+    startRow: number,
+    startCol: number,
+  ) {
+    const buffer = terminal.buffer.active;
+    const total = buffer.length;
+    const needle = keyword.toLowerCase();
+
+    if (direction === "next") {
+      for (let row = startRow; row < total; row += 1) {
+        const line = buffer.getLine(row)?.translateToString(true) ?? "";
+        const fromCol = row === startRow ? Math.max(0, startCol) : 0;
+        const index = line.toLowerCase().indexOf(needle, fromCol);
+        if (index >= 0) return { row, col: index, length: keyword.length };
+      }
+      return null;
+    }
+
+    for (let row = startRow; row >= 0; row -= 1) {
+      const line = buffer.getLine(row)?.translateToString(true) ?? "";
+      const endCol =
+        row === startRow
+          ? Math.min(startCol, line.length - 1)
+          : line.length - 1;
+      if (endCol < 0) continue;
+      const index = line.toLowerCase().lastIndexOf(needle, endCol);
+      if (index >= 0) return { row, col: index, length: keyword.length };
+    }
+    return null;
+  }
+
+  function searchActiveTerminal(keyword: string, direction: SearchDirection) {
+    const bundle = getActiveBundle();
+    const sessionId = activeSessionIdRef.current;
+    const value = keyword.trim();
+    if (!bundle || !sessionId || !value) return false;
+
+    const state = searchStateRef.current;
+    const sameQuery = state?.sessionId === sessionId && state.keyword === value;
+    const lineCount = bundle.terminal.buffer.active.length;
+    const initialRow = direction === "next" ? 0 : Math.max(lineCount - 1, 0);
+    const initialCol = direction === "next" ? 0 : Number.MAX_SAFE_INTEGER;
+
+    const startRow = sameQuery ? state.row : initialRow;
+    const startCol =
+      sameQuery && state
+        ? direction === "next"
+          ? state.col + 1
+          : Math.max(state.col - 1, 0)
+        : initialCol;
+
+    let match = findInTerminal(
+      bundle.terminal,
+      value,
+      direction,
+      startRow,
+      startCol,
+    );
+    if (!match) {
+      match = findInTerminal(
+        bundle.terminal,
+        value,
+        direction,
+        initialRow,
+        initialCol,
+      );
+    }
+    if (!match) return false;
+
+    bundle.terminal.select(match.col, match.row, match.length);
+    bundle.terminal.scrollToLine(match.row);
+    searchStateRef.current = {
+      sessionId,
+      keyword: value,
+      row: match.row,
+      col: match.col,
+    };
+    return true;
+  }
+
+  function searchActiveTerminalNext(keyword: string) {
+    return searchActiveTerminal(keyword, "next");
+  }
+
+  function searchActiveTerminalPrev(keyword: string) {
+    return searchActiveTerminal(keyword, "prev");
+  }
+
+  return {
+    registerTerminalContainer,
+    isTerminalReady,
+    getTerminalSize,
+    hasActiveSelection,
+    copyActiveSelection,
+    pasteToActiveTerminal,
+    clearActiveTerminal,
+    searchActiveTerminalNext,
+    searchActiveTerminalPrev,
+  };
 }

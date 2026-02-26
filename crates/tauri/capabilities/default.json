@@ -24,6 +24,8 @@
     "core:webview:allow-webview-show",
     "log:default",
     "fs:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     {
       "identifier": "fs:allow-write-text-file",
       "allow": [

@@ -294,7 +294,16 @@ function App() {
     getTerminalSize: () => terminalSizeRef.current,
   });
 
-  const { registerTerminalContainer, isTerminalReady } = useTerminalRuntime({
+  const {
+    registerTerminalContainer,
+    isTerminalReady,
+    hasActiveSelection,
+    copyActiveSelection,
+    pasteToActiveTerminal,
+    clearActiveTerminal,
+    searchActiveTerminalNext,
+    searchActiveTerminalPrev,
+  } = useTerminalRuntime({
     theme: themes[themeId].terminal,
     activeSessionId,
     activeSession,
@@ -593,6 +602,12 @@ function App() {
                 sessionStates={sessionStates}
                 registerTerminalContainer={registerTerminalContainer}
                 isTerminalReady={isTerminalReady}
+                hasActiveSelection={hasActiveSelection}
+                onCopySelection={copyActiveSelection}
+                onPaste={pasteToActiveTerminal}
+                onClear={clearActiveTerminal}
+                onSearchNext={searchActiveTerminalNext}
+                onSearchPrev={searchActiveTerminalPrev}
                 isLocalSession={isLocalSession}
                 onSwitchSession={switchSession}
                 onDisconnectSession={disconnectSession}

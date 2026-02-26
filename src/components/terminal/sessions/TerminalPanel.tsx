@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { FiChevronDown, FiChevronUp, FiX } from "react-icons/fi";
 import type { Translate } from "@/i18n";
 import type {
   DisconnectReason,
@@ -6,6 +7,8 @@ import type {
   Session,
   SessionStateUi,
 } from "@/types";
+import ContextMenu from "@/components/terminal/menu/ContextMenu";
+import "@/components/terminal/sessions/TerminalPanel.css";
 
 type LocalSessionMeta = Record<
   string,
@@ -27,6 +30,12 @@ type TerminalPanelProps = {
     element: HTMLDivElement | null,
   ) => void;
   isTerminalReady: (sessionId: string) => boolean;
+  hasActiveSelection: () => boolean;
+  onCopySelection: () => Promise<boolean>;
+  onPaste: () => Promise<boolean>;
+  onClear: () => boolean;
+  onSearchNext: (keyword: string) => boolean;
+  onSearchPrev: (keyword: string) => boolean;
   isLocalSession: (sessionId: string | null) => boolean;
   onSwitchSession: (sessionId: string) => void;
   onDisconnectSession: (sessionId: string) => void;
@@ -46,6 +55,12 @@ export default function TerminalPanel({
   sessionStates,
   registerTerminalContainer,
   isTerminalReady,
+  hasActiveSelection,
+  onCopySelection,
+  onPaste,
+  onClear,
+  onSearchNext,
+  onSearchPrev,
   isLocalSession,
   onSwitchSession,
   onDisconnectSession,
@@ -54,6 +69,32 @@ export default function TerminalPanel({
   const containerRefs = useRef<
     Record<string, (element: HTMLDivElement | null) => void>
   >({});
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [searchMiss, setSearchMiss] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!searchVisible) return;
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, [searchVisible]);
+
+  function closeMenu() {
+    setMenu(null);
+  }
+
+  function search(direction: "next" | "prev") {
+    const keyword = searchKeyword.trim();
+    if (!keyword) {
+      setSearchMiss(false);
+      return;
+    }
+    const found =
+      direction === "next" ? onSearchNext(keyword) : onSearchPrev(keyword);
+    setSearchMiss(!found);
+  }
 
   return (
     <main className="terminal-panel">
@@ -109,6 +150,11 @@ export default function TerminalPanel({
                 ready ? "ready" : ""
               }`}
               ref={refCallback}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                if (!active) return;
+                setMenu({ x: event.clientX, y: event.clientY });
+              }}
             />
           );
         })}
@@ -123,6 +169,97 @@ export default function TerminalPanel({
           activeSessionReason !== "exit" && (
             <div className="terminal-empty">{t("terminal.empty")}</div>
           )}
+        {menu && (
+          <ContextMenu
+            x={menu.x}
+            y={menu.y}
+            items={[
+              {
+                label: t("terminal.menu.copy"),
+                disabled: !hasActiveSelection(),
+                onClick: () => {
+                  onCopySelection().catch(() => {});
+                  closeMenu();
+                },
+              },
+              {
+                label: t("terminal.menu.paste"),
+                disabled: !activeSessionId,
+                onClick: () => {
+                  onPaste().catch(() => {});
+                  closeMenu();
+                },
+              },
+              {
+                label: t("terminal.menu.clear"),
+                disabled: !activeSessionId,
+                onClick: () => {
+                  onClear();
+                  closeMenu();
+                },
+              },
+              {
+                label: t("terminal.menu.search"),
+                disabled: !activeSessionId,
+                onClick: () => {
+                  closeMenu();
+                  setSearchVisible(true);
+                },
+              },
+            ]}
+            onClose={closeMenu}
+          />
+        )}
+        {searchVisible && (
+          <div className="terminal-search-bar">
+            <input
+              ref={searchInputRef}
+              className={`terminal-search-input ${searchMiss ? "miss" : ""}`}
+              value={searchKeyword}
+              placeholder={t("terminal.search.placeholder")}
+              onChange={(event) => {
+                setSearchKeyword(event.target.value);
+                setSearchMiss(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  search(event.shiftKey ? "prev" : "next");
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setSearchVisible(false);
+                  setSearchMiss(false);
+                }
+              }}
+            />
+            <button
+              className="terminal-search-icon-button"
+              aria-label="search-prev"
+              onClick={() => search("prev")}
+            >
+              <FiChevronUp />
+            </button>
+            <button
+              className="terminal-search-icon-button"
+              aria-label="search-next"
+              onClick={() => search("next")}
+            >
+              <FiChevronDown />
+            </button>
+            <button
+              className="terminal-search-icon-button"
+              aria-label={t("actions.close")}
+              onClick={() => {
+                setSearchVisible(false);
+                setSearchMiss(false);
+              }}
+            >
+              <FiX />
+            </button>
+          </div>
+        )}
       </div>
     </main>
   );
