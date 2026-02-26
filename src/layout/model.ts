@@ -1,7 +1,7 @@
+/** 布局结构与槽位操作工具，负责默认布局与布局配置规范化。 */
 import type { PanelKey } from "@/types";
 import type {
-  LayoutConfigV2,
-  LayoutConfigV3,
+  WidgetLayout,
   WidgetGroup,
   WidgetSide,
   WidgetSlot,
@@ -18,9 +18,8 @@ export const allPanelKeys: PanelKey[] = [
   "events",
 ];
 
-/** 默认布局（v3）。 */
-export const defaultLayoutV3: LayoutConfigV3 = {
-  version: 3,
+/** 默认小组件布局。 */
+export const defaultWidgetLayout: WidgetLayout = {
   sizes: {
     left: 320,
     right: 360,
@@ -125,59 +124,56 @@ export function normalizeSideSlotStructure(
   return { slots: next, sideSlotCounts: normalizedCounts };
 }
 
-/** 规范布局配置（兼容 v2/v3）。 */
-export function normalizeLayoutConfig(raw: unknown): LayoutConfigV3 | null {
+/** 规范小组件布局配置。 */
+export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as any;
-  if (value.version !== 2 && value.version !== 3) return null;
   if (!value.sizes || !value.slots) return null;
 
-  const baseSlots: Record<string, WidgetGroup> =
-    value.version === 3
-      ? normalizeV3Slots(value.slots as Record<string, unknown>)
-      : normalizeV2Slots(value as LayoutConfigV2);
+  const baseSlots = normalizeSlots(value.slots as Record<string, unknown>);
 
-  const initialCounts: Record<WidgetSide, number> =
-    value.version === 3
-      ? {
-          left: clampNumber(value.sideSlotCounts?.left, 1, MAX_SIDE_SLOTS, 1),
-          right: clampNumber(value.sideSlotCounts?.right, 1, MAX_SIDE_SLOTS, 1),
-        }
-      : deriveCountsFromV2(value as LayoutConfigV2);
+  const initialCounts: Record<WidgetSide, number> = {
+    left: clampNumber(value.sideSlotCounts?.left, 1, MAX_SIDE_SLOTS, 1),
+    right: clampNumber(value.sideSlotCounts?.right, 1, MAX_SIDE_SLOTS, 1),
+  };
 
   const structured = normalizeSideSlotStructure(baseSlots, initialCounts);
   const dedupedSlots = dedupeWidgets(structured.slots);
 
   return {
-    version: 3,
     sizes: {
-      left: clampNumber(value.sizes.left, 220, 520, defaultLayoutV3.sizes.left),
+      left: clampNumber(
+        value.sizes.left,
+        220,
+        520,
+        defaultWidgetLayout.sizes.left,
+      ),
       right: clampNumber(
         value.sizes.right,
         260,
         560,
-        defaultLayoutV3.sizes.right,
+        defaultWidgetLayout.sizes.right,
       ),
       bottom: clampNumber(
         value.sizes.bottom,
         160,
         420,
-        defaultLayoutV3.sizes.bottom,
+        defaultWidgetLayout.sizes.bottom,
       ),
     },
     collapsed: {
       left:
         typeof value.collapsed?.left === "boolean"
           ? value.collapsed.left
-          : defaultLayoutV3.collapsed.left,
+          : defaultWidgetLayout.collapsed.left,
       right:
         typeof value.collapsed?.right === "boolean"
           ? value.collapsed.right
-          : defaultLayoutV3.collapsed.right,
+          : defaultWidgetLayout.collapsed.right,
       bottom:
         typeof value.collapsed?.bottom === "boolean"
           ? value.collapsed.bottom
-          : defaultLayoutV3.collapsed.bottom,
+          : defaultWidgetLayout.collapsed.bottom,
     },
     sideSlotCounts: structured.sideSlotCounts,
     slots: dedupedSlots,
@@ -232,7 +228,7 @@ export function closeActiveWidgetInSlot(
   return next;
 }
 
-function normalizeV3Slots(rawSlots: Record<string, unknown>) {
+function normalizeSlots(rawSlots: Record<string, unknown>) {
   const next: Record<string, WidgetGroup> = { bottom: createEmptyGroup() };
   Object.entries(rawSlots).forEach(([key, value]) => {
     if (key === "bottom") {
@@ -244,33 +240,6 @@ function normalizeV3Slots(rawSlots: Record<string, unknown>) {
     next[sideSlotKey(parsed.side, parsed.index)] = normalizeGroup(value);
   });
   return next;
-}
-
-function normalizeV2Slots(value: LayoutConfigV2) {
-  const leftTop = normalizeGroup(value.slots.leftTop);
-  const leftBottom = normalizeGroup(value.slots.leftBottom);
-  const rightTop = normalizeGroup(value.slots.rightTop);
-  const rightBottom = normalizeGroup(value.slots.rightBottom);
-  const bottom = normalizeGroup(value.slots.bottom);
-  return {
-    "left:0": leftTop,
-    "left:1": leftBottom,
-    "right:0": rightTop,
-    "right:1": rightBottom,
-    bottom,
-  } as Record<string, WidgetGroup>;
-}
-
-function deriveCountsFromV2(value: LayoutConfigV2): Record<WidgetSide, number> {
-  const leftBottomHasContent =
-    value.slots.leftBottom.widgets.length > 0 || value.slots.leftBottom.active;
-  const rightBottomHasContent =
-    value.slots.rightBottom.widgets.length > 0 ||
-    value.slots.rightBottom.active;
-  return {
-    left: value.split.left || leftBottomHasContent ? 2 : 1,
-    right: value.split.right || rightBottomHasContent ? 2 : 1,
-  };
 }
 
 function dedupeWidgets(slots: Record<string, WidgetGroup>) {

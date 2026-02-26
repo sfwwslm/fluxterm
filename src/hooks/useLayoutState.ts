@@ -7,13 +7,13 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import {
-  defaultLayoutV3,
+  defaultWidgetLayout,
   increaseSideSlots,
-  normalizeLayoutConfig,
+  normalizeWidgetLayout,
   sideSlotKey,
 } from "@/layout/model";
 import type {
-  LayoutConfigV3,
+  WidgetLayout,
   WidgetGroup,
   WidgetSide,
   WidgetSlot,
@@ -54,13 +54,13 @@ export default function useLayoutState({
   floatingOriginRef,
 }: UseLayoutStateProps): LayoutState {
   const [layoutCollapsed, setLayoutCollapsed] = useState(
-    defaultLayoutV3.collapsed,
+    defaultWidgetLayout.collapsed,
   );
   const [sideSlotCounts, setSideSlotCounts] = useState(
-    defaultLayoutV3.sideSlotCounts,
+    defaultWidgetLayout.sideSlotCounts,
   );
-  const [slotGroups, setSlotGroups] = useState(defaultLayoutV3.slots);
-  const [panelSizes, setPanelSizes] = useState(defaultLayoutV3.sizes);
+  const [slotGroups, setSlotGroups] = useState(defaultWidgetLayout.slots);
+  const [panelSizes, setPanelSizes] = useState(defaultWidgetLayout.sizes);
 
   const dragState = useRef<{
     mode: "left" | "right" | "bottom";
@@ -133,7 +133,7 @@ export default function useLayoutState({
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
-      const normalized = normalizeLayoutConfig(parsed);
+      const normalized = normalizeWidgetLayout(parsed);
       if (!normalized) {
         layoutLoadedRef.current = true;
         return;
@@ -143,10 +143,10 @@ export default function useLayoutState({
         0,
       );
       if (totalWidgets === 0) {
-        setLayoutCollapsed(defaultLayoutV3.collapsed);
-        setSideSlotCounts(defaultLayoutV3.sideSlotCounts);
-        setSlotGroups(defaultLayoutV3.slots);
-        setPanelSizes(defaultLayoutV3.sizes);
+        setLayoutCollapsed(defaultWidgetLayout.collapsed);
+        setSideSlotCounts(defaultWidgetLayout.sideSlotCounts);
+        setSlotGroups(defaultWidgetLayout.slots);
+        setPanelSizes(defaultWidgetLayout.sizes);
         layoutLoadedRef.current = true;
         return;
       }
@@ -161,7 +161,7 @@ export default function useLayoutState({
     }
   }
 
-  async function saveLayoutConfig(payload: LayoutConfigV3) {
+  async function saveLayoutConfig(payload: WidgetLayout) {
     const dir = await getConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getLayoutConfigPath();
@@ -354,7 +354,6 @@ export default function useLayoutState({
         persistedSlots.bottom = { widgets: [], active: null, floating: false };
       }
       saveLayoutConfig({
-        version: 3,
         collapsed: layoutCollapsed,
         sideSlotCounts: normalizedCounts,
         slots: persistedSlots,
