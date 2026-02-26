@@ -41,7 +41,6 @@ export const zh = {
   "panel.group.actions": "操作",
   "panel.group.components": "组件",
   "panel.emptyHint": "当前槽位没有组件，请从下拉框添加或拖拽组件到此处",
-  "terminal.title": "远端会话",
   "terminal.empty": "尚未连接主机",
   "terminal.exitHint": "会话已断开连接，按回车重新连接",
   "session.defaultName": "会话",

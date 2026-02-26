@@ -42,7 +42,6 @@ export const en = {
   "panel.group.components": "Components",
   "panel.emptyHint":
     "No widget in this slot. Add one from the dropdown or drag one here.",
-  "terminal.title": "Remote Session",
   "terminal.empty": "No active session",
   "terminal.exitHint": "Session disconnected. Press Enter to reconnect",
   "session.defaultName": "Session",

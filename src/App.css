@@ -1012,13 +1012,6 @@ button:disabled {
   gap: 12px;
 }
 
-.terminal-title {
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
 .terminal-status {
   font-size: 12px;
   padding: 4px 10px;

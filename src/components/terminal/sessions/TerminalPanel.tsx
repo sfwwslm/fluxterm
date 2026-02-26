@@ -51,7 +51,6 @@ export default function TerminalPanel({
   return (
     <main className="terminal-panel">
       <div className="terminal-header">
-        <div className="terminal-title">{t("terminal.title")}</div>
         <div className="session-tabs">
           {sessions.map((item) => {
             const localSession = isLocalSession(item.sessionId);
