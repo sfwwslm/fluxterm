@@ -37,7 +37,7 @@ export const zh = {
   "panel.events": "事件",
   "panel.empty": "空槽位",
   "panel.add": "添加组件",
-  "panel.float": "悬浮",
+  "panel.float": "浮动",
   "panel.group.actions": "操作",
   "panel.group.components": "组件",
   "panel.emptyHint": "当前槽位没有组件，请从下拉框添加或拖拽组件到此处",

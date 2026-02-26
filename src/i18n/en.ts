@@ -37,7 +37,7 @@ export const en = {
   "panel.events": "Events",
   "panel.empty": "Empty Slot",
   "panel.add": "Add Widget",
-  "panel.float": "Float",
+  "panel.float": "Floating",
   "panel.group.actions": "Actions",
   "panel.group.components": "Components",
   "panel.emptyHint":
