@@ -1089,13 +1089,23 @@ button:disabled {
 }
 
 .terminal-container {
+  position: absolute;
+  inset: 0;
   height: 100%;
   width: 100%;
-  opacity: 0.65;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   transition: opacity 0.2s ease;
 }
 
-.terminal-container.ready {
+.terminal-container.active {
+  opacity: 0.65;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.terminal-container.active.ready {
   opacity: 1;
 }
 

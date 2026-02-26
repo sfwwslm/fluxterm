@@ -1,4 +1,4 @@
-import type React from "react";
+import { useRef } from "react";
 import type { Translate } from "@/i18n";
 import type {
   DisconnectReason,
@@ -22,8 +22,11 @@ type TerminalPanelProps = {
   activeSessionState: SessionStateUi | null;
   activeSessionReason: DisconnectReason | null;
   sessionStates: Record<string, SessionStateUi>;
-  terminalReady: boolean;
-  terminalRef: React.RefObject<HTMLDivElement | null>;
+  registerTerminalContainer: (
+    sessionId: string,
+    element: HTMLDivElement | null,
+  ) => void;
+  isTerminalReady: (sessionId: string) => boolean;
   isLocalSession: (sessionId: string | null) => boolean;
   onSwitchSession: (sessionId: string) => void;
   onDisconnectSession: (sessionId: string) => void;
@@ -41,13 +44,17 @@ export default function TerminalPanel({
   activeSessionState,
   activeSessionReason,
   sessionStates,
-  terminalReady,
-  terminalRef,
+  registerTerminalContainer,
+  isTerminalReady,
   isLocalSession,
   onSwitchSession,
   onDisconnectSession,
   t,
 }: TerminalPanelProps) {
+  const containerRefs = useRef<
+    Record<string, (element: HTMLDivElement | null) => void>
+  >({});
+
   return (
     <main className="terminal-panel">
       <div className="terminal-header">
@@ -86,10 +93,25 @@ export default function TerminalPanel({
         </div>
       </div>
       <div className="terminal-body">
-        <div
-          className={`terminal-container ${terminalReady ? "ready" : ""}`}
-          ref={terminalRef}
-        />
+        {sessions.map((item) => {
+          const active = item.sessionId === activeSessionId;
+          const ready = isTerminalReady(item.sessionId);
+          const refCallback =
+            containerRefs.current[item.sessionId] ??
+            ((element) => {
+              registerTerminalContainer(item.sessionId, element);
+            });
+          containerRefs.current[item.sessionId] = refCallback;
+          return (
+            <div
+              key={item.sessionId}
+              className={`terminal-container ${active ? "active" : ""} ${
+                ready ? "ready" : ""
+              }`}
+              ref={refCallback}
+            />
+          );
+        })}
         {activeSessionState === "disconnected" &&
           activeSessionReason === "exit" && (
             <div className="terminal-banner">{t("terminal.exitHint")}</div>

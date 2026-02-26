@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
@@ -15,8 +15,8 @@ type UseTerminalRuntimeProps = {
   theme: TerminalTheme;
   activeSessionId: string | null;
   activeSession: Session | null;
+  sessions: Session[];
   onSizeChange?: (size: { cols: number; rows: number }) => void;
-  sessionRef: React.MutableRefObject<Session | null>;
   sessionStatesRef: React.MutableRefObject<Record<string, SessionStateUi>>;
   sessionReasonsRef: React.MutableRefObject<Record<string, DisconnectReason>>;
   sessionBuffersRef: React.MutableRefObject<Record<string, string>>;
@@ -33,8 +33,11 @@ type UseTerminalRuntimeProps = {
 };
 
 type TerminalRuntime = {
-  terminalRef: React.RefObject<HTMLDivElement | null>;
-  terminalReady: boolean;
+  registerTerminalContainer: (
+    sessionId: string,
+    element: HTMLDivElement | null,
+  ) => void;
+  isTerminalReady: (sessionId: string) => boolean;
   getTerminalSize: () => { cols: number; rows: number };
 };
 
@@ -63,8 +66,8 @@ export default function useTerminalRuntime({
   theme,
   activeSessionId,
   activeSession,
+  sessions,
   onSizeChange,
-  sessionRef,
   sessionStatesRef,
   sessionReasonsRef,
   sessionBuffersRef,
@@ -75,19 +78,36 @@ export default function useTerminalRuntime({
   reconnectSession,
   reconnectLocalShell,
 }: UseTerminalRuntimeProps): TerminalRuntime {
-  const terminalRef = useRef<HTMLDivElement | null>(null);
-  const terminalInstance = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null);
+  const terminalsRef = useRef<
+    Record<
+      string,
+      { terminal: Terminal; fitAddon: FitAddon; container: HTMLDivElement }
+    >
+  >({});
+  const containersRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
   const xtermModulesRef = useRef<XtermModules | null>(null);
   const themeRef = useRef(theme);
-  const [terminalReady, setTerminalReady] = useState(false);
+  const [terminalReadyBySession, setTerminalReadyBySession] = useState<
+    Record<string, boolean>
+  >({});
+  const handlersRef = useRef({
+    recordCommandInput,
+    writeToSession,
+    resizeSession,
+    isLocalSession,
+    reconnectSession,
+    reconnectLocalShell,
+  });
 
   const getTerminalSize = useMemo(
     () => () => {
-      const term = terminalInstance.current;
+      if (!activeSessionId) return { cols: 80, rows: 24 };
+      const term = terminalsRef.current[activeSessionId]?.terminal;
       return { cols: term?.cols ?? 80, rows: term?.rows ?? 24 };
     },
-    [],
+    [activeSessionId],
   );
 
   async function loadXtermModules() {
@@ -109,98 +129,120 @@ export default function useTerminalRuntime({
   }, [theme]);
 
   useEffect(() => {
-    let disposed = false;
-    const container = terminalRef.current;
-    if (!container || terminalInstance.current) return () => {};
-    let cleanup: (() => void) | null = null;
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
-    const initTerminal = async () => {
-      const modules = await loadXtermModules();
-      if (disposed || terminalInstance.current) return;
-      const term = new modules.Terminal({
-        allowProposedApi: true,
-        convertEol: true,
-        fontFamily: '"JetBrains Mono", "Cascadia Mono", monospace',
-        fontSize: 13,
-        cursorBlink: true,
-        theme: themeRef.current,
-      });
-      const fit = new modules.FitAddon();
-      term.loadAddon(fit);
-      fitAddon.current = fit;
-      term.open(container);
-      safeFit(fit, container);
-      term.onData((data) => {
-        const active = sessionRef.current;
-        if (!active) return;
-        const state = sessionStatesRef.current[active.sessionId];
-        if (state === "disconnected") {
-          const reason = sessionReasonsRef.current[active.sessionId];
-          if (reason === "exit") {
-            if (isLocalSession(active.sessionId)) {
-              reconnectLocalShell(active.sessionId).catch(() => {});
-            } else {
-              reconnectSession(active.sessionId).catch(() => {});
-            }
-          }
-          return;
-        }
-        recordCommandInput(active.sessionId, data);
-        writeToSession(active.sessionId, data).catch(() => {});
-      });
-      terminalInstance.current = term;
-      setTerminalReady(true);
-      const resizeObserver = new ResizeObserver(() => {
-        const active = sessionRef.current;
-        if (!active || !fitAddon.current || !terminalInstance.current) return;
-        safeFit(fitAddon.current, terminalRef.current);
-        resizeSession(
-          active.sessionId,
-          terminalInstance.current.cols,
-          terminalInstance.current.rows,
-        ).catch(() => {});
-      });
-      if (terminalRef.current) {
-        resizeObserver.observe(terminalRef.current);
-      }
-
-      cleanup = () => {
-        resizeObserver.disconnect();
-        term.dispose();
-        if (terminalInstance.current === term) {
-          terminalInstance.current = null;
-        }
-      };
-    };
-
-    initTerminal().catch(() => {});
-    return () => {
-      disposed = true;
-      cleanup?.();
+  useEffect(() => {
+    handlersRef.current = {
+      recordCommandInput,
+      writeToSession,
+      resizeSession,
+      isLocalSession,
+      reconnectSession,
+      reconnectLocalShell,
     };
   }, [
     isLocalSession,
+    recordCommandInput,
     reconnectLocalShell,
     reconnectSession,
-    recordCommandInput,
     resizeSession,
-    sessionReasonsRef,
-    sessionRef,
-    sessionStatesRef,
     writeToSession,
   ]);
 
-  useEffect(() => {
-    if (!terminalReady || !terminalRef.current || !terminalInstance.current) {
-      return;
+  function observeActiveContainer(
+    container: HTMLDivElement | null,
+    sessionId: string,
+  ) {
+    if (!container || !sessionId) return;
+    if (!resizeObserverRef.current) {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        const activeId = activeSessionIdRef.current;
+        if (!activeId) return;
+        const bundle = terminalsRef.current[activeId];
+        if (!bundle) return;
+        safeFit(bundle.fitAddon, bundle.container);
+        handlersRef.current
+          .resizeSession(activeId, bundle.terminal.cols, bundle.terminal.rows)
+          .catch(() => {});
+      });
     }
-    const buffer =
-      activeSessionId && sessionBuffersRef.current[activeSessionId]
-        ? sessionBuffersRef.current[activeSessionId]
-        : "";
-    terminalInstance.current.reset();
-    terminalInstance.current.write(buffer);
-  }, [activeSessionId, terminalReady, sessionBuffersRef]);
+    resizeObserverRef.current.disconnect();
+    resizeObserverRef.current.observe(container);
+  }
+
+  async function ensureTerminal(sessionId: string, container: HTMLDivElement) {
+    if (terminalsRef.current[sessionId]) return;
+    const modules = await loadXtermModules();
+    if (terminalsRef.current[sessionId]) return;
+    const term = new modules.Terminal({
+      allowProposedApi: true,
+      convertEol: true,
+      fontFamily: '"JetBrains Mono", "Cascadia Mono", monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      theme: themeRef.current,
+    });
+    const fit = new modules.FitAddon();
+    term.loadAddon(fit);
+    term.open(container);
+    safeFit(fit, container);
+    term.onData((data) => {
+      const state = sessionStatesRef.current[sessionId];
+      if (state === "disconnected") {
+        const reason = sessionReasonsRef.current[sessionId];
+        if (reason === "exit") {
+          if (handlersRef.current.isLocalSession(sessionId)) {
+            handlersRef.current.reconnectLocalShell(sessionId).catch(() => {});
+          } else {
+            handlersRef.current.reconnectSession(sessionId).catch(() => {});
+          }
+        }
+        return;
+      }
+      handlersRef.current.recordCommandInput(sessionId, data);
+      handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+    });
+    terminalsRef.current[sessionId] = {
+      terminal: term,
+      fitAddon: fit,
+      container,
+    };
+    setTerminalReadyBySession((prev) => ({ ...prev, [sessionId]: true }));
+    const buffer = sessionBuffersRef.current[sessionId];
+    if (buffer) {
+      term.write(buffer);
+      delete sessionBuffersRef.current[sessionId];
+    }
+  }
+
+  function disposeTerminal(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return;
+    bundle.terminal.dispose();
+    delete terminalsRef.current[sessionId];
+    delete containersRef.current[sessionId];
+    setTerminalReadyBySession((prev) => {
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+  }
+
+  const registerTerminalContainer = useCallback(
+    (sessionId: string, element: HTMLDivElement | null) => {
+      containersRef.current[sessionId] = element;
+      if (element) {
+        ensureTerminal(sessionId, element).catch(() => {});
+        if (sessionId === activeSessionIdRef.current) {
+          observeActiveContainer(element, sessionId);
+        }
+      } else {
+        disposeTerminal(sessionId);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -211,13 +253,12 @@ export default function useTerminalRuntime({
         "terminal:output",
         (event) => {
           const sessionId = event.payload.sessionId;
-          const buffer = sessionBuffersRef.current[sessionId] ?? "";
-          sessionBuffersRef.current[sessionId] = buffer + event.payload.data;
-          if (
-            terminalInstance.current &&
-            sessionRef.current?.sessionId === sessionId
-          ) {
-            terminalInstance.current.write(event.payload.data);
+          const terminal = terminalsRef.current[sessionId]?.terminal;
+          if (terminal) {
+            terminal.write(event.payload.data);
+          } else {
+            const buffer = sessionBuffersRef.current[sessionId] ?? "";
+            sessionBuffersRef.current[sessionId] = buffer + event.payload.data;
           }
         },
       );
@@ -234,28 +275,44 @@ export default function useTerminalRuntime({
       cancelled = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [sessionBuffersRef, sessionRef]);
+  }, [sessionBuffersRef]);
 
   useEffect(() => {
-    if (!terminalInstance.current) return;
-    terminalInstance.current.options.theme = theme;
+    Object.values(terminalsRef.current).forEach((bundle) => {
+      bundle.terminal.options.theme = theme;
+    });
   }, [theme]);
 
   useEffect(() => {
-    if (!terminalReady || !fitAddon.current || !terminalInstance.current)
-      return;
-    safeFit(fitAddon.current, terminalRef.current);
+    if (!activeSessionId) return;
+    const bundle = terminalsRef.current[activeSessionId];
+    if (!bundle) return;
+    safeFit(bundle.fitAddon, bundle.container);
     if (!activeSession) return;
     onSizeChange?.({
-      cols: terminalInstance.current.cols,
-      rows: terminalInstance.current.rows,
+      cols: bundle.terminal.cols,
+      rows: bundle.terminal.rows,
     });
     resizeSession(
       activeSession.sessionId,
-      terminalInstance.current.cols,
-      terminalInstance.current.rows,
+      bundle.terminal.cols,
+      bundle.terminal.rows,
     ).catch(() => {});
-  }, [activeSession, resizeSession, terminalReady]);
+    observeActiveContainer(bundle.container, activeSessionId);
+  }, [activeSession, activeSessionId, resizeSession]);
 
-  return { terminalRef, terminalReady, getTerminalSize };
+  useEffect(() => {
+    const activeIds = new Set(sessions.map((item) => item.sessionId));
+    Object.keys(terminalsRef.current).forEach((sessionId) => {
+      if (!activeIds.has(sessionId)) {
+        disposeTerminal(sessionId);
+      }
+    });
+  }, [sessions]);
+
+  function isTerminalReady(sessionId: string) {
+    return !!terminalReadyBySession[sessionId];
+  }
+
+  return { registerTerminalContainer, isTerminalReady, getTerminalSize };
 }

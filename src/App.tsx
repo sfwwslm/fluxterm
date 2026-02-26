@@ -266,7 +266,6 @@ function App() {
     isRemoteSession,
     isRemoteConnected,
     canReconnect,
-    sessionRef,
     sessionStatesRef,
     sessionReasonsRef,
     sessionBuffersRef,
@@ -291,11 +290,11 @@ function App() {
     getTerminalSize: () => terminalSizeRef.current,
   });
 
-  const { terminalRef, terminalReady } = useTerminalRuntime({
+  const { registerTerminalContainer, isTerminalReady } = useTerminalRuntime({
     theme: themes[themeId].terminal,
     activeSessionId,
     activeSession,
-    sessionRef,
+    sessions,
     sessionStatesRef,
     sessionReasonsRef,
     sessionBuffersRef,
@@ -588,8 +587,8 @@ function App() {
                 activeSessionState={activeSessionState}
                 activeSessionReason={activeSessionReason}
                 sessionStates={sessionStates}
-                terminalReady={terminalReady}
-                terminalRef={terminalRef}
+                registerTerminalContainer={registerTerminalContainer}
+                isTerminalReady={isTerminalReady}
                 isLocalSession={isLocalSession}
                 onSwitchSession={switchSession}
                 onDisconnectSession={disconnectSession}
