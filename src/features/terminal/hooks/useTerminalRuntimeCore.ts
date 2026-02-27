@@ -364,6 +364,11 @@ export default function useTerminalRuntime({
     terminalsRef.current[sessionId] = bundle;
     setTerminalReadyBySession((prev) => ({ ...prev, [sessionId]: true }));
 
+    // 新建或重建当前激活会话时立即聚焦，避免回车重连后需要鼠标点击。
+    if (activeSessionIdRef.current === sessionId) {
+      bundle.terminal.focus();
+    }
+
     const bufferedData = sessionBuffersRef.current[sessionId];
     if (bufferedData) {
       writeToBundle(bundle, bufferedData);
@@ -448,6 +453,8 @@ export default function useTerminalRuntime({
     const bundle = terminalsRef.current[activeSessionId];
     if (!bundle) return;
     safeFit(bundle.fitAddon, bundle.host);
+    // 会话切换/重连替换后，主动恢复焦点到当前终端实例。
+    bundle.terminal.focus();
     if (!activeSession) return;
     onSizeChange?.({
       cols: bundle.terminal.cols,
