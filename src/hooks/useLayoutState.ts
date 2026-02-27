@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { homeDir, join } from "@tauri-apps/api/path";
 import {
   exists,
   mkdir,
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { warn } from "@tauri-apps/plugin-log";
 import {
   defaultWidgetLayout,
   increaseSideSlots,
@@ -19,6 +19,7 @@ import type {
   WidgetSlot,
 } from "@/layout/types";
 import type { PanelKey } from "@/types";
+import { getFluxTermConfigDir, getLayoutPath } from "@/shared/config/paths";
 
 type LayoutState = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
@@ -68,10 +69,8 @@ export default function useLayoutState({
     startRight: number;
     startBottom: number;
   } | null>(null);
-  const layoutPathRef = useRef<string | null>(null);
   const layoutLoadedRef = useRef(false);
   const layoutSaveTimerRef = useRef<number | null>(null);
-  const configDirRef = useRef<string | null>(null);
 
   function buildPersistentSlots(
     slots: Record<string, WidgetGroup>,
@@ -102,25 +101,9 @@ export default function useLayoutState({
     return next;
   }
 
-  async function getConfigDir() {
-    if (configDirRef.current) return configDirRef.current;
-    const dir = await homeDir();
-    const path = await join(dir, ".flux-term");
-    configDirRef.current = path;
-    return path;
-  }
-
-  async function getLayoutConfigPath() {
-    if (layoutPathRef.current) return layoutPathRef.current;
-    const dir = await getConfigDir();
-    const path = await join(dir, "layout.json");
-    layoutPathRef.current = path;
-    return path;
-  }
-
   async function loadLayoutConfig() {
     try {
-      const path = await getLayoutConfigPath();
+      const path = await getLayoutPath();
       const existsFile = await exists(path);
       let raw: string | null = null;
       if (existsFile) {
@@ -152,17 +135,22 @@ export default function useLayoutState({
       setSideSlotCounts(normalized.sideSlotCounts);
       setSlotGroups(normalized.slots);
       setPanelSizes(normalized.sizes);
-    } catch {
-      // Ignore invalid layout config.
+    } catch (error) {
+      warn(
+        JSON.stringify({
+          event: "layout:load-failed",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     } finally {
       layoutLoadedRef.current = true;
     }
   }
 
   async function saveLayoutConfig(payload: WidgetLayout) {
-    const dir = await getConfigDir();
+    const dir = await getFluxTermConfigDir();
     await mkdir(dir, { recursive: true });
-    const path = await getLayoutConfigPath();
+    const path = await getLayoutPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));
   }
 
@@ -356,7 +344,14 @@ export default function useLayoutState({
         sideSlotCounts: normalizedCounts,
         slots: persistedSlots,
         sizes: panelSizes,
-      }).catch(() => {});
+      }).catch((error) => {
+        warn(
+          JSON.stringify({
+            event: "layout:save-failed",
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      });
     }, 300);
     return () => {
       if (layoutSaveTimerRef.current) {

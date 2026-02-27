@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { homeDir, join } from "@tauri-apps/api/path";
 import {
   exists,
   mkdir,
@@ -10,6 +9,7 @@ import {
 import { info, warn } from "@tauri-apps/plugin-log";
 import type { Locale } from "@/i18n";
 import type { LocalShellProfile, ThemeId } from "@/types";
+import { getFluxTermConfigDir, getSettingsPath } from "@/shared/config/paths";
 
 type AppSettings = {
   version: 1;
@@ -62,25 +62,7 @@ export default function useAppSettings({
   const [shellId, setShellId] = useState<string | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  const settingsPathRef = useRef<string | null>(null);
-  const configDirRef = useRef<string | null>(null);
   const pendingShellIdRef = useRef<string | null>(null);
-
-  async function getConfigDir() {
-    if (configDirRef.current) return configDirRef.current;
-    const dir = await homeDir();
-    const path = await join(dir, ".flux-term");
-    configDirRef.current = path;
-    return path;
-  }
-
-  async function getSettingsPath() {
-    if (settingsPathRef.current) return settingsPathRef.current;
-    const dir = await getConfigDir();
-    const path = await join(dir, "settings.json");
-    settingsPathRef.current = path;
-    return path;
-  }
 
   function resolveDefaultShellId(shells: LocalShellProfile[]) {
     if (!shells.length) return null;
@@ -107,15 +89,20 @@ export default function useAppSettings({
       if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
         setThemeId(normalizedThemeId);
       }
-    } catch {
-      // Ignore invalid settings.
+    } catch (error) {
+      warn(
+        JSON.stringify({
+          event: "settings:load-failed",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     } finally {
       // 由初始化流程统一设置 settingsLoaded，避免竞态覆盖。
     }
   }
 
   async function saveSettings(payload: AppSettings) {
-    const dir = await getConfigDir();
+    const dir = await getFluxTermConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getSettingsPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));
@@ -182,7 +169,14 @@ export default function useAppSettings({
       shellId,
       locale,
       themeId,
-    }).catch(() => {});
+    }).catch((error) => {
+      warn(
+        JSON.stringify({
+          event: "settings:save-failed",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    });
   }, [shellId, locale, themeId, settingsLoaded]);
 
   return {

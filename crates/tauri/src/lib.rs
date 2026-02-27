@@ -1,5 +1,6 @@
 //! Tauri 应用入口与命令注册。
 pub mod commands;
+pub mod config_paths;
 pub mod events;
 pub mod local_fs;
 pub mod local_shell;
@@ -24,6 +25,7 @@ use crate::commands::sftp::{
     sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_upload,
 };
 use crate::commands::ssh::{ssh_connect, ssh_disconnect, ssh_resize, ssh_write};
+use crate::commands::system::app_config_dir;
 use crate::local_shell::LocalShellState;
 use crate::state::EngineState;
 
@@ -55,6 +57,13 @@ pub fn run() {
                 })
                 .build(),
         )
+        .setup(|_app| {
+            if let Err(message) = crate::config_paths::load_dotenv_strict() {
+                log::error!("{message}");
+                return Err(std::io::Error::other(message).into());
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             profile_list,
             profile_groups_list,
@@ -80,6 +89,7 @@ pub fn run() {
             local_shell_list,
             local_shell_write,
             local_shell_resize,
+            app_config_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

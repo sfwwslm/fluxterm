@@ -6,6 +6,8 @@ use engine::{EngineError, HostProfile};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+use crate::config_paths::resolve_config_dir;
+
 /// 主密码配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretConfig {
@@ -82,10 +84,8 @@ pub fn write_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), Engin
 }
 
 fn profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = app.path().home_dir().map_err(|err| {
-        EngineError::with_detail("profile_path_failed", "无法获取用户主目录", err.to_string())
-    })?;
-    Ok(dir.join(".flux-term").join("profiles.json"))
+    let dir = resolve_config_dir(app)?;
+    Ok(dir.join("profiles.json"))
 }
 
 fn legacy_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {

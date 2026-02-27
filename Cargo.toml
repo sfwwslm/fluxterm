@@ -9,6 +9,7 @@ authors = ["sfwwslm"]
 [workspace.dependencies]
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
+dotenvy = "0.15.7"
 
 [profile.dev]
 incremental = true
