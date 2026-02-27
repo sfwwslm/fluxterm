@@ -59,6 +59,26 @@ cli (TUI)  --->  engine (Rust)
 - 使用 xterm 渲染终端。
 - 主机配置与 SFTP 文件浏览界面。
 
+#### 前端分层（2026-02 重构）
+
+- `src/app`：应用编排层。
+  - `AppRoot` 只作为根入口。
+  - `AppShell` 负责组装各域 Controller、布局与弹窗。
+  - `theme/themePresets.ts` 统一主题定义。
+  - `panels/buildPanels.tsx` 统一工作区面板装配。
+- `src/features/session`：会话域入口与状态控制。
+  - `useSessionController` 对外暴露 `sessionState/sessionRefs/sessionActions`。
+- `src/features/terminal`：终端域入口与行为控制。
+  - `useTerminalController` 对外暴露 `terminalQuery/terminalActions`。
+- `src/features/sftp`：文件域入口与行为控制。
+  - `useSftpController` 对外暴露 `sftpState/sftpActions`。
+
+设计原则：
+
+- 保持 UI 组件只消费领域接口，避免直接依赖底层实现细节。
+- 优先通过 Controller 组合能力，减少顶层组件中的跨域耦合。
+- 重构阶段保留兼容封装，逐步将大 Hook 内部逻辑下沉到 feature/core。
+
 ## 前端布局规则
 
 - 开发阶段采用破坏性重构策略，不考虑旧布局配置兼容，优先保证结构清晰与可维护性。
