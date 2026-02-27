@@ -30,6 +30,8 @@ type TerminalTheme = {
 
 type UseTerminalRuntimeProps = {
   theme: TerminalTheme;
+  /** TODO: 后续从用户设置读取并传入终端 scrollback 配置。 */
+  scrollback?: number;
   activeSessionId: string | null;
   activeSession: Session | null;
   sessions: Session[];
@@ -92,7 +94,6 @@ type XtermModules = {
 type Disposable = { dispose: () => void };
 
 type LineMeta = {
-  number: number;
   timestamp: number;
 };
 
@@ -151,6 +152,7 @@ function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
 /** Xterm 初始化与输入输出处理。 */
 export default function useTerminalRuntime({
   theme,
+  scrollback = 3000,
   activeSessionId,
   activeSession,
   sessions,
@@ -168,6 +170,7 @@ export default function useTerminalRuntime({
   const terminalsRef = useRef<Record<string, TerminalBundle>>({});
   const containersRef = useRef<Record<string, HTMLDivElement | null>>({});
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const lastResizedSizeRef = useRef<Record<string, string>>({});
   const activeSessionIdRef = useRef<string | null>(null);
   const xtermModulesRef = useRef<XtermModules | null>(null);
   const themeRef = useRef(theme);
@@ -253,9 +256,13 @@ export default function useTerminalRuntime({
         if (!bundle) return;
         safeFit(bundle.fitAddon, bundle.host);
         scheduleRefreshGutter(bundle);
-        handlersRef.current
-          .resizeSession(activeId, bundle.terminal.cols, bundle.terminal.rows)
-          .catch(() => {});
+        const sizeKey = `${bundle.terminal.cols}x${bundle.terminal.rows}`;
+        if (lastResizedSizeRef.current[activeId] !== sizeKey) {
+          lastResizedSizeRef.current[activeId] = sizeKey;
+          handlersRef.current
+            .resizeSession(activeId, bundle.terminal.cols, bundle.terminal.rows)
+            .catch(() => {});
+        }
       });
     }
     resizeObserverRef.current.disconnect();
@@ -305,7 +312,6 @@ export default function useTerminalRuntime({
     if (!logicalIndex) return;
     if (bundle.lineMetaByLogicalIndex.has(logicalIndex)) return;
     bundle.lineMetaByLogicalIndex.set(logicalIndex, {
-      number: bundle.nextLineNumber,
       timestamp,
     });
     bundle.nextLineNumber += 1;
@@ -321,14 +327,13 @@ export default function useTerminalRuntime({
         index += 1
       ) {
         bundle.lineMetaByLogicalIndex.set(index, {
-          number: bundle.nextLineNumber,
           timestamp,
         });
         bundle.nextLineNumber += 1;
       }
-    } else {
-      addMissingCurrentLineMeta(bundle, timestamp);
+      return;
     }
+    addMissingCurrentLineMeta(bundle, timestamp);
   }
 
   function resetLineNumberingState(bundle: TerminalBundle) {
@@ -441,7 +446,7 @@ export default function useTerminalRuntime({
           ? formatGutterTime(lineMeta.timestamp)
           : "";
       const lineText = meta
-        ? String(meta.number)
+        ? String(logicalIndex)
         : wrappedContinuation
           ? "-"
           : "";
@@ -498,6 +503,7 @@ export default function useTerminalRuntime({
       fontFamily: '"JetBrains Mono", "Cascadia Mono", monospace',
       fontSize: 13,
       cursorBlink: true,
+      scrollback,
       theme: themeRef.current,
     });
     const fit = new modules.FitAddon();
@@ -625,6 +631,7 @@ export default function useTerminalRuntime({
     bundle.terminal.dispose();
     delete terminalsRef.current[sessionId];
     delete containersRef.current[sessionId];
+    delete lastResizedSizeRef.current[sessionId];
     setSearchStatsBySession((prev) => {
       const next = { ...prev };
       delete next[sessionId];
@@ -700,11 +707,15 @@ export default function useTerminalRuntime({
       cols: bundle.terminal.cols,
       rows: bundle.terminal.rows,
     });
-    resizeSession(
-      activeSession.sessionId,
-      bundle.terminal.cols,
-      bundle.terminal.rows,
-    ).catch(() => {});
+    const sizeKey = `${bundle.terminal.cols}x${bundle.terminal.rows}`;
+    if (lastResizedSizeRef.current[activeSession.sessionId] !== sizeKey) {
+      lastResizedSizeRef.current[activeSession.sessionId] = sizeKey;
+      resizeSession(
+        activeSession.sessionId,
+        bundle.terminal.cols,
+        bundle.terminal.rows,
+      ).catch(() => {});
+    }
     observeActiveContainer(bundle.container, activeSessionId);
   }, [activeSession, activeSessionId, resizeSession]);
 

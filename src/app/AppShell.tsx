@@ -208,6 +208,8 @@ export default function AppShell() {
 
   const { terminalQuery, terminalActions } = useTerminalController({
     theme: themePresets[themeId].terminal,
+    // TODO: 后续改为从用户设置读取 scrollback，而不是硬编码默认值。
+    scrollback: 3000,
     activeSessionId: sessionState.activeSessionId,
     activeSession: sessionState.activeSession,
     sessions: sessionState.sessions,

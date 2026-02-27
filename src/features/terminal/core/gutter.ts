@@ -16,9 +16,9 @@ export function formatGutterTime(timestamp: number) {
 /** 判断输出是否触发清屏并需要重置行号。 */
 export function shouldResetLineNumbering(data: string) {
   const clearScreenSequence = /\u001b\[[0-9;?]*(?:2J|3J)/.test(data);
-  const cursorHomeSequence = /\u001b\[[0-9;?]*[Hf]/.test(data);
   const hardResetSequence = /\u001bc/.test(data);
-  return hardResetSequence || (clearScreenSequence && cursorHomeSequence);
+  // 兼容本地 PowerShell 的 cls：部分终端仅发清屏序列，不一定带光标归位序列。
+  return hardResetSequence || clearScreenSequence;
 }
 
 /** 从 xterm 内部渲染服务读取真实单元格高度。 */
