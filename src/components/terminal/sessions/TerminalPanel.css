@@ -19,6 +19,11 @@
   gap: 12px;
 }
 
+.terminal-xterm-host .xterm .xterm-scrollable-element {
+  /* 终端内容与左侧边距 */
+  padding-left: 3px;
+}
+
 .terminal-status {
   font-size: 12px;
   padding: 4px 10px;
@@ -93,6 +98,8 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
+  /* 终端内容与顶部边距  */
+  margin-top: 3px;
 }
 
 .terminal-container {
