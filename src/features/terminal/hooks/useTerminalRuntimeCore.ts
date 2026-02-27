@@ -12,6 +12,7 @@ import type {
   ISearchResultChangeEvent,
   SearchAddon,
 } from "@xterm/addon-search";
+import type { WebglAddon } from "@xterm/addon-webgl";
 import type { DisconnectReason, Session, SessionStateUi } from "@/types";
 import {
   formatGutterTime,
@@ -85,6 +86,7 @@ type XtermModules = {
   Terminal: typeof import("@xterm/xterm").Terminal;
   FitAddon: typeof import("@xterm/addon-fit").FitAddon;
   SearchAddon: typeof import("@xterm/addon-search").SearchAddon | null;
+  WebglAddon: typeof import("@xterm/addon-webgl").WebglAddon | null;
 };
 
 type Disposable = { dispose: () => void };
@@ -94,13 +96,27 @@ type LineMeta = {
   timestamp: number;
 };
 
+type GutterRowNodes = {
+  root: HTMLDivElement;
+  time: HTMLSpanElement;
+  line: HTMLSpanElement;
+};
+
 type TerminalBundle = {
   terminal: Terminal;
   fitAddon: FitAddon;
   searchAddon: SearchAddon | null;
+  webglAddon: WebglAddon | null;
   container: HTMLDivElement;
   host: HTMLDivElement;
   gutter: HTMLDivElement;
+  gutterTopSpacer: HTMLDivElement;
+  gutterBottomSpacer: HTMLDivElement;
+  gutterRows: GutterRowNodes[];
+  gutterRowHeight: number;
+  gutterPaddingTop: number;
+  gutterPaddingBottom: number;
+  gutterRefreshRafId: number | null;
   disposables: Disposable[];
   logicalLineIndexByRow: number[];
   logicalLineStartByRow: boolean[];
@@ -181,15 +197,18 @@ export default function useTerminalRuntime({
 
   async function loadXtermModules() {
     if (xtermModulesRef.current) return xtermModulesRef.current;
-    const [xtermModule, fitModule, searchModule] = await Promise.all([
-      import("@xterm/xterm"),
-      import("@xterm/addon-fit"),
-      import("@xterm/addon-search").catch(() => null),
-    ]);
+    const [xtermModule, fitModule, searchModule, webglModule] =
+      await Promise.all([
+        import("@xterm/xterm"),
+        import("@xterm/addon-fit"),
+        import("@xterm/addon-search").catch(() => null),
+        import("@xterm/addon-webgl").catch(() => null),
+      ]);
     const modules: XtermModules = {
       Terminal: xtermModule.Terminal,
       FitAddon: fitModule.FitAddon,
       SearchAddon: searchModule?.SearchAddon ?? null,
+      WebglAddon: webglModule?.WebglAddon ?? null,
     };
     xtermModulesRef.current = modules;
     return modules;
@@ -233,7 +252,7 @@ export default function useTerminalRuntime({
         const bundle = terminalsRef.current[activeId];
         if (!bundle) return;
         safeFit(bundle.fitAddon, bundle.host);
-        refreshGutter(bundle);
+        scheduleRefreshGutter(bundle);
         handlersRef.current
           .resizeSession(activeId, bundle.terminal.cols, bundle.terminal.rows)
           .catch(() => {});
@@ -320,6 +339,48 @@ export default function useTerminalRuntime({
     bundle.lineMetaByLogicalIndex.clear();
   }
 
+  /** 创建并返回一行可复用的 gutter 节点。 */
+  function createGutterRowNode() {
+    const root = document.createElement("div");
+    root.className = "terminal-gutter-row";
+    const time = document.createElement("span");
+    time.className = "terminal-gutter-time";
+    const line = document.createElement("span");
+    line.className = "terminal-gutter-line";
+    root.append(time, line);
+    return { root, time, line };
+  }
+
+  /** 按可视行数扩缩 gutter 行节点，避免每次刷新重建整棵 DOM。 */
+  function ensureGutterRows(bundle: TerminalBundle, rowCount: number) {
+    const current = bundle.gutterRows.length;
+    if (current < rowCount) {
+      for (let index = current; index < rowCount; index += 1) {
+        const nodes = createGutterRowNode();
+        bundle.gutterRows.push(nodes);
+        bundle.gutter.insertBefore(nodes.root, bundle.gutterBottomSpacer);
+      }
+      return;
+    }
+    if (current > rowCount) {
+      for (let index = current - 1; index >= rowCount; index -= 1) {
+        const nodes = bundle.gutterRows[index];
+        nodes.root.remove();
+      }
+      bundle.gutterRows.length = rowCount;
+    }
+  }
+
+  /** 将 gutter 刷新合并到下一帧，降低高频输出时的重复渲染。 */
+  function scheduleRefreshGutter(bundle: TerminalBundle) {
+    if (bundle.gutterRefreshRafId !== null) return;
+    bundle.gutterRefreshRafId = window.requestAnimationFrame(() => {
+      bundle.gutterRefreshRafId = null;
+      refreshGutter(bundle);
+    });
+  }
+
+  /** 增量更新 gutter 内容与尺寸，不再使用 innerHTML 全量重建。 */
   function refreshGutter(bundle: TerminalBundle) {
     const { terminal, gutter, host } = bundle;
     const buffer = terminal.buffer.active;
@@ -346,13 +407,26 @@ export default function useTerminalRuntime({
     const maxLineNumber = Math.max(1, bundle.nextLineNumber - 1);
     const lineDigits = String(maxLineNumber).length;
     gutter.style.setProperty("--terminal-gutter-line-ch", String(lineDigits));
-    const viewportY = buffer.viewportY;
-    let html = "";
-    // 绝对对齐关键点 3：顶部 spacer 与 xterm 的 paddingTop 保持一致。
-    if (paddingTop > 0) {
-      html += `<div class="terminal-gutter-spacer" style="height:${paddingTop}px;"></div>`;
+    ensureGutterRows(bundle, rowCount);
+    if (bundle.gutterPaddingTop !== paddingTop) {
+      bundle.gutterTopSpacer.style.height = `${paddingTop}px`;
+      bundle.gutterPaddingTop = paddingTop;
     }
+    if (bundle.gutterPaddingBottom !== paddingBottom) {
+      bundle.gutterBottomSpacer.style.height = `${paddingBottom}px`;
+      bundle.gutterPaddingBottom = paddingBottom;
+    }
+    if (bundle.gutterRowHeight !== rowHeight) {
+      for (const row of bundle.gutterRows) {
+        row.root.style.height = `${rowHeight}px`;
+        row.root.style.lineHeight = `${rowHeight}px`;
+      }
+      bundle.gutterRowHeight = rowHeight;
+    }
+
+    const viewportY = buffer.viewportY;
     for (let viewRow = 0; viewRow < rowCount; viewRow += 1) {
+      const rowNode = bundle.gutterRows[viewRow];
       const bufferRow = viewportY + viewRow;
       const bufferLine = buffer.getLine(bufferRow);
       const isLogicalStart = bundle.logicalLineStartByRow[bufferRow];
@@ -371,17 +445,9 @@ export default function useTerminalRuntime({
         : wrappedContinuation
           ? "-"
           : "";
-      html +=
-        `<div class="terminal-gutter-row" style="height:${rowHeight}px;line-height:${rowHeight}px;">` +
-        `<span class="terminal-gutter-time">${timeText}</span>` +
-        `<span class="terminal-gutter-line">${lineText}</span>` +
-        `</div>`;
+      rowNode.time.textContent = timeText;
+      rowNode.line.textContent = lineText;
     }
-    // 绝对对齐关键点 4：底部 spacer 与 xterm 的 paddingBottom 保持一致。
-    if (paddingBottom > 0) {
-      html += `<div class="terminal-gutter-spacer" style="height:${paddingBottom}px;"></div>`;
-    }
-    gutter.innerHTML = html;
   }
 
   function writeToBundle(
@@ -395,7 +461,7 @@ export default function useTerminalRuntime({
     }
     bundle.terminal.write(data, () => {
       updateMetaAfterWrite(bundle, timestamp);
-      refreshGutter(bundle);
+      scheduleRefreshGutter(bundle);
     });
   }
 
@@ -412,14 +478,20 @@ export default function useTerminalRuntime({
 
     runtime.append(gutter, host);
     container.append(runtime);
-    return { host, gutter };
+    const gutterTopSpacer = document.createElement("div");
+    gutterTopSpacer.className = "terminal-gutter-spacer";
+    const gutterBottomSpacer = document.createElement("div");
+    gutterBottomSpacer.className = "terminal-gutter-spacer";
+    gutter.append(gutterTopSpacer, gutterBottomSpacer);
+    return { host, gutter, gutterTopSpacer, gutterBottomSpacer };
   }
 
   async function ensureTerminal(sessionId: string, container: HTMLDivElement) {
     if (terminalsRef.current[sessionId]) return;
     const modules = await loadXtermModules();
     if (terminalsRef.current[sessionId]) return;
-    const { host, gutter } = buildTerminalLayout(container);
+    const { host, gutter, gutterTopSpacer, gutterBottomSpacer } =
+      buildTerminalLayout(container);
     const term = new modules.Terminal({
       allowProposedApi: true,
       convertEol: true,
@@ -432,6 +504,16 @@ export default function useTerminalRuntime({
     term.loadAddon(fit);
     term.open(host);
     safeFit(fit, host);
+    let webglAddon: WebglAddon | null = null;
+    // 优先启用 WebGL 渲染；不可用时保持默认渲染路径，确保兼容性。
+    if (modules.WebglAddon) {
+      try {
+        webglAddon = new modules.WebglAddon();
+        term.loadAddon(webglAddon);
+      } catch {
+        webglAddon = null;
+      }
+    }
     let searchAddon: SearchAddon | null = null;
     if (modules.SearchAddon) {
       try {
@@ -446,9 +528,17 @@ export default function useTerminalRuntime({
       terminal: term,
       fitAddon: fit,
       searchAddon,
+      webglAddon,
       container,
       host,
       gutter,
+      gutterTopSpacer,
+      gutterBottomSpacer,
+      gutterRows: [],
+      gutterRowHeight: 0,
+      gutterPaddingTop: -1,
+      gutterPaddingBottom: -1,
+      gutterRefreshRafId: null,
       disposables: [],
       logicalLineIndexByRow: [],
       logicalLineStartByRow: [],
@@ -483,13 +573,13 @@ export default function useTerminalRuntime({
 
     bundle.disposables.push(
       term.onScroll(() => {
-        refreshGutter(bundle);
+        scheduleRefreshGutter(bundle);
       }),
     );
 
     bundle.disposables.push(
       term.onRender(() => {
-        refreshGutter(bundle);
+        scheduleRefreshGutter(bundle);
       }),
     );
 
@@ -521,12 +611,16 @@ export default function useTerminalRuntime({
 
     // 为新会话的首行（如 shell prompt）预留行号与时间。
     addMissingCurrentLineMeta(bundle, Date.now());
-    refreshGutter(bundle);
+    scheduleRefreshGutter(bundle);
   }
 
   function disposeTerminal(sessionId: string) {
     const bundle = terminalsRef.current[sessionId];
     if (!bundle) return;
+    if (bundle.gutterRefreshRafId !== null) {
+      window.cancelAnimationFrame(bundle.gutterRefreshRafId);
+      bundle.gutterRefreshRafId = null;
+    }
     bundle.disposables.forEach((disposable) => disposable.dispose());
     bundle.terminal.dispose();
     delete terminalsRef.current[sessionId];
@@ -600,7 +694,7 @@ export default function useTerminalRuntime({
     const bundle = terminalsRef.current[activeSessionId];
     if (!bundle) return;
     safeFit(bundle.fitAddon, bundle.host);
-    refreshGutter(bundle);
+    scheduleRefreshGutter(bundle);
     if (!activeSession) return;
     onSizeChange?.({
       cols: bundle.terminal.cols,
@@ -721,7 +815,7 @@ export default function useTerminalRuntime({
     resetLineNumberingState(bundle);
     rebuildLogicalLines(bundle);
     addMissingCurrentLineMeta(bundle, Date.now());
-    refreshGutter(bundle);
+    scheduleRefreshGutter(bundle);
     return true;
   }
 
