@@ -8,12 +8,13 @@ use tauri::{AppHandle, Manager};
 const CONFIG_DIR_ENV_KEY: &str = "FLUXTERM_CONFIG_DIR";
 const DEFAULT_CONFIG_DIR_NAME: &str = ".vust/flux-term";
 
-/// 严格加载 dotenv 文件。
+/// 严格加载 dotenv 文件（仅 debug 构建启用）。
 ///
 /// 行为约束：
 /// - 仅加载 `crates/tauri/.env`。
 /// - 若该文件存在但解析失败，返回错误，由调用方终止启动。
 /// - 若该文件不存在，返回成功（继续使用默认配置）。
+#[cfg(debug_assertions)]
 pub fn load_dotenv_strict() -> Result<(), String> {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tauri_env_path = manifest_dir.join(".env");
@@ -27,6 +28,12 @@ pub fn load_dotenv_strict() -> Result<(), String> {
         });
     }
 
+    Ok(())
+}
+
+/// release 构建不加载 dotenv，避免本地开发文件影响生产行为。
+#[cfg(not(debug_assertions))]
+pub fn load_dotenv_strict() -> Result<(), String> {
     Ok(())
 }
 
