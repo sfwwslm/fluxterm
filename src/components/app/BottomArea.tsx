@@ -18,8 +18,6 @@ type FooterVisibility = {
 type TerminalStats = {
   windowRows: number;
   windowCols: number;
-  logicalLineCount: number;
-  currentLogicalLineCharCount: number;
 };
 
 type BottomAreaProps = {
@@ -416,10 +414,6 @@ export default function BottomArea({
             <div className="statusbar" title={t("layout.footer.statusbar")}>
               <span>
                 [ {t("status.window")} {stats.windowRows}x{stats.windowCols} ]
-              </span>
-              <span>
-                [ {t("status.line")} {stats.logicalLineCount} {t("status.char")}{" "}
-                {stats.currentLogicalLineCharCount} ]
               </span>
               <span>[ {formatDateTime(now)} ]</span>
             </div>

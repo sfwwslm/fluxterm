@@ -1,6 +1,6 @@
 /**
  * 终端运行时核心 Hook。
- * 职责：管理 xterm 生命周期、输入输出、gutter 与搜索能力。
+ * 职责：管理 xterm 生命周期、输入输出与搜索能力。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -16,11 +16,6 @@ import type {
 import type { WebLinksAddon } from "@xterm/addon-web-links";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { DisconnectReason, Session, SessionStateUi } from "@/types";
-import {
-  formatGutterTime,
-  resolveCellHeight,
-  shouldResetLineNumbering,
-} from "@/features/terminal/core/gutter";
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
 
 type TerminalTheme = {
@@ -63,8 +58,6 @@ type TerminalRuntime = {
   getActiveTerminalStats: () => {
     windowRows: number;
     windowCols: number;
-    logicalLineCount: number;
-    currentLogicalLineCharCount: number;
   };
   getActiveSearchStats: () => {
     resultIndex: number;
@@ -96,16 +89,6 @@ type XtermModules = {
 
 type Disposable = { dispose: () => void };
 
-type LineMeta = {
-  timestamp: number;
-};
-
-type GutterRowNodes = {
-  root: HTMLDivElement;
-  time: HTMLSpanElement;
-  line: HTMLSpanElement;
-};
-
 type TerminalBundle = {
   terminal: Terminal;
   fitAddon: FitAddon;
@@ -114,20 +97,7 @@ type TerminalBundle = {
   webglAddon: WebglAddon | null;
   container: HTMLDivElement;
   host: HTMLDivElement;
-  gutter: HTMLDivElement;
-  gutterTopSpacer: HTMLDivElement;
-  gutterBottomSpacer: HTMLDivElement;
-  gutterRows: GutterRowNodes[];
-  gutterRowHeight: number;
-  gutterPaddingTop: number;
-  gutterPaddingBottom: number;
-  gutterRefreshRafId: number | null;
   disposables: Disposable[];
-  logicalLineIndexByRow: number[];
-  logicalLineStartByRow: boolean[];
-  logicalLineCount: number;
-  nextLineNumber: number;
-  lineMetaByLogicalIndex: Map<number, LineMeta>;
 };
 
 type SearchDirection = "next" | "prev";
@@ -261,7 +231,6 @@ export default function useTerminalRuntime({
         const bundle = terminalsRef.current[activeId];
         if (!bundle) return;
         safeFit(bundle.fitAddon, bundle.host);
-        scheduleRefreshGutter(bundle);
         const sizeKey = `${bundle.terminal.cols}x${bundle.terminal.rows}`;
         if (lastResizedSizeRef.current[activeId] !== sizeKey) {
           lastResizedSizeRef.current[activeId] = sizeKey;
@@ -275,205 +244,8 @@ export default function useTerminalRuntime({
     resizeObserverRef.current.observe(container);
   }
 
-  function rebuildLogicalLines(bundle: TerminalBundle) {
-    const buffer = bundle.terminal.buffer.active;
-    const nextIndexByRow = new Array<number>(buffer.length);
-    const nextStartByRow = new Array<boolean>(buffer.length);
-    const cursorRow = buffer.baseY + buffer.cursorY;
-    let lastNonEmptyRow = -1;
-    for (let row = 0; row < buffer.length; row += 1) {
-      const line = buffer.getLine(row);
-      if (!line) continue;
-      if (line.translateToString(true).length > 0) {
-        lastNonEmptyRow = row;
-      }
-    }
-    const maxRelevantRow = Math.max(cursorRow, lastNonEmptyRow);
-    let logicalIndex = 0;
-    for (let row = 0; row < buffer.length; row += 1) {
-      const line = buffer.getLine(row);
-      if (!line) {
-        nextIndexByRow[row] = logicalIndex;
-        nextStartByRow[row] = false;
-        continue;
-      }
-      const start = !line.isWrapped;
-      const relevantStart = start && row <= maxRelevantRow;
-      if (relevantStart) logicalIndex += 1;
-      nextIndexByRow[row] = logicalIndex;
-      nextStartByRow[row] = relevantStart;
-    }
-    bundle.logicalLineIndexByRow = nextIndexByRow;
-    bundle.logicalLineStartByRow = nextStartByRow;
-    bundle.logicalLineCount = logicalIndex;
-  }
-
-  function addMissingCurrentLineMeta(
-    bundle: TerminalBundle,
-    timestamp: number,
-  ) {
-    const buffer = bundle.terminal.buffer.active;
-    const cursorRow = buffer.baseY + buffer.cursorY;
-    const logicalIndex = bundle.logicalLineIndexByRow[cursorRow];
-    if (!logicalIndex) return;
-    if (bundle.lineMetaByLogicalIndex.has(logicalIndex)) return;
-    bundle.lineMetaByLogicalIndex.set(logicalIndex, {
-      timestamp,
-    });
-    bundle.nextLineNumber += 1;
-  }
-
-  function updateMetaAfterWrite(bundle: TerminalBundle, timestamp: number) {
-    const previousCount = bundle.logicalLineCount;
-    rebuildLogicalLines(bundle);
-    if (bundle.logicalLineCount > previousCount) {
-      for (
-        let index = previousCount + 1;
-        index <= bundle.logicalLineCount;
-        index += 1
-      ) {
-        bundle.lineMetaByLogicalIndex.set(index, {
-          timestamp,
-        });
-        bundle.nextLineNumber += 1;
-      }
-      return;
-    }
-    addMissingCurrentLineMeta(bundle, timestamp);
-  }
-
-  function resetLineNumberingState(bundle: TerminalBundle) {
-    bundle.logicalLineIndexByRow = [];
-    bundle.logicalLineStartByRow = [];
-    bundle.logicalLineCount = 0;
-    bundle.nextLineNumber = 1;
-    bundle.lineMetaByLogicalIndex.clear();
-  }
-
-  /** 创建并返回一行可复用的 gutter 节点。 */
-  function createGutterRowNode() {
-    const root = document.createElement("div");
-    root.className = "terminal-gutter-row";
-    const time = document.createElement("span");
-    time.className = "terminal-gutter-time";
-    const line = document.createElement("span");
-    line.className = "terminal-gutter-line";
-    root.append(time, line);
-    return { root, time, line };
-  }
-
-  /** 按可视行数扩缩 gutter 行节点，避免每次刷新重建整棵 DOM。 */
-  function ensureGutterRows(bundle: TerminalBundle, rowCount: number) {
-    const current = bundle.gutterRows.length;
-    if (current < rowCount) {
-      for (let index = current; index < rowCount; index += 1) {
-        const nodes = createGutterRowNode();
-        bundle.gutterRows.push(nodes);
-        bundle.gutter.insertBefore(nodes.root, bundle.gutterBottomSpacer);
-      }
-      return;
-    }
-    if (current > rowCount) {
-      for (let index = current - 1; index >= rowCount; index -= 1) {
-        const nodes = bundle.gutterRows[index];
-        nodes.root.remove();
-      }
-      bundle.gutterRows.length = rowCount;
-    }
-  }
-
-  /** 将 gutter 刷新合并到下一帧，降低高频输出时的重复渲染。 */
-  function scheduleRefreshGutter(bundle: TerminalBundle) {
-    if (bundle.gutterRefreshRafId !== null) return;
-    bundle.gutterRefreshRafId = window.requestAnimationFrame(() => {
-      bundle.gutterRefreshRafId = null;
-      refreshGutter(bundle);
-    });
-  }
-
-  /** 增量更新 gutter 内容与尺寸，不再使用 innerHTML 全量重建。 */
-  function refreshGutter(bundle: TerminalBundle) {
-    const { terminal, gutter, host } = bundle;
-    const buffer = terminal.buffer.active;
-    const rowCount = Math.max(terminal.rows, 1);
-    // 绝对对齐关键点 1：读取 .xterm-screen 的上下 padding，
-    // gutter 必须使用同样的上下留白，否则首末行会错位。
-    const screen = host.querySelector(".xterm-screen") as HTMLDivElement | null;
-    const style = screen ? window.getComputedStyle(screen) : null;
-    const paddingTop = style ? Number.parseFloat(style.paddingTop) || 0 : 0;
-    const paddingBottom = style
-      ? Number.parseFloat(style.paddingBottom) || 0
-      : 0;
-    const screenHeight = screen?.clientHeight ?? host.clientHeight;
-    const contentHeight = Math.max(
-      screenHeight - paddingTop - paddingBottom,
-      0,
-    );
-    const measuredRowHeight = contentHeight > 0 ? contentHeight / rowCount : 16;
-    const cellHeight = resolveCellHeight(terminal);
-    // 绝对对齐关键点 2：优先使用 xterm 内部 cell.height，
-    // 避免由于 CSS 缩放、DPI、像素舍入导致的累计误差。
-    const rowHeight = cellHeight > 0 ? cellHeight : measuredRowHeight;
-    // 根据当前最大行号位数动态扩展 gutter 宽度，避免时间与行号拥挤。
-    const maxLineNumber = Math.max(1, bundle.nextLineNumber - 1);
-    const lineDigits = String(maxLineNumber).length;
-    gutter.style.setProperty("--terminal-gutter-line-ch", String(lineDigits));
-    ensureGutterRows(bundle, rowCount);
-    if (bundle.gutterPaddingTop !== paddingTop) {
-      bundle.gutterTopSpacer.style.height = `${paddingTop}px`;
-      bundle.gutterPaddingTop = paddingTop;
-    }
-    if (bundle.gutterPaddingBottom !== paddingBottom) {
-      bundle.gutterBottomSpacer.style.height = `${paddingBottom}px`;
-      bundle.gutterPaddingBottom = paddingBottom;
-    }
-    if (bundle.gutterRowHeight !== rowHeight) {
-      for (const row of bundle.gutterRows) {
-        row.root.style.height = `${rowHeight}px`;
-        row.root.style.lineHeight = `${rowHeight}px`;
-      }
-      bundle.gutterRowHeight = rowHeight;
-    }
-
-    const viewportY = buffer.viewportY;
-    for (let viewRow = 0; viewRow < rowCount; viewRow += 1) {
-      const rowNode = bundle.gutterRows[viewRow];
-      const bufferRow = viewportY + viewRow;
-      const bufferLine = buffer.getLine(bufferRow);
-      const isLogicalStart = bundle.logicalLineStartByRow[bufferRow];
-      const logicalIndex = bundle.logicalLineIndexByRow[bufferRow];
-      const lineMeta = bundle.lineMetaByLogicalIndex.get(logicalIndex) ?? null;
-      const wrappedContinuation =
-        !!bufferLine && bufferLine.isWrapped && !isLogicalStart && !!lineMeta;
-      const meta = isLogicalStart ? lineMeta : null;
-      const timeText = meta
-        ? formatGutterTime(meta.timestamp)
-        : wrappedContinuation && lineMeta
-          ? formatGutterTime(lineMeta.timestamp)
-          : "";
-      const lineText = meta
-        ? String(logicalIndex)
-        : wrappedContinuation
-          ? "-"
-          : "";
-      rowNode.time.textContent = timeText;
-      rowNode.line.textContent = lineText;
-    }
-  }
-
-  function writeToBundle(
-    bundle: TerminalBundle,
-    data: string,
-    timestamp: number,
-  ) {
-    if (shouldResetLineNumbering(data)) {
-      // 兼容用户在 shell 中执行 clear：在处理清屏序列前先重置编号状态。
-      resetLineNumberingState(bundle);
-    }
-    bundle.terminal.write(data, () => {
-      updateMetaAfterWrite(bundle, timestamp);
-      scheduleRefreshGutter(bundle);
-    });
+  function writeToBundle(bundle: TerminalBundle, data: string) {
+    bundle.terminal.write(data);
   }
 
   function buildTerminalLayout(container: HTMLDivElement) {
@@ -481,28 +253,19 @@ export default function useTerminalRuntime({
     const runtime = document.createElement("div");
     runtime.className = "terminal-runtime";
 
-    const gutter = document.createElement("div");
-    gutter.className = "terminal-gutter";
-
     const host = document.createElement("div");
     host.className = "terminal-xterm-host";
 
-    runtime.append(gutter, host);
+    runtime.append(host);
     container.append(runtime);
-    const gutterTopSpacer = document.createElement("div");
-    gutterTopSpacer.className = "terminal-gutter-spacer";
-    const gutterBottomSpacer = document.createElement("div");
-    gutterBottomSpacer.className = "terminal-gutter-spacer";
-    gutter.append(gutterTopSpacer, gutterBottomSpacer);
-    return { host, gutter, gutterTopSpacer, gutterBottomSpacer };
+    return { host };
   }
 
   async function ensureTerminal(sessionId: string, container: HTMLDivElement) {
     if (terminalsRef.current[sessionId]) return;
     const modules = await loadXtermModules();
     if (terminalsRef.current[sessionId]) return;
-    const { host, gutter, gutterTopSpacer, gutterBottomSpacer } =
-      buildTerminalLayout(container);
+    const { host } = buildTerminalLayout(container);
     const term = new modules.Terminal({
       allowProposedApi: true,
       convertEol: true,
@@ -557,23 +320,8 @@ export default function useTerminalRuntime({
       webglAddon,
       container,
       host,
-      gutter,
-      gutterTopSpacer,
-      gutterBottomSpacer,
-      gutterRows: [],
-      gutterRowHeight: 0,
-      gutterPaddingTop: -1,
-      gutterPaddingBottom: -1,
-      gutterRefreshRafId: null,
       disposables: [],
-      logicalLineIndexByRow: [],
-      logicalLineStartByRow: [],
-      logicalLineCount: 0,
-      nextLineNumber: 1,
-      lineMetaByLogicalIndex: new Map(),
     };
-    rebuildLogicalLines(bundle);
-    refreshGutter(bundle);
 
     bundle.disposables.push(
       term.onData((data) => {
@@ -594,18 +342,6 @@ export default function useTerminalRuntime({
         }
         handlersRef.current.recordCommandInput(sessionId, data);
         handlersRef.current.writeToSession(sessionId, data).catch(() => {});
-      }),
-    );
-
-    bundle.disposables.push(
-      term.onScroll(() => {
-        scheduleRefreshGutter(bundle);
-      }),
-    );
-
-    bundle.disposables.push(
-      term.onRender(() => {
-        scheduleRefreshGutter(bundle);
       }),
     );
 
@@ -630,23 +366,14 @@ export default function useTerminalRuntime({
 
     const bufferedData = sessionBuffersRef.current[sessionId];
     if (bufferedData) {
-      writeToBundle(bundle, bufferedData, Date.now());
+      writeToBundle(bundle, bufferedData);
       delete sessionBuffersRef.current[sessionId];
-      return;
     }
-
-    // 为新会话的首行（如 shell prompt）预留行号与时间。
-    addMissingCurrentLineMeta(bundle, Date.now());
-    scheduleRefreshGutter(bundle);
   }
 
   function disposeTerminal(sessionId: string) {
     const bundle = terminalsRef.current[sessionId];
     if (!bundle) return;
-    if (bundle.gutterRefreshRafId !== null) {
-      window.cancelAnimationFrame(bundle.gutterRefreshRafId);
-      bundle.gutterRefreshRafId = null;
-    }
     bundle.disposables.forEach((disposable) => disposable.dispose());
     bundle.terminal.dispose();
     delete terminalsRef.current[sessionId];
@@ -688,7 +415,7 @@ export default function useTerminalRuntime({
         ({ sessionId, data }) => {
           const bundle = terminalsRef.current[sessionId];
           if (bundle) {
-            writeToBundle(bundle, data, Date.now());
+            writeToBundle(bundle, data);
           } else {
             const buffer = sessionBuffersRef.current[sessionId] ?? "";
             sessionBuffersRef.current[sessionId] = buffer + data;
@@ -721,7 +448,6 @@ export default function useTerminalRuntime({
     const bundle = terminalsRef.current[activeSessionId];
     if (!bundle) return;
     safeFit(bundle.fitAddon, bundle.host);
-    scheduleRefreshGutter(bundle);
     if (!activeSession) return;
     onSizeChange?.({
       cols: bundle.terminal.cols,
@@ -737,7 +463,7 @@ export default function useTerminalRuntime({
       ).catch(() => {});
     }
     observeActiveContainer(bundle.container, activeSessionId);
-  }, [activeSession, activeSessionId, resizeSession]);
+  }, [activeSession, activeSessionId, onSizeChange, resizeSession]);
 
   useEffect(() => {
     const activeIds = new Set(sessions.map((item) => item.sessionId));
@@ -764,34 +490,11 @@ export default function useTerminalRuntime({
       return {
         windowRows: 0,
         windowCols: 0,
-        logicalLineCount: 0,
-        currentLogicalLineCharCount: 0,
       };
-    }
-    rebuildLogicalLines(bundle);
-    const buffer = bundle.terminal.buffer.active;
-    const cursorRow = buffer.baseY + buffer.cursorY;
-    let startRow = cursorRow;
-    while (startRow > 0) {
-      const line = buffer.getLine(startRow);
-      if (!line?.isWrapped) break;
-      startRow -= 1;
-    }
-    let endRow = cursorRow;
-    while (endRow + 1 < buffer.length) {
-      const nextLine = buffer.getLine(endRow + 1);
-      if (!nextLine?.isWrapped) break;
-      endRow += 1;
-    }
-    let merged = "";
-    for (let row = startRow; row <= endRow; row += 1) {
-      merged += buffer.getLine(row)?.translateToString(true) ?? "";
     }
     return {
       windowRows: bundle.terminal.rows,
       windowCols: bundle.terminal.cols,
-      logicalLineCount: bundle.logicalLineCount,
-      currentLogicalLineCharCount: Array.from(merged).length,
     };
   }
 
@@ -843,10 +546,6 @@ export default function useTerminalRuntime({
     const bundle = getActiveBundle();
     if (!bundle) return false;
     bundle.terminal.clear();
-    resetLineNumberingState(bundle);
-    rebuildLogicalLines(bundle);
-    addMissingCurrentLineMeta(bundle, Date.now());
-    scheduleRefreshGutter(bundle);
     return true;
   }
 
