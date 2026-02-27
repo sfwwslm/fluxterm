@@ -115,8 +115,12 @@
 }
 
 .terminal-gutter {
-  width: 106px;
-  flex: 0 0 106px;
+  --terminal-gutter-line-ch: 3;
+  --terminal-gutter-width: calc(
+    11ch + (var(--terminal-gutter-line-ch) * 1ch) + 14px
+  );
+  width: var(--terminal-gutter-width);
+  flex: 0 0 var(--terminal-gutter-width);
   border-right: 1px solid var(--border-soft);
   background: color-mix(in srgb, var(--surface-header-strong) 74%, transparent);
   overflow: hidden;
@@ -127,10 +131,12 @@
 
 .terminal-gutter-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 10ch max-content;
+  column-gap: 1ch;
   align-items: center;
   padding: 0 8px 0 6px;
   white-space: nowrap;
+  justify-content: end;
 }
 
 .terminal-gutter-spacer {
@@ -139,6 +145,7 @@
 
 .terminal-gutter-time {
   color: var(--text-muted);
+  min-width: 10ch;
 }
 
 .terminal-gutter-line {

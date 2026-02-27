@@ -319,6 +319,10 @@ export default function useTerminalRuntime({
     // 绝对对齐关键点 2：优先使用 xterm 内部 cell.height，
     // 避免由于 CSS 缩放、DPI、像素舍入导致的累计误差。
     const rowHeight = cellHeight > 0 ? cellHeight : measuredRowHeight;
+    // 根据当前最大行号位数动态扩展 gutter 宽度，避免时间与行号拥挤。
+    const maxLineNumber = Math.max(1, bundle.nextLineNumber - 1);
+    const lineDigits = String(maxLineNumber).length;
+    gutter.style.setProperty("--terminal-gutter-line-ch", String(lineDigits));
     const viewportY = buffer.viewportY;
     let html = "";
     // 绝对对齐关键点 3：顶部 spacer 与 xterm 的 paddingTop 保持一致。
