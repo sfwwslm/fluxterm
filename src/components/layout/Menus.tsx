@@ -8,6 +8,7 @@ import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 
 type MenuAction = {
+  type?: "action";
   id: string;
   label: string;
   onClick: () => void;
@@ -15,11 +16,23 @@ type MenuAction = {
 };
 
 type MenuCustom = {
+  type?: "custom";
   id: string;
   render: React.ReactNode;
 };
 
-type MenuEntry = MenuAction | MenuCustom;
+type MenuSectionTitle = {
+  type: "section";
+  id: string;
+  label: string;
+};
+
+type MenuDivider = {
+  type: "divider";
+  id: string;
+};
+
+type MenuEntry = MenuAction | MenuCustom | MenuSectionTitle | MenuDivider;
 
 type MenuItem = {
   id: string;
@@ -33,6 +46,8 @@ type MenusProps = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
   onOpenAbout: () => void;
+  footerVisibility?: { quickbar: boolean; statusbar: boolean };
+  onToggleFooterPart?: (part: "quickbar" | "statusbar") => void;
   layoutDisabled?: boolean;
   locale: Locale;
   themeId: ThemeId;
@@ -49,6 +64,8 @@ export default function Menus({
   layoutCollapsed,
   onToggleCollapsed,
   onOpenAbout,
+  footerVisibility = { quickbar: true, statusbar: true },
+  onToggleFooterPart,
   layoutDisabled,
   locale,
   themeId,
@@ -88,6 +105,11 @@ export default function Menus({
         disabled: layoutDisabled,
         actions: [
           {
+            type: "section",
+            id: "widgets-section",
+            label: t("menu.layout.sections.widgets"),
+          },
+          {
             id: "left-collapse",
             label: `${layoutCollapsed.left ? t("layout.expand") : t("layout.collapse")} ${t("layout.left")}`,
             onClick: () => onToggleCollapsed("left"),
@@ -103,6 +125,24 @@ export default function Menus({
             id: "bottom-collapse",
             label: `${layoutCollapsed.bottom ? t("layout.expand") : t("layout.collapse")} ${t("layout.bottom")}`,
             onClick: () => onToggleCollapsed("bottom"),
+            disabled: layoutDisabled,
+          },
+          { type: "divider", id: "layout-divider" },
+          {
+            type: "section",
+            id: "footer-section",
+            label: t("menu.layout.sections.footer"),
+          },
+          {
+            id: "quickbar-visible",
+            label: `${footerVisibility.quickbar ? t("layout.hide") : t("layout.show")} ${t("layout.footer.quickbar")}`,
+            onClick: () => onToggleFooterPart?.("quickbar"),
+            disabled: layoutDisabled,
+          },
+          {
+            id: "statusbar-visible",
+            label: `${footerVisibility.statusbar ? t("layout.hide") : t("layout.show")} ${t("layout.footer.statusbar")}`,
+            onClick: () => onToggleFooterPart?.("statusbar"),
             disabled: layoutDisabled,
           },
         ],
@@ -176,6 +216,8 @@ export default function Menus({
       layoutCollapsed.bottom,
       layoutCollapsed.left,
       layoutCollapsed.right,
+      footerVisibility.quickbar,
+      footerVisibility.statusbar,
       layoutDisabled,
       locale,
       themeId,
@@ -186,6 +228,7 @@ export default function Menus({
       onShellChange,
       onThemeChange,
       onOpenAbout,
+      onToggleFooterPart,
       onToggleCollapsed,
       t,
     ],
@@ -221,6 +264,16 @@ export default function Menus({
                 onClick={(event) => event.stopPropagation()}
               >
                 {item.actions?.map((action) => {
+                  if ("type" in action && action.type === "divider") {
+                    return <div key={action.id} className="menu-sub-divider" />;
+                  }
+                  if ("type" in action && action.type === "section") {
+                    return (
+                      <div key={action.id} className="menu-sub-section-title">
+                        {action.label}
+                      </div>
+                    );
+                  }
                   if ("render" in action) {
                     return (
                       <div

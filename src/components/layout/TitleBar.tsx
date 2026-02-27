@@ -12,6 +12,8 @@ type TitleBarProps = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
   onOpenAbout: () => void;
+  footerVisibility?: { quickbar: boolean; statusbar: boolean };
+  onToggleFooterPart?: (part: "quickbar" | "statusbar") => void;
   layoutDisabled?: boolean;
   onBrandContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
   showMenus?: boolean;
@@ -30,6 +32,8 @@ export default function TitleBar({
   layoutCollapsed,
   onToggleCollapsed,
   onOpenAbout,
+  footerVisibility = { quickbar: true, statusbar: true },
+  onToggleFooterPart,
   layoutDisabled,
   onBrandContextMenu,
   showMenus = true,
@@ -69,6 +73,8 @@ export default function TitleBar({
           layoutCollapsed={layoutCollapsed}
           onToggleCollapsed={onToggleCollapsed}
           onOpenAbout={onOpenAbout}
+          footerVisibility={footerVisibility}
+          onToggleFooterPart={onToggleFooterPart}
           layoutDisabled={layoutDisabled}
           locale={locale}
           themeId={themeId}

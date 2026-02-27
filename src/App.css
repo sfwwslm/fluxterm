@@ -712,6 +712,19 @@ textarea {
   cursor: default;
 }
 
+.menu-sub-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: color-mix(in srgb, var(--border-input) 84%, transparent);
+}
+
+.menu-sub-section-title {
+  padding: 6px 10px 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
 .menu-field {
   display: flex;
   flex-direction: column;

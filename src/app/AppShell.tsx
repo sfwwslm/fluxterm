@@ -9,6 +9,7 @@ import { translations, type Translate, type TranslationKey } from "@/i18n";
 import TitleBar from "@/components/layout/TitleBar";
 import FloatingShell from "@/components/app/FloatingShell";
 import Workspace from "@/components/app/Workspace";
+import BottomArea from "@/components/app/BottomArea";
 import TerminalPanel from "@/components/terminal/sessions/TerminalPanel";
 import AboutModal from "@/components/terminal/modals/AboutModal";
 import ProfileModal from "@/components/terminal/modals/ProfileModal";
@@ -19,6 +20,7 @@ import useAppSettings from "@/hooks/settings/useAppSettings";
 import useLayoutState from "@/hooks/useLayoutState";
 import useFloatingPanels from "@/hooks/useFloatingPanels";
 import useMacAppMenu from "@/hooks/useMacAppMenu";
+import useQuickBarState from "@/hooks/useQuickBarState";
 import { allPanelKeys, moveWidgetToSlot } from "@/layout/model";
 import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
 import type { HostProfile, PanelKey, ThemeId } from "@/types";
@@ -45,6 +47,47 @@ function formatMessage(
     (text, [key, value]) => text.split(`{${key}}`).join(String(value)),
     message,
   );
+}
+
+/** 将快捷命令中的常见转义序列还原为真实控制字符。 */
+function decodeQuickCommandEscapes(input: string) {
+  let output = "";
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (char !== "\\") {
+      output += char;
+      continue;
+    }
+    const next = input[i + 1];
+    if (next === "n") {
+      output += "\n";
+      i += 1;
+      continue;
+    }
+    if (next === "r") {
+      output += "\r";
+      i += 1;
+      continue;
+    }
+    if (next === "t") {
+      output += "\t";
+      i += 1;
+      continue;
+    }
+    if (next === "\\") {
+      output += "\\";
+      i += 1;
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
+/** 统一终端提交符，避免 LF 在部分 shell 中触发续行而不执行。 */
+function normalizeQuickCommandForSubmit(input: string) {
+  // 在终端交互里，提交命令应使用 CR。将用户写的 LF/CRLF 统一折叠为 CR。
+  return input.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
 }
 
 /** 应用主界面编排层。 */
@@ -79,6 +122,11 @@ export default function AppShell() {
     moveProfileToGroup,
   } = useProfiles();
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
+  const [footerVisibility, setFooterVisibility] = useState({
+    quickbar: true,
+    statusbar: true,
+  });
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalMode, setProfileModalMode] = useState<"new" | "edit">(
     "new",
@@ -189,6 +237,20 @@ export default function AppShell() {
   });
 
   const {
+    showGroupTitle,
+    setShowGroupTitle,
+    groups: quickbarGroups,
+    commands: quickbarCommands,
+    addGroup: addQuickbarGroup,
+    renameGroup: renameQuickbarGroup,
+    removeGroup: removeQuickbarGroup,
+    toggleGroupVisible: toggleQuickbarGroupVisible,
+    addCommand: addQuickbarCommand,
+    updateCommand: updateQuickbarCommand,
+    removeCommand: removeQuickbarCommand,
+  } = useQuickBarState();
+
+  const {
     layoutCollapsed,
     sideSlotCounts,
     slotGroups,
@@ -226,12 +288,34 @@ export default function AppShell() {
     availableShells,
     layoutCollapsed,
     onToggleCollapsed: handleToggleCollapsed,
+    footerVisibility,
+    onToggleFooterPart: (part) =>
+      setFooterVisibility((prev) => ({ ...prev, [part]: !prev[part] })),
     setLocale,
     setThemeId,
     setShellId,
     onOpenAbout: () => setAboutOpen(true),
     t,
   });
+
+  function handleRunQuickCommand(command: string) {
+    // 无活动会话时不发送，给出短暂提示避免误操作。
+    const sessionId = sessionState.activeSessionId;
+    if (!sessionId) {
+      sessionActions.setBusyMessage(t("quickbar.noSession"));
+      window.setTimeout(() => {
+        sessionActions.setBusyMessage((prev) =>
+          prev === t("quickbar.noSession") ? null : prev,
+        );
+      }, 1500);
+      return;
+    }
+    // 先聚焦终端，确保后续键盘输入（如回车）进入终端而非停留在按钮焦点上。
+    terminalActions.focusActiveTerminal();
+    const parsed = decodeQuickCommandEscapes(command);
+    const normalized = normalizeQuickCommandForSubmit(parsed);
+    sessionActions.writeToSession(sessionId, normalized).catch(() => {});
+  }
 
   async function handleConnectProfile(profileInput: HostProfile) {
     if (!profileInput.host || !profileInput.username) {
@@ -403,6 +487,13 @@ export default function AppShell() {
               layoutCollapsed={layoutCollapsed}
               onToggleCollapsed={handleToggleCollapsed}
               onOpenAbout={() => setAboutOpen(true)}
+              footerVisibility={footerVisibility}
+              onToggleFooterPart={(part) =>
+                setFooterVisibility((prev) => ({
+                  ...prev,
+                  [part]: !prev[part],
+                }))
+              }
               layoutDisabled={layoutMenuDisabled}
               locale={locale}
               themeId={themeId}
@@ -461,6 +552,27 @@ export default function AppShell() {
             onDragWidget={handleDragWidget}
             onToggleSplit={handleToggleSplit}
             onStartResize={startResize}
+            t={t}
+          />
+
+          <BottomArea
+            visibility={footerVisibility}
+            managerOpen={quickbarManagerOpen}
+            onOpenManager={() => setQuickbarManagerOpen(true)}
+            showGroupTitle={showGroupTitle}
+            groups={quickbarGroups}
+            commands={quickbarCommands}
+            onCloseManager={() => setQuickbarManagerOpen(false)}
+            onAddGroup={addQuickbarGroup}
+            onRenameGroup={renameQuickbarGroup}
+            onRemoveGroup={removeQuickbarGroup}
+            onToggleGroupVisible={toggleQuickbarGroupVisible}
+            onAddCommand={addQuickbarCommand}
+            onUpdateCommand={updateQuickbarCommand}
+            onRemoveCommand={removeQuickbarCommand}
+            onShowGroupTitleChange={setShowGroupTitle}
+            onRunCommand={handleRunQuickCommand}
+            getActiveTerminalStats={terminalQuery.getActiveTerminalStats}
             t={t}
           />
 

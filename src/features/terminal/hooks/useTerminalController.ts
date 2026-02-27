@@ -17,10 +17,12 @@ export default function useTerminalController(
     terminalQuery: {
       isTerminalReady: raw.isTerminalReady,
       getTerminalSize: raw.getTerminalSize,
+      getActiveTerminalStats: raw.getActiveTerminalStats,
       hasActiveSelection: raw.hasActiveSelection,
     },
     terminalActions: {
       registerTerminalContainer: raw.registerTerminalContainer,
+      focusActiveTerminal: raw.focusActiveTerminal,
       copyActiveSelection: raw.copyActiveSelection,
       pasteToActiveTerminal: raw.pasteToActiveTerminal,
       clearActiveTerminal: raw.clearActiveTerminal,

@@ -17,6 +17,8 @@ type UseMacAppMenuOptions = {
   availableShells: Array<{ id: string; label: string }>;
   layoutCollapsed: Record<"left" | "right" | "bottom", boolean>;
   onToggleCollapsed: (side: "left" | "right" | "bottom") => void;
+  footerVisibility?: { quickbar: boolean; statusbar: boolean };
+  onToggleFooterPart?: (part: "quickbar" | "statusbar") => void;
   setLocale: (locale: Locale) => void;
   setThemeId: (themeId: ThemeId) => void;
   setShellId: (shellId: string | null) => void;
@@ -51,11 +53,13 @@ async function createAppMenu({
 async function createLayoutMenu(
   layoutCollapsed: Record<"left" | "right" | "bottom", boolean>,
   onToggleCollapsed: (side: "left" | "right" | "bottom") => void,
+  footerVisibility: { quickbar: boolean; statusbar: boolean },
+  onToggleFooterPart: (part: "quickbar" | "statusbar") => void,
   t: Translate,
 ) {
-  return Submenu.new({
-    id: "layout-menu",
-    text: t("menu.layout"),
+  const widgetsMenu = await Submenu.new({
+    id: "layout-menu-widgets",
+    text: t("menu.layout.sections.widgets"),
     items: [
       await MenuItem.new({
         id: "layout-left",
@@ -73,6 +77,27 @@ async function createLayoutMenu(
         action: () => onToggleCollapsed("bottom"),
       }),
     ],
+  });
+  const footerMenu = await Submenu.new({
+    id: "layout-menu-footer",
+    text: t("menu.layout.sections.footer"),
+    items: [
+      await MenuItem.new({
+        id: "layout-quickbar-visible",
+        text: `${footerVisibility.quickbar ? t("layout.hide") : t("layout.show")} ${t("layout.footer.quickbar")}`,
+        action: () => onToggleFooterPart("quickbar"),
+      }),
+      await MenuItem.new({
+        id: "layout-statusbar-visible",
+        text: `${footerVisibility.statusbar ? t("layout.hide") : t("layout.show")} ${t("layout.footer.statusbar")}`,
+        action: () => onToggleFooterPart("statusbar"),
+      }),
+    ],
+  });
+  return Submenu.new({
+    id: "layout-menu",
+    text: t("menu.layout"),
+    items: [widgetsMenu, footerMenu],
   });
 }
 
@@ -210,6 +235,8 @@ export default function useMacAppMenu({
   availableShells,
   layoutCollapsed,
   onToggleCollapsed,
+  footerVisibility = { quickbar: true, statusbar: true },
+  onToggleFooterPart,
   setLocale,
   setThemeId,
   setShellId,
@@ -233,6 +260,8 @@ export default function useMacAppMenu({
         const layoutMenu = await createLayoutMenu(
           layoutCollapsed,
           onToggleCollapsed,
+          footerVisibility,
+          onToggleFooterPart ?? (() => {}),
           t,
         );
         const personalizeMenu = await createPersonalizeMenu(
@@ -292,6 +321,8 @@ export default function useMacAppMenu({
     availableShells,
     layoutCollapsed,
     onToggleCollapsed,
+    footerVisibility,
+    onToggleFooterPart,
     setLocale,
     setThemeId,
     setShellId,

@@ -50,6 +50,13 @@ type TerminalRuntime = {
   ) => void;
   isTerminalReady: (sessionId: string) => boolean;
   getTerminalSize: () => { cols: number; rows: number };
+  getActiveTerminalStats: () => {
+    windowRows: number;
+    windowCols: number;
+    logicalLineCount: number;
+    currentLogicalLineCharCount: number;
+  };
+  focusActiveTerminal: () => boolean;
   hasActiveSelection: () => boolean;
   copyActiveSelection: () => Promise<boolean>;
   pasteToActiveTerminal: () => Promise<boolean>;
@@ -568,8 +575,52 @@ export default function useTerminalRuntime({
     return terminalsRef.current[sessionId] ?? null;
   }
 
+  function getActiveTerminalStats() {
+    const bundle = getActiveBundle();
+    if (!bundle) {
+      return {
+        windowRows: 0,
+        windowCols: 0,
+        logicalLineCount: 0,
+        currentLogicalLineCharCount: 0,
+      };
+    }
+    rebuildLogicalLines(bundle);
+    const buffer = bundle.terminal.buffer.active;
+    const cursorRow = buffer.baseY + buffer.cursorY;
+    let startRow = cursorRow;
+    while (startRow > 0) {
+      const line = buffer.getLine(startRow);
+      if (!line?.isWrapped) break;
+      startRow -= 1;
+    }
+    let endRow = cursorRow;
+    while (endRow + 1 < buffer.length) {
+      const nextLine = buffer.getLine(endRow + 1);
+      if (!nextLine?.isWrapped) break;
+      endRow += 1;
+    }
+    let merged = "";
+    for (let row = startRow; row <= endRow; row += 1) {
+      merged += buffer.getLine(row)?.translateToString(true) ?? "";
+    }
+    return {
+      windowRows: bundle.terminal.rows,
+      windowCols: bundle.terminal.cols,
+      logicalLineCount: bundle.logicalLineCount,
+      currentLogicalLineCharCount: Array.from(merged).length,
+    };
+  }
+
   function hasActiveSelection() {
     return !!getActiveBundle()?.terminal.getSelection();
+  }
+
+  function focusActiveTerminal() {
+    const bundle = getActiveBundle();
+    if (!bundle) return false;
+    bundle.terminal.focus();
+    return true;
   }
 
   async function copyActiveSelection() {
@@ -668,6 +719,8 @@ export default function useTerminalRuntime({
     registerTerminalContainer,
     isTerminalReady,
     getTerminalSize,
+    getActiveTerminalStats,
+    focusActiveTerminal,
     hasActiveSelection,
     copyActiveSelection,
     pasteToActiveTerminal,

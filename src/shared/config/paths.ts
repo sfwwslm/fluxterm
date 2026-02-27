@@ -30,3 +30,8 @@ export async function getSettingsPath() {
 export async function getLayoutPath() {
   return getConfigFilePath("layout.json");
 }
+
+/** 获取 quickbar.json 路径。 */
+export async function getQuickbarPath() {
+  return getConfigFilePath("quickbar.json");
+}

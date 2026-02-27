@@ -87,3 +87,28 @@ export type LocalShellProfile = {
   path: string;
   args: string[];
 };
+
+/** 快捷命令分组。 */
+export type QuickCommandGroup = {
+  id: string;
+  name: string;
+  order: number;
+  visible: boolean;
+};
+
+/** 快捷命令项。 */
+export type QuickCommandItem = {
+  id: string;
+  label: string;
+  command: string;
+  groupId: string;
+  type?: "sendText";
+};
+
+/** 快捷栏配置。 */
+export type QuickBarConfig = {
+  version: 1;
+  showGroupTitle?: boolean;
+  groups: QuickCommandGroup[];
+  commands: QuickCommandItem[];
+};
