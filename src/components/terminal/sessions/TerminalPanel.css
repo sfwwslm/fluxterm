@@ -116,11 +116,24 @@
 }
 
 .terminal-gutter {
+  --terminal-gutter-time-width: 10ch;
+  --terminal-gutter-gap: 1ch;
+  --terminal-gutter-padding-left: 6px;
+  --terminal-gutter-padding-right: 14px;
+  --terminal-gutter-min-line-ch: 3;
   --terminal-gutter-line-ch: 3;
   --terminal-gutter-width: calc(
-    11ch + (var(--terminal-gutter-line-ch) * 1ch) + 14px
+    var(--terminal-gutter-time-width) + var(--terminal-gutter-gap) +
+      (var(--terminal-gutter-line-ch) * 1ch) +
+      var(--terminal-gutter-padding-left) + var(--terminal-gutter-padding-right)
+  );
+  --terminal-gutter-min-width: calc(
+    var(--terminal-gutter-time-width) + var(--terminal-gutter-gap) +
+      (var(--terminal-gutter-min-line-ch) * 1ch) +
+      var(--terminal-gutter-padding-left) + var(--terminal-gutter-padding-right)
   );
   width: var(--terminal-gutter-width);
+  min-width: var(--terminal-gutter-min-width);
   flex: 0 0 var(--terminal-gutter-width);
   border-right: 1px solid var(--border-soft);
   background: color-mix(in srgb, var(--surface-header-strong) 74%, transparent);
@@ -132,12 +145,13 @@
 
 .terminal-gutter-row {
   display: grid;
-  grid-template-columns: 10ch max-content;
-  column-gap: 1ch;
+  grid-template-columns:
+    var(--terminal-gutter-time-width) minmax(0, 1fr)
+    calc(var(--terminal-gutter-line-ch) * 1ch);
   align-items: center;
-  padding: 0 8px 0 6px;
+  padding: 0 var(--terminal-gutter-padding-right) 0
+    var(--terminal-gutter-padding-left);
   white-space: nowrap;
-  justify-content: end;
 }
 
 .terminal-gutter-spacer {
@@ -145,11 +159,14 @@
 }
 
 .terminal-gutter-time {
+  width: var(--terminal-gutter-time-width);
   color: var(--text-muted);
-  min-width: 10ch;
 }
 
 .terminal-gutter-line {
+  grid-column: 3;
+  display: block;
+  width: calc(var(--terminal-gutter-line-ch) * 1ch);
   color: var(--accent-soft);
   min-width: 2ch;
   text-align: right;
