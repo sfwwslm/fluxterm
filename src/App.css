@@ -1457,6 +1457,7 @@ input[type="number"] {
 
 .right-resizer {
   grid-area: right-resizer;
+  border-radius: 6px;
 }
 
 .ghost.mini {
