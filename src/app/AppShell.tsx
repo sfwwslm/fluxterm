@@ -534,6 +534,8 @@ export default function AppShell() {
                 onClear={terminalActions.clearActiveTerminal}
                 onSearchNext={terminalActions.searchActiveTerminalNext}
                 onSearchPrev={terminalActions.searchActiveTerminalPrev}
+                onSearchClear={terminalActions.clearActiveSearchDecorations}
+                searchResultStats={terminalQuery.getActiveSearchStats()}
                 isLocalSession={sessionActions.isLocalSession}
                 onSwitchSession={sessionActions.switchSession}
                 onDisconnectSession={sessionActions.disconnectSession}

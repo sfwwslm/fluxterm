@@ -18,6 +18,7 @@ export default function useTerminalController(
       isTerminalReady: raw.isTerminalReady,
       getTerminalSize: raw.getTerminalSize,
       getActiveTerminalStats: raw.getActiveTerminalStats,
+      getActiveSearchStats: raw.getActiveSearchStats,
       hasActiveSelection: raw.hasActiveSelection,
     },
     terminalActions: {
@@ -26,6 +27,7 @@ export default function useTerminalController(
       copyActiveSelection: raw.copyActiveSelection,
       pasteToActiveTerminal: raw.pasteToActiveTerminal,
       clearActiveTerminal: raw.clearActiveTerminal,
+      clearActiveSearchDecorations: raw.clearActiveSearchDecorations,
       searchActiveTerminalNext: raw.searchActiveTerminalNext,
       searchActiveTerminalPrev: raw.searchActiveTerminalPrev,
     },

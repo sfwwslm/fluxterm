@@ -4,15 +4,20 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { warn } from "@tauri-apps/plugin-log";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import type {
+  ISearchOptions,
+  ISearchResultChangeEvent,
+  SearchAddon,
+} from "@xterm/addon-search";
 import type { DisconnectReason, Session, SessionStateUi } from "@/types";
 import {
   formatGutterTime,
   resolveCellHeight,
   shouldResetLineNumbering,
 } from "@/features/terminal/core/gutter";
-import { findInTerminal } from "@/features/terminal/core/search";
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
 
 type TerminalTheme = {
@@ -56,18 +61,30 @@ type TerminalRuntime = {
     logicalLineCount: number;
     currentLogicalLineCharCount: number;
   };
+  getActiveSearchStats: () => {
+    resultIndex: number;
+    resultCount: number;
+  } | null;
   focusActiveTerminal: () => boolean;
   hasActiveSelection: () => boolean;
   copyActiveSelection: () => Promise<boolean>;
   pasteToActiveTerminal: () => Promise<boolean>;
   clearActiveTerminal: () => boolean;
-  searchActiveTerminalNext: (keyword: string) => boolean;
-  searchActiveTerminalPrev: (keyword: string) => boolean;
+  clearActiveSearchDecorations: () => void;
+  searchActiveTerminalNext: (
+    keyword: string,
+    options?: ISearchOptions,
+  ) => boolean;
+  searchActiveTerminalPrev: (
+    keyword: string,
+    options?: ISearchOptions,
+  ) => boolean;
 };
 
 type XtermModules = {
   Terminal: typeof import("@xterm/xterm").Terminal;
   FitAddon: typeof import("@xterm/addon-fit").FitAddon;
+  SearchAddon: typeof import("@xterm/addon-search").SearchAddon | null;
 };
 
 type Disposable = { dispose: () => void };
@@ -80,6 +97,7 @@ type LineMeta = {
 type TerminalBundle = {
   terminal: Terminal;
   fitAddon: FitAddon;
+  searchAddon: SearchAddon | null;
   container: HTMLDivElement;
   host: HTMLDivElement;
   gutter: HTMLDivElement;
@@ -92,6 +110,12 @@ type TerminalBundle = {
 };
 
 type SearchDirection = "next" | "prev";
+
+type SearchStats = {
+  resultIndex: number;
+  resultCount: number;
+  decorations: boolean;
+};
 
 function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
   if (
@@ -131,6 +155,9 @@ export default function useTerminalRuntime({
   const activeSessionIdRef = useRef<string | null>(null);
   const xtermModulesRef = useRef<XtermModules | null>(null);
   const themeRef = useRef(theme);
+  const [searchStatsBySession, setSearchStatsBySession] = useState<
+    Record<string, SearchStats | null>
+  >({});
   const [terminalReadyBySession, setTerminalReadyBySession] = useState<
     Record<string, boolean>
   >({});
@@ -142,12 +169,6 @@ export default function useTerminalRuntime({
     reconnectSession,
     reconnectLocalShell,
   });
-  const searchStateRef = useRef<{
-    sessionId: string;
-    keyword: string;
-    row: number;
-    col: number;
-  } | null>(null);
 
   const getTerminalSize = useMemo(
     () => () => {
@@ -160,13 +181,15 @@ export default function useTerminalRuntime({
 
   async function loadXtermModules() {
     if (xtermModulesRef.current) return xtermModulesRef.current;
-    const [xtermModule, fitModule] = await Promise.all([
+    const [xtermModule, fitModule, searchModule] = await Promise.all([
       import("@xterm/xterm"),
       import("@xterm/addon-fit"),
+      import("@xterm/addon-search").catch(() => null),
     ]);
     const modules: XtermModules = {
       Terminal: xtermModule.Terminal,
       FitAddon: fitModule.FitAddon,
+      SearchAddon: searchModule?.SearchAddon ?? null,
     };
     xtermModulesRef.current = modules;
     return modules;
@@ -409,10 +432,20 @@ export default function useTerminalRuntime({
     term.loadAddon(fit);
     term.open(host);
     safeFit(fit, host);
+    let searchAddon: SearchAddon | null = null;
+    if (modules.SearchAddon) {
+      try {
+        searchAddon = new modules.SearchAddon();
+        term.loadAddon(searchAddon);
+      } catch {
+        searchAddon = null;
+      }
+    }
 
     const bundle: TerminalBundle = {
       terminal: term,
       fitAddon: fit,
+      searchAddon,
       container,
       host,
       gutter,
@@ -460,6 +493,22 @@ export default function useTerminalRuntime({
       }),
     );
 
+    // 搜索插件结果变更时同步统计信息，供 UI 展示。
+    if (searchAddon) {
+      bundle.disposables.push(
+        searchAddon.onDidChangeResults((event: ISearchResultChangeEvent) => {
+          setSearchStatsBySession((prev) => ({
+            ...prev,
+            [sessionId]: {
+              resultIndex: event.resultIndex,
+              resultCount: event.resultCount,
+              decorations: true,
+            },
+          }));
+        }),
+      );
+    }
+
     terminalsRef.current[sessionId] = bundle;
     setTerminalReadyBySession((prev) => ({ ...prev, [sessionId]: true }));
 
@@ -482,6 +531,11 @@ export default function useTerminalRuntime({
     bundle.terminal.dispose();
     delete terminalsRef.current[sessionId];
     delete containersRef.current[sessionId];
+    setSearchStatsBySession((prev) => {
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
     setTerminalReadyBySession((prev) => {
       const next = { ...prev };
       delete next[sessionId];
@@ -616,6 +670,15 @@ export default function useTerminalRuntime({
     };
   }
 
+  /** 获取当前终端的搜索统计信息（仅在开启高亮时可用）。 */
+  function getActiveSearchStats() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return null;
+    const stats = searchStatsBySession[sessionId] ?? null;
+    if (!stats?.decorations) return null;
+    return { resultIndex: stats.resultIndex, resultCount: stats.resultCount };
+  }
+
   function hasActiveSelection() {
     return !!getActiveBundle()?.terminal.getSelection();
   }
@@ -662,61 +725,66 @@ export default function useTerminalRuntime({
     return true;
   }
 
-  function searchActiveTerminal(keyword: string, direction: SearchDirection) {
+  /** 清理当前终端的搜索高亮与统计（关闭搜索栏或关闭高亮时调用）。 */
+  function clearActiveSearchDecorations() {
+    const bundle = getActiveBundle();
+    const sessionId = activeSessionIdRef.current;
+    if (!bundle || !sessionId) return;
+    if (!bundle.searchAddon) return;
+    bundle.searchAddon.clearDecorations();
+    setSearchStatsBySession((prev) => ({
+      ...prev,
+      [sessionId]: null,
+    }));
+  }
+
+  /** 使用搜索插件执行查找；插件不可用或异常时写日志并返回失败。 */
+  function searchActiveTerminal(
+    keyword: string,
+    direction: SearchDirection,
+    options?: ISearchOptions,
+  ) {
     const bundle = getActiveBundle();
     const sessionId = activeSessionIdRef.current;
     const value = keyword.trim();
     if (!bundle || !sessionId || !value) return false;
 
-    const state = searchStateRef.current;
-    const sameQuery = state?.sessionId === sessionId && state.keyword === value;
-    const lineCount = bundle.terminal.buffer.active.length;
-    const initialRow = direction === "next" ? 0 : Math.max(lineCount - 1, 0);
-    const initialCol = direction === "next" ? 0 : Number.MAX_SAFE_INTEGER;
-
-    const startRow = sameQuery ? state.row : initialRow;
-    const startCol =
-      sameQuery && state
-        ? direction === "next"
-          ? state.col + 1
-          : Math.max(state.col - 1, 0)
-        : initialCol;
-
-    let match = findInTerminal(
-      bundle.terminal,
-      value,
-      direction,
-      startRow,
-      startCol,
-    );
-    if (!match) {
-      match = findInTerminal(
-        bundle.terminal,
-        value,
-        direction,
-        initialRow,
-        initialCol,
+    if (!bundle.searchAddon) {
+      warn(
+        JSON.stringify({
+          event: "terminal:search-addon-missing",
+          sessionId,
+          direction,
+          keywordLength: value.length,
+        }),
       );
+      return false;
     }
-    if (!match) return false;
 
-    bundle.terminal.select(match.col, match.row, match.length);
-    bundle.terminal.scrollToLine(match.row);
-    searchStateRef.current = {
-      sessionId,
-      keyword: value,
-      row: match.row,
-      col: match.col,
-    };
-    return true;
+    try {
+      return direction === "next"
+        ? bundle.searchAddon.findNext(value, options)
+        : bundle.searchAddon.findPrevious(value, options);
+    } catch (error) {
+      warn(
+        JSON.stringify({
+          event: "terminal:search-addon-failed",
+          sessionId,
+          direction,
+          keywordLength: value.length,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return false;
+    }
   }
 
-  function searchActiveTerminalNext(keyword: string) {
-    return searchActiveTerminal(keyword, "next");
+  function searchActiveTerminalNext(keyword: string, options?: ISearchOptions) {
+    return searchActiveTerminal(keyword, "next", options);
   }
 
-  function searchActiveTerminalPrev(keyword: string) {
-    return searchActiveTerminal(keyword, "prev");
+  function searchActiveTerminalPrev(keyword: string, options?: ISearchOptions) {
+    return searchActiveTerminal(keyword, "prev", options);
   }
 
   return {
@@ -724,11 +792,13 @@ export default function useTerminalRuntime({
     isTerminalReady,
     getTerminalSize,
     getActiveTerminalStats,
+    getActiveSearchStats,
     focusActiveTerminal,
     hasActiveSelection,
     copyActiveSelection,
     pasteToActiveTerminal,
     clearActiveTerminal,
+    clearActiveSearchDecorations,
     searchActiveTerminalNext,
     searchActiveTerminalPrev,
   };

@@ -240,7 +240,9 @@
   z-index: 20;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
+  row-gap: 6px;
   padding: 6px;
   border-radius: 10px;
   border: 1px solid var(--border-weak);
@@ -275,6 +277,35 @@
 
 .terminal-search-bar button:hover {
   background: var(--button-bg-strong);
+}
+
+.terminal-search-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-search-toggle {
+  min-width: 32px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.terminal-search-toggle.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.terminal-search-results {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-input);
+  background: var(--surface-strong);
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .terminal-search-icon-button {

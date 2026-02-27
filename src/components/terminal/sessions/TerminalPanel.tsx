@@ -15,6 +15,31 @@ type LocalSessionMeta = Record<
   { shellId: string | null; label: string }
 >;
 
+type SearchDecorations = {
+  matchBackground?: string;
+  matchBorder?: string;
+  matchOverviewRuler: string;
+  activeMatchBackground?: string;
+  activeMatchBorder?: string;
+  activeMatchColorOverviewRuler: string;
+};
+
+type SearchOptions = {
+  regex?: boolean;
+  wholeWord?: boolean;
+  caseSensitive?: boolean;
+  incremental?: boolean;
+  decorations?: SearchDecorations;
+};
+
+/** 搜索高亮的视觉配置。 */
+const searchDecorations: SearchDecorations = {
+  matchBackground: "#314154",
+  matchOverviewRuler: "#4b5563",
+  activeMatchBackground: "#f2c94c",
+  activeMatchColorOverviewRuler: "#f59e0b",
+};
+
 type TerminalPanelProps = {
   sessions: Session[];
   profiles: HostProfile[];
@@ -34,8 +59,10 @@ type TerminalPanelProps = {
   onCopySelection: () => Promise<boolean>;
   onPaste: () => Promise<boolean>;
   onClear: () => boolean;
-  onSearchNext: (keyword: string) => boolean;
-  onSearchPrev: (keyword: string) => boolean;
+  onSearchNext: (keyword: string, options?: SearchOptions) => boolean;
+  onSearchPrev: (keyword: string, options?: SearchOptions) => boolean;
+  onSearchClear: () => void;
+  searchResultStats: { resultIndex: number; resultCount: number } | null;
   isLocalSession: (sessionId: string | null) => boolean;
   onSwitchSession: (sessionId: string) => void;
   onDisconnectSession: (sessionId: string) => void;
@@ -61,6 +88,8 @@ export default function TerminalPanel({
   onClear,
   onSearchNext,
   onSearchPrev,
+  onSearchClear,
+  searchResultStats,
   isLocalSession,
   onSwitchSession,
   onDisconnectSession,
@@ -73,6 +102,10 @@ export default function TerminalPanel({
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchMiss, setSearchMiss] = useState(false);
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const [searchRegex, setSearchRegex] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
+  const [searchHighlightAll, setSearchHighlightAll] = useState(true);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -91,10 +124,27 @@ export default function TerminalPanel({
       setSearchMiss(false);
       return;
     }
+    const options: SearchOptions = {
+      caseSensitive: searchCaseSensitive,
+      regex: searchRegex,
+      wholeWord: searchWholeWord,
+      decorations: searchHighlightAll ? searchDecorations : undefined,
+    };
     const found =
-      direction === "next" ? onSearchNext(keyword) : onSearchPrev(keyword);
+      direction === "next"
+        ? onSearchNext(keyword, options)
+        : onSearchPrev(keyword, options);
     setSearchMiss(!found);
   }
+
+  const searchResultText = (() => {
+    if (!searchHighlightAll) return "--";
+    const total = searchResultStats?.resultCount ?? 0;
+    if (total <= 0) return "0/0";
+    const index = searchResultStats?.resultIndex ?? -1;
+    const current = index >= 0 ? index + 1 : 0;
+    return `${current}/${total}`;
+  })();
 
   return (
     <main className="terminal-panel">
@@ -231,9 +281,82 @@ export default function TerminalPanel({
                   event.preventDefault();
                   setSearchVisible(false);
                   setSearchMiss(false);
+                  onSearchClear();
                 }
               }}
             />
+            <div className="terminal-search-options">
+              <button
+                className={`terminal-search-toggle ${
+                  searchCaseSensitive ? "active" : ""
+                }`}
+                type="button"
+                aria-pressed={searchCaseSensitive}
+                aria-label={t("terminal.search.caseSensitive")}
+                title={t("terminal.search.caseSensitive")}
+                onClick={() => {
+                  setSearchCaseSensitive((prev) => !prev);
+                  setSearchMiss(false);
+                }}
+              >
+                Aa
+              </button>
+              <button
+                className={`terminal-search-toggle ${
+                  searchRegex ? "active" : ""
+                }`}
+                type="button"
+                aria-pressed={searchRegex}
+                aria-label={t("terminal.search.regex")}
+                title={t("terminal.search.regex")}
+                onClick={() => {
+                  setSearchRegex((prev) => !prev);
+                  setSearchMiss(false);
+                }}
+              >
+                .*
+              </button>
+              <button
+                className={`terminal-search-toggle ${
+                  searchWholeWord ? "active" : ""
+                }`}
+                type="button"
+                aria-pressed={searchWholeWord}
+                aria-label={t("terminal.search.wholeWord")}
+                title={t("terminal.search.wholeWord")}
+                onClick={() => {
+                  setSearchWholeWord((prev) => !prev);
+                  setSearchMiss(false);
+                }}
+              >
+                W
+              </button>
+              <button
+                className={`terminal-search-toggle ${
+                  searchHighlightAll ? "active" : ""
+                }`}
+                type="button"
+                aria-pressed={searchHighlightAll}
+                aria-label={t("terminal.search.highlightAll")}
+                title={t("terminal.search.highlightAll")}
+                onClick={() => {
+                  setSearchHighlightAll((prev) => {
+                    const next = !prev;
+                    if (!next) onSearchClear();
+                    return next;
+                  });
+                  setSearchMiss(false);
+                }}
+              >
+                HL
+              </button>
+            </div>
+            <div
+              className="terminal-search-results"
+              aria-label={t("terminal.search.results")}
+            >
+              {searchResultText}
+            </div>
             <button
               className="terminal-search-icon-button"
               aria-label="search-prev"
@@ -254,6 +377,7 @@ export default function TerminalPanel({
               onClick={() => {
                 setSearchVisible(false);
                 setSearchMiss(false);
+                onSearchClear();
               }}
             >
               <FiX />
