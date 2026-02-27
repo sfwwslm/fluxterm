@@ -6,7 +6,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { info, warn } from "@tauri-apps/plugin-log";
+import { warn, debug } from "@tauri-apps/plugin-log";
 import type { Locale } from "@/i18n";
 import type { LocalShellProfile, ThemeId } from "@/types";
 import { getFluxTermConfigDir, getSettingsPath } from "@/shared/config/paths";
@@ -133,7 +133,7 @@ export default function useAppSettings({
         const selected = (preferredAvailable ? preferred : fallbackId) ?? null;
         setShellId(selected);
         // 记录初始化结果，便于验证持久化与回退是否生效。
-        info(
+        debug(
           JSON.stringify({
             event: "settings:init-shell",
             savedShellId: preferred ?? null,
