@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { warn } from "@tauri-apps/plugin-log";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type {
@@ -12,6 +13,7 @@ import type {
   ISearchResultChangeEvent,
   SearchAddon,
 } from "@xterm/addon-search";
+import type { WebLinksAddon } from "@xterm/addon-web-links";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { DisconnectReason, Session, SessionStateUi } from "@/types";
 import {
@@ -88,6 +90,7 @@ type XtermModules = {
   Terminal: typeof import("@xterm/xterm").Terminal;
   FitAddon: typeof import("@xterm/addon-fit").FitAddon;
   SearchAddon: typeof import("@xterm/addon-search").SearchAddon | null;
+  WebLinksAddon: typeof import("@xterm/addon-web-links").WebLinksAddon | null;
   WebglAddon: typeof import("@xterm/addon-webgl").WebglAddon | null;
 };
 
@@ -107,6 +110,7 @@ type TerminalBundle = {
   terminal: Terminal;
   fitAddon: FitAddon;
   searchAddon: SearchAddon | null;
+  webLinksAddon: WebLinksAddon | null;
   webglAddon: WebglAddon | null;
   container: HTMLDivElement;
   host: HTMLDivElement;
@@ -200,17 +204,19 @@ export default function useTerminalRuntime({
 
   async function loadXtermModules() {
     if (xtermModulesRef.current) return xtermModulesRef.current;
-    const [xtermModule, fitModule, searchModule, webglModule] =
+    const [xtermModule, fitModule, searchModule, webLinksModule, webglModule] =
       await Promise.all([
         import("@xterm/xterm"),
         import("@xterm/addon-fit"),
         import("@xterm/addon-search").catch(() => null),
+        import("@xterm/addon-web-links").catch(() => null),
         import("@xterm/addon-webgl").catch(() => null),
       ]);
     const modules: XtermModules = {
       Terminal: xtermModule.Terminal,
       FitAddon: fitModule.FitAddon,
       SearchAddon: searchModule?.SearchAddon ?? null,
+      WebLinksAddon: webLinksModule?.WebLinksAddon ?? null,
       WebglAddon: webglModule?.WebglAddon ?? null,
     };
     xtermModulesRef.current = modules;
@@ -529,11 +535,25 @@ export default function useTerminalRuntime({
         searchAddon = null;
       }
     }
+    let webLinksAddon: WebLinksAddon | null = null;
+    if (modules.WebLinksAddon) {
+      try {
+        // 将终端中识别到的 URL 交给 Tauri opener 打开，保持桌面端默认打开行为。
+        webLinksAddon = new modules.WebLinksAddon((event, uri) => {
+          event.preventDefault();
+          openUrl(uri).catch(() => {});
+        });
+        term.loadAddon(webLinksAddon);
+      } catch {
+        webLinksAddon = null;
+      }
+    }
 
     const bundle: TerminalBundle = {
       terminal: term,
       fitAddon: fit,
       searchAddon,
+      webLinksAddon,
       webglAddon,
       container,
       host,
