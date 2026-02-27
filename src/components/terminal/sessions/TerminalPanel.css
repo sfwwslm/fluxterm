@@ -129,6 +129,7 @@
 .terminal-xterm-host .xterm .xterm-viewport {
   scrollbar-width: thin;
   scrollbar-color: rgba(34, 47, 66, 0.9) transparent;
+  background-color: transparent !important;
 }
 
 .terminal-xterm-host .xterm .xterm-viewport::-webkit-scrollbar {
