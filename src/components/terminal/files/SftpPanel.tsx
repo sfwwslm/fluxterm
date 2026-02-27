@@ -18,8 +18,8 @@ type SftpPanelProps = {
   onOpen: (path: string) => void;
   onUpload: () => void;
   onDownload: (entry: SftpEntry) => void;
-  onMkdir: () => void;
-  onRename: (entry: SftpEntry) => void;
+  onMkdir: (name: string) => void;
+  onRename: (entry: SftpEntry, name: string) => void;
   onRemove: (entry: SftpEntry) => void;
   locale: Locale;
   t: Translate;
@@ -194,7 +194,12 @@ export default function SftpPanel({
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
-                onRename(menu.entry);
+                const name = window.prompt(
+                  t("prompts.rename"),
+                  menu.entry.name,
+                );
+                if (!name || name === menu.entry.name) return;
+                onRename(menu.entry, name);
                 closeMenu();
               },
             },
@@ -203,6 +208,13 @@ export default function SftpPanel({
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
+                if (
+                  !window.confirm(
+                    t("prompts.confirmDelete", { name: menu.entry.name }),
+                  )
+                ) {
+                  return;
+                }
                 onRemove(menu.entry);
                 closeMenu();
               },
@@ -221,7 +233,9 @@ export default function SftpPanel({
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
-                onMkdir();
+                const name = window.prompt(t("prompts.newFolder"));
+                if (!name) return;
+                onMkdir(name);
                 closeActionsMenu();
               },
             },

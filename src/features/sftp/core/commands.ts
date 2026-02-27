@@ -1,0 +1,59 @@
+/**
+ * SFTP 命令模块。
+ * 职责：封装本地文件与远端 SFTP 的 tauri 命令调用。
+ */
+import { callTauri } from "@/shared/tauri/commands";
+import type { SftpEntry } from "@/types";
+
+/** 读取本地目录。 */
+export function localList(path: string) {
+  return callTauri<SftpEntry[]>("local_list", { path });
+}
+
+/** 读取本地 home。 */
+export function localHome() {
+  return callTauri<string>("local_home");
+}
+
+/** 读取远端目录。 */
+export function sftpList(sessionId: string, path: string) {
+  return callTauri<SftpEntry[]>("sftp_list", { sessionId, path });
+}
+
+/** 读取远端 home。 */
+export function sftpHome(sessionId: string) {
+  return callTauri<string>("sftp_home", { sessionId });
+}
+
+/** 上传文件。 */
+export function sftpUpload(
+  sessionId: string,
+  localPath: string,
+  remotePath: string,
+) {
+  return callTauri("sftp_upload", { sessionId, localPath, remotePath });
+}
+
+/** 下载文件。 */
+export function sftpDownload(
+  sessionId: string,
+  remotePath: string,
+  localPath: string,
+) {
+  return callTauri("sftp_download", { sessionId, remotePath, localPath });
+}
+
+/** 新建目录。 */
+export function sftpMkdir(sessionId: string, path: string) {
+  return callTauri("sftp_mkdir", { sessionId, path });
+}
+
+/** 重命名。 */
+export function sftpRename(sessionId: string, from: string, to: string) {
+  return callTauri("sftp_rename", { sessionId, from, to });
+}
+
+/** 删除条目。 */
+export function sftpRemove(sessionId: string, path: string) {
+  return callTauri("sftp_remove", { sessionId, path });
+}
