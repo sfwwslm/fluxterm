@@ -100,6 +100,7 @@
   inset: 0;
   height: 100%;
   width: 100%;
+  display: none;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -198,6 +199,7 @@
 }
 
 .terminal-container.active {
+  display: block;
   opacity: 0.65;
   visibility: visible;
   pointer-events: auto;
