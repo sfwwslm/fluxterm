@@ -29,8 +29,34 @@ use crate::commands::system::app_config_dir;
 use crate::local_shell::LocalShellState;
 use crate::state::EngineState;
 
+fn resolve_log_level() -> LevelFilter {
+    let raw = std::env::var("RUST_LOG").unwrap_or_default();
+    let normalized = raw.trim().to_ascii_lowercase();
+    if normalized.contains("trace") {
+        return LevelFilter::Trace;
+    }
+    if normalized.contains("debug") {
+        return LevelFilter::Debug;
+    }
+    if normalized.contains("warn") {
+        return LevelFilter::Warn;
+    }
+    if normalized.contains("error") {
+        return LevelFilter::Error;
+    }
+    if normalized.contains("off") {
+        return LevelFilter::Off;
+    }
+    LevelFilter::Info
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Err(message) = crate::config_paths::load_dotenv_strict() {
+        eprintln!("{message}");
+        std::process::exit(1);
+    }
+    let log_level = resolve_log_level();
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
@@ -49,7 +75,7 @@ pub fn run() {
                     Target::new(TargetKind::LogDir { file_name: None }),
                     Target::new(TargetKind::Webview),
                 ])
-                .level(LevelFilter::Info)
+                .level(log_level)
                 // https://github.com/tauri-apps/tauri/issues/8494 2025年7月22日 未解决
                 // 抑制 tao::platform_impl::platform::event 警告的日志
                 .filter(|metadata| {
@@ -57,13 +83,6 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(|_app| {
-            if let Err(message) = crate::config_paths::load_dotenv_strict() {
-                log::error!("{message}");
-                return Err(std::io::Error::other(message).into());
-            }
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             profile_list,
             profile_groups_list,
