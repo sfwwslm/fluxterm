@@ -13,6 +13,7 @@ import type {
   ISearchResultChangeEvent,
   SearchAddon,
 } from "@xterm/addon-search";
+import type { Unicode11Addon } from "@xterm/addon-unicode11";
 import type { WebLinksAddon } from "@xterm/addon-web-links";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { DisconnectReason, Session, SessionStateUi } from "@/types";
@@ -83,6 +84,7 @@ type XtermModules = {
   Terminal: typeof import("@xterm/xterm").Terminal;
   FitAddon: typeof import("@xterm/addon-fit").FitAddon;
   SearchAddon: typeof import("@xterm/addon-search").SearchAddon | null;
+  Unicode11Addon: typeof import("@xterm/addon-unicode11").Unicode11Addon | null;
   WebLinksAddon: typeof import("@xterm/addon-web-links").WebLinksAddon | null;
   WebglAddon: typeof import("@xterm/addon-webgl").WebglAddon | null;
 };
@@ -93,6 +95,7 @@ type TerminalBundle = {
   terminal: Terminal;
   fitAddon: FitAddon;
   searchAddon: SearchAddon | null;
+  unicode11Addon: Unicode11Addon | null;
   webLinksAddon: WebLinksAddon | null;
   webglAddon: WebglAddon | null;
   container: HTMLDivElement;
@@ -174,18 +177,26 @@ export default function useTerminalRuntime({
 
   async function loadXtermModules() {
     if (xtermModulesRef.current) return xtermModulesRef.current;
-    const [xtermModule, fitModule, searchModule, webLinksModule, webglModule] =
-      await Promise.all([
-        import("@xterm/xterm"),
-        import("@xterm/addon-fit"),
-        import("@xterm/addon-search").catch(() => null),
-        import("@xterm/addon-web-links").catch(() => null),
-        import("@xterm/addon-webgl").catch(() => null),
-      ]);
+    const [
+      xtermModule,
+      fitModule,
+      searchModule,
+      unicode11Module,
+      webLinksModule,
+      webglModule,
+    ] = await Promise.all([
+      import("@xterm/xterm"),
+      import("@xterm/addon-fit"),
+      import("@xterm/addon-search").catch(() => null),
+      import("@xterm/addon-unicode11").catch(() => null),
+      import("@xterm/addon-web-links").catch(() => null),
+      import("@xterm/addon-webgl").catch(() => null),
+    ]);
     const modules: XtermModules = {
       Terminal: xtermModule.Terminal,
       FitAddon: fitModule.FitAddon,
       SearchAddon: searchModule?.SearchAddon ?? null,
+      Unicode11Addon: unicode11Module?.Unicode11Addon ?? null,
       WebLinksAddon: webLinksModule?.WebLinksAddon ?? null,
       WebglAddon: webglModule?.WebglAddon ?? null,
     };
@@ -298,6 +309,17 @@ export default function useTerminalRuntime({
         searchAddon = null;
       }
     }
+    let unicode11Addon: Unicode11Addon | null = null;
+    if (modules.Unicode11Addon) {
+      try {
+        // 启用 Unicode 11 宽度表，改善 emoji/CJK 字符宽度与光标对齐。
+        unicode11Addon = new modules.Unicode11Addon();
+        term.loadAddon(unicode11Addon);
+        term.unicode.activeVersion = "11";
+      } catch {
+        unicode11Addon = null;
+      }
+    }
     let webLinksAddon: WebLinksAddon | null = null;
     if (modules.WebLinksAddon) {
       try {
@@ -316,6 +338,7 @@ export default function useTerminalRuntime({
       terminal: term,
       fitAddon: fit,
       searchAddon,
+      unicode11Addon,
       webLinksAddon,
       webglAddon,
       container,
