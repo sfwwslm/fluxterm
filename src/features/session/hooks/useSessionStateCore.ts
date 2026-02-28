@@ -161,6 +161,20 @@ export default function useSessionState({
     Record<string, { shellId: string | null; label: string }>
   >({});
   const profilesRef = useRef<HostProfile[]>([]);
+  // Tauri 事件监听需要尽量保持单次注册，否则在 React 重渲染时频繁 unlisten/listen，
+  // 容易让 Rust 侧的异步事件打到已经失效的 callback，出现 "Couldn't find callback id" 警告。
+  // 这里用 ref 持有“最新的事件处理函数”，把监听器生命周期与 React 渲染解耦。
+  const sessionEventHandlersRef = useRef<{
+    handleSessionDisconnected: (sessionId: string) => void;
+    handleSessionStatus: (payload: {
+      sessionId: string;
+      state: SessionStateUi;
+      error?: { message: string };
+    }) => void;
+  }>({
+    handleSessionDisconnected: () => {},
+    handleSessionStatus: () => {},
+  });
 
   const activeSession = useMemo(() => {
     if (!activeSessionId) return null;
@@ -399,6 +413,77 @@ export default function useSessionState({
     }
   }
 
+  // 监听器本身只注册一次，但里面执行的逻辑需要始终拿到最新的 t/openDialog/appendLog 等闭包。
+  // 因此每次渲染后都把最新处理函数写回 ref，事件到达时再间接转发给它。
+  useEffect(() => {
+    sessionEventHandlersRef.current = {
+      handleSessionDisconnected,
+      handleSessionStatus: (payload) => {
+        const label = resolveSessionLabel(payload.sessionId);
+        setSessionStates((prev) => ({
+          ...prev,
+          [payload.sessionId]: payload.state,
+        }));
+        if (payload.state === "error" && payload.error?.message) {
+          setBusyMessage(payload.error.message);
+        }
+        if (payload.state === "error") {
+          setSessionReasons((prev) => ({
+            ...prev,
+            [payload.sessionId]: "network",
+          }));
+          appendLog(
+            "log.event.error",
+            {
+              name: label,
+              detail: payload.error?.message ?? t("log.unknownError"),
+            },
+            "error",
+          );
+          logError(
+            JSON.stringify({
+              event: "ssh.session.error",
+              sessionId: payload.sessionId,
+              message: payload.error?.message ?? "unknown",
+            }),
+          );
+          if (!isLocalSession(payload.sessionId)) {
+            disconnectSession(payload.sessionId).catch(() => {});
+          }
+          if (!errorDialogShownRef.current[payload.sessionId]) {
+            errorDialogShownRef.current[payload.sessionId] = true;
+            openDialog({
+              title: t("dialog.sshErrorTitle"),
+              message: payload.error?.message ?? t("dialog.sshErrorBody"),
+              confirmLabel: t("actions.close"),
+            });
+          }
+        }
+        if (payload.state === "connected") {
+          appendLog("log.event.connected", { name: label }, "success");
+          logInfo(
+            JSON.stringify({
+              event: "ssh.session.connected",
+              sessionId: payload.sessionId,
+            }),
+          );
+        }
+        if (payload.state === "connecting") {
+          appendLog("log.event.connecting", { name: label });
+          logInfo(
+            JSON.stringify({
+              event: "ssh.session.connecting",
+              sessionId: payload.sessionId,
+            }),
+          );
+        }
+        if (payload.state === "disconnected") {
+          handleSessionDisconnected(payload.sessionId);
+        }
+      },
+    };
+  });
+
   async function connectProfile(profile: HostProfile) {
     await connectProfileCommand({
       profile,
@@ -532,73 +617,16 @@ export default function useSessionState({
     let cancelled = false;
     let teardown: (() => void) | null = null;
 
+    // 会话级 Tauri listener 必须保持单次注册。
+    // 如果跟着 render 反复重建，terminal:exit / session:status 这类异步事件就可能命中旧 callback，
+    // 从而在控制台出现 callback id 丢失警告。
     const registerListeners = async () => {
       const unlisten = await registerSessionListeners({
         onTerminalExit: ({ sessionId }) => {
-          handleSessionDisconnected(sessionId);
+          sessionEventHandlersRef.current.handleSessionDisconnected(sessionId);
         },
         onSessionStatus: (payload) => {
-          const label = resolveSessionLabel(payload.sessionId);
-          setSessionStates((prev) => ({
-            ...prev,
-            [payload.sessionId]: payload.state,
-          }));
-          if (payload.state === "error" && payload.error?.message) {
-            setBusyMessage(payload.error.message);
-          }
-          if (payload.state === "error") {
-            setSessionReasons((prev) => ({
-              ...prev,
-              [payload.sessionId]: "network",
-            }));
-            appendLog(
-              "log.event.error",
-              {
-                name: label,
-                detail: payload.error?.message ?? t("log.unknownError"),
-              },
-              "error",
-            );
-            logError(
-              JSON.stringify({
-                event: "ssh.session.error",
-                sessionId: payload.sessionId,
-                message: payload.error?.message ?? "unknown",
-              }),
-            );
-            if (!isLocalSession(payload.sessionId)) {
-              disconnectSession(payload.sessionId).catch(() => {});
-            }
-            if (!errorDialogShownRef.current[payload.sessionId]) {
-              errorDialogShownRef.current[payload.sessionId] = true;
-              openDialog({
-                title: t("dialog.sshErrorTitle"),
-                message: payload.error?.message ?? t("dialog.sshErrorBody"),
-                confirmLabel: t("actions.close"),
-              });
-            }
-          }
-          if (payload.state === "connected") {
-            appendLog("log.event.connected", { name: label }, "success");
-            logInfo(
-              JSON.stringify({
-                event: "ssh.session.connected",
-                sessionId: payload.sessionId,
-              }),
-            );
-          }
-          if (payload.state === "connecting") {
-            appendLog("log.event.connecting", { name: label });
-            logInfo(
-              JSON.stringify({
-                event: "ssh.session.connecting",
-                sessionId: payload.sessionId,
-              }),
-            );
-          }
-          if (payload.state === "disconnected") {
-            handleSessionDisconnected(payload.sessionId);
-          }
+          sessionEventHandlersRef.current.handleSessionStatus(payload);
         },
       });
       if (cancelled) {
@@ -614,7 +642,7 @@ export default function useSessionState({
       cancelled = true;
       teardown?.();
     };
-  }, [appendLog, openDialog, t]);
+  }, []);
 
   return {
     sessions,
