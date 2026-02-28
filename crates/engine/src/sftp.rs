@@ -1,5 +1,5 @@
 //! SFTP 操作实现。
-use log::{info, warn};
+use log::{debug, warn};
 use russh::client;
 use russh_sftp::client::{RawSftpSession, SftpSession};
 use russh_sftp::extensions;
@@ -38,7 +38,7 @@ pub async fn sftp_list(
 ) -> Result<Vec<SftpEntry>, EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    info!("sftp_list_start path={} started_at_ms={}", path, started_at);
+    debug!("sftp_list_start path={} started_at_ms={}", path, started_at);
     let sftp = open_sftp(session).await?;
     let entries = sftp.read_dir(path.to_string()).await.map_err(|err| {
         let err = EngineError::with_detail("sftp_list_failed", "无法读取目录", err.to_string());
@@ -86,7 +86,7 @@ pub async fn sftp_list(
         });
     }
     results.sort_by(|a, b| a.name.cmp(&b.name));
-    info!(
+    debug!(
         "sftp_list_success path={} started_at_ms={} elapsed_ms={} entry_count={}",
         path,
         started_at,
@@ -112,7 +112,7 @@ pub async fn sftp_upload(
     })?;
     let metadata = local.metadata().await.ok();
     let total = metadata.map(|m| m.len());
-    info!(
+    debug!(
         "sftp_upload_start session_id={} local_path={} remote_path={} started_at_ms={} total_bytes={}",
         session_id,
         local_path,
@@ -322,7 +322,7 @@ pub async fn sftp_download(
         EngineError::with_detail("sftp_download_failed", "无法打开远端文件", err.to_string())
     })?;
     let total = remote.metadata().await.ok().and_then(|m| m.size);
-    info!(
+    debug!(
         "sftp_download_start session_id={} remote_path={} local_path={} started_at_ms={} total_bytes={}",
         session_id,
         remote_path,
@@ -386,7 +386,7 @@ pub async fn sftp_rename(
 ) -> Result<(), EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    info!(
+    debug!(
         "sftp_rename_start source_path={} target_path={} started_at_ms={}",
         from, to, started_at
     );
@@ -405,7 +405,7 @@ pub async fn sftp_rename(
             );
             err
         })?;
-    info!(
+    debug!(
         "sftp_rename_success source_path={} target_path={} started_at_ms={} elapsed_ms={}",
         from,
         to,
@@ -422,7 +422,7 @@ pub async fn sftp_remove(
 ) -> Result<(), EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    info!(
+    debug!(
         "sftp_remove_start path={} started_at_ms={}",
         path, started_at
     );
@@ -438,7 +438,7 @@ pub async fn sftp_remove(
         );
         err
     })?;
-    info!(
+    debug!(
         "sftp_remove_success path={} started_at_ms={} elapsed_ms={}",
         path,
         started_at,
@@ -454,7 +454,7 @@ pub async fn sftp_mkdir(
 ) -> Result<(), EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    info!(
+    debug!(
         "sftp_mkdir_start path={} started_at_ms={}",
         path, started_at
     );
@@ -470,7 +470,7 @@ pub async fn sftp_mkdir(
         );
         err
     })?;
-    info!(
+    debug!(
         "sftp_mkdir_success path={} started_at_ms={} elapsed_ms={}",
         path,
         started_at,
@@ -485,7 +485,7 @@ pub async fn sftp_home(
 ) -> Result<String, EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    info!("sftp_home_start started_at_ms={}", started_at);
+    debug!("sftp_home_start started_at_ms={}", started_at);
     let sftp = open_sftp(session).await?;
     let home = sftp.canonicalize(".").await.map_err(|err| {
         let err = EngineError::with_detail("sftp_home_failed", "无法获取家目录", err.to_string());
@@ -499,7 +499,7 @@ pub async fn sftp_home(
         );
         err
     })?;
-    info!(
+    debug!(
         "sftp_home_success path={} started_at_ms={} elapsed_ms={}",
         home,
         started_at,
@@ -515,7 +515,7 @@ pub async fn sftp_resolve_path(
 ) -> Result<String, EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    info!(
+    debug!(
         "sftp_resolve_path_start path={} started_at_ms={}",
         path, started_at
     );
@@ -535,7 +535,7 @@ pub async fn sftp_resolve_path(
         );
         err
     })?;
-    info!(
+    debug!(
         "sftp_resolve_path_success path={} resolved_path={} started_at_ms={} elapsed_ms={}",
         path,
         resolved,
@@ -610,7 +610,7 @@ fn log_sftp_success(action: &str, context: &TransferLogContext<'_>) {
     } else {
         ((context.transferred_bytes as u128 * 1000) / context.elapsed_ms) as u64
     };
-    info!(
+    debug!(
         "{} session_id={} source_path={} target_path={} started_at_ms={} elapsed_ms={} transferred_bytes={} total_bytes={} avg_bytes_per_sec={}",
         action,
         context.session_id,
