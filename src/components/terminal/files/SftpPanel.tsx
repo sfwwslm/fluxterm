@@ -3,6 +3,7 @@ import type { Locale, Translate } from "@/i18n";
 import type { SftpEntry } from "@/types";
 import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
+import { useNotices } from "@/hooks/useNotices";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
 import { FiCornerLeftUp, FiMoreVertical, FiRefreshCw } from "react-icons/fi";
@@ -41,6 +42,7 @@ export default function SftpPanel({
   locale,
   t,
 }: SftpPanelProps) {
+  const { openDialog } = useNotices();
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -208,15 +210,16 @@ export default function SftpPanel({
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
-                if (
-                  !window.confirm(
-                    t("prompts.confirmDelete", { name: menu.entry.name }),
-                  )
-                ) {
-                  return;
-                }
-                onRemove(menu.entry);
                 closeMenu();
+                openDialog({
+                  title: t("actions.remove"),
+                  message: t("prompts.confirmDelete", {
+                    name: menu.entry.name,
+                  }),
+                  confirmLabel: t("actions.remove"),
+                  cancelLabel: t("actions.cancel"),
+                  onConfirm: () => onRemove(menu.entry),
+                });
               },
             },
           ]}
