@@ -380,13 +380,25 @@ export default function AppShell() {
     floatingPanelKey,
     floatingOriginRef,
   });
+  const { floatingPanels, handleFloat } = useFloatingPanels({
+    floatingPanelKey,
+    floatingOriginRef,
+    slotGroups,
+    setSlotGroups,
+    panelLabels,
+    layoutCollapsed,
+    locale,
+    themeId,
+    setLocale,
+    setThemeId,
+  });
   const filesWidgetVisible = useMemo(() => {
     if (floatingPanelKey === "files") return true;
-    if (floatingOriginRef.current.files) return true;
+    if (floatingPanels.files) return true;
     return Object.values(slotGroups).some((group) =>
       group.widgets.includes("files"),
     );
-  }, [floatingPanelKey, slotGroups]);
+  }, [floatingPanelKey, floatingPanels.files, slotGroups]);
 
   const { sftpState, sftpActions } = useSftpController({
     enabled: sftpEnabled,
@@ -652,19 +664,6 @@ export default function AppShell() {
     renameEntry,
     uploadFile,
   ]);
-
-  const { handleFloat } = useFloatingPanels({
-    floatingPanelKey,
-    floatingOriginRef,
-    slotGroups,
-    setSlotGroups,
-    panelLabels,
-    layoutCollapsed,
-    locale,
-    themeId,
-    setLocale,
-    setThemeId,
-  });
 
   useMacAppMenu({
     locale,
