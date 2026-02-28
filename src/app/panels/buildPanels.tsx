@@ -34,6 +34,7 @@ type BuildPanelsProps = {
   busyMessage: string | null;
   logEntries: LogEntry[];
   currentPath: string;
+  terminalPathSyncStatus: "active" | "paused" | "unsupported" | "disabled";
   entries: SftpEntry[];
   locale: Locale;
   canReconnect: boolean;
@@ -80,6 +81,7 @@ export function buildPanels(
     busyMessage,
     logEntries,
     currentPath,
+    terminalPathSyncStatus,
     entries,
     locale,
     canReconnect,
@@ -140,6 +142,7 @@ export function buildPanels(
         isRemote={isRemoteConnected}
         isRemoteSession={isRemoteSession}
         currentPath={currentPath}
+        terminalPathSyncStatus={terminalPathSyncStatus}
         entries={entries}
         onRefresh={onRefreshList}
         onOpen={onOpenRemoteDir}

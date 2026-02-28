@@ -28,9 +28,11 @@ type ConfigModalProps = {
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
+  terminalPathSyncEnabled?: boolean;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
   onScrollbackChange?: (value: number) => void;
+  onTerminalPathSyncEnabledChange?: (enabled: boolean) => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -51,9 +53,11 @@ export default function ConfigModal({
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
   scrollback = 3000,
+  terminalPathSyncEnabled = true,
   onWebLinksEnabledChange,
   onSelectionAutoCopyEnabledChange,
   onScrollbackChange,
+  onTerminalPathSyncEnabledChange,
   onClose,
   onSectionChange,
   t,
@@ -147,6 +151,23 @@ export default function ConfigModal({
               checked={selectionAutoCopyEnabled}
               onChange={(event) =>
                 onSelectionAutoCopyEnabledChange?.(event.target.checked)
+              }
+            />
+          </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.terminalPathSyncEnabled")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.terminalPathSyncEnabledHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={terminalPathSyncEnabled}
+              onChange={(event) =>
+                onTerminalPathSyncEnabledChange?.(event.target.checked)
               }
             />
           </label>

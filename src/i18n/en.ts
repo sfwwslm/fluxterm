@@ -41,6 +41,10 @@ export const en = {
   "config.session.selectionAutoCopyEnabled": "Auto Copy Selection",
   "config.session.selectionAutoCopyEnabledHint":
     "When enabled, selected text in the terminal is copied to the system clipboard automatically.",
+  "config.session.terminalPathSyncEnabled":
+    "Sync Terminal Path to File Manager",
+  "config.session.terminalPathSyncEnabledHint":
+    "When enabled, supported terminal prompt paths are synced to the file manager automatically. Currently bash only.",
   "config.session.scrollback": "Terminal Scrollback",
   "config.session.scrollbackHint":
     "Controls how many history lines the terminal keeps, from {min} to {max}.",
@@ -200,6 +204,10 @@ export const en = {
   "sftp.kind.dir": "Directory",
   "sftp.kind.link": "Link",
   "sftp.kind.file": "File",
+  "sftp.pathSync.active": "Sync active",
+  "sftp.pathSync.paused": "Sync paused",
+  "sftp.pathSync.unsupported": "Unsupported",
+  "sftp.pathSync.disabled": "Sync disabled",
   "sftp.empty": "Folder is empty",
   "sftp.emptyUnavailable": "No available file manager",
   "log.sessionState": "Session",

@@ -45,6 +45,14 @@ type UseTerminalRuntimeProps = {
     cols: number,
     rows: number,
   ) => Promise<unknown>;
+  onWorkingDirectoryChange?: (
+    sessionId: string,
+    payload: { username: string | null; path: string },
+  ) => void;
+  onPathSyncSupportChange?: (
+    sessionId: string,
+    status: "supported" | "unsupported",
+  ) => void;
   isLocalSession: (sessionId: string | null) => boolean;
   reconnectSession: (sessionId: string) => Promise<void>;
   reconnectLocalShell: (sessionId: string) => Promise<void>;
@@ -129,6 +137,10 @@ type SearchStats = {
   decorations: boolean;
 };
 
+type PromptParseState = {
+  carry: string;
+};
+
 /** 终端链接点击后的临时菜单状态。 */
 type LinkMenuState = {
   sessionId: string;
@@ -174,6 +186,56 @@ function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
   }
 }
 
+function stripAnsiForPromptParsing(text: string) {
+  return text
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(/\u001b[@-_]/g, "");
+}
+
+/**
+ * 当前只支持 bash 常见提示符形态：
+ * 1. user@host:/abs/path$
+ * 2. user@host:~/path$
+ * 3. /abs/path$
+ * 4. ~/path$
+ * 不再继续兼容 zsh 的缩略路径提示符，因为它通常不给出可稳定还原的绝对路径。
+ *
+ * PATH_SYNC_GIT_BASH_TODO:
+ * 后续如果要支持 Git Bash，请优先从这里扩展提示符匹配规则。
+ */
+function matchPromptPath(line: string) {
+  const trimmed = line.trimEnd();
+  const promptMatch =
+    trimmed.match(
+      /(?:^|\s)(?:[^@\s]+@)?[^:\s]+:(?<path>~(?:\/[^\s#$]*)?|\/[^\s#$]*)\s*[#$]$/,
+    ) ?? trimmed.match(/(?:^|\s)(?<path>~(?:\/[^\s#$]*)?|\/[^\s#$]*)\s*[#$]$/);
+  return promptMatch?.groups?.path ?? null;
+}
+
+function matchPromptUsername(line: string) {
+  const trimmed = line.trimEnd();
+  const promptMatch =
+    trimmed.match(
+      /(?:^|\s)(?<username>[^@\s:]+)@[^:\s]+:(?:~(?:\/[^\s#$]*)?|\/[^\s#$]*)\s*[#$]$/,
+    ) ?? trimmed.match(/(?:^|\s)(?<username>[^@\s:]+)@[^:\s]+\s*[$#]$/);
+  return promptMatch?.groups?.username ?? null;
+}
+
+/**
+ * 识别“看起来像 shell prompt，但又不满足 bash 解析规则”的场景。
+ * 一旦命中，就把该会话标记为“不再解析路径”，避免在 zsh/sh 或自定义 prompt 下反复尝试。
+ */
+function looksLikeUnsupportedPrompt(line: string) {
+  const trimmed = line.trimEnd();
+  if (!trimmed) return false;
+  return (
+    /(?:^|\s)(?:[^@\s]+@)?[^\s]+?\s+[^\s]+\s*%$/.test(trimmed) ||
+    /(?:^|\s)(?:[^@\s]+@)?[^\s]+:[^\s]+\s*%$/.test(trimmed) ||
+    /(?:^|\s)(?:[^@\s]+@)?[^\s]+\s*[$#]$/.test(trimmed)
+  );
+}
+
 /** Xterm 初始化与输入输出处理。 */
 export default function useTerminalRuntime({
   theme,
@@ -190,6 +252,8 @@ export default function useTerminalRuntime({
   recordCommandInput,
   writeToSession,
   resizeSession,
+  onWorkingDirectoryChange,
+  onPathSyncSupportChange,
   isLocalSession,
   reconnectSession,
   reconnectLocalShell,
@@ -212,10 +276,18 @@ export default function useTerminalRuntime({
   >({});
   const focusedLineBySessionRef = useRef<Record<string, FocusedLineState>>({});
   const selectionAutoCopyTimerRef = useRef<Record<string, number>>({});
+  const promptParseStateRef = useRef<Record<string, PromptParseState>>({});
+  const workingDirectoryBySessionRef = useRef<Record<string, string>>({});
+  const workingDirectoryUserBySessionRef = useRef<
+    Record<string, string | null>
+  >({});
+  const disabledPromptParsingRef = useRef<Record<string, boolean>>({});
   const handlersRef = useRef({
     recordCommandInput,
     writeToSession,
     resizeSession,
+    onWorkingDirectoryChange,
+    onPathSyncSupportChange,
     isLocalSession,
     reconnectSession,
     reconnectLocalShell,
@@ -283,6 +355,8 @@ export default function useTerminalRuntime({
       recordCommandInput,
       writeToSession,
       resizeSession,
+      onWorkingDirectoryChange,
+      onPathSyncSupportChange,
       isLocalSession,
       reconnectSession,
       reconnectLocalShell,
@@ -293,6 +367,8 @@ export default function useTerminalRuntime({
     reconnectLocalShell,
     reconnectSession,
     resizeSession,
+    onWorkingDirectoryChange,
+    onPathSyncSupportChange,
     writeToSession,
   ]);
 
@@ -338,6 +414,107 @@ export default function useTerminalRuntime({
     if (timer === undefined) return;
     window.clearTimeout(timer);
     delete selectionAutoCopyTimerRef.current[sessionId];
+  }
+
+  function ensurePromptParseState(sessionId: string) {
+    if (!promptParseStateRef.current[sessionId]) {
+      promptParseStateRef.current[sessionId] = { carry: "" };
+    }
+    return promptParseStateRef.current[sessionId];
+  }
+
+  function disposePromptParseState(sessionId: string) {
+    delete promptParseStateRef.current[sessionId];
+    delete workingDirectoryBySessionRef.current[sessionId];
+    delete workingDirectoryUserBySessionRef.current[sessionId];
+    delete disabledPromptParsingRef.current[sessionId];
+  }
+
+  function maybePublishWorkingDirectory(
+    sessionId: string,
+    payload: { username: string | null; path: string },
+  ) {
+    const normalizedUser = payload.username?.trim() || null;
+    const normalizedPath = payload.path.replace(/\r/g, "").trim();
+    if (!normalizedPath) return;
+    if (
+      workingDirectoryBySessionRef.current[sessionId] === normalizedPath &&
+      workingDirectoryUserBySessionRef.current[sessionId] === normalizedUser
+    ) {
+      return;
+    }
+    workingDirectoryBySessionRef.current[sessionId] = normalizedPath;
+    workingDirectoryUserBySessionRef.current[sessionId] = normalizedUser;
+    handlersRef.current.onPathSyncSupportChange?.(sessionId, "supported");
+    // 终端运行时只负责上报“当前 prompt 用户 + prompt 路径”。
+    // 是否允许继续驱动 SFTP，由上层再和 SSH 初始登录用户做一致性判断。
+    handlersRef.current.onWorkingDirectoryChange?.(sessionId, {
+      username: normalizedUser,
+      path: normalizedPath,
+    });
+  }
+
+  function disablePromptParsing(
+    sessionId: string,
+    sample: string,
+    reason: "unsupported-shell-prompt",
+  ) {
+    if (disabledPromptParsingRef.current[sessionId]) return;
+    disabledPromptParsingRef.current[sessionId] = true;
+    handlersRef.current.onPathSyncSupportChange?.(sessionId, "unsupported");
+    warn(
+      JSON.stringify({
+        event: "terminal:cwd-sync-unsupported-prompt",
+        sessionId,
+        reason,
+        promptSample: sample.slice(0, 200),
+      }),
+    );
+  }
+
+  /**
+   * 这里只支持 bash 常见的绝对路径/家目录提示符。
+   * 遇到 zsh、sh 或其他无法稳定反推出绝对路径的 prompt 时，当前会话只记一条日志，
+   * 然后直接停止后续解析，避免重复匹配和刷日志。
+   * 解析职责也刻意保持很窄：这里只负责从输出里提取“当前 prompt 用户 + 路径”，
+   * 不在终端层直接判断 SFTP 是否还能安全联动，那个决策交给上层和 SSH 登录用户一起做。
+   */
+  function parseWorkingDirectoryFromPrompt(sessionId: string, data: string) {
+    if (handlersRef.current.isLocalSession(sessionId)) return;
+    if (disabledPromptParsingRef.current[sessionId]) return;
+    const state = ensurePromptParseState(sessionId);
+    // 先剥离 ANSI，再按“行 + 最后一段未闭合 prompt 缓冲”解析，
+    // 兼容终端输出被拆成多个事件时的 prompt 拼接。
+    const normalized = stripAnsiForPromptParsing(data).replace(/\r\n/g, "\n");
+    const combined = `${state.carry}${normalized}`;
+    const lines = combined.split(/\n|\r/);
+    state.carry = lines.pop() ?? "";
+
+    lines.forEach((line) => {
+      const path = matchPromptPath(line);
+      if (path) {
+        maybePublishWorkingDirectory(sessionId, {
+          username: matchPromptUsername(line),
+          path,
+        });
+        return;
+      }
+      if (looksLikeUnsupportedPrompt(line)) {
+        disablePromptParsing(sessionId, line, "unsupported-shell-prompt");
+      }
+    });
+
+    const trailingPath = matchPromptPath(state.carry);
+    if (trailingPath) {
+      maybePublishWorkingDirectory(sessionId, {
+        username: matchPromptUsername(state.carry),
+        path: trailingPath,
+      });
+      return;
+    }
+    if (looksLikeUnsupportedPrompt(state.carry)) {
+      disablePromptParsing(sessionId, state.carry, "unsupported-shell-prompt");
+    }
   }
 
   function syncCursorBlink(sessionId: string, enabled: boolean) {
@@ -603,6 +780,7 @@ export default function useTerminalRuntime({
     if (!bundle) return;
     disposeSelectionAutoCopyTimer(sessionId);
     disposeFocusedLine(sessionId);
+    disposePromptParseState(sessionId);
     bundle.disposables.forEach((disposable) => disposable.dispose());
     bundle.terminal.dispose();
     delete terminalsRef.current[sessionId];
@@ -642,6 +820,7 @@ export default function useTerminalRuntime({
     const registerListeners = async () => {
       const outputUnlisten = await registerTerminalOutputListener(
         ({ sessionId, data }) => {
+          parseWorkingDirectoryFromPrompt(sessionId, data);
           const bundle = terminalsRef.current[sessionId];
           if (bundle) {
             writeToBundle(bundle, data);

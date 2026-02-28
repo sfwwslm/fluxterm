@@ -40,6 +40,9 @@ export const zh = {
   "config.session.selectionAutoCopyEnabled": "选中文本自动复制",
   "config.session.selectionAutoCopyEnabledHint":
     "开启后，终端中只要选中文本，就会自动写入系统剪贴板。",
+  "config.session.terminalPathSyncEnabled": "终端路径联动文件管理器",
+  "config.session.terminalPathSyncEnabledHint":
+    "开启后，支持的终端提示符路径会自动同步到文件管理器，当前仅支持 bash。",
   "config.session.scrollback": "终端滚动回溯",
   "config.session.scrollbackHint":
     "控制终端保留的历史行数，范围 {min} 到 {max}。",
@@ -197,6 +200,10 @@ export const zh = {
   "sftp.kind.dir": "目录",
   "sftp.kind.link": "链接",
   "sftp.kind.file": "文件",
+  "sftp.pathSync.active": "联动中",
+  "sftp.pathSync.paused": "联动已暂停",
+  "sftp.pathSync.unsupported": "不支持联动",
+  "sftp.pathSync.disabled": "联动已关闭",
   "sftp.empty": "目录为空",
   "sftp.emptyUnavailable": "没有可用的文件管理器",
   "log.sessionState": "会话状态",

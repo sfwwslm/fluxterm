@@ -9,14 +9,18 @@ import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
 import {
   FiCode,
+  FiClock,
   FiCornerLeftUp,
   FiDatabase,
   FiFile,
   FiFileText,
   FiFolder,
+  FiInfo,
   FiImage,
   FiLink2,
   FiLock,
+  FiLink,
+  FiSlash,
   FiMoreVertical,
   FiPackage,
   FiRefreshCw,
@@ -31,6 +35,7 @@ type SftpPanelProps = {
   isRemote: boolean;
   isRemoteSession: boolean;
   currentPath: string;
+  terminalPathSyncStatus?: "active" | "paused" | "unsupported" | "disabled";
   entries: SftpEntry[];
   onRefresh: (path?: string) => void;
   onOpen: (path: string) => void;
@@ -176,6 +181,7 @@ export default function SftpPanel({
   isRemote,
   isRemoteSession,
   currentPath,
+  terminalPathSyncStatus = "unsupported",
   entries,
   onRefresh,
   onOpen,
@@ -199,6 +205,31 @@ export default function SftpPanel({
   } | null>(null);
   const showUnavailable = isRemoteSession && !isRemote;
 
+  const pathSyncMeta =
+    terminalPathSyncStatus === "active"
+      ? {
+          Icon: FiLink,
+          tone: "active",
+          label: t("sftp.pathSync.active"),
+        }
+      : terminalPathSyncStatus === "paused"
+        ? {
+            Icon: FiClock,
+            tone: "paused",
+            label: t("sftp.pathSync.paused"),
+          }
+        : terminalPathSyncStatus === "unsupported"
+          ? {
+              Icon: FiInfo,
+              tone: "unsupported",
+              label: t("sftp.pathSync.unsupported"),
+            }
+          : {
+              Icon: FiSlash,
+              tone: "disabled",
+              label: t("sftp.pathSync.disabled"),
+            };
+
   function openMenu(event: React.MouseEvent, entry: SftpEntry) {
     event.preventDefault();
     setMenu({ x: event.clientX, y: event.clientY, entry });
@@ -220,8 +251,18 @@ export default function SftpPanel({
   return (
     <div className="sftp-panel">
       <div className="sftp-toolbar">
-        <div className="path" title={showUnavailable ? "-" : currentPath}>
-          {showUnavailable ? "-" : currentPath}
+        <div className="path-with-sync">
+          <Tooltip content={pathSyncMeta.label}>
+            <span
+              className={`path-sync-indicator ${pathSyncMeta.tone}`}
+              aria-label={pathSyncMeta.label}
+            >
+              <pathSyncMeta.Icon />
+            </span>
+          </Tooltip>
+          <div className="path" title={showUnavailable ? "-" : currentPath}>
+            {showUnavailable ? "-" : currentPath}
+          </div>
         </div>
         {!showUnavailable && (
           <div className="sftp-actions">

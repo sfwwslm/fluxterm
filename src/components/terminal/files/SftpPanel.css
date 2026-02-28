@@ -15,12 +15,62 @@
   color: var(--text-soft);
 }
 
+.path-with-sync {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
 .path {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.path-sync-indicator {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+}
+
+.path-sync-indicator svg {
+  width: 13px;
+  height: 13px;
+}
+
+.path-sync-indicator.active {
+  color: #58c4a3;
+  background: rgba(88, 196, 163, 0.14);
+  border-color: rgba(88, 196, 163, 0.2);
+}
+
+.path-sync-indicator.paused {
+  color: #d6a441;
+  background: rgba(214, 164, 65, 0.14);
+  border-color: rgba(214, 164, 65, 0.2);
+}
+
+.path-sync-indicator.disabled {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.path-sync-indicator.unsupported {
+  color: #8ea4c6;
+  background: rgba(142, 164, 198, 0.12);
+  border-color: rgba(142, 164, 198, 0.18);
 }
 
 .sftp-actions button {

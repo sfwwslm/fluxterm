@@ -20,15 +20,18 @@ type SessionSettings = {
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
+  terminalPathSyncEnabled?: boolean;
 };
 
 type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
   selectionAutoCopyEnabled: boolean;
   scrollback: number;
+  terminalPathSyncEnabled: boolean;
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setScrollback: React.Dispatch<React.SetStateAction<number>>;
+  setTerminalPathSyncEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   sessionSettingsLoaded: boolean;
 };
 
@@ -42,12 +45,16 @@ function normalizeScrollback(value: number) {
 const defaultSessionSettings: Required<
   Pick<
     SessionSettings,
-    "webLinksEnabled" | "selectionAutoCopyEnabled" | "scrollback"
+    | "webLinksEnabled"
+    | "selectionAutoCopyEnabled"
+    | "scrollback"
+    | "terminalPathSyncEnabled"
   >
 > = {
   webLinksEnabled: true,
   selectionAutoCopyEnabled: false,
   scrollback: 3000,
+  terminalPathSyncEnabled: true,
 };
 
 /** 会话设置持久化：管理终端域的全局配置，统一写入 session.json。 */
@@ -61,12 +68,16 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   const [scrollback, setScrollback] = useState(
     defaultSessionSettings.scrollback,
   );
+  const [terminalPathSyncEnabled, setTerminalPathSyncEnabled] = useState(
+    defaultSessionSettings.terminalPathSyncEnabled,
+  );
   const [sessionSettingsLoaded, setSessionSettingsLoaded] = useState(false);
   const loadedRef = useRef(false);
   const loggedSettingsRef = useRef({
     webLinksEnabled: defaultSessionSettings.webLinksEnabled,
     selectionAutoCopyEnabled: defaultSessionSettings.selectionAutoCopyEnabled,
     scrollback: defaultSessionSettings.scrollback,
+    terminalPathSyncEnabled: defaultSessionSettings.terminalPathSyncEnabled,
   });
 
   async function loadSessionSettings() {
@@ -84,6 +95,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       }
       if (typeof parsed?.selectionAutoCopyEnabled === "boolean") {
         setSelectionAutoCopyEnabled(parsed.selectionAutoCopyEnabled);
+      }
+      if (typeof parsed?.terminalPathSyncEnabled === "boolean") {
+        setTerminalPathSyncEnabled(parsed.terminalPathSyncEnabled);
       }
       if (typeof parsed?.scrollback === "number") {
         const normalizedScrollback = normalizeScrollback(parsed.scrollback);
@@ -119,6 +133,10 @@ export default function useSessionSettings(): UseSessionSettingsResult {
             typeof parsed.selectionAutoCopyEnabled === "boolean"
               ? parsed.selectionAutoCopyEnabled
               : defaultSessionSettings.selectionAutoCopyEnabled,
+          terminalPathSyncEnabled:
+            typeof parsed.terminalPathSyncEnabled === "boolean"
+              ? parsed.terminalPathSyncEnabled
+              : defaultSessionSettings.terminalPathSyncEnabled,
           scrollback:
             typeof parsed.scrollback === "number"
               ? normalizeScrollback(parsed.scrollback)
@@ -141,6 +159,10 @@ export default function useSessionSettings(): UseSessionSettingsResult {
           typeof parsed?.selectionAutoCopyEnabled === "boolean"
             ? parsed.selectionAutoCopyEnabled
             : defaultSessionSettings.selectionAutoCopyEnabled,
+        terminalPathSyncEnabled:
+          typeof parsed?.terminalPathSyncEnabled === "boolean"
+            ? parsed.terminalPathSyncEnabled
+            : defaultSessionSettings.terminalPathSyncEnabled,
         scrollback:
           typeof parsed?.scrollback === "number"
             ? normalizeScrollback(parsed.scrollback)
@@ -171,6 +193,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       version: 1,
       webLinksEnabled,
       selectionAutoCopyEnabled,
+      terminalPathSyncEnabled,
       scrollback: normalizeScrollback(scrollback),
     }).catch((error) => {
       warn(
@@ -180,7 +203,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
         }),
       );
     });
-  }, [scrollback, selectionAutoCopyEnabled, webLinksEnabled]);
+  }, [
+    scrollback,
+    selectionAutoCopyEnabled,
+    terminalPathSyncEnabled,
+    webLinksEnabled,
+  ]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -215,13 +243,32 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     loggedSettingsRef.current.scrollback = nextScrollback;
   }, [scrollback]);
 
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    if (
+      loggedSettingsRef.current.terminalPathSyncEnabled ===
+      terminalPathSyncEnabled
+    ) {
+      return;
+    }
+    info(
+      JSON.stringify({
+        event: "session-settings:terminal-path-sync-changed",
+        enabled: terminalPathSyncEnabled,
+      }),
+    ).catch(() => {});
+    loggedSettingsRef.current.terminalPathSyncEnabled = terminalPathSyncEnabled;
+  }, [terminalPathSyncEnabled]);
+
   return {
     webLinksEnabled,
     selectionAutoCopyEnabled,
     scrollback: normalizeScrollback(scrollback),
+    terminalPathSyncEnabled,
     setWebLinksEnabled,
     setSelectionAutoCopyEnabled,
     setScrollback,
+    setTerminalPathSyncEnabled,
     sessionSettingsLoaded,
   };
 }

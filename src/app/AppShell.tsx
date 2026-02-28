@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
+import { info, warn } from "@tauri-apps/plugin-log";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
 import ConfigModal, {
   type ConfigSectionItem,
@@ -100,6 +101,18 @@ function normalizeQuickCommandForSubmit(input: string) {
   return input.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
 }
 
+function resolvePromptWorkingDirectory(
+  rawPath: string,
+  homePath: string | null,
+) {
+  // 终端层只会上报 prompt 里看得到的路径字面量。
+  // 这里负责把 `/abs/path` 或 `~` / `~/subdir` 还原成 SFTP 可以直接打开的绝对路径。
+  if (rawPath.startsWith("/")) return rawPath;
+  if (!rawPath.startsWith("~") || !homePath) return null;
+  if (rawPath === "~") return homePath;
+  return `${homePath.replace(/\/+$/, "")}/${rawPath.slice(2)}`;
+}
+
 /** 应用主界面编排层。 */
 export default function AppShell() {
   useDisableBrowserShortcuts();
@@ -122,9 +135,11 @@ export default function AppShell() {
     webLinksEnabled,
     selectionAutoCopyEnabled,
     scrollback,
+    terminalPathSyncEnabled,
     setWebLinksEnabled,
     setSelectionAutoCopyEnabled,
     setScrollback,
+    setTerminalPathSyncEnabled,
   } = useSessionSettings();
   const {
     profiles,
@@ -183,6 +198,14 @@ export default function AppShell() {
   const lastSftpTransferKeyRef = useRef<Record<string, string>>({});
   const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
     useState<FloatingFilesSnapshot | null>(null);
+  const [terminalWorkingDirs, setTerminalWorkingDirs] = useState<
+    Record<string, { username: string | null; path: string }>
+  >({});
+  const [terminalHomeDirs, setTerminalHomeDirs] = useState<
+    Record<string, string>
+  >({});
+  const [terminalPathSyncStateBySession, setTerminalPathSyncStateBySession] =
+    useState<Record<string, "active" | "paused-mismatch" | "unsupported">>({});
 
   useEffect(() => {
     const theme = themePresets[themeId];
@@ -286,6 +309,21 @@ export default function AppShell() {
     recordCommandInput: sessionActions.recordCommandInput,
     writeToSession: sessionActions.writeToSession,
     resizeSession: sessionActions.resizeSession,
+    onWorkingDirectoryChange: (sessionId, payload) => {
+      setTerminalWorkingDirs((prev) =>
+        prev[sessionId]?.path === payload.path &&
+        prev[sessionId]?.username === payload.username
+          ? prev
+          : { ...prev, [sessionId]: payload },
+      );
+    },
+    onPathSyncSupportChange: (sessionId, status) => {
+      setTerminalPathSyncStateBySession((prev) => {
+        const nextState = status === "unsupported" ? "unsupported" : "active";
+        if (prev[sessionId] === nextState) return prev;
+        return { ...prev, [sessionId]: nextState };
+      });
+    },
     isLocalSession: sessionActions.isLocalSession,
     reconnectSession: sessionActions.reconnectSession,
     reconnectLocalShell: sessionActions.reconnectLocalShell,
@@ -313,6 +351,137 @@ export default function AppShell() {
     rename: renameEntry,
     remove: removeEntry,
   } = sftpActions;
+  const activeTerminalPathSyncStatus = useMemo<
+    "active" | "paused" | "unsupported" | "disabled"
+  >(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    // 图标状态优先表达“用户主动关闭”与“当前会话天然不支持”的区别，
+    // 避免本地 shell / zsh 这类场景被误显示成绿色联动中。
+    if (!terminalPathSyncEnabled) return "disabled";
+    if (!activeSessionId) return "unsupported";
+    if (sessionActions.isLocalSession(activeSessionId)) return "unsupported";
+    if (terminalPathSyncStateBySession[activeSessionId] === "unsupported") {
+      return "unsupported";
+    }
+    return terminalPathSyncStateBySession[activeSessionId] === "paused-mismatch"
+      ? "paused"
+      : terminalPathSyncStateBySession[activeSessionId] === "active"
+        ? "active"
+        : "unsupported";
+  }, [
+    sessionActions,
+    sessionState.activeSessionId,
+    terminalPathSyncEnabled,
+    terminalPathSyncStateBySession,
+  ]);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return;
+    // 新会话先走保守默认值，只有真正解析到受支持的 bash prompt 后才提升为 active，
+    // 避免 zsh / 不支持场景在首屏短暂闪成绿色。
+    setTerminalPathSyncStateBySession((prev) =>
+      prev[activeSessionId]
+        ? prev
+        : { ...prev, [activeSessionId]: "unsupported" },
+    );
+  }, [sessionState.activeSessionId]);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return;
+    if (!sessionState.isRemoteConnected) return;
+    if (!terminalPathSyncEnabled) return;
+    const tracked = terminalWorkingDirs[activeSessionId];
+    if (!tracked) return;
+    // 终端运行时已经判定该会话 prompt 不可稳定解析时，这里直接停止联动，
+    // 不再尝试根据脏路径去驱动 SFTP。
+    if (terminalPathSyncStateBySession[activeSessionId] === "unsupported") {
+      return;
+    }
+    const sessionProfile = sessionState.activeSessionProfile;
+    const loginUsername = sessionProfile?.username?.trim() || null;
+    const promptUsername = tracked.username?.trim() || null;
+    const syncState =
+      terminalPathSyncStateBySession[activeSessionId] ?? "active";
+    // 终端 prompt 用户一旦和 SSH 初始登录用户不一致，说明 shell 身份已经切换，
+    // 此时再继续用原 SFTP 身份联动路径会产生错误的 home/权限语义，因此直接暂停联动。
+    if (loginUsername && promptUsername && loginUsername !== promptUsername) {
+      if (syncState !== "paused-mismatch") {
+        setTerminalPathSyncStateBySession((prev) => ({
+          ...prev,
+          [activeSessionId]: "paused-mismatch",
+        }));
+        warn(
+          JSON.stringify({
+            event: "terminal:cwd-sync-paused-user-mismatch",
+            sessionId: activeSessionId,
+            loginUsername,
+            promptUsername,
+          }),
+        );
+      }
+      return;
+    }
+    // 当 prompt 用户恢复成初始登录用户后，说明 shell 身份重新与 SFTP 身份对齐，
+    // 此时自动恢复路径联动，不要求用户手动刷新或重新连接。
+    if (syncState === "paused-mismatch") {
+      setTerminalPathSyncStateBySession((prev) => ({
+        ...prev,
+        [activeSessionId]: "active",
+      }));
+      info(
+        JSON.stringify({
+          event: "terminal:cwd-sync-resumed-user-match",
+          sessionId: activeSessionId,
+          loginUsername,
+          promptUsername,
+        }),
+      ).catch(() => {});
+    }
+    const trackedPath = tracked.path;
+    // prompt 中的 `~` 只能表示“当前 shell 的 home 语义”，SFTP 无法直接访问它。
+    // 这里复用当前会话已知的绝对路径来记住 home，并在后续把 `~` / `~/subdir` 展开为绝对路径。
+    const knownHome =
+      terminalHomeDirs[activeSessionId] ??
+      (trackedPath === "~" && sftpState.currentPath.startsWith("/")
+        ? sftpState.currentPath
+        : null);
+    if (
+      trackedPath === "~" &&
+      knownHome &&
+      terminalHomeDirs[activeSessionId] !== knownHome
+    ) {
+      setTerminalHomeDirs((prev) => ({
+        ...prev,
+        [activeSessionId]: knownHome,
+      }));
+    }
+    const resolvedPath = resolvePromptWorkingDirectory(trackedPath, knownHome);
+    if (!resolvedPath || resolvedPath === sftpState.currentPath) return;
+    // 终端 cwd 只单向驱动文件管理器，避免文件管理器操作再反向干扰 shell。
+    openRemoteDir(resolvedPath).catch((error) => {
+      warn(
+        JSON.stringify({
+          event: "sftp:sync-terminal-path-failed",
+          sessionId: activeSessionId,
+          path: resolvedPath,
+          rawPath: trackedPath,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    });
+  }, [
+    openRemoteDir,
+    sessionState.activeSessionProfile,
+    sessionState.activeSessionId,
+    sessionState.isRemoteConnected,
+    terminalPathSyncStateBySession,
+    sftpState.currentPath,
+    terminalHomeDirs,
+    terminalPathSyncEnabled,
+    terminalWorkingDirs,
+  ]);
 
   const isFloatingFilesPanel = floatingPanelKey === "files";
 
@@ -635,6 +804,7 @@ export default function AppShell() {
         busyMessage: sessionState.busyMessage,
         logEntries: sessionState.logEntries,
         currentPath: filesPanelState.currentPath,
+        terminalPathSyncStatus: activeTerminalPathSyncStatus,
         entries: filesPanelState.entries,
         locale,
         canReconnect: sessionState.canReconnect,
@@ -680,6 +850,7 @@ export default function AppShell() {
       sessionState.busyMessage,
       sessionState.logEntries,
       filesPanelState.currentPath,
+      activeTerminalPathSyncStatus,
       filesPanelState.entries,
       locale,
       sessionState.canReconnect,
@@ -934,9 +1105,11 @@ export default function AppShell() {
         webLinksEnabled={webLinksEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
         scrollback={scrollback}
+        terminalPathSyncEnabled={terminalPathSyncEnabled}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
         onScrollbackChange={setScrollback}
+        onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}
