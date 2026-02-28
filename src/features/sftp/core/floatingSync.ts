@@ -2,7 +2,7 @@
  * 浮动文件面板同步协议。
  * 职责：定义主窗口与浮动文件管理器之间共享的状态快照与操作消息类型。
  */
-import type { SftpEntry } from "@/types";
+import type { SftpAvailability, SftpEntry } from "@/types";
 
 /** 浮动文件面板与主窗口之间共享的 BroadcastChannel 名称。 */
 export const FLOATING_FILES_CHANNEL = "fluxterm-files-sync";
@@ -12,6 +12,13 @@ export type FloatingFilesSnapshot = {
   activeSessionId: string | null;
   isRemoteSession: boolean;
   isRemoteConnected: boolean;
+  sftpAvailability: SftpAvailability;
+  terminalPathSyncStatus:
+    | "active"
+    | "paused"
+    | "checking"
+    | "unsupported"
+    | "disabled";
   currentPath: string;
   entries: SftpEntry[];
 };

@@ -2,11 +2,13 @@
  * SFTP 状态核心 Hook。
  * 职责：维护目录视图、传输进度与文件操作流程。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { warn } from "@tauri-apps/plugin-log";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
   LogLevel,
+  SftpAvailability,
   SftpEntry,
   SftpProgress,
   Session,
@@ -28,6 +30,8 @@ import {
 import { registerSftpProgressListener } from "@/features/sftp/core/listeners";
 
 type UseSftpStateProps = {
+  enabled: boolean;
+  active: boolean;
   activeSessionId: string | null;
   activeSession: Session | null;
   activeSessionState: SessionStateUi | null;
@@ -46,6 +50,7 @@ type UseSftpStateResult = {
   currentPath: string;
   entries: SftpEntry[];
   progressBySession: Record<string, SftpProgress>;
+  availabilityBySession: Record<string, SftpAvailability>;
   refreshList: (path?: string, sessionId?: string | null) => Promise<void>;
   openRemoteDir: (path: string) => Promise<void>;
   uploadFile: () => Promise<void>;
@@ -57,6 +62,8 @@ type UseSftpStateResult = {
 
 /** SFTP 目录与传输状态管理。 */
 export default function useSftpState({
+  enabled,
+  active,
   activeSessionId,
   activeSession,
   activeSessionState,
@@ -72,11 +79,19 @@ export default function useSftpState({
   const [progressBySession, setProgressBySession] = useState<
     Record<string, SftpProgress>
   >({});
+  const [availabilityBySession, setAvailabilityBySession] = useState<
+    Record<string, SftpAvailability>
+  >({});
+  const unsupportedLoggedRef = useRef<Record<string, boolean>>({});
 
   const activeFileView = useMemo(() => {
     if (!activeSessionId) return null;
     return fileViews[activeSessionId] ?? null;
   }, [fileViews, activeSessionId]);
+  const activeSessionIsLocal = useMemo(
+    () => isLocalSession(activeSessionId),
+    [activeSessionId, isLocalSession],
+  );
 
   const currentPath = activeFileView?.path ?? "";
   const entries = activeFileView?.entries ?? [];
@@ -92,16 +107,86 @@ export default function useSftpState({
     }));
   }
 
+  function setSessionAvailability(
+    sessionId: string,
+    availability: SftpAvailability,
+  ) {
+    setAvailabilityBySession((prev) =>
+      prev[sessionId] === availability
+        ? prev
+        : { ...prev, [sessionId]: availability },
+    );
+  }
+
+  function clearFileView(sessionId: string) {
+    updateFileView(sessionId, "", []);
+  }
+
+  function isSftpInitUnsupported(error: unknown) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : "";
+    return code === "sftp_init_failed";
+  }
+
+  function markUnsupported(sessionId: string, error: unknown) {
+    setSessionAvailability(sessionId, "unsupported");
+    clearFileView(sessionId);
+    // 服务器不支持 SFTP 时，只在当前会话首次失败时记录一次，
+    // 后续直接保持 unsupported 状态，避免自动初始化反复刷日志。
+    if (!unsupportedLoggedRef.current[sessionId]) {
+      unsupportedLoggedRef.current[sessionId] = true;
+      appendLog("log.event.sftpUnsupported");
+      warn(
+        JSON.stringify({
+          event: "sftp:unsupported",
+          sessionId,
+          error:
+            typeof error === "object" && error !== null
+              ? {
+                  code:
+                    "code" in error && typeof error.code === "string"
+                      ? error.code
+                      : null,
+                  message:
+                    "message" in error && typeof error.message === "string"
+                      ? error.message
+                      : String(error),
+                  detail:
+                    "detail" in error && typeof error.detail === "string"
+                      ? error.detail
+                      : null,
+                }
+              : { code: null, message: String(error), detail: null },
+        }),
+      ).catch(() => {});
+    }
+  }
+
   async function refreshList(path = currentPath, sessionId = activeSessionId) {
     if (!sessionId) return;
     if (isLocalSession(sessionId)) {
+      setSessionAvailability(sessionId, "ready");
       const normalizedPath = normalizeLocalPath(path);
       const list = await localList(normalizedPath);
       updateFileView(sessionId, normalizedPath, list);
       return;
     }
+    if (!enabled || !active) {
+      setSessionAvailability(sessionId, "disabled");
+      clearFileView(sessionId);
+      return;
+    }
+    if (availabilityBySession[sessionId] === "unsupported") {
+      clearFileView(sessionId);
+      return;
+    }
     if (sessionStatesRef.current[sessionId] !== "connected") {
-      updateFileView(sessionId, "", []);
+      clearFileView(sessionId);
       return;
     }
     // 远端目录不能为空。连接建立初期 currentPath 可能还是空串，此时先回退到 home，
@@ -110,23 +195,54 @@ export default function useSftpState({
       await loadHomePath(sessionId);
       return;
     }
-    const list = await sftpList(sessionId, path);
-    updateFileView(sessionId, path, list);
+    try {
+      const list = await sftpList(sessionId, path);
+      setSessionAvailability(sessionId, "ready");
+      updateFileView(sessionId, path, list);
+    } catch (error) {
+      if (isSftpInitUnsupported(error)) {
+        markUnsupported(sessionId, error);
+        return;
+      }
+      throw error;
+    }
   }
 
   async function loadHomePath(sessionId = activeSessionId) {
     if (!sessionId) return;
     if (isLocalSession(sessionId)) {
+      setSessionAvailability(sessionId, "ready");
       const home = await localHome();
       await refreshList(home, sessionId);
       return;
     }
-    if (sessionStatesRef.current[sessionId] !== "connected") {
-      updateFileView(sessionId, "", []);
+    if (!enabled || !active) {
+      setSessionAvailability(sessionId, "disabled");
+      clearFileView(sessionId);
       return;
     }
-    const home = await sftpHome(sessionId);
-    await refreshList(home, sessionId);
+    if (availabilityBySession[sessionId] === "unsupported") {
+      clearFileView(sessionId);
+      return;
+    }
+    if (sessionStatesRef.current[sessionId] !== "connected") {
+      clearFileView(sessionId);
+      return;
+    }
+    // 远端会话开始初始化 SFTP 但尚未拿到结果前，先标记为 checking，
+    // 让文件面板和联动图标都能显示“正在检测”而不是误导成空目录或已可用。
+    setSessionAvailability(sessionId, "checking");
+    try {
+      const home = await sftpHome(sessionId);
+      setSessionAvailability(sessionId, "ready");
+      await refreshList(home, sessionId);
+    } catch (error) {
+      if (isSftpInitUnsupported(error)) {
+        markUnsupported(sessionId, error);
+        return;
+      }
+      throw error;
+    }
   }
 
   async function openRemoteDir(path: string) {
@@ -135,12 +251,32 @@ export default function useSftpState({
       await refreshList(path, activeSessionId);
       return;
     }
-    const resolvedPath = await sftpResolvePath(activeSessionId, path);
-    await refreshList(resolvedPath, activeSessionId);
+    if (!enabled || !active) {
+      setSessionAvailability(activeSessionId, "disabled");
+      clearFileView(activeSessionId);
+      return;
+    }
+    if (availabilityBySession[activeSessionId] === "unsupported") {
+      clearFileView(activeSessionId);
+      return;
+    }
+    setSessionAvailability(activeSessionId, "checking");
+    try {
+      const resolvedPath = await sftpResolvePath(activeSessionId, path);
+      setSessionAvailability(activeSessionId, "ready");
+      await refreshList(resolvedPath, activeSessionId);
+    } catch (error) {
+      if (isSftpInitUnsupported(error)) {
+        markUnsupported(activeSessionId, error);
+        return;
+      }
+      throw error;
+    }
   }
 
   async function uploadFile() {
     if (!activeSession) return;
+    if (!enabled && !isLocalSession(activeSession.sessionId)) return;
     const file = await open({ multiple: false });
     if (!file || Array.isArray(file)) return;
     const fileName = file.split(/[\\/]/).pop() ?? "upload.bin";
@@ -162,6 +298,7 @@ export default function useSftpState({
 
   async function downloadFile(entry: SftpEntry) {
     if (!activeSession) return;
+    if (!enabled && !isLocalSession(activeSession.sessionId)) return;
     const target = await save({ defaultPath: entry.name });
     if (!target) return;
     appendLog("log.event.downloadStart", { name: entry.name });
@@ -178,6 +315,7 @@ export default function useSftpState({
 
   async function createFolder(name: string) {
     if (!activeSession) return;
+    if (!enabled && !isLocalSession(activeSession.sessionId)) return;
     if (!name) return;
     const path = currentPath.endsWith("/")
       ? `${currentPath}${name}`
@@ -188,6 +326,7 @@ export default function useSftpState({
 
   async function rename(entry: SftpEntry, name: string) {
     if (!activeSession) return;
+    if (!enabled && !isLocalSession(activeSession.sessionId)) return;
     if (!name || name === entry.name) return;
     const base = currentPath.endsWith("/") ? currentPath : `${currentPath}/`;
     const to = `${base}${name}`;
@@ -197,14 +336,28 @@ export default function useSftpState({
 
   async function remove(entry: SftpEntry) {
     if (!activeSession) return;
+    if (!enabled && !isLocalSession(activeSession.sessionId)) return;
     await sftpRemove(activeSession.sessionId, entry.path);
     await refreshList();
   }
 
   useEffect(() => {
     if (!activeSessionId) return;
+    if ((!enabled || !active) && !activeSessionIsLocal) {
+      setSessionAvailability(activeSessionId, "disabled");
+      clearFileView(activeSessionId);
+      return;
+    }
+    // 这里不能把 isLocalSession 函数引用直接作为初始化触发条件，
+    // 否则上层 render 时函数 identity 变化会让目录初始化 effect 反复重跑。
     loadHomePath(activeSessionId).catch(() => {});
-  }, [activeSessionId, activeSessionState]);
+  }, [
+    active,
+    activeSessionId,
+    activeSessionIsLocal,
+    activeSessionState,
+    enabled,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,16 +382,14 @@ export default function useSftpState({
     };
   }, []);
 
-  useEffect(() => {
-    if (!activeSessionId) return;
-    if (sessionStatesRef.current[activeSessionId] !== "connected") return;
-    refreshList(currentPath, activeSessionId).catch(() => {});
-  }, [activeSessionId, activeSessionState]);
+  // 会话建立后的目录初始化统一走 loadHomePath -> refreshList(home) 这条链路，
+  // 不能再额外监听 currentPath 自动 refresh，否则首连时会把同一路径重复 list 一次。
 
   return {
     currentPath,
     entries,
     progressBySession,
+    availabilityBySession,
     refreshList,
     openRemoteDir,
     uploadFile,

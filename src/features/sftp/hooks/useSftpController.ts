@@ -18,6 +18,7 @@ export default function useSftpController(
       currentPath: raw.currentPath,
       entries: raw.entries,
       progressBySession: raw.progressBySession,
+      availabilityBySession: raw.availabilityBySession,
     },
     sftpActions: {
       refreshList: raw.refreshList,

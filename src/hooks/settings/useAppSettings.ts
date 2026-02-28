@@ -16,6 +16,7 @@ type AppSettings = {
   shellId?: string | null;
   locale?: Locale;
   themeId?: ThemeId;
+  sftpEnabled?: boolean;
 };
 
 type UseAppSettingsProps = {
@@ -30,6 +31,8 @@ type UseAppSettingsResult = {
   setThemeId: React.Dispatch<React.SetStateAction<ThemeId>>;
   shellId: string | null;
   setShellId: React.Dispatch<React.SetStateAction<string | null>>;
+  sftpEnabled: boolean;
+  setSftpEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
 };
@@ -60,6 +63,7 @@ export default function useAppSettings({
     [],
   );
   const [shellId, setShellId] = useState<string | null>(null);
+  const [sftpEnabled, setSftpEnabled] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const pendingShellIdRef = useRef<string | null>(null);
@@ -84,6 +88,9 @@ export default function useAppSettings({
       }
       if (parsed?.locale === "zh" || parsed?.locale === "en") {
         setLocale(parsed.locale);
+      }
+      if (typeof parsed?.sftpEnabled === "boolean") {
+        setSftpEnabled(parsed.sftpEnabled);
       }
       const normalizedThemeId = normalizeThemeId(parsed?.themeId);
       if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
@@ -169,6 +176,7 @@ export default function useAppSettings({
       shellId,
       locale,
       themeId,
+      sftpEnabled,
     }).catch((error) => {
       warn(
         JSON.stringify({
@@ -177,7 +185,7 @@ export default function useAppSettings({
         }),
       );
     });
-  }, [shellId, locale, themeId, settingsLoaded]);
+  }, [shellId, locale, themeId, sftpEnabled, settingsLoaded]);
 
   return {
     locale,
@@ -186,6 +194,8 @@ export default function useAppSettings({
     setThemeId,
     shellId,
     setShellId,
+    sftpEnabled,
+    setSftpEnabled,
     availableShells,
     settingsLoaded,
   };

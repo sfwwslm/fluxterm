@@ -15,6 +15,7 @@ import type {
   LogEntry,
   PanelKey,
   SessionStateUi,
+  SftpAvailability,
   SftpEntry,
   SftpProgress,
 } from "@/types";
@@ -34,7 +35,13 @@ type BuildPanelsProps = {
   busyMessage: string | null;
   logEntries: LogEntry[];
   currentPath: string;
-  terminalPathSyncStatus: "active" | "paused" | "unsupported" | "disabled";
+  sftpAvailability: SftpAvailability;
+  terminalPathSyncStatus:
+    | "active"
+    | "paused"
+    | "checking"
+    | "unsupported"
+    | "disabled";
   entries: SftpEntry[];
   locale: Locale;
   canReconnect: boolean;
@@ -81,6 +88,7 @@ export function buildPanels(
     busyMessage,
     logEntries,
     currentPath,
+    sftpAvailability,
     terminalPathSyncStatus,
     entries,
     locale,
@@ -142,6 +150,7 @@ export function buildPanels(
         isRemote={isRemoteConnected}
         isRemoteSession={isRemoteSession}
         currentPath={currentPath}
+        sftpAvailability={sftpAvailability}
         terminalPathSyncStatus={terminalPathSyncStatus}
         entries={entries}
         onRefresh={onRefreshList}

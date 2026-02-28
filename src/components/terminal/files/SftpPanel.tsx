@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";
-import type { SftpEntry } from "@/types";
+import type { SftpAvailability, SftpEntry } from "@/types";
 import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
 import { useNotices } from "@/hooks/useNotices";
@@ -9,6 +9,7 @@ import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
 import {
   FiCode,
+  FiRefreshCw,
   FiClock,
   FiCornerLeftUp,
   FiDatabase,
@@ -23,7 +24,6 @@ import {
   FiSlash,
   FiMoreVertical,
   FiPackage,
-  FiRefreshCw,
   FiSettings,
   FiTerminal,
   FiVideo,
@@ -35,7 +35,13 @@ type SftpPanelProps = {
   isRemote: boolean;
   isRemoteSession: boolean;
   currentPath: string;
-  terminalPathSyncStatus?: "active" | "paused" | "unsupported" | "disabled";
+  sftpAvailability?: SftpAvailability;
+  terminalPathSyncStatus?:
+    | "active"
+    | "paused"
+    | "checking"
+    | "unsupported"
+    | "disabled";
   entries: SftpEntry[];
   onRefresh: (path?: string) => void;
   onOpen: (path: string) => void;
@@ -181,7 +187,8 @@ export default function SftpPanel({
   isRemote,
   isRemoteSession,
   currentPath,
-  terminalPathSyncStatus = "unsupported",
+  sftpAvailability = "ready",
+  terminalPathSyncStatus = "checking",
   entries,
   onRefresh,
   onOpen,
@@ -204,6 +211,11 @@ export default function SftpPanel({
     y: number;
   } | null>(null);
   const showUnavailable = isRemoteSession && !isRemote;
+  const showSftpDisabled = isRemoteSession && sftpAvailability === "disabled";
+  const showSftpUnsupported =
+    isRemoteSession && sftpAvailability === "unsupported";
+  const interactionsDisabled =
+    showUnavailable || showSftpDisabled || showSftpUnsupported;
 
   const pathSyncMeta =
     terminalPathSyncStatus === "active"
@@ -212,23 +224,29 @@ export default function SftpPanel({
           tone: "active",
           label: t("sftp.pathSync.active"),
         }
-      : terminalPathSyncStatus === "paused"
+      : terminalPathSyncStatus === "checking"
         ? {
-            Icon: FiClock,
-            tone: "paused",
-            label: t("sftp.pathSync.paused"),
+            Icon: FiRefreshCw,
+            tone: "checking",
+            label: t("sftp.pathSync.checking"),
           }
-        : terminalPathSyncStatus === "unsupported"
+        : terminalPathSyncStatus === "paused"
           ? {
-              Icon: FiInfo,
-              tone: "unsupported",
-              label: t("sftp.pathSync.unsupported"),
+              Icon: FiClock,
+              tone: "paused",
+              label: t("sftp.pathSync.paused"),
             }
-          : {
-              Icon: FiSlash,
-              tone: "disabled",
-              label: t("sftp.pathSync.disabled"),
-            };
+          : terminalPathSyncStatus === "unsupported"
+            ? {
+                Icon: FiInfo,
+                tone: "unsupported",
+                label: t("sftp.pathSync.unsupported"),
+              }
+            : {
+                Icon: FiSlash,
+                tone: "disabled",
+                label: t("sftp.pathSync.disabled"),
+              };
 
   function openMenu(event: React.MouseEvent, entry: SftpEntry) {
     event.preventDefault();
@@ -260,11 +278,14 @@ export default function SftpPanel({
               <pathSyncMeta.Icon />
             </span>
           </Tooltip>
-          <div className="path" title={showUnavailable ? "-" : currentPath}>
-            {showUnavailable ? "-" : currentPath}
+          <div
+            className="path"
+            title={interactionsDisabled ? "-" : currentPath}
+          >
+            {interactionsDisabled ? "-" : currentPath}
           </div>
         </div>
-        {!showUnavailable && (
+        {!interactionsDisabled && (
           <div className="sftp-actions">
             <Tooltip content={t("actions.refresh")}>
               <Button
@@ -305,7 +326,7 @@ export default function SftpPanel({
         )}
       </div>
       <div className="sftp-list">
-        {!showUnavailable && (
+        {!interactionsDisabled && (
           <div className="sftp-table-row sftp-table-header">
             <span className="sftp-cell sftp-cell-name">
               {t("sftp.columns.name")}
@@ -323,7 +344,7 @@ export default function SftpPanel({
           </div>
         )}
         <div className="sftp-list-body">
-          {!showUnavailable &&
+          {!interactionsDisabled &&
             entries.map((entry) => {
               const iconMeta = getEntryIconMeta(entry);
               return (
@@ -372,7 +393,16 @@ export default function SftpPanel({
           {showUnavailable && (
             <div className="empty-hint">{t("sftp.emptyUnavailable")}</div>
           )}
-          {!showUnavailable && !entries.length && (
+          {showSftpDisabled && (
+            <div className="empty-hint">{t("sftp.disabled")}</div>
+          )}
+          {isRemoteSession && sftpAvailability === "checking" && (
+            <div className="empty-hint">{t("sftp.checking")}</div>
+          )}
+          {showSftpUnsupported && (
+            <div className="empty-hint">{t("sftp.unsupported")}</div>
+          )}
+          {!interactionsDisabled && !entries.length && (
             <div className="empty-hint">{t("sftp.empty")}</div>
           )}
         </div>

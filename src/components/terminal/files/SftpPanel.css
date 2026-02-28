@@ -55,6 +55,12 @@
   border-color: rgba(88, 196, 163, 0.2);
 }
 
+.path-sync-indicator.checking {
+  color: #7aa2d8;
+  background: rgba(122, 162, 216, 0.12);
+  border-color: rgba(122, 162, 216, 0.18);
+}
+
 .path-sync-indicator.paused {
   color: #d6a441;
   background: rgba(214, 164, 65, 0.14);

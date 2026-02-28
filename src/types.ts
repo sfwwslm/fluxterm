@@ -46,6 +46,13 @@ export type SftpProgress = {
   total?: number | null;
 };
 
+/** SFTP 可用性状态。 */
+export type SftpAvailability =
+  | "ready"
+  | "checking"
+  | "disabled"
+  | "unsupported";
+
 /** 日志级别。 */
 export type LogLevel = "info" | "success" | "error";
 

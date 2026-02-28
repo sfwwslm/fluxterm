@@ -124,6 +124,8 @@ export default function AppShell() {
     setThemeId,
     shellId,
     setShellId,
+    sftpEnabled,
+    setSftpEnabled,
     availableShells,
     settingsLoaded,
   } = useAppSettings({
@@ -332,7 +334,63 @@ export default function AppShell() {
     },
   });
 
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return;
+    // 新会话先走保守默认值，只有真正解析到受支持的 bash prompt 后才提升为 active，
+    // 避免 zsh / 不支持场景在首屏短暂闪成绿色。
+    setTerminalPathSyncStateBySession((prev) =>
+      prev[activeSessionId]
+        ? prev
+        : { ...prev, [activeSessionId]: "unsupported" },
+    );
+  }, [sessionState.activeSessionId]);
+
+  const isFloatingFilesPanel = floatingPanelKey === "files";
+
+  const {
+    showGroupTitle,
+    setShowGroupTitle,
+    groups: quickbarGroups,
+    commands: quickbarCommands,
+    addGroup: addQuickbarGroup,
+    renameGroup: renameQuickbarGroup,
+    removeGroup: removeQuickbarGroup,
+    toggleGroupVisible: toggleQuickbarGroupVisible,
+    addCommand: addQuickbarCommand,
+    updateCommand: updateQuickbarCommand,
+    removeCommand: removeQuickbarCommand,
+  } = useQuickBarState(t);
+
+  const {
+    layoutCollapsed,
+    sideSlotCounts,
+    slotGroups,
+    leftVisible,
+    rightVisible,
+    bottomVisible,
+    layoutVars,
+    setSlotGroups,
+    setPanelCollapsed,
+    handleToggleSplit,
+    handleCloseSlot,
+    handleToggleCollapsed,
+    startResize,
+  } = useLayoutState({
+    floatingPanelKey,
+    floatingOriginRef,
+  });
+  const filesWidgetVisible = useMemo(() => {
+    if (floatingPanelKey === "files") return true;
+    if (floatingOriginRef.current.files) return true;
+    return Object.values(slotGroups).some((group) =>
+      group.widgets.includes("files"),
+    );
+  }, [floatingPanelKey, slotGroups]);
+
   const { sftpState, sftpActions } = useSftpController({
+    enabled: sftpEnabled,
+    active: filesWidgetVisible,
     activeSessionId: sessionState.activeSessionId,
     activeSession: sessionState.activeSession,
     activeSessionState: sessionState.activeSessionState,
@@ -351,15 +409,32 @@ export default function AppShell() {
     rename: renameEntry,
     remove: removeEntry,
   } = sftpActions;
+  const activeSftpAvailability = useMemo(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return "ready";
+    if (sessionActions.isLocalSession(activeSessionId)) return "ready";
+    if (!sftpEnabled || !filesWidgetVisible) return "disabled";
+    return sftpState.availabilityBySession[activeSessionId] ?? "checking";
+  }, [
+    sessionActions,
+    sessionState.activeSessionId,
+    filesWidgetVisible,
+    sftpEnabled,
+    sftpState.availabilityBySession,
+  ]);
   const activeTerminalPathSyncStatus = useMemo<
-    "active" | "paused" | "unsupported" | "disabled"
+    "active" | "paused" | "checking" | "unsupported" | "disabled"
   >(() => {
     const activeSessionId = sessionState.activeSessionId;
     // 图标状态优先表达“用户主动关闭”与“当前会话天然不支持”的区别，
     // 避免本地 shell / zsh 这类场景被误显示成绿色联动中。
-    if (!terminalPathSyncEnabled) return "disabled";
+    if (!terminalPathSyncEnabled || !sftpEnabled || !filesWidgetVisible) {
+      return "disabled";
+    }
     if (!activeSessionId) return "unsupported";
     if (sessionActions.isLocalSession(activeSessionId)) return "unsupported";
+    if (activeSftpAvailability === "checking") return "checking";
+    if (activeSftpAvailability === "unsupported") return "unsupported";
     if (terminalPathSyncStateBySession[activeSessionId] === "unsupported") {
       return "unsupported";
     }
@@ -371,6 +446,9 @@ export default function AppShell() {
   }, [
     sessionActions,
     sessionState.activeSessionId,
+    activeSftpAvailability,
+    filesWidgetVisible,
+    sftpEnabled,
     terminalPathSyncEnabled,
     terminalPathSyncStateBySession,
   ]);
@@ -378,22 +456,13 @@ export default function AppShell() {
   useEffect(() => {
     const activeSessionId = sessionState.activeSessionId;
     if (!activeSessionId) return;
-    // 新会话先走保守默认值，只有真正解析到受支持的 bash prompt 后才提升为 active，
-    // 避免 zsh / 不支持场景在首屏短暂闪成绿色。
-    setTerminalPathSyncStateBySession((prev) =>
-      prev[activeSessionId]
-        ? prev
-        : { ...prev, [activeSessionId]: "unsupported" },
-    );
-  }, [sessionState.activeSessionId]);
-
-  useEffect(() => {
-    const activeSessionId = sessionState.activeSessionId;
-    if (!activeSessionId) return;
     if (!sessionState.isRemoteConnected) return;
-    if (!terminalPathSyncEnabled) return;
+    // 文件管理器组件不可见时，不应为了“潜在可联动”去隐式拉起 SFTP。
+    // 因此路径联动和 SFTP 初始化共用同一个可见性前置条件。
+    if (!terminalPathSyncEnabled || !sftpEnabled || !filesWidgetVisible) return;
     const tracked = terminalWorkingDirs[activeSessionId];
     if (!tracked) return;
+    if (activeSftpAvailability === "unsupported") return;
     // 终端运行时已经判定该会话 prompt 不可稳定解析时，这里直接停止联动，
     // 不再尝试根据脏路径去驱动 SFTP。
     if (terminalPathSyncStateBySession[activeSessionId] === "unsupported") {
@@ -476,14 +545,15 @@ export default function AppShell() {
     sessionState.activeSessionProfile,
     sessionState.activeSessionId,
     sessionState.isRemoteConnected,
+    activeSftpAvailability,
+    filesWidgetVisible,
     terminalPathSyncStateBySession,
     sftpState.currentPath,
     terminalHomeDirs,
+    sftpEnabled,
     terminalPathSyncEnabled,
     terminalWorkingDirs,
   ]);
-
-  const isFloatingFilesPanel = floatingPanelKey === "files";
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
@@ -497,6 +567,8 @@ export default function AppShell() {
           activeSessionId: sessionState.activeSessionId,
           isRemoteSession: sessionState.isRemoteSession,
           isRemoteConnected: sessionState.isRemoteConnected,
+          sftpAvailability: activeSftpAvailability,
+          terminalPathSyncStatus: activeTerminalPathSyncStatus,
           currentPath: sftpState.currentPath,
           entries: sftpState.entries,
         };
@@ -571,6 +643,7 @@ export default function AppShell() {
     sessionState.isRemoteSession,
     createFolder,
     downloadFile,
+    activeSftpAvailability,
     sftpState.currentPath,
     sftpState.entries,
     openRemoteDir,
@@ -579,39 +652,6 @@ export default function AppShell() {
     renameEntry,
     uploadFile,
   ]);
-
-  const {
-    showGroupTitle,
-    setShowGroupTitle,
-    groups: quickbarGroups,
-    commands: quickbarCommands,
-    addGroup: addQuickbarGroup,
-    renameGroup: renameQuickbarGroup,
-    removeGroup: removeQuickbarGroup,
-    toggleGroupVisible: toggleQuickbarGroupVisible,
-    addCommand: addQuickbarCommand,
-    updateCommand: updateQuickbarCommand,
-    removeCommand: removeQuickbarCommand,
-  } = useQuickBarState(t);
-
-  const {
-    layoutCollapsed,
-    sideSlotCounts,
-    slotGroups,
-    leftVisible,
-    rightVisible,
-    bottomVisible,
-    layoutVars,
-    setSlotGroups,
-    setPanelCollapsed,
-    handleToggleSplit,
-    handleCloseSlot,
-    handleToggleCollapsed,
-    startResize,
-  } = useLayoutState({
-    floatingPanelKey,
-    floatingOriginRef,
-  });
 
   const { handleFloat } = useFloatingPanels({
     floatingPanelKey,
@@ -714,16 +754,24 @@ export default function AppShell() {
             isRemoteSession: floatingFilesSnapshot?.isRemoteSession ?? false,
             isRemoteConnected:
               floatingFilesSnapshot?.isRemoteConnected ?? false,
+            sftpAvailability:
+              floatingFilesSnapshot?.sftpAvailability ?? "checking",
+            terminalPathSyncStatus:
+              floatingFilesSnapshot?.terminalPathSyncStatus ?? "checking",
             currentPath: floatingFilesSnapshot?.currentPath ?? "",
             entries: floatingFilesSnapshot?.entries ?? [],
           }
         : {
             isRemoteSession: sessionState.isRemoteSession,
             isRemoteConnected: sessionState.isRemoteConnected,
+            sftpAvailability: activeSftpAvailability,
+            terminalPathSyncStatus: activeTerminalPathSyncStatus,
             currentPath: sftpState.currentPath,
             entries: sftpState.entries,
           },
     [
+      activeSftpAvailability,
+      activeTerminalPathSyncStatus,
       floatingFilesSnapshot,
       isFloatingFilesPanel,
       sessionState.isRemoteConnected,
@@ -804,7 +852,8 @@ export default function AppShell() {
         busyMessage: sessionState.busyMessage,
         logEntries: sessionState.logEntries,
         currentPath: filesPanelState.currentPath,
-        terminalPathSyncStatus: activeTerminalPathSyncStatus,
+        sftpAvailability: filesPanelState.sftpAvailability,
+        terminalPathSyncStatus: filesPanelState.terminalPathSyncStatus,
         entries: filesPanelState.entries,
         locale,
         canReconnect: sessionState.canReconnect,
@@ -850,7 +899,8 @@ export default function AppShell() {
       sessionState.busyMessage,
       sessionState.logEntries,
       filesPanelState.currentPath,
-      activeTerminalPathSyncStatus,
+      filesPanelState.terminalPathSyncStatus,
+      filesPanelState.sftpAvailability,
       filesPanelState.entries,
       locale,
       sessionState.canReconnect,
@@ -1102,10 +1152,12 @@ export default function AppShell() {
         open={configModalOpen}
         activeSection={activeConfigSection}
         sections={configModalSections}
+        sftpEnabled={sftpEnabled}
         webLinksEnabled={webLinksEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
         scrollback={scrollback}
         terminalPathSyncEnabled={terminalPathSyncEnabled}
+        onSftpEnabledChange={setSftpEnabled}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
         onScrollbackChange={setScrollback}

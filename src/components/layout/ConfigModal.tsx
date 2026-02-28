@@ -25,10 +25,12 @@ type ConfigModalProps = {
   open: boolean;
   activeSection: ConfigSectionKey;
   sections: ConfigSectionItem[];
+  sftpEnabled?: boolean;
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
+  onSftpEnabledChange?: (enabled: boolean) => void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
   onScrollbackChange?: (value: number) => void;
@@ -50,10 +52,12 @@ export default function ConfigModal({
   open,
   activeSection,
   sections,
+  sftpEnabled = true,
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
   scrollback = 3000,
   terminalPathSyncEnabled = true,
+  onSftpEnabledChange,
   onWebLinksEnabledChange,
   onSelectionAutoCopyEnabledChange,
   onScrollbackChange,
@@ -111,6 +115,21 @@ export default function ConfigModal({
       return (
         <div className="config-modal-panel config-modal-panel-scrollable">
           <h3>{t("config.section.appSettings")}</h3>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.app.sftpEnabled")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.app.sftpEnabledHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={sftpEnabled}
+              onChange={(event) => onSftpEnabledChange?.(event.target.checked)}
+            />
+          </label>
         </div>
       );
     }
