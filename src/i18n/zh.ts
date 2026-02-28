@@ -145,6 +145,7 @@ export const zh = {
   "actions.remove": "删除",
   "actions.reconnect": "重新连接",
   "status.window": "窗口",
+  "status.buffer": "历史",
   "status.line": "行",
   "status.char": "字符",
   "quickbar.noSession": "当前没有活动会话",

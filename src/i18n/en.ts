@@ -147,6 +147,7 @@ export const en = {
   "actions.remove": "Delete",
   "actions.reconnect": "Reconnect",
   "status.window": "Window",
+  "status.buffer": "Buffer",
   "status.line": "Line",
   "status.char": "Char",
   "quickbar.noSession": "No active session",

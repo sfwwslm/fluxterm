@@ -68,6 +68,7 @@ type TerminalRuntime = {
   getActiveTerminalStats: () => {
     windowRows: number;
     windowCols: number;
+    bufferLines: number;
   };
   getActiveSearchStats: () => {
     resultIndex: number;
@@ -912,11 +913,15 @@ export default function useTerminalRuntime({
       return {
         windowRows: 0,
         windowCols: 0,
+        bufferLines: 0,
       };
     }
+    // buffer 真实行数按“当前已经写到的最后一条 buffer 行”计算，
+    // 它反映的是当前会话已经累计产生了多少行终端内容，而不是窗口可见高度。
     return {
       windowRows: bundle.terminal.rows,
       windowCols: bundle.terminal.cols,
+      bufferLines: getAbsoluteCursorLine(bundle.terminal) + 1,
     };
   }
 
