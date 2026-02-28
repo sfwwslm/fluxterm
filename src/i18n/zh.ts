@@ -53,6 +53,8 @@ export const zh = {
   "terminal.menu.paste": "粘贴",
   "terminal.menu.clear": "清屏",
   "terminal.menu.search": "搜索",
+  "terminal.menu.openLink": "浏览器中打开",
+  "terminal.menu.copyLink": "复制链接地址",
   "terminal.search.placeholder": "搜索当前会话内容",
   "terminal.search.caseSensitive": "区分大小写",
   "terminal.search.regex": "正则",

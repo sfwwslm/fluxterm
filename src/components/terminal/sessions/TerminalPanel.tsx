@@ -55,8 +55,12 @@ type TerminalPanelProps = {
     element: HTMLDivElement | null,
   ) => void;
   isTerminalReady: (sessionId: string) => boolean;
+  activeLinkMenu: { x: number; y: number; uri: string } | null;
   hasActiveSelection: () => boolean;
   onCopySelection: () => Promise<boolean>;
+  onOpenLink: () => Promise<boolean>;
+  onCopyLink: () => Promise<boolean>;
+  onCloseLinkMenu: () => void;
   onPaste: () => Promise<boolean>;
   onClear: () => boolean;
   onSearchNext: (keyword: string, options?: SearchOptions) => boolean;
@@ -82,8 +86,12 @@ export default function TerminalPanel({
   sessionStates,
   registerTerminalContainer,
   isTerminalReady,
+  activeLinkMenu,
   hasActiveSelection,
   onCopySelection,
+  onOpenLink,
+  onCopyLink,
+  onCloseLinkMenu,
   onPaste,
   onClear,
   onSearchNext,
@@ -203,6 +211,7 @@ export default function TerminalPanel({
               onContextMenu={(event) => {
                 event.preventDefault();
                 if (!active) return;
+                onCloseLinkMenu();
                 setMenu({ x: event.clientX, y: event.clientY });
               }}
             />
@@ -258,6 +267,30 @@ export default function TerminalPanel({
               },
             ]}
             onClose={closeMenu}
+          />
+        )}
+        {/* 终端 URL 点击菜单：与普通右键菜单分开维护，避免互相覆盖。 */}
+        {activeLinkMenu && (
+          <ContextMenu
+            x={activeLinkMenu.x}
+            y={activeLinkMenu.y}
+            items={[
+              {
+                label: t("terminal.menu.openLink"),
+                disabled: false,
+                onClick: () => {
+                  onOpenLink().catch(() => {});
+                },
+              },
+              {
+                label: t("terminal.menu.copyLink"),
+                disabled: false,
+                onClick: () => {
+                  onCopyLink().catch(() => {});
+                },
+              },
+            ]}
+            onClose={onCloseLinkMenu}
           />
         )}
         {searchVisible && (

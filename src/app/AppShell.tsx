@@ -793,8 +793,12 @@ export default function AppShell() {
                   terminalActions.registerTerminalContainer
                 }
                 isTerminalReady={terminalQuery.isTerminalReady}
+                activeLinkMenu={terminalQuery.getActiveLinkMenu()}
                 hasActiveSelection={terminalQuery.hasActiveSelection}
                 onCopySelection={terminalActions.copyActiveSelection}
+                onOpenLink={terminalActions.openActiveLink}
+                onCopyLink={terminalActions.copyActiveLink}
+                onCloseLinkMenu={terminalActions.closeActiveLinkMenu}
                 onPaste={terminalActions.pasteToActiveTerminal}
                 onClear={terminalActions.clearActiveTerminal}
                 onSearchNext={terminalActions.searchActiveTerminalNext}

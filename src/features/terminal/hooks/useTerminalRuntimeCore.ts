@@ -64,9 +64,17 @@ type TerminalRuntime = {
     resultIndex: number;
     resultCount: number;
   } | null;
+  getActiveLinkMenu: () => {
+    x: number;
+    y: number;
+    uri: string;
+  } | null;
   focusActiveTerminal: () => boolean;
   hasActiveSelection: () => boolean;
   copyActiveSelection: () => Promise<boolean>;
+  openActiveLink: () => Promise<boolean>;
+  copyActiveLink: () => Promise<boolean>;
+  closeActiveLinkMenu: () => void;
   pasteToActiveTerminal: () => Promise<boolean>;
   clearActiveTerminal: () => boolean;
   clearActiveSearchDecorations: () => void;
@@ -109,6 +117,14 @@ type SearchStats = {
   resultIndex: number;
   resultCount: number;
   decorations: boolean;
+};
+
+/** 终端链接点击后的临时菜单状态。 */
+type LinkMenuState = {
+  sessionId: string;
+  x: number;
+  y: number;
+  uri: string;
 };
 
 /**
@@ -176,6 +192,7 @@ export default function useTerminalRuntime({
   const [searchStatsBySession, setSearchStatsBySession] = useState<
     Record<string, SearchStats | null>
   >({});
+  const [linkMenu, setLinkMenu] = useState<LinkMenuState | null>(null);
   const [terminalReadyBySession, setTerminalReadyBySession] = useState<
     Record<string, boolean>
   >({});
@@ -345,10 +362,15 @@ export default function useTerminalRuntime({
     let webLinksAddon: WebLinksAddon | null = null;
     if (modules.WebLinksAddon) {
       try {
-        // 将终端中识别到的 URL 交给 Tauri opener 打开，保持桌面端默认打开行为。
+        // 终端检测到 URL 点击后，不再直接打开，而是记录点击位置并弹出操作菜单。
         webLinksAddon = new modules.WebLinksAddon((event, uri) => {
           event.preventDefault();
-          openUrl(uri).catch(() => {});
+          setLinkMenu({
+            sessionId,
+            x: event.clientX,
+            y: event.clientY,
+            uri,
+          });
         });
         term.loadAddon(webLinksAddon);
       } catch {
@@ -564,6 +586,18 @@ export default function useTerminalRuntime({
     return { resultIndex: stats.resultIndex, resultCount: stats.resultCount };
   }
 
+  /** 仅暴露当前活动会话的链接菜单，避免切换会话后串用旧菜单状态。 */
+  function getActiveLinkMenu() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return null;
+    if (linkMenu?.sessionId !== sessionId) return null;
+    return {
+      x: linkMenu.x,
+      y: linkMenu.y,
+      uri: linkMenu.uri,
+    };
+  }
+
   function hasActiveSelection() {
     return !!getActiveBundle()?.terminal.getSelection();
   }
@@ -584,6 +618,58 @@ export default function useTerminalRuntime({
     } catch {
       return false;
     }
+  }
+
+  /** 在默认浏览器中打开当前链接，并在操作结束后关闭菜单。 */
+  async function openActiveLink() {
+    const menu = getActiveLinkMenu();
+    if (!menu?.uri) return false;
+    try {
+      await openUrl(menu.uri);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setLinkMenu((current) =>
+        current?.uri === menu.uri &&
+        current.x === menu.x &&
+        current.y === menu.y
+          ? null
+          : current,
+      );
+    }
+  }
+
+  /** 复制当前链接地址，并在操作结束后关闭菜单。 */
+  async function copyActiveLink() {
+    const menu = getActiveLinkMenu();
+    if (!menu?.uri) return false;
+    try {
+      await writeText(menu.uri);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setLinkMenu((current) =>
+        current?.uri === menu.uri &&
+        current.x === menu.x &&
+        current.y === menu.y
+          ? null
+          : current,
+      );
+    }
+  }
+
+  /** 统一关闭当前活动会话的链接菜单，供外层点击或其他菜单打开时复用。 */
+  function closeActiveLinkMenu() {
+    const sessionId = activeSessionIdRef.current;
+    setLinkMenu((current) => {
+      if (!current) return null;
+      if (!sessionId || current.sessionId === sessionId) {
+        return null;
+      }
+      return current;
+    });
   }
 
   async function pasteToActiveTerminal() {
@@ -674,9 +760,13 @@ export default function useTerminalRuntime({
     getTerminalSize,
     getActiveTerminalStats,
     getActiveSearchStats,
+    getActiveLinkMenu,
     focusActiveTerminal,
     hasActiveSelection,
     copyActiveSelection,
+    openActiveLink,
+    copyActiveLink,
+    closeActiveLinkMenu,
     pasteToActiveTerminal,
     clearActiveTerminal,
     clearActiveSearchDecorations,

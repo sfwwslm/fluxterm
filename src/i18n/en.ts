@@ -54,6 +54,8 @@ export const en = {
   "terminal.menu.paste": "Paste",
   "terminal.menu.clear": "Clear",
   "terminal.menu.search": "Search",
+  "terminal.menu.openLink": "Open in Browser",
+  "terminal.menu.copyLink": "Copy Link Address",
   "terminal.search.placeholder": "Search in current session",
   "terminal.search.caseSensitive": "Case sensitive",
   "terminal.search.regex": "Regex",
