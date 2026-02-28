@@ -365,7 +365,7 @@ export default function AppShell() {
     addCommand: addQuickbarCommand,
     updateCommand: updateQuickbarCommand,
     removeCommand: removeQuickbarCommand,
-  } = useQuickBarState();
+  } = useQuickBarState(t);
 
   const {
     layoutCollapsed,

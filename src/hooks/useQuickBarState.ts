@@ -6,6 +6,7 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { warn } from "@tauri-apps/plugin-log";
+import type { Translate, TranslationKey } from "@/i18n";
 import type {
   QuickBarConfig,
   QuickCommandGroup,
@@ -14,26 +15,14 @@ import type {
 import { getFluxTermConfigDir, getQuickbarPath } from "@/shared/config/paths";
 import {
   DEFAULT_QUICKBAR_GROUP_ID,
-  DEFAULT_QUICKBAR_GROUP_NAME,
   LEGACY_DEFAULT_QUICKBAR_GROUP_ID,
 } from "@/constants/quickbar";
 
 const defaultGroupId = DEFAULT_QUICKBAR_GROUP_ID;
 
-/** 快捷栏默认配置。 */
-const defaultQuickBarConfig: QuickBarConfig = {
-  version: 1,
-  showGroupTitle: true,
-  groups: [
-    {
-      id: defaultGroupId,
-      name: DEFAULT_QUICKBAR_GROUP_NAME,
-      order: 0,
-      visible: true,
-    },
-  ],
-  commands: [],
-};
+type GroupMutationResult =
+  | { ok: true; id?: string }
+  | { ok: false; errorKey: TranslationKey };
 
 type UseQuickBarStateResult = {
   showGroupTitle: boolean;
@@ -41,8 +30,8 @@ type UseQuickBarStateResult = {
   groups: QuickCommandGroup[];
   commands: QuickCommandItem[];
   visibleGroupIds: string[];
-  addGroup: (name: string) => string | null;
-  renameGroup: (groupId: string, name: string) => void;
+  addGroup: (name: string) => GroupMutationResult;
+  renameGroup: (groupId: string, name: string) => GroupMutationResult;
   removeGroup: (groupId: string) => void;
   toggleGroupVisible: (groupId: string) => void;
   addCommand: (payload: {
@@ -57,6 +46,27 @@ type UseQuickBarStateResult = {
   removeCommand: (commandId: string) => void;
   visibleCommands: Array<QuickCommandItem & { groupName: string }>;
 };
+
+function getDefaultGroupName(t: Translate) {
+  return t("quickbar.group.default");
+}
+
+/** 快捷栏默认配置。 */
+function createDefaultQuickBarConfig(t: Translate): QuickBarConfig {
+  return {
+    version: 1,
+    showGroupTitle: true,
+    groups: [
+      {
+        id: defaultGroupId,
+        name: getDefaultGroupName(t),
+        order: 0,
+        visible: true,
+      },
+    ],
+    commands: [],
+  };
+}
 
 /** 生成分组/命令 id：优先使用浏览器原生 UUID。 */
 function createId() {
@@ -93,8 +103,26 @@ function isValidCommand(value: unknown): value is QuickCommandItem {
   );
 }
 
+function normalizeGroupName(name: string) {
+  return name.trim().toLocaleLowerCase();
+}
+
+/** 判断分组名是否与现有分组重复；默认忽略当前正在重命名的分组。 */
+function isDuplicateGroupName(
+  groups: QuickCommandGroup[],
+  name: string,
+  excludeGroupId?: string,
+) {
+  const normalized = normalizeGroupName(name);
+  return groups.some((group) => {
+    if (excludeGroupId && group.id === excludeGroupId) return false;
+    return normalizeGroupName(group.name) === normalized;
+  });
+}
+
 /** 配置规范化：兼容历史默认分组 id，并修正无效字段。 */
-function normalizeConfig(value: unknown): QuickBarConfig {
+function normalizeConfig(value: unknown, t: Translate): QuickBarConfig {
+  const defaultQuickBarConfig = createDefaultQuickBarConfig(t);
   if (!value || typeof value !== "object") {
     return defaultQuickBarConfig;
   }
@@ -114,7 +142,7 @@ function normalizeConfig(value: unknown): QuickBarConfig {
       id,
       name:
         id === defaultGroupId
-          ? DEFAULT_QUICKBAR_GROUP_NAME
+          ? getDefaultGroupName(t)
           : group.name.trim() || `Group ${index + 1}`,
       order: Number.isFinite(group.order) ? group.order : index,
       visible: group.visible,
@@ -123,7 +151,7 @@ function normalizeConfig(value: unknown): QuickBarConfig {
   if (!dedupedGroups.some((group) => group.id === defaultGroupId)) {
     dedupedGroups.unshift({
       id: defaultGroupId,
-      name: DEFAULT_QUICKBAR_GROUP_NAME,
+      name: getDefaultGroupName(t),
       order: -1,
       visible: true,
     });
@@ -161,7 +189,11 @@ function normalizeConfig(value: unknown): QuickBarConfig {
 }
 
 /** 快捷栏分组与命令状态管理（含本地配置持久化）。 */
-export default function useQuickBarState(): UseQuickBarStateResult {
+export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
+  const defaultQuickBarConfig = useMemo(
+    () => createDefaultQuickBarConfig(t),
+    [t],
+  );
   const [showGroupTitle, setShowGroupTitle] = useState(
     defaultQuickBarConfig.showGroupTitle ?? true,
   );
@@ -188,7 +220,7 @@ export default function useQuickBarState(): UseQuickBarStateResult {
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
-      const normalized = normalizeConfig(parsed);
+      const normalized = normalizeConfig(parsed, t);
       setShowGroupTitle(normalized.showGroupTitle ?? true);
       setGroups(normalized.groups);
       setCommands(normalized.commands);
@@ -213,7 +245,18 @@ export default function useQuickBarState(): UseQuickBarStateResult {
 
   useEffect(() => {
     loadConfig().catch(() => {});
-  }, []);
+  }, [t]);
+
+  useEffect(() => {
+    // 默认分组名称始终跟随当前语言切换，避免保留旧语言下的硬编码名称。
+    setGroups((prev) =>
+      prev.map((group) =>
+        group.id === defaultGroupId
+          ? { ...group, name: getDefaultGroupName(t) }
+          : group,
+      ),
+    );
+  }, [t]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -264,11 +307,17 @@ export default function useQuickBarState(): UseQuickBarStateResult {
           groupNameById.get(item.groupId) ??
           defaultQuickBarConfig.groups[0].name,
       }));
-  }, [commands, groups, visibleGroupIds]);
+  }, [commands, defaultQuickBarConfig.groups, groups, visibleGroupIds]);
 
-  function addGroup(name: string) {
+  function addGroup(name: string): GroupMutationResult {
     const trimmed = name.trim();
-    if (!trimmed) return null;
+    if (!trimmed) {
+      return { ok: false, errorKey: "quickbar.manager.groupNameRequired" };
+    }
+    // 分组名按去首尾空格 + 不区分大小写的方式判重。
+    if (isDuplicateGroupName(groups, trimmed)) {
+      return { ok: false, errorKey: "quickbar.manager.groupNameDuplicate" };
+    }
     const id = createId();
     setGroups((prev) => [
       ...prev,
@@ -279,17 +328,24 @@ export default function useQuickBarState(): UseQuickBarStateResult {
         visible: false,
       },
     ]);
-    return id;
+    return { ok: true, id };
   }
 
-  function renameGroup(groupId: string, name: string) {
+  function renameGroup(groupId: string, name: string): GroupMutationResult {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return { ok: false, errorKey: "quickbar.manager.groupNameRequired" };
+    }
+    // 重命名时排除当前分组自身，允许“名称不变”的提交通过。
+    if (isDuplicateGroupName(groups, trimmed, groupId)) {
+      return { ok: false, errorKey: "quickbar.manager.groupNameDuplicate" };
+    }
     setGroups((prev) =>
       prev.map((group) =>
         group.id === groupId ? { ...group, name: trimmed } : group,
       ),
     );
+    return { ok: true };
   }
 
   function removeGroup(groupId: string) {

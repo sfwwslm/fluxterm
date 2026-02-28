@@ -9,10 +9,12 @@ type InputDialogProps = {
   label: string;
   placeholder?: string;
   initialValue?: string;
+  errorText?: string | null;
   confirmText: string;
   cancelText: string;
   closeText: string;
   onClose: () => void;
+  onValueChange?: (value: string) => void;
   onConfirm: (value: string) => void;
 };
 
@@ -23,10 +25,12 @@ export default function InputDialog({
   label,
   placeholder,
   initialValue = "",
+  errorText,
   confirmText,
   cancelText,
   closeText,
   onClose,
+  onValueChange,
   onConfirm,
 }: InputDialogProps) {
   const [value, setValue] = useState(initialValue);
@@ -64,13 +68,20 @@ export default function InputDialog({
         <input
           value={value}
           placeholder={placeholder}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            setValue(event.target.value);
+            // 输入变更后通知外层清理校验错误，避免旧错误文案残留。
+            onValueChange?.(event.target.value);
+          }}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             event.preventDefault();
             onConfirm(value.trim());
           }}
         />
+        {errorText ? (
+          <div className="input-dialog-error">{errorText}</div>
+        ) : null}
       </div>
     </Modal>
   );

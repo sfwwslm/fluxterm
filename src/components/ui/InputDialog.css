@@ -3,3 +3,8 @@
   flex-direction: column;
   gap: 8px;
 }
+
+.input-dialog-error {
+  color: var(--danger);
+  font-size: 12px;
+}

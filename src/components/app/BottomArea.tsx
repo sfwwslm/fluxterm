@@ -10,6 +10,10 @@ import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import { DEFAULT_QUICKBAR_GROUP_ID } from "@/constants/quickbar";
 import "@/components/app/BottomArea.css";
 
+type GroupMutationResult =
+  | { ok: true; id?: string }
+  | { ok: false; errorKey: import("@/i18n").TranslationKey };
+
 type FooterVisibility = {
   quickbar: boolean;
   statusbar: boolean;
@@ -28,8 +32,8 @@ type BottomAreaProps = {
   groups: QuickCommandGroup[];
   commands: QuickCommandItem[];
   onCloseManager: () => void;
-  onAddGroup: (name: string) => string | null;
-  onRenameGroup: (groupId: string, name: string) => void;
+  onAddGroup: (name: string) => GroupMutationResult;
+  onRenameGroup: (groupId: string, name: string) => GroupMutationResult;
   onRemoveGroup: (groupId: string) => void;
   onToggleGroupVisible: (groupId: string) => void;
   onAddCommand: (payload: {
@@ -114,6 +118,7 @@ export default function BottomArea({
   const [groupDialogMode, setGroupDialogMode] = useState<
     "add" | "rename" | null
   >(null);
+  const [groupDialogError, setGroupDialogError] = useState<string | null>(null);
   const [deleteGroupPendingId, setDeleteGroupPendingId] = useState<
     string | null
   >(null);
@@ -222,6 +227,12 @@ export default function BottomArea({
       document.removeEventListener("mousedown", closeOnOutside);
     };
   }, [quickbarMenuOpen]);
+
+  useEffect(() => {
+    if (!groupDialogMode) {
+      setGroupDialogError(null);
+    }
+  }, [groupDialogMode]);
 
   useEffect(() => {
     if (!managerOpen) return;
@@ -620,19 +631,38 @@ export default function BottomArea({
         confirmText={t("actions.save")}
         cancelText={t("actions.cancel")}
         closeText={t("actions.close")}
-        onClose={() => setGroupDialogMode(null)}
+        errorText={groupDialogError}
+        onClose={() => {
+          setGroupDialogMode(null);
+          setGroupDialogError(null);
+        }}
+        onValueChange={() => setGroupDialogError(null)}
         onConfirm={(value) => {
           const name = value.trim();
-          if (!name) return;
+          if (!name) {
+            setGroupDialogError(t("quickbar.manager.groupNameRequired"));
+            return;
+          }
           if (groupDialogMode === "add") {
-            const id = onAddGroup(name);
-            if (id) {
-              setSelectedGroupId(id);
+            // 新增分组失败时保留弹窗与输入内容，直接展示校验错误。
+            const result = onAddGroup(name);
+            if (!result.ok) {
+              setGroupDialogError(t(result.errorKey));
+              return;
+            }
+            if (result.id) {
+              setSelectedGroupId(result.id);
               setSelectedCommandId(null);
             }
           } else if (groupDialogMode === "rename" && selectedGroup) {
-            onRenameGroup(selectedGroup.id, name);
+            // 重命名分组失败时同样不关闭弹窗，便于用户直接修正名称。
+            const result = onRenameGroup(selectedGroup.id, name);
+            if (!result.ok) {
+              setGroupDialogError(t(result.errorKey));
+              return;
+            }
           }
+          setGroupDialogError(null);
           setGroupDialogMode(null);
         }}
       />
