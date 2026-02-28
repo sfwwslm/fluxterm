@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import type { Locale, Translate } from "@/i18n";
 import type { LogEntry, SftpProgress } from "@/types";
-import { formatBytes } from "@/utils/format";
+import { formatBytes, formatTime } from "@/utils/format";
+import "./TransfersPanel.css";
 
 type TransfersPanelProps = {
   progress: SftpProgress | null;
@@ -22,13 +24,30 @@ export default function TransfersPanel({
   t,
 }: TransfersPanelProps) {
   const transferEntries = entries.filter((entry) => isTransferKey(entry.key));
+  const [progressStartedAt, setProgressStartedAt] = useState<number | null>(
+    null,
+  );
 
   const formatLogTime = (timestamp: number) =>
-    new Date(timestamp).toLocaleTimeString(locale, {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    formatTime(timestamp / 1000, locale);
+
+  const progressLabel = progress
+    ? progress.op === "upload"
+      ? t("log.upload")
+      : t("log.download")
+    : "";
+
+  useEffect(() => {
+    if (!progress) {
+      setProgressStartedAt(null);
+      return;
+    }
+    if (progress.transferred === 0) {
+      setProgressStartedAt(Date.now());
+      return;
+    }
+    setProgressStartedAt((prev) => prev ?? Date.now());
+  }, [progress]);
 
   return (
     <div className="log-panel">
@@ -38,11 +57,17 @@ export default function TransfersPanel({
       </div>
       {progress && (
         <div className="log-progress">
-          <div className="log-row">
-            <span>
-              {progress.op === "upload" ? t("log.upload") : t("log.download")}
+          <div className="log-row log-row-transfer">
+            <span className="log-transfer-meta">
+              [
+              {progressStartedAt
+                ? formatTime(progressStartedAt / 1000, locale)
+                : "--"}
+              ] [{progressLabel}]{" "}
             </span>
-            <strong>{progress.path}</strong>
+            <strong className="log-transfer-path" title={progress.path}>
+              {progress.path}
+            </strong>
           </div>
           <div className="progress-bar">
             <span
