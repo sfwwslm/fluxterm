@@ -103,6 +103,12 @@ export default function useSftpState({
       updateFileView(sessionId, "", []);
       return;
     }
+    // 远端目录不能为空。连接建立初期 currentPath 可能还是空串，此时先回退到 home，
+    // 避免向后端发送 read_dir("") 导致无意义的 No such file 告警。
+    if (!path.trim()) {
+      await loadHomePath(sessionId);
+      return;
+    }
     const list = await sftpList(sessionId, path);
     updateFileView(sessionId, path, list);
   }
