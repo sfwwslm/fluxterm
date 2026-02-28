@@ -279,13 +279,11 @@ export default function useFloatingPanels({
       setSlotGroups((prev) => {
         // 悬浮后立即从当前槽位移除该组件，避免主窗口和浮动窗口重复渲染。
         const group = prev[slot];
-        const widgets = group.widgets.filter((item) => item !== widget);
         return {
           ...prev,
           [slot]: {
             ...group,
-            widgets,
-            active: widgets[0] ?? null,
+            active: null,
           },
         };
       });

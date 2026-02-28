@@ -7,13 +7,11 @@ import WidgetTitleBar from "./WidgetTitleBar";
 
 type WidgetSlotProps = {
   slot: WidgetSlotKey;
-  widgets: PanelKey[];
   active: PanelKey | null;
   allWidgets: PanelKey[];
   labels: Record<PanelKey, string>;
   body: React.ReactNode;
-  onSelect: (slot: WidgetSlotKey, key: PanelKey) => void;
-  onAdd: (slot: WidgetSlotKey, key: PanelKey) => void;
+  onReplace: (slot: WidgetSlotKey, key: PanelKey) => void;
   onFloat: (slot: WidgetSlotKey) => void;
   onClose?: (slot: WidgetSlotKey) => void;
   onSplit?: (slot: WidgetSlotKey) => void;
@@ -30,13 +28,11 @@ type WidgetSlotProps = {
 
 export default function WidgetSlot({
   slot,
-  widgets,
   active,
   allWidgets,
   labels,
   body,
-  onSelect,
-  onAdd,
+  onReplace,
   onFloat,
   onClose,
   onSplit,
@@ -48,7 +44,7 @@ export default function WidgetSlot({
 }: WidgetSlotProps) {
   return (
     <section
-      className={`panel widget-slot ${!widgets.length ? "empty" : ""}`}
+      className={`panel widget-slot ${!active ? "empty" : ""}`}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -65,13 +61,11 @@ export default function WidgetSlot({
       }}
     >
       <WidgetTitleBar
-        widgets={widgets}
         active={active}
         allWidgets={allWidgets}
         labels={labels}
         draggableWidget={active}
-        onSelect={(key) => onSelect(slot, key)}
-        onAdd={(key) => onAdd(slot, key)}
+        onReplace={(key) => onReplace(slot, key)}
         onFloat={() => onFloat(slot)}
         onSplit={onSplit ? () => onSplit(slot) : undefined}
         splitDisabled={splitDisabled}
@@ -81,7 +75,7 @@ export default function WidgetSlot({
         t={t}
       />
       <div className="panel-body">
-        {widgets.length ? (
+        {active ? (
           body
         ) : (
           <div className="empty-hint">{t("panel.emptyHint")}</div>

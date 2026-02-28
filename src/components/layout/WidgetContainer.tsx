@@ -8,7 +8,6 @@ import WidgetSlotView from "./WidgetSlot";
 
 type SlotData = {
   slot: WidgetSlot;
-  widgets: PanelKey[];
   active: PanelKey | null;
   body: React.ReactNode;
 };
@@ -20,8 +19,7 @@ type WidgetContainerProps = {
   slots: SlotData[];
   available: PanelKey[];
   labels: Record<PanelKey, string>;
-  onSelect: (slot: WidgetSlot, key: PanelKey) => void;
-  onAdd: (slot: WidgetSlot, key: PanelKey) => void;
+  onReplace: (slot: WidgetSlot, key: PanelKey) => void;
   onFloat: (slot: WidgetSlot) => void;
   onCloseWidget: (slot: WidgetSlot) => void;
   onDropWidget: (slot: WidgetSlot, key: PanelKey) => void;
@@ -41,8 +39,7 @@ export default function WidgetContainer({
   slots,
   available,
   labels,
-  onSelect,
-  onAdd,
+  onReplace,
   onFloat,
   onCloseWidget,
   onDropWidget,
@@ -66,13 +63,11 @@ export default function WidgetContainer({
           <WidgetSlotView
             key={slot.slot}
             slot={slot.slot}
-            widgets={slot.widgets}
             active={slot.active}
             allWidgets={available}
             labels={labels}
             body={slot.body}
-            onSelect={onSelect}
-            onAdd={onAdd}
+            onReplace={onReplace}
             onFloat={onFloat}
             onClose={onCloseWidget}
             onSplit={() => onToggleSplit(side)}

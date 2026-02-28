@@ -18,8 +18,7 @@ type WorkspaceProps = {
   leftVisible: boolean;
   rightVisible: boolean;
   bottomVisible: boolean;
-  onSelect: (slot: WidgetSlot, key: PanelKey) => void;
-  onAdd: (slot: WidgetSlot, key: PanelKey) => void;
+  onReplace: (slot: WidgetSlot, key: PanelKey) => void;
   onFloat: (slot: WidgetSlot) => void;
   onCloseWidget: (slot: WidgetSlot) => void;
   onDropWidget: (slot: WidgetSlot, key: PanelKey) => void;
@@ -48,8 +47,7 @@ export default function Workspace({
   leftVisible,
   rightVisible,
   bottomVisible,
-  onSelect,
-  onAdd,
+  onReplace,
   onFloat,
   onCloseWidget,
   onDropWidget,
@@ -63,13 +61,11 @@ export default function Workspace({
     return Array.from({ length: count }, (_, index) => {
       const slot = sideSlotKey(side, index);
       const group = slotGroups[slot] ?? {
-        widgets: [],
         active: null,
         floating: false,
       };
       return {
         slot,
-        widgets: group.widgets,
         active: group.active,
         body: group.active ? panels[group.active] : null,
       };
@@ -79,7 +75,6 @@ export default function Workspace({
   const leftSlots = sideSlots("left");
   const rightSlots = sideSlots("right");
   const bottomGroup = slotGroups.bottom ?? {
-    widgets: [],
     active: null,
     floating: false,
   };
@@ -94,8 +89,7 @@ export default function Workspace({
           slots={leftSlots}
           available={availableWidgets}
           labels={panelLabels}
-          onSelect={onSelect}
-          onAdd={onAdd}
+          onReplace={onReplace}
           onFloat={onFloat}
           onCloseWidget={onCloseWidget}
           onDropWidget={onDropWidget}
@@ -123,8 +117,7 @@ export default function Workspace({
           slots={rightSlots}
           available={availableWidgets}
           labels={panelLabels}
-          onSelect={onSelect}
-          onAdd={onAdd}
+          onReplace={onReplace}
           onFloat={onFloat}
           onCloseWidget={onCloseWidget}
           onDropWidget={onDropWidget}
@@ -145,13 +138,11 @@ export default function Workspace({
         <footer className="bottom-panel">
           <WidgetSlotView
             slot="bottom"
-            widgets={bottomGroup.widgets}
             active={bottomGroup.active}
             allWidgets={availableWidgets}
             labels={panelLabels}
             body={bottomGroup.active ? panels[bottomGroup.active] : null}
-            onSelect={onSelect}
-            onAdd={onAdd}
+            onReplace={onReplace}
             onFloat={onFloat}
             onClose={onCloseWidget}
             closeDisabled={!bottomGroup.active}

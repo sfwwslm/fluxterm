@@ -78,26 +78,20 @@ export default function useLayoutState({
   ): Record<string, WidgetGroup> {
     const next: Record<string, WidgetGroup> = {};
     Object.entries(slots).forEach(([slot, group]) => {
-      next[slot as WidgetSlot] = { ...group, widgets: [...group.widgets] };
+      next[slot as WidgetSlot] = { ...group };
     });
     (Object.keys(floatingOriginRef.current) as PanelKey[]).forEach((panel) => {
       const origin = floatingOriginRef.current[panel];
       if (!origin) return;
       Object.values(next).forEach((group) => {
-        group.widgets = group.widgets.filter((item) => item !== panel);
         if (group.active === panel) {
-          group.active = group.widgets[0] ?? null;
+          group.active = null;
         }
       });
       if (!next[origin]) {
-        next[origin] = {
-          widgets: [],
-          active: null,
-          floating: false,
-        };
+        next[origin] = { active: null, floating: false };
       }
-      next[origin].widgets.push(panel);
-      next[origin].active = next[origin].active ?? panel;
+      next[origin].active = panel;
     });
     return next;
   }
@@ -122,7 +116,7 @@ export default function useLayoutState({
         return;
       }
       const totalWidgets = Object.values(normalized.slots).reduce(
-        (count, group) => count + group.widgets.length,
+        (count, group) => count + (group.active ? 1 : 0),
         0,
       );
       if (totalWidgets === 0) {
@@ -170,10 +164,9 @@ export default function useLayoutState({
       setSlotGroups((prev) => {
         const group = prev.bottom;
         if (!group?.active) return prev;
-        const widgets = group.widgets.filter((item) => item !== group.active);
         return {
           ...prev,
-          bottom: { ...group, widgets, active: widgets[0] ?? null },
+          bottom: { ...group, active: null },
         };
       });
       return;
@@ -192,10 +185,9 @@ export default function useLayoutState({
       setSlotGroups((prev) => {
         const group = prev[slot];
         if (!group?.active) return prev;
-        const widgets = group.widgets.filter((item) => item !== group.active);
         return {
           ...prev,
-          [slot]: { ...group, widgets, active: widgets[0] ?? null },
+          [slot]: { ...group, active: null },
         };
       });
       return;
@@ -205,7 +197,7 @@ export default function useLayoutState({
       const next: Record<string, WidgetGroup> = {};
       Object.entries(prev).forEach(([key, group]) => {
         if (key === "bottom") {
-          next.bottom = { ...group, widgets: [...group.widgets] };
+          next.bottom = { ...group };
           return;
         }
         const item = key.match(/^(left|right):(\d+)$/);
@@ -213,15 +205,12 @@ export default function useLayoutState({
         const itemSide = item[1] as WidgetSide;
         const itemIndex = Number(item[2]);
         if (itemSide !== side) {
-          next[key] = { ...group, widgets: [...group.widgets] };
+          next[key] = { ...group };
           return;
         }
         if (itemIndex === index) return;
         const targetIndex = itemIndex > index ? itemIndex - 1 : itemIndex;
-        next[`${side}:${targetIndex}`] = {
-          ...group,
-          widgets: [...group.widgets],
-        };
+        next[`${side}:${targetIndex}`] = { ...group };
       });
       return next;
     });
@@ -337,16 +326,18 @@ export default function useLayoutState({
       };
       for (let i = 0; i < normalizedCounts.left; i += 1) {
         const key = sideSlotKey("left", i);
-        if (!persistedSlots[key])
-          persistedSlots[key] = { widgets: [], active: null, floating: false };
+        if (!persistedSlots[key]) {
+          persistedSlots[key] = { active: null, floating: false };
+        }
       }
       for (let i = 0; i < normalizedCounts.right; i += 1) {
         const key = sideSlotKey("right", i);
-        if (!persistedSlots[key])
-          persistedSlots[key] = { widgets: [], active: null, floating: false };
+        if (!persistedSlots[key]) {
+          persistedSlots[key] = { active: null, floating: false };
+        }
       }
       if (!persistedSlots.bottom) {
-        persistedSlots.bottom = { widgets: [], active: null, floating: false };
+        persistedSlots.bottom = { active: null, floating: false };
       }
       saveLayoutConfig({
         version: 1,

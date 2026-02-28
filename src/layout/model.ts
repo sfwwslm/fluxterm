@@ -36,13 +36,9 @@ export const defaultWidgetLayout: WidgetLayout = {
     right: 1,
   },
   slots: {
-    "left:0": { widgets: ["profiles"], active: "profiles", floating: false },
-    "right:0": { widgets: ["files"], active: "files", floating: false },
-    bottom: {
-      widgets: ["transfers", "events"],
-      active: "transfers",
-      floating: false,
-    },
+    "left:0": { active: "profiles", floating: false },
+    "right:0": { active: "files", floating: false },
+    bottom: { active: "transfers", floating: false },
   },
 };
 
@@ -53,27 +49,15 @@ export function sideSlotKey(side: WidgetSide, index: number): WidgetSlot {
 
 /** 创建空组件组。 */
 export function createEmptyGroup(): WidgetGroup {
-  return { widgets: [], active: null, floating: false };
+  return { active: null, floating: false };
 }
 
-/** 统一规范组件组，确保 active 合法。 */
+/** 统一规范组件组，单个槽位同一时刻只保留一个组件。 */
 export function normalizeGroup(group: unknown): WidgetGroup {
   if (!group || typeof group !== "object") return createEmptyGroup();
   const raw = group as Partial<WidgetGroup>;
-  const widgets = Array.isArray(raw.widgets)
-    ? raw.widgets
-        .map((item) => normalizePanelKey(item))
-        .filter((item): item is PanelKey => Boolean(item))
-    : [];
-  const deduped = Array.from(new Set(widgets));
-  const normalizedActive = normalizePanelKey(raw.active);
-  const active =
-    normalizedActive && deduped.includes(normalizedActive)
-      ? normalizedActive
-      : (deduped[0] ?? null);
   return {
-    widgets: deduped,
-    active,
+    active: normalizePanelKey(raw.active),
     floating: false,
   };
 }
@@ -97,7 +81,7 @@ export function getSideSlotKeys(
 export function cloneSlots(slots: Record<string, WidgetGroup>) {
   const next: Record<string, WidgetGroup> = {};
   Object.entries(slots).forEach(([slot, group]) => {
-    next[slot as WidgetSlot] = { ...group, widgets: [...group.widgets] };
+    next[slot as WidgetSlot] = { ...group };
   });
   return next;
 }
@@ -128,36 +112,44 @@ export function normalizeSideSlotStructure(
 /** 规范小组件布局配置。 */
 export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
   if (!raw || typeof raw !== "object") return null;
-  const value = raw as any;
+  const value = raw as Record<string, unknown>;
   if (value.version !== 1 || !value.sizes || !value.slots) return null;
 
   const baseSlots = normalizeSlots(value.slots as Record<string, unknown>);
-
   const initialCounts: Record<WidgetSide, number> = {
-    left: clampNumber(value.sideSlotCounts?.left, 1, MAX_SIDE_SLOTS, 1),
-    right: clampNumber(value.sideSlotCounts?.right, 1, MAX_SIDE_SLOTS, 1),
+    left: clampNumber(
+      (value.sideSlotCounts as Record<string, unknown> | undefined)?.left,
+      1,
+      MAX_SIDE_SLOTS,
+      1,
+    ),
+    right: clampNumber(
+      (value.sideSlotCounts as Record<string, unknown> | undefined)?.right,
+      1,
+      MAX_SIDE_SLOTS,
+      1,
+    ),
   };
-
   const structured = normalizeSideSlotStructure(baseSlots, initialCounts);
-  const dedupedSlots = dedupeWidgets(structured.slots);
+  const dedupedSlots = dedupeActivePanels(structured.slots);
 
   return {
     version: 1,
     sizes: {
       left: clampNumber(
-        value.sizes.left,
+        (value.sizes as Record<string, unknown>).left,
         220,
         520,
         defaultWidgetLayout.sizes.left,
       ),
       right: clampNumber(
-        value.sizes.right,
+        (value.sizes as Record<string, unknown>).right,
         260,
         560,
         defaultWidgetLayout.sizes.right,
       ),
       bottom: clampNumber(
-        value.sizes.bottom,
+        (value.sizes as Record<string, unknown>).bottom,
         160,
         420,
         defaultWidgetLayout.sizes.bottom,
@@ -165,16 +157,19 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
     },
     collapsed: {
       left:
-        typeof value.collapsed?.left === "boolean"
-          ? value.collapsed.left
+        typeof (value.collapsed as Record<string, unknown> | undefined)
+          ?.left === "boolean"
+          ? ((value.collapsed as Record<string, unknown>).left as boolean)
           : defaultWidgetLayout.collapsed.left,
       right:
-        typeof value.collapsed?.right === "boolean"
-          ? value.collapsed.right
+        typeof (value.collapsed as Record<string, unknown> | undefined)
+          ?.right === "boolean"
+          ? ((value.collapsed as Record<string, unknown>).right as boolean)
           : defaultWidgetLayout.collapsed.right,
       bottom:
-        typeof value.collapsed?.bottom === "boolean"
-          ? value.collapsed.bottom
+        typeof (value.collapsed as Record<string, unknown> | undefined)
+          ?.bottom === "boolean"
+          ? ((value.collapsed as Record<string, unknown>).bottom as boolean)
           : defaultWidgetLayout.collapsed.bottom,
     },
     sideSlotCounts: structured.sideSlotCounts,
@@ -182,7 +177,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
   };
 }
 
-/** 将组件放入槽位：空槽迁移，非空合并。 */
+/** 将组件放入槽位：从其他槽位移除后，直接替换目标槽位当前组件。 */
 export function moveWidgetToSlot(
   slots: Record<string, WidgetGroup>,
   widget: PanelKey,
@@ -190,14 +185,12 @@ export function moveWidgetToSlot(
 ) {
   const next = cloneSlots(slots);
   Object.values(next).forEach((group) => {
-    group.widgets = group.widgets.filter((item) => item !== widget);
     if (group.active === widget) {
-      group.active = group.widgets[0] ?? null;
+      group.active = null;
     }
   });
   if (!next[target]) next[target] = createEmptyGroup();
-  next[target].widgets.push(widget);
-  next[target].active = next[target].active ?? widget;
+  next[target].active = widget;
   next[target].floating = false;
   return next;
 }
@@ -225,8 +218,7 @@ export function closeActiveWidgetInSlot(
   const next = cloneSlots(slots);
   const group = next[slot];
   if (!group || !group.active) return next;
-  group.widgets = group.widgets.filter((item) => item !== group.active);
-  group.active = group.widgets[0] ?? null;
+  group.active = null;
   return next;
 }
 
@@ -244,7 +236,7 @@ function normalizeSlots(rawSlots: Record<string, unknown>) {
   return next;
 }
 
-function dedupeWidgets(slots: Record<string, WidgetGroup>) {
+function dedupeActivePanels(slots: Record<string, WidgetGroup>) {
   const next = cloneSlots(slots);
   const used = new Set<PanelKey>();
   const orderedKeys = [
@@ -254,15 +246,12 @@ function dedupeWidgets(slots: Record<string, WidgetGroup>) {
   ];
   orderedKeys.forEach((slot) => {
     const group = next[slot];
-    if (!group) return;
-    group.widgets = group.widgets.filter((item) => {
-      if (used.has(item)) return false;
-      used.add(item);
-      return true;
-    });
-    if (group.active && !group.widgets.includes(group.active)) {
-      group.active = group.widgets[0] ?? null;
+    if (!group?.active) return;
+    if (used.has(group.active)) {
+      group.active = null;
+      return;
     }
+    used.add(group.active);
   });
   return next;
 }

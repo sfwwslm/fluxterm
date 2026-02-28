@@ -1,4 +1,4 @@
-/** 组件槽位标题栏，提供切换/浮动/分割/关闭入口，并管理设置菜单状态。 */
+/** 组件槽位标题栏，提供替换/浮动/分割/关闭入口，并管理设置菜单状态。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createPortal } from "react-dom";
@@ -9,13 +9,11 @@ import Button from "@/components/ui/button";
 import "@/components/layout/WidgetTitleBar.css";
 
 type WidgetTitleBarProps = {
-  widgets: PanelKey[];
   active: PanelKey | null;
   allWidgets: PanelKey[];
   labels: Record<PanelKey, string>;
   draggableWidget?: PanelKey | null;
-  onSelect: (key: PanelKey) => void;
-  onAdd: (key: PanelKey) => void;
+  onReplace: (key: PanelKey) => void;
   onFloat?: () => void;
   onClose?: () => void;
   onSplit?: () => void;
@@ -26,13 +24,11 @@ type WidgetTitleBarProps = {
 };
 
 export default function WidgetTitleBar({
-  widgets,
   active,
   allWidgets,
   labels,
   draggableWidget,
-  onSelect,
-  onAdd,
+  onReplace,
   onFloat,
   onClose,
   onSplit,
@@ -197,11 +193,7 @@ export default function WidgetTitleBar({
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        if (widgets.includes(item)) {
-                          onSelect(item);
-                        } else {
-                          onAdd(item);
-                        }
+                        onReplace(item);
                         setMenuOpen(false);
                       }}
                     >

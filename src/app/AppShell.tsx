@@ -395,9 +395,8 @@ export default function AppShell() {
   const filesWidgetVisible = useMemo(() => {
     if (floatingPanelKey === "files") return true;
     if (floatingPanels.files) return true;
-    return Object.values(slotGroups).some((group) =>
-      group.widgets.includes("files"),
-    );
+    // 单槽位模型下，只有当前激活组件就是 files 时才算真正可见。
+    return Object.values(slotGroups).some((group) => group.active === "files");
   }, [floatingPanelKey, floatingPanels.files, slotGroups]);
 
   const { sftpState, sftpActions } = useSftpController({
@@ -946,7 +945,6 @@ export default function AppShell() {
     setSlotGroups((prev) => {
       const bottomGroup = prev.bottom;
       if (!bottomGroup) return prev;
-      if (!bottomGroup.widgets.includes("transfers")) return prev;
       if (bottomGroup.active === "transfers") return prev;
       return {
         ...prev,
@@ -963,26 +961,8 @@ export default function AppShell() {
     setSlotGroups,
   ]);
 
-  function handleSlotSelect(slot: LayoutWidgetSlot, key: PanelKey) {
-    setSlotGroups((prev) => {
-      const group = prev[slot];
-      if (!group.widgets.includes(key)) return prev;
-      return { ...prev, [slot]: { ...group, active: key } };
-    });
-  }
-
-  function handleSlotAdd(slot: LayoutWidgetSlot, key: PanelKey) {
-    setSlotGroups((prev) => {
-      const moved = moveWidgetToSlot(prev, key, slot);
-      const group = moved[slot];
-      return {
-        ...moved,
-        [slot]: {
-          ...group,
-          active: key,
-        },
-      };
-    });
+  function handleSlotReplace(slot: LayoutWidgetSlot, key: PanelKey) {
+    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
   }
 
   function handleDropWidget(slot: LayoutWidgetSlot, key: PanelKey) {
@@ -1098,8 +1078,7 @@ export default function AppShell() {
             leftVisible={leftVisible}
             rightVisible={rightVisible}
             bottomVisible={bottomVisible}
-            onSelect={handleSlotSelect}
-            onAdd={handleSlotAdd}
+            onReplace={handleSlotReplace}
             onFloat={handleFloat}
             onCloseWidget={handleCloseSlot}
             onDropWidget={handleDropWidget}

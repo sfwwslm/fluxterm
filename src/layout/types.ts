@@ -9,7 +9,6 @@ export type WidgetSide = "left" | "right";
 
 /** 单个槽位的组件组。 */
 export type WidgetGroup = {
-  widgets: PanelKey[];
   active: PanelKey | null;
   floating: boolean;
 };
