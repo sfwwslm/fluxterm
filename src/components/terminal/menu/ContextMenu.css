@@ -1,0 +1,36 @@
+.context-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.context-menu {
+  position: fixed;
+  background: var(--surface-menu);
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  box-shadow: var(--shadow-strong);
+}
+
+.context-menu button {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.context-menu button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
