@@ -143,7 +143,10 @@ export default function SftpPanel({
                 key={entry.path}
                 type="button"
                 className={`sftp-table-row sftp-table-item ${entry.kind}`}
-                onClick={() => entry.kind === "dir" && onOpen(entry.path)}
+                onClick={() =>
+                  (entry.kind === "dir" || entry.kind === "link") &&
+                  onOpen(entry.path)
+                }
                 onContextMenu={(event) => openMenu(event, entry)}
               >
                 <span className="sftp-cell sftp-cell-name">{entry.name}</span>

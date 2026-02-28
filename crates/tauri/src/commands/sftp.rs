@@ -44,6 +44,25 @@ pub async fn sftp_home(
 }
 
 #[tauri::command]
+/// 解析远端路径到真实路径。
+pub async fn sftp_resolve_path(
+    state: State<'_, EngineState>,
+    session_id: String,
+    path: String,
+) -> Result<String, EngineError> {
+    let engine: Arc<Engine> = Arc::clone(&state.engine);
+    tauri::async_runtime::spawn_blocking(move || engine.sftp_resolve_path(&session_id, &path))
+        .await
+        .map_err(|err| {
+            EngineError::with_detail(
+                "session_command_failed",
+                "无法执行 SFTP 路径解析",
+                err.to_string(),
+            )
+        })?
+}
+
+#[tauri::command]
 /// 上传本地文件到远端。
 pub async fn sftp_upload(
     state: State<'_, EngineState>,

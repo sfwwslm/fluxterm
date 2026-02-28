@@ -178,6 +178,28 @@ impl Engine {
         self.await_response(resp_rx, "无法接收 SFTP Home 响应")
     }
 
+    /// 解析远端路径到真实路径。
+    pub fn sftp_resolve_path(&self, session_id: &str, path: &str) -> Result<String, EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::SftpResolvePath {
+                path: path.to_string(),
+                respond_to: resp_tx,
+            })
+            .map_err(|_| {
+                EngineError::new("session_command_failed", "无法发送 SFTP 路径解析命令")
+            })?;
+        self.await_response(resp_rx, "无法接收 SFTP 路径解析响应")
+    }
+
     /// 上传本地文件到远端。
     pub fn sftp_upload(
         &self,

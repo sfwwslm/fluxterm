@@ -508,6 +508,43 @@ pub async fn sftp_home(
     Ok(home)
 }
 
+/// 解析远端路径到真实路径。
+pub async fn sftp_resolve_path(
+    session: &client::Handle<super::session::ClientHandler>,
+    path: &str,
+) -> Result<String, EngineError> {
+    let started_at = now_epoch_millis();
+    let started = Instant::now();
+    info!(
+        "sftp_resolve_path_start path={} started_at_ms={}",
+        path, started_at
+    );
+    let sftp = open_sftp(session).await?;
+    let resolved = sftp.canonicalize(path).await.map_err(|err| {
+        let err = EngineError::with_detail(
+            "sftp_resolve_path_failed",
+            "无法解析远端路径",
+            err.to_string(),
+        );
+        log_sftp_path_failure(
+            "sftp_resolve_path_failed",
+            path,
+            started_at,
+            started.elapsed().as_millis(),
+            &err,
+        );
+        err
+    })?;
+    info!(
+        "sftp_resolve_path_success path={} resolved_path={} started_at_ms={} elapsed_ms={}",
+        path,
+        resolved,
+        started_at,
+        started.elapsed().as_millis()
+    );
+    Ok(resolved)
+}
+
 /// 以固定缓冲区大小复制并回调进度。
 async fn transfer_with_progress(
     session_id: &str,

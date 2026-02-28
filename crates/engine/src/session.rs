@@ -8,7 +8,8 @@ use tokio::sync::mpsc;
 use crate::auth::authenticate;
 use crate::error::EngineError;
 use crate::sftp::{
-    sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_upload,
+    sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_resolve_path,
+    sftp_upload,
 };
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, TerminalSize,
@@ -32,6 +33,10 @@ pub enum SessionCommand {
         respond_to: tokio::sync::oneshot::Sender<Result<Vec<SftpEntry>, EngineError>>,
     },
     SftpHome {
+        respond_to: tokio::sync::oneshot::Sender<Result<String, EngineError>>,
+    },
+    SftpResolvePath {
+        path: String,
         respond_to: tokio::sync::oneshot::Sender<Result<String, EngineError>>,
     },
     SftpUpload {
@@ -140,6 +145,9 @@ pub async fn run_session_loop(
                     }
                     SessionCommand::SftpHome { respond_to } => {
                         let _ = respond_to.send(sftp_home(&session).await);
+                    }
+                    SessionCommand::SftpResolvePath { path, respond_to } => {
+                        let _ = respond_to.send(sftp_resolve_path(&session, &path).await);
                     }
                     SessionCommand::SftpUpload { local_path, remote_path, respond_to } => {
                         let _ = respond_to.send(sftp_upload(&session, &session_id, &local_path, &remote_path, &on_event).await);

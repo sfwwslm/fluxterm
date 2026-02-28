@@ -25,6 +25,11 @@ export function sftpHome(sessionId: string) {
   return callTauri<string>("sftp_home", { sessionId });
 }
 
+/** 解析远端路径到真实路径。 */
+export function sftpResolvePath(sessionId: string, path: string) {
+  return callTauri<string>("sftp_resolve_path", { sessionId, path });
+}
+
 /** 上传文件。 */
 export function sftpUpload(
   sessionId: string,

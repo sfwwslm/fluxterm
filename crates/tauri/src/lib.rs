@@ -22,7 +22,8 @@ use crate::commands::profile::{
     profile_groups_list, profile_groups_save, profile_list, profile_remove, profile_save,
 };
 use crate::commands::sftp::{
-    sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_upload,
+    sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_resolve_path,
+    sftp_upload,
 };
 use crate::commands::ssh::{ssh_connect, ssh_disconnect, ssh_resize, ssh_write};
 use crate::commands::system::app_config_dir;
@@ -95,6 +96,7 @@ pub fn run() {
             ssh_write,
             sftp_list,
             sftp_home,
+            sftp_resolve_path,
             sftp_upload,
             sftp_download,
             sftp_rename,

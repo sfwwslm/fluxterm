@@ -21,6 +21,7 @@ import {
   sftpList,
   sftpMkdir,
   sftpRemove,
+  sftpResolvePath,
   sftpRename,
   sftpUpload,
 } from "@/features/sftp/core/commands";
@@ -129,7 +130,13 @@ export default function useSftpState({
   }
 
   async function openRemoteDir(path: string) {
-    await refreshList(path);
+    if (!activeSessionId) return;
+    if (isLocalSession(activeSessionId)) {
+      await refreshList(path, activeSessionId);
+      return;
+    }
+    const resolvedPath = await sftpResolvePath(activeSessionId, path);
+    await refreshList(resolvedPath, activeSessionId);
   }
 
   async function uploadFile() {
