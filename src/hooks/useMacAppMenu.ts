@@ -10,6 +10,7 @@ import { error as logError } from "@tauri-apps/plugin-log";
 import type { Locale, Translate } from "@/i18n";
 import type { ThemeId } from "@/types";
 import { isMacOS } from "@/utils/platform";
+import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 
 type UseMacAppMenuOptions = {
   locale: Locale;
@@ -20,6 +21,7 @@ type UseMacAppMenuOptions = {
   onToggleCollapsed: (side: "left" | "right" | "bottom") => void;
   footerVisibility?: { quickbar: boolean; statusbar: boolean };
   onToggleFooterPart?: (part: "quickbar" | "statusbar") => void;
+  onOpenConfigSection: (section: ConfigSectionKey) => void;
   setLocale: (locale: Locale) => void;
   setThemeId: (themeId: ThemeId) => void;
   setShellId: (shellId: string | null) => void;
@@ -99,6 +101,33 @@ async function createLayoutMenu(
     id: "layout-menu",
     text: t("menu.layout"),
     items: [widgetsMenu, footerMenu],
+  });
+}
+
+async function createConfigMenu(
+  onOpenConfigSection: (section: ConfigSectionKey) => void,
+  t: Translate,
+) {
+  return Submenu.new({
+    id: "config-menu",
+    text: t("menu.config"),
+    items: [
+      await MenuItem.new({
+        id: "config-app-settings",
+        text: t("config.section.appSettings"),
+        action: () => onOpenConfigSection("app-settings"),
+      }),
+      await MenuItem.new({
+        id: "config-session-settings",
+        text: t("config.section.sessionSettings"),
+        action: () => onOpenConfigSection("session-settings"),
+      }),
+      await MenuItem.new({
+        id: "config-directory",
+        text: t("config.section.configDirectory"),
+        action: () => onOpenConfigSection("config-directory"),
+      }),
+    ],
   });
 }
 
@@ -238,6 +267,7 @@ export default function useMacAppMenu({
   onToggleCollapsed,
   footerVisibility = { quickbar: true, statusbar: true },
   onToggleFooterPart,
+  onOpenConfigSection,
   setLocale,
   setThemeId,
   setShellId,
@@ -258,6 +288,9 @@ export default function useMacAppMenu({
           t,
           onOpenAbout,
         });
+        // macOS 原生菜单的“配置”入口必须与 Windows/Web 的 Menus.tsx 保持同步，
+        // 后续新增或调整配置分组时，两处都要一起修改，避免某个平台缺入口。
+        const configMenu = await createConfigMenu(onOpenConfigSection, t);
         const layoutMenu = await createLayoutMenu(
           layoutCollapsed,
           onToggleCollapsed,
@@ -286,6 +319,7 @@ export default function useMacAppMenu({
         const menu = await Menu.new();
         await menu.append([
           appMenu,
+          configMenu,
           layoutMenu,
           personalizeMenu,
           editMenu,
@@ -329,6 +363,7 @@ export default function useMacAppMenu({
     onToggleCollapsed,
     footerVisibility,
     onToggleFooterPart,
+    onOpenConfigSection,
     setLocale,
     setThemeId,
     setShellId,

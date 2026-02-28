@@ -106,7 +106,8 @@ export default function Menus({
       {
         id: "config",
         label: t("menu.config"),
-        // “配置”菜单先提供统一入口，后续具体设置项都收敛到同一个模态框内扩展。
+        // Windows/Web 自定义菜单里的“配置”入口需要与 macOS 的 useMacAppMenu.ts 保持同步，
+        // 后续新增或调整配置分组时，两处都要一起修改，避免某个平台缺入口。
         actions: [
           {
             id: "config-app-settings",

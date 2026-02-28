@@ -857,6 +857,7 @@ export default function AppShell() {
     footerVisibility,
     onToggleFooterPart: (part) =>
       setFooterVisibility((prev) => ({ ...prev, [part]: !prev[part] })),
+    onOpenConfigSection: openConfigSection,
     setLocale,
     setThemeId,
     setShellId,
