@@ -28,6 +28,7 @@ type TerminalTheme = {
 
 type UseTerminalRuntimeProps = {
   theme: TerminalTheme;
+  webLinksEnabled?: boolean;
   /** TODO: 后续从用户设置读取并传入终端 scrollback 配置。 */
   scrollback?: number;
   activeSessionId: string | null;
@@ -167,6 +168,7 @@ function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
 /** Xterm 初始化与输入输出处理。 */
 export default function useTerminalRuntime({
   theme,
+  webLinksEnabled = true,
   scrollback = 3000,
   activeSessionId,
   activeSession,
@@ -189,6 +191,7 @@ export default function useTerminalRuntime({
   const activeSessionIdRef = useRef<string | null>(null);
   const xtermModulesRef = useRef<XtermModules | null>(null);
   const themeRef = useRef(theme);
+  const webLinksEnabledRef = useRef(webLinksEnabled);
   const [searchStatsBySession, setSearchStatsBySession] = useState<
     Record<string, SearchStats | null>
   >({});
@@ -246,6 +249,13 @@ export default function useTerminalRuntime({
   useEffect(() => {
     themeRef.current = theme;
   }, [theme]);
+
+  useEffect(() => {
+    webLinksEnabledRef.current = webLinksEnabled;
+    if (!webLinksEnabled) {
+      setLinkMenu(null);
+    }
+  }, [webLinksEnabled]);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -365,6 +375,7 @@ export default function useTerminalRuntime({
         // 终端检测到 URL 点击后，不再直接打开，而是记录点击位置并弹出操作菜单。
         webLinksAddon = new modules.WebLinksAddon((event, uri) => {
           event.preventDefault();
+          if (!webLinksEnabledRef.current) return;
           setLinkMenu({
             sessionId,
             x: event.clientX,

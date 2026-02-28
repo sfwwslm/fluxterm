@@ -32,6 +32,11 @@ export const zh = {
   "config.section.configDirectory": "配置文件目录",
   "config.placeholder.appSettings": "全局设置即将提供。",
   "config.placeholder.sessionSettings": "会话设置即将提供。",
+  "config.session.description":
+    "会话设置会写入 session.json，并对所有终端会话统一生效。",
+  "config.session.webLinksEnabled": "启用 Web Links",
+  "config.session.webLinksEnabledHint":
+    "关闭后，终端中的 URL 点击菜单将不再生效。",
   "config.directory.description":
     "这里显示当前 FluxTerm 使用的配置目录，方便查看和编辑配置文件。",
   "config.directory.open": "在文件管理器中打开",

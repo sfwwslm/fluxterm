@@ -35,3 +35,8 @@ export async function getLayoutPath() {
 export async function getQuickbarPath() {
   return getConfigFilePath("quickbar.json");
 }
+
+/** 获取 session.json 路径。 */
+export async function getSessionSettingsPath() {
+  return getConfigFilePath("session.json");
+}

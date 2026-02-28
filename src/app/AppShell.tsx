@@ -21,6 +21,7 @@ import NoticeHost from "@/components/ui/notice-host";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import useProfiles from "@/hooks/profile/useProfiles";
 import useAppSettings from "@/hooks/settings/useAppSettings";
+import useSessionSettings from "@/hooks/settings/useSessionSettings";
 import useLayoutState from "@/hooks/useLayoutState";
 import useFloatingPanels from "@/hooks/useFloatingPanels";
 import useMacAppMenu from "@/hooks/useMacAppMenu";
@@ -116,6 +117,8 @@ export default function AppShell() {
     themeIds,
     defaultThemeId: "dark",
   });
+  // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
+  const { webLinksEnabled, setWebLinksEnabled } = useSessionSettings();
   const {
     profiles,
     sshGroups,
@@ -264,6 +267,7 @@ export default function AppShell() {
 
   const { terminalQuery, terminalActions } = useTerminalController({
     theme: themePresets[themeId].terminal,
+    webLinksEnabled,
     // TODO: 后续改为从用户设置读取 scrollback，而不是硬编码默认值。
     scrollback: 3000,
     activeSessionId: sessionState.activeSessionId,
@@ -917,6 +921,8 @@ export default function AppShell() {
         open={configModalOpen}
         activeSection={activeConfigSection}
         sections={configModalSections}
+        webLinksEnabled={webLinksEnabled}
+        onWebLinksEnabledChange={setWebLinksEnabled}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}

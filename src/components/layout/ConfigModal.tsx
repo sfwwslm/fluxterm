@@ -21,6 +21,8 @@ type ConfigModalProps = {
   open: boolean;
   activeSection: ConfigSectionKey;
   sections: ConfigSectionItem[];
+  webLinksEnabled?: boolean;
+  onWebLinksEnabledChange?: (enabled: boolean) => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -38,6 +40,8 @@ export default function ConfigModal({
   open,
   activeSection,
   sections,
+  webLinksEnabled = true,
+  onWebLinksEnabledChange,
   onClose,
   onSectionChange,
   t,
@@ -70,7 +74,24 @@ export default function ConfigModal({
       return (
         <div className="config-modal-panel">
           <h3>{t("config.section.sessionSettings")}</h3>
-          <p>{t("config.placeholder.sessionSettings")}</p>
+          <p>{t("config.session.description")}</p>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.webLinksEnabled")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.webLinksEnabledHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={webLinksEnabled}
+              onChange={(event) =>
+                onWebLinksEnabledChange?.(event.target.checked)
+              }
+            />
+          </label>
         </div>
       );
     }

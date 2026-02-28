@@ -92,6 +92,34 @@
   word-break: break-all;
 }
 
+.config-toggle-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-input);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-header) 76%, transparent);
+}
+
+.config-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.config-toggle-title {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.config-toggle-desc {
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
 @media (max-width: 720px) {
   .config-modal-layout {
     grid-template-columns: 1fr;

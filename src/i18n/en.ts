@@ -33,6 +33,11 @@ export const en = {
   "config.placeholder.appSettings": "Global settings will be available soon.",
   "config.placeholder.sessionSettings":
     "Session settings will be available soon.",
+  "config.session.description":
+    "Session settings are stored in session.json and apply to all terminal sessions.",
+  "config.session.webLinksEnabled": "Enable Web Links",
+  "config.session.webLinksEnabledHint":
+    "When disabled, the URL click menu in the terminal will no longer respond.",
   "config.directory.description":
     "This is the active FluxTerm configuration directory for viewing and editing configuration files.",
   "config.directory.open": "Open in File Manager",
