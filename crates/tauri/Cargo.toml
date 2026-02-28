@@ -1,9 +1,9 @@
 [package]
 name = "flux-term"
-version = "0.1.0-alpha.1"
-description = "A Tauri App"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
+description = "现代化的 Tauri 终端与 SSH/SFTP 桌面应用"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
