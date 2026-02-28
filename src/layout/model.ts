@@ -20,6 +20,7 @@ export const allPanelKeys: PanelKey[] = [
 
 /** 默认小组件布局。 */
 export const defaultWidgetLayout: WidgetLayout = {
+  version: 1,
   sizes: {
     left: 320,
     right: 360,
@@ -128,7 +129,7 @@ export function normalizeSideSlotStructure(
 export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as any;
-  if (!value.sizes || !value.slots) return null;
+  if (value.version !== 1 || !value.sizes || !value.slots) return null;
 
   const baseSlots = normalizeSlots(value.slots as Record<string, unknown>);
 
@@ -141,6 +142,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
   const dedupedSlots = dedupeWidgets(structured.slots);
 
   return {
+    version: 1,
     sizes: {
       left: clampNumber(
         value.sizes.left,

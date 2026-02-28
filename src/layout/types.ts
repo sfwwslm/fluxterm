@@ -16,6 +16,7 @@ export type WidgetGroup = {
 
 /** 小组件布局配置（左右动态槽位）。 */
 export type WidgetLayout = {
+  version: 1;
   sizes: {
     left: number;
     right: number;

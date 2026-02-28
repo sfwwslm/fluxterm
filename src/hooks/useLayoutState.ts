@@ -115,6 +115,7 @@ export default function useLayoutState({
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
+      // layout.json 缺少 version 视为无效并回退默认布局。
       const normalized = normalizeWidgetLayout(parsed);
       if (!normalized) {
         layoutLoadedRef.current = true;
@@ -348,6 +349,7 @@ export default function useLayoutState({
         persistedSlots.bottom = { widgets: [], active: null, floating: false };
       }
       saveLayoutConfig({
+        version: 1,
         collapsed: layoutCollapsed,
         sideSlotCounts: normalizedCounts,
         slots: persistedSlots,
