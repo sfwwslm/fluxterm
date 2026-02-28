@@ -183,7 +183,11 @@ export default function TerminalPanel({
                   state === "disconnected" ? "disconnected" : ""
                 }`}
               >
-                <button onClick={() => onSwitchSession(item.sessionId)}>
+                {/* 短标签也保留稳定点击区，避免切换会话时误点到右侧关闭按钮。 */}
+                <button
+                  className="session-tab-trigger"
+                  onClick={() => onSwitchSession(item.sessionId)}
+                >
                   {label}
                 </button>
                 <button

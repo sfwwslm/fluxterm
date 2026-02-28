@@ -74,6 +74,11 @@
   padding: 0;
 }
 
+.session-tab .session-tab-trigger {
+  min-width: 3.5rem;
+  text-align: left;
+}
+
 .session-tab .close {
   width: 18px;
   height: 18px;
