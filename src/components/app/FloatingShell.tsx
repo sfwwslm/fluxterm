@@ -1,5 +1,6 @@
 import type React from "react";
 import type { Locale, Translate } from "@/i18n";
+import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import type { PanelKey, ThemeId } from "@/types";
 import type { WidgetSide } from "@/layout/types";
 import TitleBar from "@/components/layout/TitleBar";
@@ -16,6 +17,7 @@ type FloatingShellProps = {
   aboutOpen: boolean;
   onOpenAbout: () => void;
   onCloseAbout: () => void;
+  onOpenConfigSection: (section: ConfigSectionKey) => void;
   locale: Locale;
   themeId: ThemeId;
   shellId: string | null;
@@ -38,6 +40,7 @@ export default function FloatingShell({
   aboutOpen,
   onOpenAbout,
   onCloseAbout,
+  onOpenConfigSection,
   locale,
   themeId,
   shellId,
@@ -54,6 +57,7 @@ export default function FloatingShell({
     <div className="floating-shell">
       {!isMac && (
         <TitleBar
+          onOpenConfigSection={onOpenConfigSection}
           layoutCollapsed={layoutCollapsed}
           onToggleCollapsed={onToggleCollapsed}
           onOpenAbout={onOpenAbout}

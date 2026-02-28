@@ -1,0 +1,105 @@
+.modal-body.config-modal-body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.config-modal-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 480px;
+}
+
+.config-modal-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  border-right: 1px solid var(--border-soft);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-header) 82%, transparent),
+    color-mix(in srgb, var(--surface-menu) 92%, transparent)
+  );
+}
+
+.config-modal-nav-item {
+  width: 100%;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.config-modal-nav-item:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  transform: translateX(1px);
+}
+
+.config-modal-nav-item.active {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border-input));
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text-primary);
+}
+
+.config-modal-content {
+  padding: 22px 24px;
+  overflow: auto;
+}
+
+.config-modal-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.config-modal-panel h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.config-modal-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.config-dir-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border-input);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-header) 76%, transparent);
+}
+
+.config-dir-path {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-menu) 70%, transparent);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+@media (max-width: 720px) {
+  .config-modal-layout {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .config-modal-nav {
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+  }
+}

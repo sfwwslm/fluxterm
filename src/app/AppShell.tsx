@@ -6,6 +6,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
+import ConfigModal, {
+  type ConfigSectionItem,
+  type ConfigSectionKey,
+} from "@/components/layout/ConfigModal";
 import TitleBar from "@/components/layout/TitleBar";
 import FloatingShell from "@/components/app/FloatingShell";
 import Workspace from "@/components/app/Workspace";
@@ -128,6 +132,12 @@ export default function AppShell() {
   } = useProfiles();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [activeConfigSection, setActiveConfigSection] =
+    useState<ConfigSectionKey>("app-settings");
+  const [configModalSections, setConfigModalSections] = useState<
+    ConfigSectionItem[]
+  >([{ key: "app-settings", label: "" }]);
   const [footerVisibility, setFooterVisibility] = useState({
     quickbar: true,
     statusbar: true,
@@ -193,6 +203,43 @@ export default function AppShell() {
   async function submitProfile() {
     await saveProfile(profileDraft);
     setProfileModalOpen(false);
+  }
+
+  const configSectionLabels = useMemo(
+    () => ({
+      "app-settings": t("config.section.appSettings"),
+      "session-settings": t("config.section.sessionSettings"),
+      "config-directory": t("config.section.configDirectory"),
+    }),
+    [t],
+  );
+
+  /** 打开统一配置模态框，并切换到指定配置分区。 */
+  function openConfigSection(section: ConfigSectionKey) {
+    // 每个顶部二级菜单只携带自己所属的配置分组，避免共享一个总导航。
+    const sectionsByEntry: Record<ConfigSectionKey, ConfigSectionItem[]> = {
+      "app-settings": [
+        {
+          key: "app-settings",
+          label: configSectionLabels["app-settings"],
+        },
+      ],
+      "session-settings": [
+        {
+          key: "session-settings",
+          label: configSectionLabels["session-settings"],
+        },
+      ],
+      "config-directory": [
+        {
+          key: "config-directory",
+          label: configSectionLabels["config-directory"],
+        },
+      ],
+    };
+    setConfigModalSections(sectionsByEntry[section]);
+    setActiveConfigSection(section);
+    setConfigModalOpen(true);
   }
 
   const availableWidgets = allPanelKeys;
@@ -735,6 +782,7 @@ export default function AppShell() {
           aboutOpen={aboutOpen}
           onOpenAbout={() => setAboutOpen(true)}
           onCloseAbout={() => setAboutOpen(false)}
+          onOpenConfigSection={openConfigSection}
           locale={locale}
           themeId={themeId}
           shellId={shellId}
@@ -749,6 +797,7 @@ export default function AppShell() {
         <div className="app-shell" style={layoutVars}>
           {!isMac && (
             <TitleBar
+              onOpenConfigSection={openConfigSection}
               layoutCollapsed={layoutCollapsed}
               onToggleCollapsed={handleToggleCollapsed}
               onOpenAbout={() => setAboutOpen(true)}
@@ -862,6 +911,14 @@ export default function AppShell() {
         onDraftChange={setProfileDraft}
         onClose={closeProfileModal}
         onSubmit={submitProfile}
+        t={t}
+      />
+      <ConfigModal
+        open={configModalOpen}
+        activeSection={activeConfigSection}
+        sections={configModalSections}
+        onClose={() => setConfigModalOpen(false)}
+        onSectionChange={setActiveConfigSection}
         t={t}
       />
       <NoticeHost />

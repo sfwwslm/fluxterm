@@ -6,6 +6,14 @@
     "dialog:default",
     "window-state:default",
     {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
+    {
       "identifier": "opener:default",
       "allow": [
         {

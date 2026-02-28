@@ -43,6 +43,9 @@ type MenuItem = {
 };
 
 type MenusProps = {
+  onOpenConfigSection: (
+    section: "app-settings" | "session-settings" | "config-directory",
+  ) => void;
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
   onOpenAbout: () => void;
@@ -61,6 +64,7 @@ type MenusProps = {
 };
 
 export default function Menus({
+  onOpenConfigSection,
   layoutCollapsed,
   onToggleCollapsed,
   onOpenAbout,
@@ -99,6 +103,28 @@ export default function Menus({
 
   const menuItems = useMemo<MenuItem[]>(
     () => [
+      {
+        id: "config",
+        label: t("menu.config"),
+        // “配置”菜单先提供统一入口，后续具体设置项都收敛到同一个模态框内扩展。
+        actions: [
+          {
+            id: "config-app-settings",
+            label: t("config.section.appSettings"),
+            onClick: () => onOpenConfigSection("app-settings"),
+          },
+          {
+            id: "config-session-settings",
+            label: t("config.section.sessionSettings"),
+            onClick: () => onOpenConfigSection("session-settings"),
+          },
+          {
+            id: "config-directory",
+            label: t("config.section.configDirectory"),
+            onClick: () => onOpenConfigSection("config-directory"),
+          },
+        ],
+      },
       {
         id: "layout",
         label: t("menu.layout"),
@@ -213,6 +239,7 @@ export default function Menus({
       },
     ],
     [
+      onOpenConfigSection,
       layoutCollapsed.bottom,
       layoutCollapsed.left,
       layoutCollapsed.right,

@@ -5,10 +5,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Locale, Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { ThemeId } from "@/types";
+import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import Menus from "./Menus";
 import WindowControls from "./WindowControls";
 
 type TitleBarProps = {
+  onOpenConfigSection: (section: ConfigSectionKey) => void;
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
   onOpenAbout: () => void;
@@ -29,6 +31,7 @@ type TitleBarProps = {
 };
 
 export default function TitleBar({
+  onOpenConfigSection,
   layoutCollapsed,
   onToggleCollapsed,
   onOpenAbout,
@@ -70,6 +73,7 @@ export default function TitleBar({
       </div>
       {showMenus && (
         <Menus
+          onOpenConfigSection={onOpenConfigSection}
           layoutCollapsed={layoutCollapsed}
           onToggleCollapsed={onToggleCollapsed}
           onOpenAbout={onOpenAbout}
