@@ -109,17 +109,15 @@ export default function ConfigModal({
   function renderSectionContent() {
     if (activeSection === "app-settings") {
       return (
-        <div className="config-modal-panel">
+        <div className="config-modal-panel config-modal-panel-scrollable">
           <h3>{t("config.section.appSettings")}</h3>
-          <p>{t("config.placeholder.appSettings")}</p>
         </div>
       );
     }
     if (activeSection === "session-settings") {
       return (
-        <div className="config-modal-panel">
+        <div className="config-modal-panel config-modal-panel-scrollable">
           <h3>{t("config.section.sessionSettings")}</h3>
-          <p>{t("config.session.description")}</p>
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
@@ -203,9 +201,9 @@ export default function ConfigModal({
       );
     }
     return (
-      <div className="config-modal-panel">
+      // 右侧配置区统一使用固定高度 + 内部滚动，避免不同分区在内容增长后把模态框继续撑高。
+      <div className="config-modal-panel config-modal-panel-scrollable">
         <h3>{t("config.section.configDirectory")}</h3>
-        <p>{t("config.directory.description")}</p>
         <div className="config-dir-card">
           <div className="config-dir-path">
             {configDir || t("config.directory.unavailable")}

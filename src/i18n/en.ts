@@ -30,11 +30,6 @@ export const en = {
   "config.section.appSettings": "Settings",
   "config.section.sessionSettings": "Session Settings",
   "config.section.configDirectory": "Config Directory",
-  "config.placeholder.appSettings": "Global settings will be available soon.",
-  "config.placeholder.sessionSettings":
-    "Session settings will be available soon.",
-  "config.session.description":
-    "Session settings are stored in session.json and apply to all terminal sessions.",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
     "When disabled, the URL click menu in the terminal will no longer respond.",
@@ -48,8 +43,6 @@ export const en = {
   "config.session.scrollback": "Terminal Scrollback",
   "config.session.scrollbackHint":
     "Controls how many history lines the terminal keeps, from {min} to {max}.",
-  "config.directory.description":
-    "This is the active FluxTerm configuration directory for viewing and editing configuration files.",
   "config.directory.open": "Open in File Manager",
   "config.directory.openFailed": "Failed to open configuration directory",
   "config.directory.unavailable": "Configuration directory is unavailable",
