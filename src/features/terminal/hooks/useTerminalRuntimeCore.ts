@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { warn } from "@tauri-apps/plugin-log";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { Terminal } from "@xterm/xterm";
+import type { IDecoration, IMarker, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type {
   ISearchOptions,
@@ -71,6 +71,9 @@ type TerminalRuntime = {
     uri: string;
   } | null;
   focusActiveTerminal: () => boolean;
+  focusTerminalLineAtPoint: (sessionId: string, clientY: number) => boolean;
+  hasFocusedLine: () => boolean;
+  copyActiveFocusedLine: () => Promise<boolean>;
   hasActiveSelection: () => boolean;
   copyActiveSelection: () => Promise<boolean>;
   openActiveLink: () => Promise<boolean>;
@@ -110,6 +113,12 @@ type TerminalBundle = {
   container: HTMLDivElement;
   host: HTMLDivElement;
   disposables: Disposable[];
+};
+
+type FocusedLineState = {
+  line: number;
+  marker: IMarker;
+  decoration: IDecoration | null;
 };
 
 type SearchDirection = "next" | "prev";
@@ -199,6 +208,7 @@ export default function useTerminalRuntime({
   const [terminalReadyBySession, setTerminalReadyBySession] = useState<
     Record<string, boolean>
   >({});
+  const focusedLineBySessionRef = useRef<Record<string, FocusedLineState>>({});
   const handlersRef = useRef({
     recordCommandInput,
     writeToSession,
@@ -308,6 +318,95 @@ export default function useTerminalRuntime({
     bundle.terminal.write(data);
   }
 
+  function disposeFocusedLine(sessionId: string) {
+    const focused = focusedLineBySessionRef.current[sessionId];
+    if (!focused) return;
+    focused.decoration?.dispose();
+    focused.marker.dispose();
+    delete focusedLineBySessionRef.current[sessionId];
+  }
+
+  function syncCursorBlink(sessionId: string, enabled: boolean) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return;
+    if (bundle.terminal.options.cursorBlink === enabled) return;
+    bundle.terminal.options.cursorBlink = enabled;
+  }
+
+  function getAbsoluteCursorLine(terminal: Terminal) {
+    return terminal.buffer.active.baseY + terminal.buffer.active.cursorY;
+  }
+
+  /**
+   * 为点击到的 buffer 行建立高亮装饰。
+   * 如果点击的是当前提示符所在行，则保持光标闪烁；否则暂停闪烁，
+   * 直到用户继续键盘输入，表示输入焦点仍在 shell prompt。
+   * 这里按 xterm 的单个 buffer line 处理，不拼接自动折行后的可视分段。
+   */
+  function setFocusedLine(sessionId: string, line: number) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return false;
+    const buffer = bundle.terminal.buffer.active;
+    const targetLine = buffer.getLine(line);
+    if (!targetLine) return false;
+
+    disposeFocusedLine(sessionId);
+
+    const marker = bundle.terminal.registerMarker(
+      line - getAbsoluteCursorLine(bundle.terminal),
+    );
+    if (!marker || marker.isDisposed) {
+      return false;
+    }
+
+    const decoration =
+      bundle.terminal.registerDecoration({
+        marker,
+        x: 0,
+        width: bundle.terminal.cols,
+        height: 1,
+        backgroundColor: "#2d4f85",
+        layer: "bottom",
+      }) ?? null;
+
+    if (decoration) {
+      decoration.onRender((element) => {
+        element.classList.add("terminal-focused-line-decoration");
+      });
+    }
+
+    focusedLineBySessionRef.current[sessionId] = {
+      line,
+      marker,
+      decoration,
+    };
+    syncCursorBlink(sessionId, line === getAbsoluteCursorLine(bundle.terminal));
+    return true;
+  }
+
+  function resolveBufferLineFromPoint(bundle: TerminalBundle, clientY: number) {
+    const rect = bundle.host.getBoundingClientRect();
+    if (rect.height <= 0 || bundle.terminal.rows <= 0) return null;
+    if (clientY < rect.top || clientY > rect.bottom) return null;
+    const relativeY = clientY - rect.top;
+    const rowHeight = rect.height / bundle.terminal.rows;
+    if (rowHeight <= 0) return null;
+    const viewportRow = Math.max(
+      0,
+      Math.min(bundle.terminal.rows - 1, Math.floor(relativeY / rowHeight)),
+    );
+    return bundle.terminal.buffer.active.viewportY + viewportRow;
+  }
+
+  function getFocusedLineText(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    const focused = focusedLineBySessionRef.current[sessionId];
+    if (!bundle || !focused) return null;
+    const line = bundle.terminal.buffer.active.getLine(focused.line);
+    if (!line) return null;
+    return line.translateToString(true);
+  }
+
   function buildTerminalLayout(container: HTMLDivElement) {
     container.innerHTML = "";
     const runtime = document.createElement("div");
@@ -403,6 +502,11 @@ export default function useTerminalRuntime({
 
     bundle.disposables.push(
       term.onData((data) => {
+        // 聚焦行只用于“查看/复制这一行”。
+        // 一旦用户继续键盘输入，就恢复提示符光标闪烁，表示输入焦点仍在 shell prompt。
+        if (focusedLineBySessionRef.current[sessionId]) {
+          syncCursorBlink(sessionId, true);
+        }
         const state = sessionStatesRef.current[sessionId];
         if (state === "disconnected") {
           const reason = sessionReasonsRef.current[sessionId];
@@ -460,6 +564,7 @@ export default function useTerminalRuntime({
   function disposeTerminal(sessionId: string) {
     const bundle = terminalsRef.current[sessionId];
     if (!bundle) return;
+    disposeFocusedLine(sessionId);
     bundle.disposables.forEach((disposable) => disposable.dispose());
     bundle.terminal.dispose();
     delete terminalsRef.current[sessionId];
@@ -613,11 +718,39 @@ export default function useTerminalRuntime({
     return !!getActiveBundle()?.terminal.getSelection();
   }
 
+  function hasFocusedLine() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return false;
+    return !!focusedLineBySessionRef.current[sessionId];
+  }
+
   function focusActiveTerminal() {
     const bundle = getActiveBundle();
     if (!bundle) return false;
     bundle.terminal.focus();
     return true;
+  }
+
+  function focusTerminalLineAtPoint(sessionId: string, clientY: number) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return false;
+    const line = resolveBufferLineFromPoint(bundle, clientY);
+    if (line === null) return false;
+    return setFocusedLine(sessionId, line);
+  }
+
+  /** 复制当前聚焦的 buffer 行文本，供右键菜单在无选区时复用。 */
+  async function copyActiveFocusedLine() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return false;
+    const text = getFocusedLineText(sessionId);
+    if (text === null) return false;
+    try {
+      await writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async function copyActiveSelection() {
@@ -773,6 +906,9 @@ export default function useTerminalRuntime({
     getActiveSearchStats,
     getActiveLinkMenu,
     focusActiveTerminal,
+    focusTerminalLineAtPoint,
+    hasFocusedLine,
+    copyActiveFocusedLine,
     hasActiveSelection,
     copyActiveSelection,
     openActiveLink,

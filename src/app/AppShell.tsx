@@ -847,6 +847,9 @@ export default function AppShell() {
                 }
                 isTerminalReady={terminalQuery.isTerminalReady}
                 activeLinkMenu={terminalQuery.getActiveLinkMenu()}
+                hasFocusedLine={terminalQuery.hasFocusedLine}
+                onFocusLineAtPoint={terminalActions.focusTerminalLineAtPoint}
+                onCopyFocusedLine={terminalActions.copyActiveFocusedLine}
                 hasActiveSelection={terminalQuery.hasActiveSelection}
                 onCopySelection={terminalActions.copyActiveSelection}
                 onOpenLink={terminalActions.openActiveLink}

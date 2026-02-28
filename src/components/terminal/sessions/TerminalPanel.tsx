@@ -56,6 +56,9 @@ type TerminalPanelProps = {
   ) => void;
   isTerminalReady: (sessionId: string) => boolean;
   activeLinkMenu: { x: number; y: number; uri: string } | null;
+  hasFocusedLine: () => boolean;
+  onFocusLineAtPoint: (sessionId: string, clientY: number) => boolean;
+  onCopyFocusedLine: () => Promise<boolean>;
   hasActiveSelection: () => boolean;
   onCopySelection: () => Promise<boolean>;
   onOpenLink: () => Promise<boolean>;
@@ -87,6 +90,9 @@ export default function TerminalPanel({
   registerTerminalContainer,
   isTerminalReady,
   activeLinkMenu,
+  hasFocusedLine,
+  onFocusLineAtPoint,
+  onCopyFocusedLine,
   hasActiveSelection,
   onCopySelection,
   onOpenLink,
@@ -208,9 +214,13 @@ export default function TerminalPanel({
                 ready ? "ready" : ""
               }`}
               ref={refCallback}
+              onClick={(event) => {
+                onFocusLineAtPoint(item.sessionId, event.clientY);
+              }}
               onContextMenu={(event) => {
                 event.preventDefault();
                 if (!active) return;
+                onFocusLineAtPoint(item.sessionId, event.clientY);
                 onCloseLinkMenu();
                 setMenu({ x: event.clientX, y: event.clientY });
               }}
@@ -235,9 +245,15 @@ export default function TerminalPanel({
             items={[
               {
                 label: t("terminal.menu.copy"),
-                disabled: !hasActiveSelection(),
+                disabled: !hasFocusedLine() && !hasActiveSelection(),
                 onClick: () => {
-                  onCopySelection().catch(() => {});
+                  // 右键菜单只保留一个“复制”入口：
+                  // 有选区时优先复制选中内容，否则退回复制当前聚焦行。
+                  if (hasActiveSelection()) {
+                    onCopySelection().catch(() => {});
+                  } else {
+                    onCopyFocusedLine().catch(() => {});
+                  }
                   closeMenu();
                 },
               },
