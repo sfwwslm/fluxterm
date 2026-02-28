@@ -21,6 +21,8 @@ type SessionSettings = {
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
+  resourceMonitorEnabled?: boolean;
+  resourceMonitorIntervalSec?: number;
 };
 
 type UseSessionSettingsResult = {
@@ -28,18 +30,28 @@ type UseSessionSettingsResult = {
   selectionAutoCopyEnabled: boolean;
   scrollback: number;
   terminalPathSyncEnabled: boolean;
+  resourceMonitorEnabled: boolean;
+  resourceMonitorIntervalSec: number;
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setScrollback: React.Dispatch<React.SetStateAction<number>>;
   setTerminalPathSyncEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setResourceMonitorEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setResourceMonitorIntervalSec: React.Dispatch<React.SetStateAction<number>>;
   sessionSettingsLoaded: boolean;
 };
 
 export const MIN_SCROLLBACK = 100;
 export const MAX_SCROLLBACK = 50000;
+export const MIN_RESOURCE_MONITOR_INTERVAL_SEC = 3;
+export const DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC = 5;
 
 function normalizeScrollback(value: number) {
   return Math.max(MIN_SCROLLBACK, Math.min(MAX_SCROLLBACK, Math.round(value)));
+}
+
+function normalizeResourceMonitorIntervalSec(value: number) {
+  return Math.max(MIN_RESOURCE_MONITOR_INTERVAL_SEC, Math.round(value));
 }
 
 const defaultSessionSettings: Required<
@@ -49,12 +61,16 @@ const defaultSessionSettings: Required<
     | "selectionAutoCopyEnabled"
     | "scrollback"
     | "terminalPathSyncEnabled"
+    | "resourceMonitorEnabled"
+    | "resourceMonitorIntervalSec"
   >
 > = {
   webLinksEnabled: true,
   selectionAutoCopyEnabled: false,
   scrollback: 3000,
   terminalPathSyncEnabled: true,
+  resourceMonitorEnabled: false,
+  resourceMonitorIntervalSec: DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
 };
 
 /** 会话设置持久化：管理终端域的全局配置，统一写入 session.json。 */
@@ -71,6 +87,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   const [terminalPathSyncEnabled, setTerminalPathSyncEnabled] = useState(
     defaultSessionSettings.terminalPathSyncEnabled,
   );
+  const [resourceMonitorEnabled, setResourceMonitorEnabled] = useState(
+    defaultSessionSettings.resourceMonitorEnabled,
+  );
+  const [resourceMonitorIntervalSec, setResourceMonitorIntervalSec] = useState(
+    defaultSessionSettings.resourceMonitorIntervalSec,
+  );
   const [sessionSettingsLoaded, setSessionSettingsLoaded] = useState(false);
   const loadedRef = useRef(false);
   const loggedSettingsRef = useRef({
@@ -78,6 +100,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     selectionAutoCopyEnabled: defaultSessionSettings.selectionAutoCopyEnabled,
     scrollback: defaultSessionSettings.scrollback,
     terminalPathSyncEnabled: defaultSessionSettings.terminalPathSyncEnabled,
+    resourceMonitorEnabled: defaultSessionSettings.resourceMonitorEnabled,
+    resourceMonitorIntervalSec:
+      defaultSessionSettings.resourceMonitorIntervalSec,
   });
 
   async function loadSessionSettings() {
@@ -99,6 +124,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       if (typeof parsed?.terminalPathSyncEnabled === "boolean") {
         setTerminalPathSyncEnabled(parsed.terminalPathSyncEnabled);
       }
+      if (typeof parsed?.resourceMonitorEnabled === "boolean") {
+        setResourceMonitorEnabled(parsed.resourceMonitorEnabled);
+      }
       if (typeof parsed?.scrollback === "number") {
         const normalizedScrollback = normalizeScrollback(parsed.scrollback);
         setScrollback(normalizedScrollback);
@@ -109,6 +137,22 @@ export default function useSessionSettings(): UseSessionSettingsResult {
               event: "session-settings:scrollback-invalid",
               raw: parsed.scrollback,
               normalized: normalizedScrollback,
+            }),
+          );
+        }
+      }
+      if (typeof parsed?.resourceMonitorIntervalSec === "number") {
+        const normalizedInterval = normalizeResourceMonitorIntervalSec(
+          parsed.resourceMonitorIntervalSec,
+        );
+        setResourceMonitorIntervalSec(normalizedInterval);
+        if (normalizedInterval !== parsed.resourceMonitorIntervalSec) {
+          shouldRewrite = true;
+          warn(
+            JSON.stringify({
+              event: "session-settings:resource-monitor-interval-invalid",
+              raw: parsed.resourceMonitorIntervalSec,
+              normalized: normalizedInterval,
             }),
           );
         }
@@ -137,10 +181,20 @@ export default function useSessionSettings(): UseSessionSettingsResult {
             typeof parsed.terminalPathSyncEnabled === "boolean"
               ? parsed.terminalPathSyncEnabled
               : defaultSessionSettings.terminalPathSyncEnabled,
+          resourceMonitorEnabled:
+            typeof parsed.resourceMonitorEnabled === "boolean"
+              ? parsed.resourceMonitorEnabled
+              : defaultSessionSettings.resourceMonitorEnabled,
           scrollback:
             typeof parsed.scrollback === "number"
               ? normalizeScrollback(parsed.scrollback)
               : defaultSessionSettings.scrollback,
+          resourceMonitorIntervalSec:
+            typeof parsed.resourceMonitorIntervalSec === "number"
+              ? normalizeResourceMonitorIntervalSec(
+                  parsed.resourceMonitorIntervalSec,
+                )
+              : defaultSessionSettings.resourceMonitorIntervalSec,
         }).catch((error) => {
           warn(
             JSON.stringify({
@@ -163,10 +217,20 @@ export default function useSessionSettings(): UseSessionSettingsResult {
           typeof parsed?.terminalPathSyncEnabled === "boolean"
             ? parsed.terminalPathSyncEnabled
             : defaultSessionSettings.terminalPathSyncEnabled,
+        resourceMonitorEnabled:
+          typeof parsed?.resourceMonitorEnabled === "boolean"
+            ? parsed.resourceMonitorEnabled
+            : defaultSessionSettings.resourceMonitorEnabled,
         scrollback:
           typeof parsed?.scrollback === "number"
             ? normalizeScrollback(parsed.scrollback)
             : defaultSessionSettings.scrollback,
+        resourceMonitorIntervalSec:
+          typeof parsed?.resourceMonitorIntervalSec === "number"
+            ? normalizeResourceMonitorIntervalSec(
+                parsed.resourceMonitorIntervalSec,
+              )
+            : defaultSessionSettings.resourceMonitorIntervalSec,
       };
       loadedRef.current = true;
       setSessionSettingsLoaded(true);
@@ -194,7 +258,11 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       webLinksEnabled,
       selectionAutoCopyEnabled,
       terminalPathSyncEnabled,
+      resourceMonitorEnabled,
       scrollback: normalizeScrollback(scrollback),
+      resourceMonitorIntervalSec: normalizeResourceMonitorIntervalSec(
+        resourceMonitorIntervalSec,
+      ),
     }).catch((error) => {
       warn(
         JSON.stringify({
@@ -207,6 +275,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     scrollback,
     selectionAutoCopyEnabled,
     terminalPathSyncEnabled,
+    resourceMonitorEnabled,
+    resourceMonitorIntervalSec,
     webLinksEnabled,
   ]);
 
@@ -260,15 +330,55 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     loggedSettingsRef.current.terminalPathSyncEnabled = terminalPathSyncEnabled;
   }, [terminalPathSyncEnabled]);
 
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    if (
+      loggedSettingsRef.current.resourceMonitorEnabled ===
+      resourceMonitorEnabled
+    ) {
+      return;
+    }
+    info(
+      JSON.stringify({
+        event: "session-settings:resource-monitor-changed",
+        enabled: resourceMonitorEnabled,
+      }),
+    ).catch(() => {});
+    loggedSettingsRef.current.resourceMonitorEnabled = resourceMonitorEnabled;
+  }, [resourceMonitorEnabled]);
+
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const nextInterval = normalizeResourceMonitorIntervalSec(
+      resourceMonitorIntervalSec,
+    );
+    if (loggedSettingsRef.current.resourceMonitorIntervalSec === nextInterval) {
+      return;
+    }
+    info(
+      JSON.stringify({
+        event: "session-settings:resource-monitor-interval-changed",
+        intervalSec: nextInterval,
+      }),
+    ).catch(() => {});
+    loggedSettingsRef.current.resourceMonitorIntervalSec = nextInterval;
+  }, [resourceMonitorIntervalSec]);
+
   return {
     webLinksEnabled,
     selectionAutoCopyEnabled,
     scrollback: normalizeScrollback(scrollback),
     terminalPathSyncEnabled,
+    resourceMonitorEnabled,
+    resourceMonitorIntervalSec: normalizeResourceMonitorIntervalSec(
+      resourceMonitorIntervalSec,
+    ),
     setWebLinksEnabled,
     setSelectionAutoCopyEnabled,
     setScrollback,
     setTerminalPathSyncEnabled,
+    setResourceMonitorEnabled,
+    setResourceMonitorIntervalSec,
     sessionSettingsLoaded,
   };
 }

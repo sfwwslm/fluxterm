@@ -5,6 +5,7 @@ pub mod events;
 pub mod local_fs;
 pub mod local_shell;
 pub mod profile_store;
+pub mod resource_monitor;
 pub mod state;
 
 use std::sync::Arc;
@@ -21,6 +22,9 @@ use crate::commands::local_shell::{
 use crate::commands::profile::{
     profile_groups_list, profile_groups_save, profile_list, profile_remove, profile_save,
 };
+use crate::commands::resource_monitor::{
+    resource_monitor_start_local, resource_monitor_start_ssh, resource_monitor_stop,
+};
 use crate::commands::sftp::{
     sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_resolve_path,
     sftp_upload,
@@ -28,6 +32,7 @@ use crate::commands::sftp::{
 use crate::commands::ssh::{ssh_connect, ssh_disconnect, ssh_resize, ssh_write};
 use crate::commands::system::app_config_dir;
 use crate::local_shell::LocalShellState;
+use crate::resource_monitor::ResourceMonitorState;
 use crate::state::EngineState;
 
 fn resolve_log_level() -> LevelFilter {
@@ -65,6 +70,7 @@ pub fn run() {
             engine: Arc::new(Engine::new()),
         })
         .manage(LocalShellState::default())
+        .manage(ResourceMonitorState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -110,6 +116,9 @@ pub fn run() {
             local_shell_list,
             local_shell_write,
             local_shell_resize,
+            resource_monitor_start_local,
+            resource_monitor_start_ssh,
+            resource_monitor_stop,
             app_config_dir,
         ])
         .run(tauri::generate_context!())

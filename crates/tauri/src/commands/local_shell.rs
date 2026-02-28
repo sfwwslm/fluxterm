@@ -6,6 +6,7 @@ use crate::local_shell::{
     LocalShellProfile, LocalShellState, list_local_shells, resize_local_shell, start_local_shell,
     stop_local_shell, write_local_shell,
 };
+use crate::resource_monitor::ResourceMonitorState;
 
 #[tauri::command]
 /// 列出本地可用 Shell。
@@ -49,7 +50,9 @@ pub fn local_shell_resize(
 /// 关闭本地 Shell 会话。
 pub fn local_shell_disconnect(
     state: State<LocalShellState>,
+    monitor_state: State<ResourceMonitorState>,
     session_id: String,
 ) -> Result<(), EngineError> {
+    monitor_state.stop(&session_id);
     stop_local_shell(&state, &session_id)
 }

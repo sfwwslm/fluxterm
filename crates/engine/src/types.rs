@@ -105,6 +105,49 @@ pub struct SftpProgress {
     pub total: Option<u64>,
 }
 
+/// 资源监控状态。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceMonitorStatus {
+    Checking,
+    Ready,
+    Unsupported,
+}
+
+/// CPU 资源快照。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceCpuSnapshot {
+    pub total_percent: f32,
+    pub user_percent: f32,
+    pub system_percent: f32,
+    pub idle_percent: f32,
+    pub iowait_percent: f32,
+}
+
+/// 内存资源快照。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceMemorySnapshot {
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub free_bytes: u64,
+    pub available_bytes: u64,
+    pub cache_bytes: u64,
+}
+
+/// 会话资源快照。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionResourceSnapshot {
+    pub session_id: String,
+    pub sampled_at: u64,
+    pub source: String,
+    pub status: ResourceMonitorStatus,
+    pub cpu: Option<ResourceCpuSnapshot>,
+    pub memory: Option<ResourceMemorySnapshot>,
+}
+
 /// 引擎事件回调载荷。
 #[derive(Debug, Clone)]
 pub enum EngineEvent {
@@ -116,6 +159,7 @@ pub enum EngineEvent {
         session_id: String,
     },
     SftpProgress(SftpProgress),
+    SessionResource(SessionResourceSnapshot),
     SessionStatus {
         session_id: String,
         state: SessionState,

@@ -41,6 +41,9 @@ pub fn build_event_bridge(app: AppHandle) -> Arc<dyn Fn(EngineEvent) + Send + Sy
         EngineEvent::SftpProgress(progress) => {
             let _ = app.emit("sftp:progress", progress);
         }
+        EngineEvent::SessionResource(resource) => {
+            let _ = app.emit("session:resource", resource);
+        }
         EngineEvent::SessionStatus {
             session_id,
             state,

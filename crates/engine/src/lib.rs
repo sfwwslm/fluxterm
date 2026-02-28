@@ -2,6 +2,7 @@
 pub mod auth;
 pub mod engine;
 pub mod error;
+pub mod monitor;
 pub mod session;
 pub mod sftp;
 pub mod types;

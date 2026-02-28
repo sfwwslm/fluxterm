@@ -53,6 +53,41 @@ export type SftpAvailability =
   | "disabled"
   | "unsupported";
 
+/** 资源监控状态。 */
+export type ResourceMonitorStatus =
+  | "disabled"
+  | "checking"
+  | "ready"
+  | "unsupported";
+
+/** CPU 资源快照。 */
+export type ResourceCpuSnapshot = {
+  totalPercent: number;
+  userPercent: number;
+  systemPercent: number;
+  idlePercent: number;
+  iowaitPercent: number;
+};
+
+/** 内存资源快照。 */
+export type ResourceMemorySnapshot = {
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  availableBytes: number;
+  cacheBytes: number;
+};
+
+/** 会话资源快照。 */
+export type SessionResourceSnapshot = {
+  sessionId: string;
+  sampledAt: number;
+  source: "local" | "ssh-linux";
+  status: ResourceMonitorStatus;
+  cpu?: ResourceCpuSnapshot | null;
+  memory?: ResourceMemorySnapshot | null;
+};
+
 /** 日志级别。 */
 export type LogLevel = "info" | "success" | "error";
 

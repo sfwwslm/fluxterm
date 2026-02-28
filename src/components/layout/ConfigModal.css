@@ -112,6 +112,28 @@
   background: color-mix(in srgb, var(--surface-header) 76%, transparent);
 }
 
+.config-feature-group {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.config-toggle-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.config-subsetting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border-soft);
+}
+
 .config-toggle-copy {
   display: flex;
   flex-direction: column;

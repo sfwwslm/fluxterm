@@ -3,6 +3,7 @@ use engine::{EngineError, HostProfile, Session, TerminalSize};
 use tauri::{AppHandle, State};
 
 use crate::events::build_event_bridge;
+use crate::resource_monitor::ResourceMonitorState;
 use crate::state::EngineState;
 
 #[tauri::command]
@@ -19,7 +20,12 @@ pub fn ssh_connect(
 
 #[tauri::command]
 /// 断开 SSH 会话连接。
-pub fn ssh_disconnect(state: State<EngineState>, session_id: String) -> Result<(), EngineError> {
+pub fn ssh_disconnect(
+    state: State<EngineState>,
+    monitor_state: State<ResourceMonitorState>,
+    session_id: String,
+) -> Result<(), EngineError> {
+    monitor_state.stop(&session_id);
     state.engine.disconnect(&session_id)
 }
 

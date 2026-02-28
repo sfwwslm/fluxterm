@@ -29,11 +29,22 @@ import useMacAppMenu from "@/hooks/useMacAppMenu";
 import useQuickBarState from "@/hooks/useQuickBarState";
 import { allPanelKeys, moveWidgetToSlot } from "@/layout/model";
 import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
-import type { HostProfile, PanelKey, ThemeId } from "@/types";
+import type {
+  HostProfile,
+  PanelKey,
+  SessionResourceSnapshot,
+  ThemeId,
+} from "@/types";
 import { isMacOS } from "@/utils/platform";
 import useSessionController from "@/features/session/hooks/useSessionController";
 import useTerminalController from "@/features/terminal/hooks/useTerminalController";
 import useSftpController from "@/features/sftp/hooks/useSftpController";
+import { MIN_RESOURCE_MONITOR_INTERVAL_SEC } from "@/hooks/settings/useSessionSettings";
+import {
+  startLocalResourceMonitor,
+  startSshResourceMonitor,
+  stopResourceMonitor,
+} from "@/features/resource/core/commands";
 import { themePresets } from "@/app/theme/themePresets";
 import { buildPanels } from "@/app/panels/buildPanels";
 import {
@@ -41,6 +52,7 @@ import {
   type FloatingFilesMessage,
   type FloatingFilesSnapshot,
 } from "@/features/sftp/core/floatingSync";
+import { subscribeTauri } from "@/shared/tauri/events";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   profiles: "panel.profiles",
@@ -138,10 +150,14 @@ export default function AppShell() {
     selectionAutoCopyEnabled,
     scrollback,
     terminalPathSyncEnabled,
+    resourceMonitorEnabled,
+    resourceMonitorIntervalSec,
     setWebLinksEnabled,
     setSelectionAutoCopyEnabled,
     setScrollback,
     setTerminalPathSyncEnabled,
+    setResourceMonitorEnabled,
+    setResourceMonitorIntervalSec,
   } = useSessionSettings();
   const {
     profiles,
@@ -198,8 +214,13 @@ export default function AppShell() {
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
   const lastSftpProgressRef = useRef<Record<string, number>>({});
   const lastSftpTransferKeyRef = useRef<Record<string, string>>({});
+  const activeResourceMonitorSessionIdRef = useRef<string | null>(null);
+  const activeResourceMonitorKeyRef = useRef("");
   const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
     useState<FloatingFilesSnapshot | null>(null);
+  const [resourceSnapshotsBySession, setResourceSnapshotsBySession] = useState<
+    Record<string, SessionResourceSnapshot>
+  >({});
   const [terminalWorkingDirs, setTerminalWorkingDirs] = useState<
     Record<string, { username: string | null; path: string }>
   >({});
@@ -463,6 +484,168 @@ export default function AppShell() {
     terminalPathSyncEnabled,
     terminalPathSyncStateBySession,
   ]);
+  const activeResourceSnapshot = useMemo(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return null;
+    if (sessionState.activeSessionState !== "connected") return null;
+    return resourceSnapshotsBySession[activeSessionId] ?? null;
+  }, [
+    resourceSnapshotsBySession,
+    sessionState.activeSessionId,
+    sessionState.activeSessionState,
+  ]);
+  const activeResourceMonitorStatus = useMemo<
+    "disabled" | "checking" | "ready" | "unsupported"
+  >(() => {
+    if (!resourceMonitorEnabled) return "disabled";
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return "checking";
+    if (sessionState.activeSessionState !== "connected") return "checking";
+    const snapshot = resourceSnapshotsBySession[activeSessionId];
+    if (!snapshot) return "checking";
+    if (snapshot.status === "ready" && snapshot.cpu && snapshot.memory) {
+      return "ready";
+    }
+    return snapshot.status;
+  }, [
+    resourceMonitorEnabled,
+    resourceSnapshotsBySession,
+    sessionState.activeSessionId,
+    sessionState.activeSessionState,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let teardown: (() => void) | null = null;
+
+    const registerResourceListener = async () => {
+      const unlisten = await subscribeTauri<SessionResourceSnapshot>(
+        "session:resource",
+        (event) => {
+          if (cancelled) return;
+          setResourceSnapshotsBySession((prev) => ({
+            ...prev,
+            [event.payload.sessionId]: event.payload,
+          }));
+        },
+      );
+      if (cancelled) {
+        unlisten();
+        return;
+      }
+      teardown = unlisten;
+    };
+
+    registerResourceListener().catch(() => {});
+    return () => {
+      cancelled = true;
+      teardown?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    const normalizedInterval = Math.max(
+      MIN_RESOURCE_MONITOR_INTERVAL_SEC,
+      resourceMonitorIntervalSec,
+    );
+    const isLocalActiveSession =
+      !!activeSessionId && sessionActions.isLocalSession(activeSessionId);
+    const desiredMonitorKey =
+      resourceMonitorEnabled &&
+      activeSessionId &&
+      sessionState.activeSessionState === "connected" &&
+      (isLocalActiveSession || sessionState.activeSessionProfile)
+        ? [
+            activeSessionId,
+            isLocalActiveSession ? "local" : "ssh",
+            sessionState.activeSessionProfile?.id ?? "local",
+            normalizedInterval,
+          ].join(":")
+        : "";
+
+    const stopMonitorById = async (sessionId: string | null) => {
+      if (!sessionId) return;
+      await stopResourceMonitor(sessionId).catch(() => {});
+    };
+
+    const syncMonitor = async () => {
+      // 资源监控的启停只能跟随稳定的“会话 + 模式 + 间隔”键变化，
+      // 不能依赖 controller 包装对象本身，否则 render 抖动会导致 start/stop 循环。
+      if (activeResourceMonitorKeyRef.current === desiredMonitorKey) {
+        return;
+      }
+      activeResourceMonitorKeyRef.current = desiredMonitorKey;
+
+      const previousSessionId = activeResourceMonitorSessionIdRef.current;
+      if (!desiredMonitorKey || !activeSessionId) {
+        await stopMonitorById(previousSessionId);
+        activeResourceMonitorSessionIdRef.current = null;
+        return;
+      }
+
+      if (
+        resourceSnapshotsBySession[activeSessionId]?.status === "unsupported"
+      ) {
+        await stopMonitorById(previousSessionId);
+        activeResourceMonitorSessionIdRef.current = null;
+        activeResourceMonitorKeyRef.current = `unsupported:${activeSessionId}`;
+        return;
+      }
+
+      if (previousSessionId && previousSessionId !== activeSessionId) {
+        await stopMonitorById(previousSessionId);
+      }
+
+      setResourceSnapshotsBySession((prev) => {
+        const existing = prev[activeSessionId];
+        if (existing?.status === "checking" || existing?.status === "ready") {
+          return prev;
+        }
+        return {
+          ...prev,
+          [activeSessionId]: {
+            sessionId: activeSessionId,
+            sampledAt: Date.now(),
+            source: isLocalActiveSession ? "local" : "ssh-linux",
+            status: "checking",
+            cpu: null,
+            memory: null,
+          },
+        };
+      });
+
+      if (isLocalActiveSession) {
+        await startLocalResourceMonitor(activeSessionId, normalizedInterval);
+      } else if (sessionState.activeSessionProfile) {
+        await startSshResourceMonitor(
+          activeSessionId,
+          sessionState.activeSessionProfile,
+          normalizedInterval,
+        );
+      }
+
+      activeResourceMonitorSessionIdRef.current = activeSessionId;
+    };
+
+    syncMonitor().catch(() => {});
+  }, [
+    resourceMonitorEnabled,
+    resourceMonitorIntervalSec,
+    resourceSnapshotsBySession,
+    sessionState.activeSessionId,
+    sessionState.activeSessionProfile,
+    sessionState.activeSessionState,
+    sessionActions.isLocalSession,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      const sessionId = activeResourceMonitorSessionIdRef.current;
+      if (!sessionId) return;
+      stopResourceMonitor(sessionId).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     const activeSessionId = sessionState.activeSessionId;
@@ -1106,6 +1289,9 @@ export default function AppShell() {
             onShowGroupTitleChange={setShowGroupTitle}
             onRunCommand={handleRunQuickCommand}
             getActiveTerminalStats={terminalQuery.getActiveTerminalStats}
+            resourceMonitorEnabled={resourceMonitorEnabled}
+            resourceMonitorStatus={activeResourceMonitorStatus}
+            resourceSnapshot={activeResourceSnapshot}
             t={t}
           />
 
@@ -1135,11 +1321,15 @@ export default function AppShell() {
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
         scrollback={scrollback}
         terminalPathSyncEnabled={terminalPathSyncEnabled}
+        resourceMonitorEnabled={resourceMonitorEnabled}
+        resourceMonitorIntervalSec={resourceMonitorIntervalSec}
         onSftpEnabledChange={setSftpEnabled}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
         onScrollbackChange={setScrollback}
         onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}
+        onResourceMonitorEnabledChange={setResourceMonitorEnabled}
+        onResourceMonitorIntervalSecChange={setResourceMonitorIntervalSec}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}

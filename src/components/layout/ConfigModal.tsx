@@ -7,7 +7,9 @@ import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
 import { getFluxTermConfigDir } from "@/shared/config/paths";
 import {
+  DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   MAX_SCROLLBACK,
+  MIN_RESOURCE_MONITOR_INTERVAL_SEC,
   MIN_SCROLLBACK,
 } from "@/hooks/settings/useSessionSettings";
 import "@/components/layout/ConfigModal.css";
@@ -31,11 +33,15 @@ type ConfigModalProps = {
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
+  resourceMonitorEnabled?: boolean;
+  resourceMonitorIntervalSec?: number;
   onSftpEnabledChange?: (enabled: boolean) => void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
   onScrollbackChange?: (value: number) => void;
   onTerminalPathSyncEnabledChange?: (enabled: boolean) => void;
+  onResourceMonitorEnabledChange?: (enabled: boolean) => void;
+  onResourceMonitorIntervalSecChange?: (value: number) => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -58,11 +64,15 @@ export default function ConfigModal({
   selectionAutoCopyEnabled = false,
   scrollback = 3000,
   terminalPathSyncEnabled = true,
+  resourceMonitorEnabled = false,
+  resourceMonitorIntervalSec = DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   onSftpEnabledChange,
   onWebLinksEnabledChange,
   onSelectionAutoCopyEnabledChange,
   onScrollbackChange,
   onTerminalPathSyncEnabledChange,
+  onResourceMonitorEnabledChange,
+  onResourceMonitorIntervalSecChange,
   onClose,
   onSectionChange,
   t,
@@ -73,6 +83,8 @@ export default function ConfigModal({
   const [scrollbackDraft, setScrollbackDraft] = useState(() =>
     String(scrollback),
   );
+  const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
+    useState(() => String(resourceMonitorIntervalSec));
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -89,6 +101,10 @@ export default function ConfigModal({
     setScrollbackDraft(String(scrollback));
   }, [scrollback]);
 
+  useEffect(() => {
+    setResourceMonitorIntervalDraft(String(resourceMonitorIntervalSec));
+  }, [resourceMonitorIntervalSec]);
+
   // 仅在失焦、回车或模态框关闭时提交草稿；非法输入则回退到当前生效值。
   function commitScrollbackDraft() {
     const value = scrollbackDraft.trim();
@@ -104,9 +120,24 @@ export default function ConfigModal({
     onScrollbackChange?.(next);
   }
 
+  function commitResourceMonitorIntervalDraft() {
+    const value = resourceMonitorIntervalDraft.trim();
+    if (!value) {
+      setResourceMonitorIntervalDraft(String(resourceMonitorIntervalSec));
+      return;
+    }
+    const next = Number(value);
+    if (!Number.isFinite(next)) {
+      setResourceMonitorIntervalDraft(String(resourceMonitorIntervalSec));
+      return;
+    }
+    onResourceMonitorIntervalSecChange?.(next);
+  }
+
   function handleClose() {
     // 遮罩关闭发生在 input blur 之前，这里先提交草稿，避免用户点到模态框外部时丢失修改。
     commitScrollbackDraft();
+    commitResourceMonitorIntervalDraft();
     onClose();
   }
 
@@ -217,6 +248,52 @@ export default function ConfigModal({
               }}
             />
           </label>
+          <div className="config-toggle-card config-feature-group">
+            <label className="config-toggle-head">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.session.resourceMonitorEnabled")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.session.resourceMonitorEnabledHint")}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={resourceMonitorEnabled}
+                onChange={(event) =>
+                  onResourceMonitorEnabledChange?.(event.target.checked)
+                }
+              />
+            </label>
+            <div className="config-subsetting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.session.resourceMonitorIntervalSec")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.session.resourceMonitorIntervalSecHint", {
+                    min: MIN_RESOURCE_MONITOR_INTERVAL_SEC,
+                  })}
+                </span>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="config-number-input"
+                value={resourceMonitorIntervalDraft}
+                onChange={(event) => {
+                  setResourceMonitorIntervalDraft(event.target.value);
+                }}
+                onBlur={commitResourceMonitorIntervalDraft}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  commitResourceMonitorIntervalDraft();
+                }}
+              />
+            </div>
+          </div>
         </div>
       );
     }

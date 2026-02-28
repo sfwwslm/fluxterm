@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiSettings } from "react-icons/fi";
+import { FiActivity, FiDatabase, FiSettings } from "react-icons/fi";
 import type { Translate } from "@/i18n";
-import type { QuickCommandGroup, QuickCommandItem } from "@/types";
+import type {
+  QuickCommandGroup,
+  QuickCommandItem,
+  ResourceMonitorStatus,
+  SessionResourceSnapshot,
+} from "@/types";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
@@ -50,6 +55,9 @@ type BottomAreaProps = {
   onShowGroupTitleChange: React.Dispatch<React.SetStateAction<boolean>>;
   onRunCommand: (command: string) => void;
   getActiveTerminalStats: () => TerminalStats;
+  resourceMonitorEnabled: boolean;
+  resourceMonitorStatus: ResourceMonitorStatus;
+  resourceSnapshot: SessionResourceSnapshot | null;
   t: Translate;
 };
 
@@ -59,6 +67,23 @@ function pad2(value: number) {
 
 function formatDateTime(value: Date) {
   return `${value.getFullYear()}/${value.getMonth() + 1}/${value.getDate()} ${pad2(value.getHours())}:${pad2(value.getMinutes())}`;
+}
+
+function formatPercent(value: number) {
+  return `${Math.round(value)}%`;
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  const precision = size >= 100 || index === 0 ? 0 : 1;
+  return `${size.toFixed(precision)} ${units[index]}`;
 }
 
 function useMinuteClock() {
@@ -106,6 +131,9 @@ export default function BottomArea({
   onShowGroupTitleChange,
   onRunCommand,
   getActiveTerminalStats,
+  resourceMonitorEnabled,
+  resourceMonitorStatus,
+  resourceSnapshot,
   t,
 }: BottomAreaProps) {
   const [stats, setStats] = useState<TerminalStats>(() =>
@@ -133,6 +161,7 @@ export default function BottomArea({
   const now = useMinuteClock();
   const quickbarMenuRef = useRef<HTMLDivElement | null>(null);
   const [quickbarMenuOpen, setQuickbarMenuOpen] = useState(false);
+  const [resourcePopoverOpen, setResourcePopoverOpen] = useState(false);
 
   useEffect(() => {
     setStats(getActiveTerminalStats());
@@ -320,6 +349,11 @@ export default function BottomArea({
     return null;
   }
 
+  const showResourceStatus = resourceMonitorEnabled;
+  const resourceStatus = resourceMonitorStatus;
+  const resourceCpu = resourceSnapshot?.cpu ?? null;
+  const resourceMemory = resourceSnapshot?.memory ?? null;
+
   return (
     <>
       <footer className="bottom-area">
@@ -424,13 +458,131 @@ export default function BottomArea({
             className={`statusbar-row ${visibility.quickbar ? "with-separator" : ""}`.trim()}
           >
             <div className="statusbar" title={t("layout.footer.statusbar")}>
-              <span>
-                [ {t("status.window")} {stats.windowRows}x{stats.windowCols} ]
-              </span>
-              <span>
-                [ {t("status.buffer")} {stats.bufferLines} ]
-              </span>
-              <span>[ {formatDateTime(now)} ]</span>
+              <div className="statusbar-left">
+                {showResourceStatus && (
+                  <div
+                    className="statusbar-resource"
+                    onMouseEnter={() => setResourcePopoverOpen(true)}
+                    onMouseLeave={() => setResourcePopoverOpen(false)}
+                  >
+                    {resourceStatus === "ready" &&
+                    resourceCpu &&
+                    resourceMemory ? (
+                      <>
+                        <span className="statusbar-resource-chip">
+                          <FiActivity />
+                          <span>
+                            {t("status.resource.cpu")}{" "}
+                            {formatPercent(resourceCpu.totalPercent)}
+                          </span>
+                        </span>
+                        <span className="statusbar-resource-chip">
+                          <FiDatabase />
+                          <span>
+                            {t("status.resource.memory")}{" "}
+                            {formatPercent(
+                              resourceMemory.totalBytes > 0
+                                ? (resourceMemory.usedBytes /
+                                    resourceMemory.totalBytes) *
+                                    100
+                                : 0,
+                            )}
+                          </span>
+                        </span>
+                      </>
+                    ) : (
+                      <span className="statusbar-resource-chip muted">
+                        {resourceStatus === "unsupported"
+                          ? t("status.resource.unsupported")
+                          : t("status.resource.checking")}
+                      </span>
+                    )}
+                    {resourcePopoverOpen && (
+                      <div className="statusbar-resource-popover">
+                        {resourceStatus === "ready" &&
+                        resourceCpu &&
+                        resourceMemory ? (
+                          <>
+                            <div className="statusbar-resource-block">
+                              <div className="statusbar-resource-title">
+                                {t("status.resource.cpu")}
+                              </div>
+                              <div className="statusbar-resource-grid">
+                                <span>{t("status.resource.total")}</span>
+                                <strong>
+                                  {formatPercent(resourceCpu.totalPercent)}
+                                </strong>
+                                {resourceSnapshot?.source === "ssh-linux" && (
+                                  <>
+                                    <span>{t("status.resource.user")}</span>
+                                    <strong>
+                                      {formatPercent(resourceCpu.userPercent)}
+                                    </strong>
+                                    <span>{t("status.resource.system")}</span>
+                                    <strong>
+                                      {formatPercent(resourceCpu.systemPercent)}
+                                    </strong>
+                                    <span>{t("status.resource.idle")}</span>
+                                    <strong>
+                                      {formatPercent(resourceCpu.idlePercent)}
+                                    </strong>
+                                    <span>{t("status.resource.iowait")}</span>
+                                    <strong>
+                                      {formatPercent(resourceCpu.iowaitPercent)}
+                                    </strong>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="statusbar-resource-block">
+                              <div className="statusbar-resource-title">
+                                {t("status.resource.memory")}
+                              </div>
+                              <div className="statusbar-resource-grid">
+                                <span>{t("status.resource.total")}</span>
+                                <strong>
+                                  {formatBytes(resourceMemory.totalBytes)}
+                                </strong>
+                                <span>{t("status.resource.used")}</span>
+                                <strong>
+                                  {formatBytes(resourceMemory.usedBytes)}
+                                </strong>
+                                <span>{t("status.resource.free")}</span>
+                                <strong>
+                                  {formatBytes(resourceMemory.freeBytes)}
+                                </strong>
+                                <span>{t("status.resource.available")}</span>
+                                <strong>
+                                  {formatBytes(resourceMemory.availableBytes)}
+                                </strong>
+                                <span>{t("status.resource.cache")}</span>
+                                <strong>
+                                  {formatBytes(resourceMemory.cacheBytes)}
+                                </strong>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="statusbar-resource-empty">
+                            {resourceStatus === "unsupported"
+                              ? t("status.resource.unsupported")
+                              : t("status.resource.checking")}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="statusbar-right">
+                <span>
+                  [ {t("status.window")} {stats.windowRows}x{stats.windowCols} ]
+                </span>
+                <span>
+                  [ {t("status.buffer")} {stats.bufferLines} ]
+                </span>
+                <span>[ {formatDateTime(now)} ]</span>
+              </div>
             </div>
           </div>
         )}
