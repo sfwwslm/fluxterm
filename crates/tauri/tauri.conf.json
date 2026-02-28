@@ -36,7 +36,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "category": "Utility",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -46,6 +47,15 @@
     ]
   },
   "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4Rjc0OERCMUJEMUUxNzIKUldSeTRkRWIyMGozR0RjZVk2V0ZLeEFoUWR6V2dmUGxPeG4xLzdIMWFlaXVTZWt0UnpuTGp0cGQK",
+      "endpoints": [
+        "https://github.com/sfwwslm/flux-term/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    },
     "fs": {
       "requireLiteralLeadingDot": false
     }
