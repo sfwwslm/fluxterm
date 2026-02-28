@@ -124,7 +124,7 @@
 
 .terminal-xterm-host .terminal-focused-line-decoration {
   pointer-events: none;
-  opacity: 0.92;
+  opacity: 0.14;
 }
 
 .terminal-xterm-host .xterm .xterm-viewport {

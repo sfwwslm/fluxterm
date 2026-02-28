@@ -551,15 +551,21 @@ export default function useTerminalRuntime({
       return false;
     }
 
-    const decoration =
-      bundle.terminal.registerDecoration({
-        marker,
-        x: 0,
-        width: bundle.terminal.cols,
-        height: 1,
-        backgroundColor: "#2d4f85",
-        layer: "bottom",
-      }) ?? null;
+    const isPromptLine = line === getAbsoluteCursorLine(bundle.terminal);
+    // 当前输入行只保留“逻辑上的聚焦”，用于右键复制这一行，
+    // 但不再铺背景高亮，避免用户输入命令时被装饰色干扰。
+    const decoration = isPromptLine
+      ? null
+      : (bundle.terminal.registerDecoration({
+          marker,
+          x: 0,
+          width: bundle.terminal.cols,
+          height: 1,
+          // 聚焦行使用更轻的独立冷灰色，避免与真实选区混淆，
+          // 同时保持足够低的存在感，不压住提示符和输入文字的可读性。
+          backgroundColor: "rgba(130, 146, 168, 0.18)",
+          layer: "bottom",
+        }) ?? null);
 
     if (decoration) {
       decoration.onRender((element) => {
@@ -572,7 +578,7 @@ export default function useTerminalRuntime({
       marker,
       decoration,
     };
-    syncCursorBlink(sessionId, line === getAbsoluteCursorLine(bundle.terminal));
+    syncCursorBlink(sessionId, isPromptLine);
     return true;
   }
 
