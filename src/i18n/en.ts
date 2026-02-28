@@ -41,6 +41,9 @@ export const en = {
   "config.session.selectionAutoCopyEnabled": "Auto Copy Selection",
   "config.session.selectionAutoCopyEnabledHint":
     "When enabled, selected text in the terminal is copied to the system clipboard automatically.",
+  "config.session.scrollback": "Terminal Scrollback",
+  "config.session.scrollbackHint":
+    "Controls how many history lines the terminal keeps, from {min} to {max}.",
   "config.directory.description":
     "This is the active FluxTerm configuration directory for viewing and editing configuration files.",
   "config.directory.open": "Open in File Manager",

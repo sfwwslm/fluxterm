@@ -120,6 +120,22 @@
   line-height: 1.55;
 }
 
+.config-number-input {
+  width: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--input-text);
+  font: inherit;
+  text-align: right;
+}
+
+.config-number-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 @media (max-width: 720px) {
   .config-modal-layout {
     grid-template-columns: 1fr;

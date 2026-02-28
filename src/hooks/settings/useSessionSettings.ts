@@ -19,21 +19,35 @@ type SessionSettings = {
   version: 1;
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  scrollback?: number;
 };
 
 type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
   selectionAutoCopyEnabled: boolean;
+  scrollback: number;
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setScrollback: React.Dispatch<React.SetStateAction<number>>;
   sessionSettingsLoaded: boolean;
 };
 
+export const MIN_SCROLLBACK = 100;
+export const MAX_SCROLLBACK = 50000;
+
+function normalizeScrollback(value: number) {
+  return Math.max(MIN_SCROLLBACK, Math.min(MAX_SCROLLBACK, Math.round(value)));
+}
+
 const defaultSessionSettings: Required<
-  Pick<SessionSettings, "webLinksEnabled" | "selectionAutoCopyEnabled">
+  Pick<
+    SessionSettings,
+    "webLinksEnabled" | "selectionAutoCopyEnabled" | "scrollback"
+  >
 > = {
   webLinksEnabled: true,
   selectionAutoCopyEnabled: false,
+  scrollback: 3000,
 };
 
 /** 会话设置持久化：管理终端域的全局配置，统一写入 session.json。 */
@@ -44,15 +58,20 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   const [selectionAutoCopyEnabled, setSelectionAutoCopyEnabled] = useState(
     defaultSessionSettings.selectionAutoCopyEnabled,
   );
+  const [scrollback, setScrollback] = useState(
+    defaultSessionSettings.scrollback,
+  );
   const [sessionSettingsLoaded, setSessionSettingsLoaded] = useState(false);
   const loadedRef = useRef(false);
   const loggedSettingsRef = useRef({
     webLinksEnabled: defaultSessionSettings.webLinksEnabled,
     selectionAutoCopyEnabled: defaultSessionSettings.selectionAutoCopyEnabled,
+    scrollback: defaultSessionSettings.scrollback,
   });
 
   async function loadSessionSettings() {
     let parsed: SessionSettings | null = null;
+    let shouldRewrite = false;
     try {
       const path = await getSessionSettingsPath();
       if (!(await exists(path))) {
@@ -66,6 +85,20 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       if (typeof parsed?.selectionAutoCopyEnabled === "boolean") {
         setSelectionAutoCopyEnabled(parsed.selectionAutoCopyEnabled);
       }
+      if (typeof parsed?.scrollback === "number") {
+        const normalizedScrollback = normalizeScrollback(parsed.scrollback);
+        setScrollback(normalizedScrollback);
+        if (normalizedScrollback !== parsed.scrollback) {
+          shouldRewrite = true;
+          warn(
+            JSON.stringify({
+              event: "session-settings:scrollback-invalid",
+              raw: parsed.scrollback,
+              normalized: normalizedScrollback,
+            }),
+          );
+        }
+      }
     } catch (error) {
       warn(
         JSON.stringify({
@@ -74,6 +107,31 @@ export default function useSessionSettings(): UseSessionSettingsResult {
         }),
       );
     } finally {
+      // 发现本地手改后的非法 scrollback 时，加载期先纠正内存值，再把合法值回写到 session.json。
+      if (parsed && shouldRewrite) {
+        saveSessionSettings({
+          version: 1,
+          webLinksEnabled:
+            typeof parsed.webLinksEnabled === "boolean"
+              ? parsed.webLinksEnabled
+              : defaultSessionSettings.webLinksEnabled,
+          selectionAutoCopyEnabled:
+            typeof parsed.selectionAutoCopyEnabled === "boolean"
+              ? parsed.selectionAutoCopyEnabled
+              : defaultSessionSettings.selectionAutoCopyEnabled,
+          scrollback:
+            typeof parsed.scrollback === "number"
+              ? normalizeScrollback(parsed.scrollback)
+              : defaultSessionSettings.scrollback,
+        }).catch((error) => {
+          warn(
+            JSON.stringify({
+              event: "session-settings:rewrite-failed",
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        });
+      }
       loggedSettingsRef.current = {
         webLinksEnabled:
           typeof parsed?.webLinksEnabled === "boolean"
@@ -83,6 +141,10 @@ export default function useSessionSettings(): UseSessionSettingsResult {
           typeof parsed?.selectionAutoCopyEnabled === "boolean"
             ? parsed.selectionAutoCopyEnabled
             : defaultSessionSettings.selectionAutoCopyEnabled,
+        scrollback:
+          typeof parsed?.scrollback === "number"
+            ? normalizeScrollback(parsed.scrollback)
+            : defaultSessionSettings.scrollback,
       };
       loadedRef.current = true;
       setSessionSettingsLoaded(true);
@@ -109,6 +171,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       version: 1,
       webLinksEnabled,
       selectionAutoCopyEnabled,
+      scrollback: normalizeScrollback(scrollback),
     }).catch((error) => {
       warn(
         JSON.stringify({
@@ -117,7 +180,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
         }),
       );
     });
-  }, [selectionAutoCopyEnabled, webLinksEnabled]);
+  }, [scrollback, selectionAutoCopyEnabled, webLinksEnabled]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -137,11 +200,28 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       selectionAutoCopyEnabled;
   }, [selectionAutoCopyEnabled]);
 
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const nextScrollback = normalizeScrollback(scrollback);
+    if (loggedSettingsRef.current.scrollback === nextScrollback) {
+      return;
+    }
+    info(
+      JSON.stringify({
+        event: "session-settings:scrollback-changed",
+        scrollback: nextScrollback,
+      }),
+    ).catch(() => {});
+    loggedSettingsRef.current.scrollback = nextScrollback;
+  }, [scrollback]);
+
   return {
     webLinksEnabled,
     selectionAutoCopyEnabled,
+    scrollback: normalizeScrollback(scrollback),
     setWebLinksEnabled,
     setSelectionAutoCopyEnabled,
+    setScrollback,
     sessionSettingsLoaded,
   };
 }

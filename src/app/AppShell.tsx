@@ -121,8 +121,10 @@ export default function AppShell() {
   const {
     webLinksEnabled,
     selectionAutoCopyEnabled,
+    scrollback,
     setWebLinksEnabled,
     setSelectionAutoCopyEnabled,
+    setScrollback,
   } = useSessionSettings();
   const {
     profiles,
@@ -274,8 +276,7 @@ export default function AppShell() {
     theme: themePresets[themeId].terminal,
     webLinksEnabled,
     selectionAutoCopyEnabled,
-    // TODO: 后续改为从用户设置读取 scrollback，而不是硬编码默认值。
-    scrollback: 3000,
+    scrollback,
     activeSessionId: sessionState.activeSessionId,
     activeSession: sessionState.activeSession,
     sessions: sessionState.sessions,
@@ -932,8 +933,10 @@ export default function AppShell() {
         sections={configModalSections}
         webLinksEnabled={webLinksEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
+        scrollback={scrollback}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
+        onScrollbackChange={setScrollback}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}

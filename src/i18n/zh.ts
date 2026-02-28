@@ -40,6 +40,9 @@ export const zh = {
   "config.session.selectionAutoCopyEnabled": "选中文本自动复制",
   "config.session.selectionAutoCopyEnabledHint":
     "开启后，终端中只要选中文本，就会自动写入系统剪贴板。",
+  "config.session.scrollback": "终端滚动回溯",
+  "config.session.scrollbackHint":
+    "控制终端保留的历史行数，范围 {min} 到 {max}。",
   "config.directory.description":
     "这里显示当前 FluxTerm 使用的配置目录，方便查看和编辑配置文件。",
   "config.directory.open": "在文件管理器中打开",

@@ -30,7 +30,6 @@ type UseTerminalRuntimeProps = {
   theme: TerminalTheme;
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
-  /** TODO: 后续从用户设置读取并传入终端 scrollback 配置。 */
   scrollback?: number;
   activeSessionId: string | null;
   activeSession: Session | null;
@@ -672,6 +671,12 @@ export default function useTerminalRuntime({
       bundle.terminal.options.theme = theme;
     });
   }, [theme]);
+
+  useEffect(() => {
+    Object.values(terminalsRef.current).forEach((bundle) => {
+      bundle.terminal.options.scrollback = scrollback;
+    });
+  }, [scrollback]);
 
   useEffect(() => {
     if (!activeSessionId) return;

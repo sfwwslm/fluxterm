@@ -5,6 +5,10 @@ import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
 import { getFluxTermConfigDir } from "@/shared/config/paths";
+import {
+  MAX_SCROLLBACK,
+  MIN_SCROLLBACK,
+} from "@/hooks/settings/useSessionSettings";
 import "@/components/layout/ConfigModal.css";
 
 export type ConfigSectionKey =
@@ -23,8 +27,10 @@ type ConfigModalProps = {
   sections: ConfigSectionItem[];
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  scrollback?: number;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
+  onScrollbackChange?: (value: number) => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -44,14 +50,20 @@ export default function ConfigModal({
   sections,
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
+  scrollback = 3000,
   onWebLinksEnabledChange,
   onSelectionAutoCopyEnabledChange,
+  onScrollbackChange,
   onClose,
   onSectionChange,
   t,
 }: ConfigModalProps) {
   const { pushToast } = useNotices();
   const [configDir, setConfigDir] = useState("");
+  // 数字输入使用本地草稿字符串，避免受控 number 输入在清空/连续编辑时不断打断用户。
+  const [scrollbackDraft, setScrollbackDraft] = useState(() =>
+    String(scrollback),
+  );
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -63,6 +75,31 @@ export default function ConfigModal({
         setConfigDir("");
       });
   }, [activeSection, open]);
+
+  useEffect(() => {
+    setScrollbackDraft(String(scrollback));
+  }, [scrollback]);
+
+  // 仅在失焦、回车或模态框关闭时提交草稿；非法输入则回退到当前生效值。
+  function commitScrollbackDraft() {
+    const value = scrollbackDraft.trim();
+    if (!value) {
+      setScrollbackDraft(String(scrollback));
+      return;
+    }
+    const next = Number(value);
+    if (!Number.isFinite(next)) {
+      setScrollbackDraft(String(scrollback));
+      return;
+    }
+    onScrollbackChange?.(next);
+  }
+
+  function handleClose() {
+    // 遮罩关闭发生在 input blur 之前，这里先提交草稿，避免用户点到模态框外部时丢失修改。
+    commitScrollbackDraft();
+    onClose();
+  }
 
   // 左侧导航只渲染当前入口所属的配置分组，避免“设置 / 会话设置 / 配置文件目录”共享同一总导航。
   function renderSectionContent() {
@@ -113,6 +150,34 @@ export default function ConfigModal({
               }
             />
           </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.scrollback")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.scrollbackHint", {
+                  min: MIN_SCROLLBACK,
+                  max: MAX_SCROLLBACK,
+                })}
+              </span>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="config-number-input"
+              value={scrollbackDraft}
+              onChange={(event) => {
+                setScrollbackDraft(event.target.value);
+              }}
+              onBlur={commitScrollbackDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitScrollbackDraft();
+              }}
+            />
+          </label>
         </div>
       );
     }
@@ -156,7 +221,7 @@ export default function ConfigModal({
       open={open}
       title={t("menu.config")}
       closeLabel={t("actions.close")}
-      onClose={onClose}
+      onClose={handleClose}
       bodyClassName="config-modal-body"
     >
       <div className="config-modal-layout">
