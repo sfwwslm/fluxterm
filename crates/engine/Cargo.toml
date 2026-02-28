@@ -9,6 +9,6 @@ anyhow = "1"
 serde = { workspace = true, features = ["derive"] }
 russh = { version = "0.56.0", default-features = false, features = ["flate2", "ring", "rsa"] }
 russh-sftp = "2.1.1"
-tokio = { version = "1", features = ["rt-multi-thread", "time", "io-util", "sync", "macros"] }
+tokio = { version = "1", features = ["fs", "rt-multi-thread", "time", "io-util", "sync", "macros"] }
 uuid = { version = "1", features = ["v4"] }
 log= { workspace = true }
