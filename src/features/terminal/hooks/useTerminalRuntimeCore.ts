@@ -787,7 +787,15 @@ export default function useTerminalRuntime({
     try {
       await writeText(text);
       return true;
-    } catch {
+    } catch (error) {
+      warn(
+        JSON.stringify({
+          event: "terminal:focused-line-copy-failed",
+          sessionId,
+          textLength: text.length,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       return false;
     }
   }
