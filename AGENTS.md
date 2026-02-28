@@ -7,7 +7,6 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 - `src/`: Frontend source (React + TypeScript). UI components, hooks, and utilities live here.
 - `public/`: Static assets served by Vite.
 - `crates/engine/`: Core engine for SSH/SFTP and terminal features.
-- `crates/cli/`: CLI entry point (TUI CLI).
 - `crates/tauri/`: Tauri desktop shell.
 - `ARCHITECTURE_V1.md`: High-level architecture notes.
 

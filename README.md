@@ -18,7 +18,6 @@ FluxTerm：Flux 是流动、变换，强调动态与现代感的终端
 flux-term/
 ├── crates/
 │   ├── engine/        # 核心引擎 ssh sftp 等
-│   ├── cli/           # 命令行入口（TUI CLI）
 │   └── tauri/         # GUI 壳（可插拔）
 ├── src/               # 前端工程
 ├── ARCHITECTURE_V1.md # 架构宪法

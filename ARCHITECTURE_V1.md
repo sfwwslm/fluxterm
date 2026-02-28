@@ -9,7 +9,6 @@ FluxTerm 是一款面向 SSH 连接并支持 SFTP 的现代化终端工具。
 
 - 提供稳定的 SSH 连接与交互式终端会话。
 - 提供 SFTP 传输与基础文件管理能力。
-- 优先实现 GUI（Tauri + React），GUI 未完成前不考虑 CLI/TUI。
 - 连接与会话逻辑只保留一套核心引擎。
 - 视觉风格统一为玻璃拟态轻奢：强调透明层次、细腻高光与质感边框，保持一致的光影与层级规范。
 - 代码设计采用模块化：各功能模块职责清晰、边界稳定、可替换与可复用，避免跨层耦合。
@@ -24,8 +23,6 @@ FluxTerm 是一款面向 SSH 连接并支持 SFTP 的现代化终端工具。
 
 ```text
 frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
-                                   
-cli (TUI)  --->  engine (Rust)
 ```
 
 ## 模块说明
@@ -37,13 +34,6 @@ cli (TUI)  --->  engine (Rust)
 - SSH 客户端：认证、会话、终端 I/O。
 - SFTP 客户端：列出/上传/下载/重命名/删除。
 - 会话生命周期、重试与超时抽象。
-
-### `crates/cli`
-
-面向脚本化与快速使用的 TUI 客户端（低优先级，GUI 完成后再评估）。
-
-- 会话管理与基础文件操作。
-- 复用 `engine` API。
 
 ### `crates/tauri`
 
