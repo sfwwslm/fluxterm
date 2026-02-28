@@ -97,12 +97,6 @@ pub async fn run_session_loop(
 
     authenticate(&mut session, &profile).await?;
 
-    on_event(EngineEvent::SessionStatus {
-        session_id: session_id.clone(),
-        state: SessionState::Connected,
-        error: None,
-    });
-
     let mut channel = session.channel_open_session().await.map_err(|err| {
         EngineError::with_detail(
             "ssh_channel_open_failed",
@@ -127,6 +121,15 @@ pub async fn run_session_loop(
     channel.request_shell(true).await.map_err(|err| {
         EngineError::with_detail("ssh_shell_failed", "无法启动 shell", err.to_string())
     })?;
+
+    // 只有在 PTY 和交互 shell 都就绪后，前端才应把会话视为真正可用。
+    // 这样 files 面板首轮触发的 SFTP 初始化不会抢在首屏横幅/提示符输出之前，
+    // 避免首个 SSH 会话在冷启动阶段出现“横幅缺失 + SFTP checking 卡住”的竞态。
+    on_event(EngineEvent::SessionStatus {
+        session_id: session_id.clone(),
+        state: SessionState::Connected,
+        error: None,
+    });
 
     let mut running = true;
 
