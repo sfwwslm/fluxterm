@@ -37,6 +37,9 @@ export const zh = {
   "config.session.webLinksEnabled": "启用 Web Links",
   "config.session.webLinksEnabledHint":
     "关闭后，终端中的 URL 点击菜单将不再生效。",
+  "config.session.selectionAutoCopyEnabled": "选中文本自动复制",
+  "config.session.selectionAutoCopyEnabledHint":
+    "开启后，终端中只要选中文本，就会自动写入系统剪贴板。",
   "config.directory.description":
     "这里显示当前 FluxTerm 使用的配置目录，方便查看和编辑配置文件。",
   "config.directory.open": "在文件管理器中打开",

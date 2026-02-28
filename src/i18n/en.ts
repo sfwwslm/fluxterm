@@ -38,6 +38,9 @@ export const en = {
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
     "When disabled, the URL click menu in the terminal will no longer respond.",
+  "config.session.selectionAutoCopyEnabled": "Auto Copy Selection",
+  "config.session.selectionAutoCopyEnabledHint":
+    "When enabled, selected text in the terminal is copied to the system clipboard automatically.",
   "config.directory.description":
     "This is the active FluxTerm configuration directory for viewing and editing configuration files.",
   "config.directory.open": "Open in File Manager",

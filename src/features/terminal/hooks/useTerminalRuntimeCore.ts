@@ -29,6 +29,7 @@ type TerminalTheme = {
 type UseTerminalRuntimeProps = {
   theme: TerminalTheme;
   webLinksEnabled?: boolean;
+  selectionAutoCopyEnabled?: boolean;
   /** TODO: 后续从用户设置读取并传入终端 scrollback 配置。 */
   scrollback?: number;
   activeSessionId: string | null;
@@ -178,6 +179,7 @@ function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
 export default function useTerminalRuntime({
   theme,
   webLinksEnabled = true,
+  selectionAutoCopyEnabled = false,
   scrollback = 3000,
   activeSessionId,
   activeSession,
@@ -201,6 +203,7 @@ export default function useTerminalRuntime({
   const xtermModulesRef = useRef<XtermModules | null>(null);
   const themeRef = useRef(theme);
   const webLinksEnabledRef = useRef(webLinksEnabled);
+  const selectionAutoCopyEnabledRef = useRef(selectionAutoCopyEnabled);
   const [searchStatsBySession, setSearchStatsBySession] = useState<
     Record<string, SearchStats | null>
   >({});
@@ -209,6 +212,7 @@ export default function useTerminalRuntime({
     Record<string, boolean>
   >({});
   const focusedLineBySessionRef = useRef<Record<string, FocusedLineState>>({});
+  const selectionAutoCopyTimerRef = useRef<Record<string, number>>({});
   const handlersRef = useRef({
     recordCommandInput,
     writeToSession,
@@ -268,6 +272,10 @@ export default function useTerminalRuntime({
   }, [webLinksEnabled]);
 
   useEffect(() => {
+    selectionAutoCopyEnabledRef.current = selectionAutoCopyEnabled;
+  }, [selectionAutoCopyEnabled]);
+
+  useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
 
@@ -324,6 +332,13 @@ export default function useTerminalRuntime({
     focused.decoration?.dispose();
     focused.marker.dispose();
     delete focusedLineBySessionRef.current[sessionId];
+  }
+
+  function disposeSelectionAutoCopyTimer(sessionId: string) {
+    const timer = selectionAutoCopyTimerRef.current[sessionId];
+    if (timer === undefined) return;
+    window.clearTimeout(timer);
+    delete selectionAutoCopyTimerRef.current[sessionId];
   }
 
   function syncCursorBlink(sessionId: string, enabled: boolean) {
@@ -527,6 +542,29 @@ export default function useTerminalRuntime({
       }),
     );
 
+    bundle.disposables.push(
+      term.onSelectionChange(() => {
+        disposeSelectionAutoCopyTimer(sessionId);
+        if (!selectionAutoCopyEnabledRef.current) return;
+        // 拖动选区时会连续触发选择变更，这里做短防抖，避免频繁覆盖系统剪贴板。
+        selectionAutoCopyTimerRef.current[sessionId] = window.setTimeout(() => {
+          delete selectionAutoCopyTimerRef.current[sessionId];
+          const text = term.getSelection();
+          if (!text) return;
+          writeText(text).catch((error) => {
+            warn(
+              JSON.stringify({
+                event: "terminal:selection-auto-copy-failed",
+                sessionId,
+                textLength: text.length,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          });
+        }, 120);
+      }),
+    );
+
     // 搜索插件结果变更时同步统计信息，供 UI 展示。
     if (searchAddon) {
       bundle.disposables.push(
@@ -564,6 +602,7 @@ export default function useTerminalRuntime({
   function disposeTerminal(sessionId: string) {
     const bundle = terminalsRef.current[sessionId];
     if (!bundle) return;
+    disposeSelectionAutoCopyTimer(sessionId);
     disposeFocusedLine(sessionId);
     bundle.disposables.forEach((disposable) => disposable.dispose());
     bundle.terminal.dispose();

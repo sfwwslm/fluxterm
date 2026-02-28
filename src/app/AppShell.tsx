@@ -118,7 +118,12 @@ export default function AppShell() {
     defaultThemeId: "dark",
   });
   // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
-  const { webLinksEnabled, setWebLinksEnabled } = useSessionSettings();
+  const {
+    webLinksEnabled,
+    selectionAutoCopyEnabled,
+    setWebLinksEnabled,
+    setSelectionAutoCopyEnabled,
+  } = useSessionSettings();
   const {
     profiles,
     sshGroups,
@@ -268,6 +273,7 @@ export default function AppShell() {
   const { terminalQuery, terminalActions } = useTerminalController({
     theme: themePresets[themeId].terminal,
     webLinksEnabled,
+    selectionAutoCopyEnabled,
     // TODO: 后续改为从用户设置读取 scrollback，而不是硬编码默认值。
     scrollback: 3000,
     activeSessionId: sessionState.activeSessionId,
@@ -925,7 +931,9 @@ export default function AppShell() {
         activeSection={activeConfigSection}
         sections={configModalSections}
         webLinksEnabled={webLinksEnabled}
+        selectionAutoCopyEnabled={selectionAutoCopyEnabled}
         onWebLinksEnabledChange={setWebLinksEnabled}
+        onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}

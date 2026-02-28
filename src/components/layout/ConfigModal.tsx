@@ -22,7 +22,9 @@ type ConfigModalProps = {
   activeSection: ConfigSectionKey;
   sections: ConfigSectionItem[];
   webLinksEnabled?: boolean;
+  selectionAutoCopyEnabled?: boolean;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
+  onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -41,7 +43,9 @@ export default function ConfigModal({
   activeSection,
   sections,
   webLinksEnabled = true,
+  selectionAutoCopyEnabled = false,
   onWebLinksEnabledChange,
+  onSelectionAutoCopyEnabledChange,
   onClose,
   onSectionChange,
   t,
@@ -89,6 +93,23 @@ export default function ConfigModal({
               checked={webLinksEnabled}
               onChange={(event) =>
                 onWebLinksEnabledChange?.(event.target.checked)
+              }
+            />
+          </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.selectionAutoCopyEnabled")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.selectionAutoCopyEnabledHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={selectionAutoCopyEnabled}
+              onChange={(event) =>
+                onSelectionAutoCopyEnabledChange?.(event.target.checked)
               }
             />
           </label>
