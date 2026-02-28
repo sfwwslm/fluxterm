@@ -586,7 +586,11 @@ export default function useTerminalRuntime({
       0,
       Math.min(bundle.terminal.rows - 1, Math.floor(relativeY / rowHeight)),
     );
-    return bundle.terminal.buffer.active.viewportY + viewportRow;
+    const bufferLine = bundle.terminal.buffer.active.viewportY + viewportRow;
+    // 终端视口高度通常会大于“实际已有内容”的高度，尤其在会话刚连接或窗口较高时，
+    // 提示符下面会出现尚未写入任何 buffer 内容的空白区域。
+    // 这些空白区域不应被视为可聚焦行，因此这里把最大可命中的行限制在当前光标所在行。
+    return Math.min(bufferLine, getAbsoluteCursorLine(bundle.terminal));
   }
 
   function getFocusedLineText(sessionId: string) {
