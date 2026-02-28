@@ -6,6 +6,7 @@ import {
   PredefinedMenuItem,
   Submenu,
 } from "@tauri-apps/api/menu";
+import { error as logError } from "@tauri-apps/plugin-log";
 import type { Locale, Translate } from "@/i18n";
 import type { ThemeId } from "@/types";
 import { isMacOS } from "@/utils/platform";
@@ -305,7 +306,12 @@ export default function useMacAppMenu({
           await previousMenu.close();
         }
       } catch (error) {
-        console.error("Failed to apply macOS app menu", error);
+        void logError(
+          JSON.stringify({
+            event: "mac-app-menu:apply-failed",
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
       }
     };
 

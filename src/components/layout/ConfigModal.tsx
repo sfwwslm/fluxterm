@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { error as logError } from "@tauri-apps/plugin-log";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Translate } from "@/i18n";
 import Modal from "@/components/terminal/modals/Modal";
@@ -240,9 +241,13 @@ export default function ConfigModal({
                   level: "error",
                   message: t("config.directory.openFailed"),
                 });
-                console.error(
-                  "Failed to open config directory",
-                  error instanceof Error ? error.message : error,
+                void logError(
+                  JSON.stringify({
+                    event: "config-directory:open-failed",
+                    path: configDir,
+                    message:
+                      error instanceof Error ? error.message : String(error),
+                  }),
                 );
               }
             }}
