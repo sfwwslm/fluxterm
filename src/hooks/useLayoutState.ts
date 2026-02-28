@@ -33,6 +33,7 @@ type LayoutState = {
   setSlotGroups: React.Dispatch<
     React.SetStateAction<Record<string, WidgetGroup>>
   >;
+  setPanelCollapsed: (side: WidgetSide | "bottom", collapsed: boolean) => void;
   handleToggleSplit: (side: WidgetSide) => void;
   handleCloseSlot: (slot: WidgetSlot) => void;
   handleToggleCollapsed: (side: WidgetSide | "bottom") => void;
@@ -233,6 +234,13 @@ export default function useLayoutState({
     setLayoutCollapsed((prev) => ({ ...prev, [side]: !prev[side] }));
   }
 
+  function setPanelCollapsed(side: WidgetSide | "bottom", collapsed: boolean) {
+    setLayoutCollapsed((prev) => {
+      if (prev[side] === collapsed) return prev;
+      return { ...prev, [side]: collapsed };
+    });
+  }
+
   function startResize(
     mode: "left" | "right" | "bottom",
     event: React.MouseEvent<HTMLDivElement>,
@@ -377,6 +385,7 @@ export default function useLayoutState({
     bottomVisible,
     layoutVars,
     setSlotGroups,
+    setPanelCollapsed,
     handleToggleSplit,
     handleCloseSlot,
     handleToggleCollapsed,

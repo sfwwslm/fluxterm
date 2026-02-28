@@ -154,6 +154,8 @@ export default function AppShell() {
     {},
   );
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
+  const lastSftpProgressRef = useRef<Record<string, number>>({});
+  const lastSftpTransferKeyRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const theme = themePresets[themeId];
@@ -261,6 +263,7 @@ export default function AppShell() {
     bottomVisible,
     layoutVars,
     setSlotGroups,
+    setPanelCollapsed,
     handleToggleSplit,
     handleCloseSlot,
     handleToggleCollapsed,
@@ -421,6 +424,56 @@ export default function AppShell() {
       sftpActions.remove,
     ],
   );
+
+  // 当检测到新的 SFTP 上传/下载开始时，主动把底部区域展开并切到传输面板，
+  // 避免用户在底部收起或停留在其他面板时感知不到传输开始。
+  // 这里仅在“新传输”开始时触发一次，不会在每次进度刷新时重复切换，也不会在传输结束后自动恢复原状态。
+  useEffect(() => {
+    if (floatingPanelKey) return;
+
+    let shouldRevealTransfers = false;
+    Object.values(sftpState.progressBySession).forEach((progress) => {
+      const transferKey = `${progress.op}:${progress.path}`;
+      const previousTransferred =
+        lastSftpProgressRef.current[progress.sessionId];
+      const previousTransferKey =
+        lastSftpTransferKeyRef.current[progress.sessionId];
+
+      const isNewTransfer =
+        previousTransferred === undefined ||
+        previousTransferKey !== transferKey ||
+        progress.transferred < previousTransferred;
+
+      if (isNewTransfer) {
+        shouldRevealTransfers = true;
+      }
+
+      lastSftpProgressRef.current[progress.sessionId] = progress.transferred;
+      lastSftpTransferKeyRef.current[progress.sessionId] = transferKey;
+    });
+
+    if (!shouldRevealTransfers) return;
+
+    setPanelCollapsed("bottom", false);
+    setSlotGroups((prev) => {
+      const bottomGroup = prev.bottom;
+      if (!bottomGroup) return prev;
+      if (!bottomGroup.widgets.includes("transfers")) return prev;
+      if (bottomGroup.active === "transfers") return prev;
+      return {
+        ...prev,
+        bottom: {
+          ...bottomGroup,
+          active: "transfers",
+        },
+      };
+    });
+  }, [
+    floatingPanelKey,
+    sftpState.progressBySession,
+    setPanelCollapsed,
+    setSlotGroups,
+  ]);
 
   function handleSlotSelect(slot: LayoutWidgetSlot, key: PanelKey) {
     setSlotGroups((prev) => {
