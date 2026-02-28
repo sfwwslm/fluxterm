@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";
 import type { SftpEntry } from "@/types";
 import { formatBytes, formatTime } from "@/utils/format";
@@ -6,7 +7,23 @@ import { isRootPath, parentPath } from "@/utils/path";
 import { useNotices } from "@/hooks/useNotices";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
-import { FiCornerLeftUp, FiMoreVertical, FiRefreshCw } from "react-icons/fi";
+import {
+  FiCode,
+  FiCornerLeftUp,
+  FiDatabase,
+  FiFile,
+  FiFileText,
+  FiFolder,
+  FiImage,
+  FiLink2,
+  FiLock,
+  FiMoreVertical,
+  FiPackage,
+  FiRefreshCw,
+  FiSettings,
+  FiTerminal,
+  FiVideo,
+} from "react-icons/fi";
 import Button from "@/components/ui/button";
 import "./SftpPanel.css";
 
@@ -25,6 +42,134 @@ type SftpPanelProps = {
   locale: Locale;
   t: Translate;
 };
+
+type FileIconMeta = {
+  Icon: IconType;
+  tone: string;
+};
+
+const CODE_EXTENSIONS = new Set([
+  "bash",
+  "c",
+  "cc",
+  "cpp",
+  "cs",
+  "css",
+  "go",
+  "h",
+  "hpp",
+  "html",
+  "java",
+  "js",
+  "json",
+  "jsx",
+  "kt",
+  "lua",
+  "md",
+  "php",
+  "py",
+  "rb",
+  "rs",
+  "scss",
+  "sh",
+  "sql",
+  "swift",
+  "toml",
+  "ts",
+  "tsx",
+  "vue",
+  "xml",
+  "yaml",
+  "yml",
+  "zsh",
+]);
+const IMAGE_EXTENSIONS = new Set([
+  "avif",
+  "bmp",
+  "gif",
+  "heic",
+  "ico",
+  "jpeg",
+  "jpg",
+  "png",
+  "svg",
+  "webp",
+]);
+const VIDEO_EXTENSIONS = new Set([
+  "avi",
+  "mkv",
+  "mov",
+  "mp4",
+  "mpeg",
+  "mpg",
+  "webm",
+]);
+const ARCHIVE_EXTENSIONS = new Set([
+  "7z",
+  "bz2",
+  "gz",
+  "rar",
+  "tar",
+  "tgz",
+  "xz",
+  "zip",
+]);
+const CONFIG_EXTENSIONS = new Set([
+  "conf",
+  "cfg",
+  "config",
+  "env",
+  "ini",
+  "properties",
+]);
+
+/** 图标判定优先走文件实体 kind，其次才按扩展名粗分普通文件类型。 */
+function getEntryIconMeta(entry: SftpEntry): FileIconMeta {
+  if (entry.kind === "dir") {
+    return { Icon: FiFolder, tone: "folder" };
+  }
+  if (entry.kind === "link") {
+    return { Icon: FiLink2, tone: "link" };
+  }
+
+  const parts = entry.name.split(".");
+  const extension =
+    parts.length > 1 ? (parts[parts.length - 1]?.toLowerCase() ?? "") : "";
+
+  if (CODE_EXTENSIONS.has(extension)) {
+    if (extension === "sh" || extension === "bash" || extension === "zsh") {
+      return { Icon: FiTerminal, tone: "script" };
+    }
+    if (extension === "sql") {
+      return { Icon: FiDatabase, tone: "database" };
+    }
+    return { Icon: FiCode, tone: "code" };
+  }
+  if (IMAGE_EXTENSIONS.has(extension)) {
+    return { Icon: FiImage, tone: "image" };
+  }
+  if (VIDEO_EXTENSIONS.has(extension)) {
+    return { Icon: FiVideo, tone: "media" };
+  }
+  if (ARCHIVE_EXTENSIONS.has(extension)) {
+    return { Icon: FiPackage, tone: "archive" };
+  }
+  if (CONFIG_EXTENSIONS.has(extension)) {
+    return { Icon: FiSettings, tone: "config" };
+  }
+  if (
+    extension === "log" ||
+    extension === "txt" ||
+    extension === "csv" ||
+    extension === "pdf"
+  ) {
+    return { Icon: FiFileText, tone: "text" };
+  }
+  if (extension === "key" || extension === "pem" || extension === "crt") {
+    return { Icon: FiLock, tone: "secure" };
+  }
+  return { Icon: FiFile, tone: "file" };
+}
 
 /** SFTP 文件管理面板。 */
 export default function SftpPanel({
@@ -138,40 +283,51 @@ export default function SftpPanel({
         )}
         <div className="sftp-list-body">
           {!showUnavailable &&
-            entries.map((entry) => (
-              <button
-                key={entry.path}
-                type="button"
-                className={`sftp-table-row sftp-table-item ${entry.kind}`}
-                onClick={() =>
-                  (entry.kind === "dir" || entry.kind === "link") &&
-                  onOpen(entry.path)
-                }
-                onContextMenu={(event) => openMenu(event, entry)}
-              >
-                <span className="sftp-cell sftp-cell-name">{entry.name}</span>
-                <span className="sftp-cell">
-                  {entry.mtime ? formatTime(entry.mtime, locale) : "-"}
-                </span>
-                <span className={`sftp-cell sftp-kind ${entry.kind}`}>
-                  {entry.kind === "dir"
-                    ? t("sftp.kind.dir")
-                    : entry.kind === "link"
-                      ? t("sftp.kind.link")
-                      : t("sftp.kind.file")}
-                </span>
-                <span className="sftp-cell">
-                  {entry.kind === "dir" ? "-" : formatBytes(entry.size ?? 0)}
-                </span>
-                <span className="sftp-cell">{entry.permissions ?? "-"}</span>
-                <span className="sftp-cell sftp-cell-owner">
-                  {entry.owner ?? "-"}
-                </span>
-                <span className="sftp-cell sftp-cell-group">
-                  {entry.group ?? "-"}
-                </span>
-              </button>
-            ))}
+            entries.map((entry) => {
+              const iconMeta = getEntryIconMeta(entry);
+              return (
+                <button
+                  key={entry.path}
+                  type="button"
+                  className={`sftp-table-row sftp-table-item ${entry.kind}`}
+                  onClick={() =>
+                    (entry.kind === "dir" || entry.kind === "link") &&
+                    onOpen(entry.path)
+                  }
+                  onContextMenu={(event) => openMenu(event, entry)}
+                >
+                  <span className="sftp-cell sftp-cell-name">
+                    <span
+                      className={`sftp-entry-icon ${iconMeta.tone}`}
+                      aria-hidden="true"
+                    >
+                      <iconMeta.Icon />
+                    </span>
+                    <span className="sftp-entry-name-text">{entry.name}</span>
+                  </span>
+                  <span className="sftp-cell">
+                    {entry.mtime ? formatTime(entry.mtime, locale) : "-"}
+                  </span>
+                  <span className={`sftp-cell sftp-kind ${entry.kind}`}>
+                    {entry.kind === "dir"
+                      ? t("sftp.kind.dir")
+                      : entry.kind === "link"
+                        ? t("sftp.kind.link")
+                        : t("sftp.kind.file")}
+                  </span>
+                  <span className="sftp-cell">
+                    {entry.kind === "dir" ? "-" : formatBytes(entry.size ?? 0)}
+                  </span>
+                  <span className="sftp-cell">{entry.permissions ?? "-"}</span>
+                  <span className="sftp-cell sftp-cell-owner">
+                    {entry.owner ?? "-"}
+                  </span>
+                  <span className="sftp-cell sftp-cell-group">
+                    {entry.group ?? "-"}
+                  </span>
+                </button>
+              );
+            })}
           {showUnavailable && (
             <div className="empty-hint">{t("sftp.emptyUnavailable")}</div>
           )}

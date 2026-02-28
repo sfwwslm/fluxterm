@@ -170,8 +170,90 @@
 }
 
 .sftp-cell.sftp-cell-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--text-primary);
   font-weight: 500;
+  min-width: 0;
+}
+
+.sftp-entry-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sftp-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-alt) 80%, transparent);
+}
+
+.sftp-entry-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.sftp-entry-icon.folder {
+  color: #d6a441;
+  background: rgba(214, 164, 65, 0.14);
+}
+
+.sftp-entry-icon.link {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 22%, transparent);
+}
+
+.sftp-entry-icon.code {
+  color: #58c4a3;
+  background: rgba(88, 196, 163, 0.14);
+}
+
+.sftp-entry-icon.script {
+  color: #ff8f5a;
+  background: rgba(255, 143, 90, 0.16);
+}
+
+.sftp-entry-icon.database {
+  color: #76a8ff;
+  background: rgba(118, 168, 255, 0.16);
+}
+
+.sftp-entry-icon.image {
+  color: #c678dd;
+  background: rgba(198, 120, 221, 0.16);
+}
+
+.sftp-entry-icon.media {
+  color: #e06c75;
+  background: rgba(224, 108, 117, 0.16);
+}
+
+.sftp-entry-icon.archive {
+  color: #c7a252;
+  background: rgba(199, 162, 82, 0.16);
+}
+
+.sftp-entry-icon.config {
+  color: #56b6c2;
+  background: rgba(86, 182, 194, 0.16);
+}
+
+.sftp-entry-icon.text {
+  color: #8ea4c6;
+  background: rgba(142, 164, 198, 0.16);
+}
+
+.sftp-entry-icon.secure {
+  color: #d96b6b;
+  background: rgba(217, 107, 107, 0.16);
 }
 
 .sftp-table-item.dir .sftp-cell-name {
