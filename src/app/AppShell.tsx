@@ -30,6 +30,11 @@ import useTerminalController from "@/features/terminal/hooks/useTerminalControll
 import useSftpController from "@/features/sftp/hooks/useSftpController";
 import { themePresets } from "@/app/theme/themePresets";
 import { buildPanels } from "@/app/panels/buildPanels";
+import {
+  FLOATING_FILES_CHANNEL,
+  type FloatingFilesMessage,
+  type FloatingFilesSnapshot,
+} from "@/features/sftp/core/floatingSync";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   profiles: "panel.profiles",
@@ -156,6 +161,8 @@ export default function AppShell() {
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
   const lastSftpProgressRef = useRef<Record<string, number>>({});
   const lastSftpTransferKeyRef = useRef<Record<string, string>>({});
+  const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
+    useState<FloatingFilesSnapshot | null>(null);
 
   useEffect(() => {
     const theme = themePresets[themeId];
@@ -239,6 +246,112 @@ export default function AppShell() {
     setBusyMessage: sessionActions.setBusyMessage,
     t,
   });
+  const {
+    refreshList,
+    openRemoteDir,
+    uploadFile,
+    downloadFile,
+    createFolder,
+    rename: renameEntry,
+    remove: removeEntry,
+  } = sftpActions;
+
+  const isFloatingFilesPanel = floatingPanelKey === "files";
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(FLOATING_FILES_CHANNEL);
+
+    if (!floatingPanelKey) {
+      // 主窗口维护真实文件状态，并向浮动文件面板广播当前快照；
+      // 同时消费浮动窗口发回的文件操作请求。
+      const broadcastSnapshot = () => {
+        const payload: FloatingFilesSnapshot = {
+          activeSessionId: sessionState.activeSessionId,
+          isRemoteSession: sessionState.isRemoteSession,
+          isRemoteConnected: sessionState.isRemoteConnected,
+          currentPath: sftpState.currentPath,
+          entries: sftpState.entries,
+        };
+        channel.postMessage({
+          type: "files:snapshot",
+          payload,
+        } satisfies FloatingFilesMessage);
+      };
+
+      broadcastSnapshot();
+
+      channel.onmessage = (event) => {
+        const message = event.data as FloatingFilesMessage | undefined;
+        if (!message) return;
+        switch (message.type) {
+          case "files:request-snapshot":
+            broadcastSnapshot();
+            break;
+          case "files:refresh":
+            refreshList(message.path).catch(() => {});
+            break;
+          case "files:open":
+            openRemoteDir(message.path).catch(() => {});
+            break;
+          case "files:upload":
+            uploadFile().catch(() => {});
+            break;
+          case "files:download":
+            downloadFile(message.entry).catch(() => {});
+            break;
+          case "files:mkdir":
+            createFolder(message.name).catch(() => {});
+            break;
+          case "files:rename":
+            renameEntry(message.entry, message.name).catch(() => {});
+            break;
+          case "files:remove":
+            removeEntry(message.entry).catch(() => {});
+            break;
+          case "files:snapshot":
+            break;
+        }
+      };
+      return () => {
+        channel.close();
+      };
+    }
+
+    if (isFloatingFilesPanel) {
+      // 浮动文件面板不直接维护会话级 SFTP 状态，而是请求主窗口发送当前快照。
+      channel.onmessage = (event) => {
+        const message = event.data as FloatingFilesMessage | undefined;
+        if (message?.type === "files:snapshot") {
+          setFloatingFilesSnapshot(message.payload);
+        }
+      };
+      channel.postMessage({
+        type: "files:request-snapshot",
+      } satisfies FloatingFilesMessage);
+      return () => {
+        channel.close();
+      };
+    }
+
+    channel.close();
+    return undefined;
+  }, [
+    floatingPanelKey,
+    isFloatingFilesPanel,
+    sessionState.activeSessionId,
+    sessionState.isRemoteConnected,
+    sessionState.isRemoteSession,
+    createFolder,
+    downloadFile,
+    sftpState.currentPath,
+    sftpState.entries,
+    openRemoteDir,
+    refreshList,
+    removeEntry,
+    renameEntry,
+    uploadFile,
+  ]);
 
   const {
     showGroupTitle,
@@ -344,6 +457,109 @@ export default function AppShell() {
     }
   }
 
+  const floatingFilesChannelRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined" || !isFloatingFilesPanel) {
+      floatingFilesChannelRef.current?.close();
+      floatingFilesChannelRef.current = null;
+      return;
+    }
+    const channel = new BroadcastChannel(FLOATING_FILES_CHANNEL);
+    floatingFilesChannelRef.current = channel;
+    return () => {
+      if (floatingFilesChannelRef.current === channel) {
+        floatingFilesChannelRef.current = null;
+      }
+      channel.close();
+    };
+  }, [isFloatingFilesPanel]);
+
+  function postFloatingFilesMessage(message: FloatingFilesMessage) {
+    floatingFilesChannelRef.current?.postMessage(message);
+  }
+
+  // 主窗口直接读取本地 SFTP 状态；浮动文件面板则消费主窗口同步过来的只读快照。
+  const filesPanelState = useMemo(
+    () =>
+      isFloatingFilesPanel
+        ? {
+            isRemoteSession: floatingFilesSnapshot?.isRemoteSession ?? false,
+            isRemoteConnected:
+              floatingFilesSnapshot?.isRemoteConnected ?? false,
+            currentPath: floatingFilesSnapshot?.currentPath ?? "",
+            entries: floatingFilesSnapshot?.entries ?? [],
+          }
+        : {
+            isRemoteSession: sessionState.isRemoteSession,
+            isRemoteConnected: sessionState.isRemoteConnected,
+            currentPath: sftpState.currentPath,
+            entries: sftpState.entries,
+          },
+    [
+      floatingFilesSnapshot,
+      isFloatingFilesPanel,
+      sessionState.isRemoteConnected,
+      sessionState.isRemoteSession,
+      sftpState.currentPath,
+      sftpState.entries,
+    ],
+  );
+
+  // 主窗口直接调用 SFTP action；浮动文件面板通过消息把操作代理回主窗口执行。
+  const filesPanelActions = useMemo(
+    () =>
+      isFloatingFilesPanel
+        ? {
+            refreshList: async (path?: string) => {
+              postFloatingFilesMessage({ type: "files:refresh", path });
+            },
+            openRemoteDir: async (path: string) => {
+              postFloatingFilesMessage({ type: "files:open", path });
+            },
+            uploadFile: async () => {
+              postFloatingFilesMessage({ type: "files:upload" });
+            },
+            downloadFile: async (
+              entry: (typeof filesPanelState.entries)[number],
+            ) => {
+              postFloatingFilesMessage({ type: "files:download", entry });
+            },
+            createFolder: async (name: string) => {
+              postFloatingFilesMessage({ type: "files:mkdir", name });
+            },
+            rename: async (
+              entry: (typeof filesPanelState.entries)[number],
+              name: string,
+            ) => {
+              postFloatingFilesMessage({ type: "files:rename", entry, name });
+            },
+            remove: async (entry: (typeof filesPanelState.entries)[number]) => {
+              postFloatingFilesMessage({ type: "files:remove", entry });
+            },
+          }
+        : {
+            refreshList,
+            openRemoteDir,
+            uploadFile,
+            downloadFile,
+            createFolder,
+            rename: renameEntry,
+            remove: removeEntry,
+          },
+    [
+      createFolder,
+      downloadFile,
+      filesPanelState.entries,
+      isFloatingFilesPanel,
+      openRemoteDir,
+      refreshList,
+      removeEntry,
+      renameEntry,
+      uploadFile,
+    ],
+  );
+
   const panels = useMemo(
     () =>
       buildPanels({
@@ -355,13 +571,13 @@ export default function AppShell() {
         activeSessionState: sessionState.activeSessionState,
         activeSessionReason: sessionState.activeSessionReason,
         activeReconnectInfo: sessionState.activeReconnectInfo,
-        isRemoteSession: sessionState.isRemoteSession,
-        isRemoteConnected: sessionState.isRemoteConnected,
+        isRemoteSession: filesPanelState.isRemoteSession,
+        isRemoteConnected: filesPanelState.isRemoteConnected,
         progressBySession: sftpState.progressBySession,
         busyMessage: sessionState.busyMessage,
         logEntries: sessionState.logEntries,
-        currentPath: sftpState.currentPath,
-        entries: sftpState.entries,
+        currentPath: filesPanelState.currentPath,
+        entries: filesPanelState.entries,
         locale,
         canReconnect: sessionState.canReconnect,
         t,
@@ -377,13 +593,13 @@ export default function AppShell() {
         onConnectLocalShell: (shell) => {
           sessionActions.connectLocalShell(shell, true).catch(() => {});
         },
-        onRefreshList: sftpActions.refreshList,
-        onOpenRemoteDir: sftpActions.openRemoteDir,
-        onUploadFile: sftpActions.uploadFile,
-        onDownloadFile: sftpActions.downloadFile,
-        onCreateFolder: sftpActions.createFolder,
-        onRenameEntry: sftpActions.rename,
-        onRemoveEntry: sftpActions.remove,
+        onRefreshList: filesPanelActions.refreshList,
+        onOpenRemoteDir: filesPanelActions.openRemoteDir,
+        onUploadFile: filesPanelActions.uploadFile,
+        onDownloadFile: filesPanelActions.downloadFile,
+        onCreateFolder: filesPanelActions.createFolder,
+        onRenameEntry: filesPanelActions.rename,
+        onRemoveEntry: filesPanelActions.remove,
         onReconnectActive: () => {
           if (!sessionState.activeSessionId) return;
           sessionActions
@@ -400,13 +616,13 @@ export default function AppShell() {
       sessionState.activeSessionState,
       sessionState.activeSessionReason,
       sessionState.activeReconnectInfo,
-      sessionState.isRemoteSession,
-      sessionState.isRemoteConnected,
+      filesPanelState.isRemoteSession,
+      filesPanelState.isRemoteConnected,
       sftpState.progressBySession,
       sessionState.busyMessage,
       sessionState.logEntries,
-      sftpState.currentPath,
-      sftpState.entries,
+      filesPanelState.currentPath,
+      filesPanelState.entries,
       locale,
       sessionState.canReconnect,
       t,
@@ -415,13 +631,7 @@ export default function AppShell() {
       renameGroup,
       removeGroup,
       moveProfileToGroup,
-      sftpActions.refreshList,
-      sftpActions.openRemoteDir,
-      sftpActions.uploadFile,
-      sftpActions.downloadFile,
-      sftpActions.createFolder,
-      sftpActions.rename,
-      sftpActions.remove,
+      filesPanelActions,
     ],
   );
 
