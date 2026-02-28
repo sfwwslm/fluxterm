@@ -111,6 +111,28 @@ type SearchStats = {
   decorations: boolean;
 };
 
+/**
+ * 判断当前焦点是否应由表单或模态框继续持有。
+ * 用于在终端会话切换、重连或重建时避免无条件把焦点抢回 xterm，
+ * 从而打断用户在输入框、选择框或弹窗中的编辑操作。
+ */
+function shouldPreserveFocusedElement() {
+  const activeElement = document.activeElement;
+  if (!activeElement || !(activeElement instanceof HTMLElement)) {
+    return false;
+  }
+  const tagName = activeElement.tagName.toLowerCase();
+  if (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    activeElement.isContentEditable
+  ) {
+    return true;
+  }
+  return Boolean(activeElement.closest(".modal"));
+}
+
 function safeFit(fitter: FitAddon, container?: HTMLElement | null) {
   if (
     !container ||
@@ -388,7 +410,10 @@ export default function useTerminalRuntime({
     setTerminalReadyBySession((prev) => ({ ...prev, [sessionId]: true }));
 
     // 新建或重建当前激活会话时立即聚焦，避免回车重连后需要鼠标点击。
-    if (activeSessionIdRef.current === sessionId) {
+    if (
+      activeSessionIdRef.current === sessionId &&
+      !shouldPreserveFocusedElement()
+    ) {
       bundle.terminal.focus();
     }
 
@@ -477,7 +502,9 @@ export default function useTerminalRuntime({
     if (!bundle) return;
     safeFit(bundle.fitAddon, bundle.host);
     // 会话切换/重连替换后，主动恢复焦点到当前终端实例。
-    bundle.terminal.focus();
+    if (!shouldPreserveFocusedElement()) {
+      bundle.terminal.focus();
+    }
     if (!activeSession) return;
     onSizeChange?.({
       cols: bundle.terminal.cols,
