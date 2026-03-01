@@ -220,6 +220,12 @@
   border-bottom-color: var(--border-soft);
 }
 
+.sftp-table-item.selected {
+  background: color-mix(in srgb, var(--accent-soft) 16%, transparent);
+  border-color: transparent;
+  border-bottom-color: var(--border-soft);
+}
+
 .sftp-table-item:focus-visible {
   outline: 2px solid var(--accent-soft);
   outline-offset: -2px;

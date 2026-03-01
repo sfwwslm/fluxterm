@@ -203,6 +203,9 @@ export default function SftpPanel({
   const { openDialog } = useNotices();
   const headerScrollRef = useRef<HTMLDivElement | null>(null);
   const listBodyRef = useRef<HTMLDivElement | null>(null);
+  const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(
+    null,
+  );
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -237,6 +240,12 @@ export default function SftpPanel({
     };
   }, [entries, interactionsDisabled]);
 
+  useEffect(() => {
+    if (!selectedEntryPath) return;
+    if (entries.some((entry) => entry.path === selectedEntryPath)) return;
+    setSelectedEntryPath(null);
+  }, [entries, selectedEntryPath]);
+
   const pathSyncMeta =
     terminalPathSyncStatus === "active"
       ? {
@@ -270,6 +279,7 @@ export default function SftpPanel({
 
   function openMenu(event: React.MouseEvent, entry: SftpEntry) {
     event.preventDefault();
+    setSelectedEntryPath(entry.path);
     setMenu({ x: event.clientX, y: event.clientY, entry });
   }
 
@@ -284,6 +294,16 @@ export default function SftpPanel({
 
   function closeActionsMenu() {
     setActionsMenu(null);
+  }
+
+  function handleSelectEntry(entry: SftpEntry) {
+    setSelectedEntryPath(entry.path);
+  }
+
+  function handleOpenEntry(entry: SftpEntry) {
+    if (entry.kind === "dir" || entry.kind === "link") {
+      onOpen(entry.path);
+    }
   }
 
   return (
@@ -371,15 +391,15 @@ export default function SftpPanel({
           {!interactionsDisabled &&
             entries.map((entry) => {
               const iconMeta = getEntryIconMeta(entry);
+              const selected = selectedEntryPath === entry.path;
               return (
                 <button
                   key={entry.path}
                   type="button"
-                  className={`sftp-table-row sftp-table-item ${entry.kind}`}
-                  onClick={() =>
-                    (entry.kind === "dir" || entry.kind === "link") &&
-                    onOpen(entry.path)
-                  }
+                  className={`sftp-table-row sftp-table-item ${entry.kind} ${selected ? "selected" : ""}`.trim()}
+                  // 文件列表采用桌面文件管理器语义：单击只选中，双击目录才打开。
+                  onClick={() => handleSelectEntry(entry)}
+                  onDoubleClick={() => handleOpenEntry(entry)}
                   onContextMenu={(event) => openMenu(event, entry)}
                 >
                   <span className="sftp-cell sftp-cell-name">
