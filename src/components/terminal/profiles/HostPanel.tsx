@@ -342,58 +342,6 @@ export default function HostPanel({
               )}
             </div>
           )}
-          {filteredRootProfiles.map((profile) => (
-            <Button
-              key={profile.id}
-              className={profile.id === activeProfileId ? "active" : ""}
-              variant="ghost"
-              size="sm"
-              onContextMenu={(event) =>
-                openMenu(event, [
-                  {
-                    label: t("host.addGroup"),
-                    disabled: false,
-                    onClick: openAddGroupDialog,
-                  },
-                  {
-                    label: t("profile.menu.edit"),
-                    disabled: false,
-                    onClick: () => {
-                      setMenu(null);
-                      onOpenEditProfile(profile);
-                    },
-                  },
-                  {
-                    label: t("host.menu.moveTo"),
-                    disabled: false,
-                    onClick: () => {
-                      setMenu(null);
-                      setMoveDialog(profile);
-                      setMoveGroupValue(
-                        profile.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE,
-                      );
-                    },
-                  },
-                  {
-                    label: t("profile.menu.delete"),
-                    disabled: false,
-                    onClick: () => {
-                      setMenu(null);
-                      onRemoveProfile(profile);
-                    },
-                  },
-                ])
-              }
-              onClick={() => onPick(profile.id)}
-              onDoubleClick={() => onConnectProfile(profile)}
-            >
-              {/* 分组与会话用不同图标区分，保持树结构语义一眼可辨。 */}
-              <span className="host-row-label">
-                <FiServer className="host-row-icon" />
-                <span>{profile.name || profile.host}</span>
-              </span>
-            </Button>
-          ))}
           {filteredGroups.map((group) => (
             <div key={group.label} className="host-group">
               <Button
@@ -511,6 +459,58 @@ export default function HostPanel({
                 </div>
               )}
             </div>
+          ))}
+          {filteredRootProfiles.map((profile) => (
+            <Button
+              key={profile.id}
+              className={profile.id === activeProfileId ? "active" : ""}
+              variant="ghost"
+              size="sm"
+              onContextMenu={(event) =>
+                openMenu(event, [
+                  {
+                    label: t("host.addGroup"),
+                    disabled: false,
+                    onClick: openAddGroupDialog,
+                  },
+                  {
+                    label: t("profile.menu.edit"),
+                    disabled: false,
+                    onClick: () => {
+                      setMenu(null);
+                      onOpenEditProfile(profile);
+                    },
+                  },
+                  {
+                    label: t("host.menu.moveTo"),
+                    disabled: false,
+                    onClick: () => {
+                      setMenu(null);
+                      setMoveDialog(profile);
+                      setMoveGroupValue(
+                        profile.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE,
+                      );
+                    },
+                  },
+                  {
+                    label: t("profile.menu.delete"),
+                    disabled: false,
+                    onClick: () => {
+                      setMenu(null);
+                      onRemoveProfile(profile);
+                    },
+                  },
+                ])
+              }
+              onClick={() => onPick(profile.id)}
+              onDoubleClick={() => onConnectProfile(profile)}
+            >
+              {/* 根级会话固定排在所有分组之后。 */}
+              <span className="host-row-label">
+                <FiServer className="host-row-icon" />
+                <span>{profile.name || profile.host}</span>
+              </span>
+            </Button>
           ))}
           {!profiles.length && localShells.length === 0 && (
             <div className="empty-hint">{t("host.empty")}</div>
