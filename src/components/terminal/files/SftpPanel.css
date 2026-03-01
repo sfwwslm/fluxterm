@@ -125,6 +125,15 @@
   overflow: hidden;
 }
 
+.sftp-table-header-shell {
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.sftp-table-header-scroll {
+  overflow-x: hidden;
+}
+
 .sftp-list-body {
   display: flex;
   flex-direction: column;
@@ -185,8 +194,6 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  background-color: #151d29;
-  border-bottom: 1px solid var(--border-soft);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
   padding: 10px 28px 8px 18px;
 }

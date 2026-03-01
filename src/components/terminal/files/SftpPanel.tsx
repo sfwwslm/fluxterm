@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";
 import type { SftpAvailability, SftpEntry } from "@/types";
@@ -201,6 +201,8 @@ export default function SftpPanel({
   t,
 }: SftpPanelProps) {
   const { openDialog } = useNotices();
+  const headerScrollRef = useRef<HTMLDivElement | null>(null);
+  const listBodyRef = useRef<HTMLDivElement | null>(null);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -216,6 +218,24 @@ export default function SftpPanel({
     isRemoteSession && sftpAvailability === "unsupported";
   const interactionsDisabled =
     showUnavailable || showSftpDisabled || showSftpUnsupported;
+
+  useEffect(() => {
+    const listBody = listBodyRef.current;
+    const header = headerScrollRef.current;
+    if (!listBody || !header) return;
+
+    // 文件列表的横向滚动发生在 body 容器中，表头是独立层；
+    // 因此需要把 body 的 scrollLeft 同步给表头，避免列标题与内容错位。
+    const syncHeaderScroll = () => {
+      header.scrollLeft = listBody.scrollLeft;
+    };
+
+    syncHeaderScroll();
+    listBody.addEventListener("scroll", syncHeaderScroll, { passive: true });
+    return () => {
+      listBody.removeEventListener("scroll", syncHeaderScroll);
+    };
+  }, [entries, interactionsDisabled]);
 
   const pathSyncMeta =
     terminalPathSyncStatus === "active"
@@ -327,23 +347,27 @@ export default function SftpPanel({
       </div>
       <div className="sftp-list">
         {!interactionsDisabled && (
-          <div className="sftp-table-row sftp-table-header">
-            <span className="sftp-cell sftp-cell-name">
-              {t("sftp.columns.name")}
-            </span>
-            <span className="sftp-cell">{t("sftp.columns.mtime")}</span>
-            <span className="sftp-cell">{t("sftp.columns.type")}</span>
-            <span className="sftp-cell">{t("sftp.columns.size")}</span>
-            <span className="sftp-cell">{t("sftp.columns.perm")}</span>
-            <span className="sftp-cell sftp-cell-owner">
-              {t("sftp.columns.owner")}
-            </span>
-            <span className="sftp-cell sftp-cell-group">
-              {t("sftp.columns.group")}
-            </span>
+          <div className="sftp-table-header-shell">
+            <div className="sftp-table-header-scroll" ref={headerScrollRef}>
+              <div className="sftp-table-row sftp-table-header">
+                <span className="sftp-cell sftp-cell-name">
+                  {t("sftp.columns.name")}
+                </span>
+                <span className="sftp-cell">{t("sftp.columns.mtime")}</span>
+                <span className="sftp-cell">{t("sftp.columns.type")}</span>
+                <span className="sftp-cell">{t("sftp.columns.size")}</span>
+                <span className="sftp-cell">{t("sftp.columns.perm")}</span>
+                <span className="sftp-cell sftp-cell-owner">
+                  {t("sftp.columns.owner")}
+                </span>
+                <span className="sftp-cell sftp-cell-group">
+                  {t("sftp.columns.group")}
+                </span>
+              </div>
+            </div>
           </div>
         )}
-        <div className="sftp-list-body">
+        <div className="sftp-list-body" ref={listBodyRef}>
           {!interactionsDisabled &&
             entries.map((entry) => {
               const iconMeta = getEntryIconMeta(entry);
