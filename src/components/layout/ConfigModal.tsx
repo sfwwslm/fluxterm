@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { error as logError } from "@tauri-apps/plugin-log";
+import { open as openDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Translate } from "@/i18n";
 import Modal from "@/components/terminal/modals/Modal";
@@ -29,6 +30,7 @@ type ConfigModalProps = {
   activeSection: ConfigSectionKey;
   sections: ConfigSectionItem[];
   sftpEnabled?: boolean;
+  fileDefaultEditorPath?: string;
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
@@ -36,6 +38,7 @@ type ConfigModalProps = {
   resourceMonitorEnabled?: boolean;
   resourceMonitorIntervalSec?: number;
   onSftpEnabledChange?: (enabled: boolean) => void;
+  onFileDefaultEditorPathChange?: (value: string) => void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
   onScrollbackChange?: (value: number) => void;
@@ -60,6 +63,7 @@ export default function ConfigModal({
   activeSection,
   sections,
   sftpEnabled = true,
+  fileDefaultEditorPath = "",
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
   scrollback = 3000,
@@ -67,6 +71,7 @@ export default function ConfigModal({
   resourceMonitorEnabled = false,
   resourceMonitorIntervalSec = DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   onSftpEnabledChange,
+  onFileDefaultEditorPathChange,
   onWebLinksEnabledChange,
   onSelectionAutoCopyEnabledChange,
   onScrollbackChange,
@@ -79,6 +84,9 @@ export default function ConfigModal({
 }: ConfigModalProps) {
   const { pushToast } = useNotices();
   const [configDir, setConfigDir] = useState("");
+  const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useState(
+    fileDefaultEditorPath,
+  );
   // 数字输入使用本地草稿字符串，避免受控 number 输入在清空/连续编辑时不断打断用户。
   const [scrollbackDraft, setScrollbackDraft] = useState(() =>
     String(scrollback),
@@ -96,6 +104,10 @@ export default function ConfigModal({
         setConfigDir("");
       });
   }, [activeSection, open]);
+
+  useEffect(() => {
+    setDefaultEditorPathDraft(fileDefaultEditorPath);
+  }, [fileDefaultEditorPath]);
 
   useEffect(() => {
     setScrollbackDraft(String(scrollback));
@@ -134,8 +146,13 @@ export default function ConfigModal({
     onResourceMonitorIntervalSecChange?.(next);
   }
 
+  function commitDefaultEditorPathDraft() {
+    onFileDefaultEditorPathChange?.(defaultEditorPathDraft.trim());
+  }
+
   function handleClose() {
     // 遮罩关闭发生在 input blur 之前，这里先提交草稿，避免用户点到模态框外部时丢失修改。
+    commitDefaultEditorPathDraft();
     commitScrollbackDraft();
     commitResourceMonitorIntervalDraft();
     onClose();
@@ -162,6 +179,58 @@ export default function ConfigModal({
               onChange={(event) => onSftpEnabledChange?.(event.target.checked)}
             />
           </label>
+          <div className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.app.fileDefaultEditorPath")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.app.fileDefaultEditorPathHint")}
+              </span>
+            </div>
+            <div className="config-file-picker">
+              <div
+                className={`config-file-picker-path ${
+                  defaultEditorPathDraft ? "" : "empty"
+                }`.trim()}
+                title={
+                  defaultEditorPathDraft ||
+                  t("config.app.fileDefaultEditorPathPlaceholder")
+                }
+              >
+                {defaultEditorPathDraft ||
+                  t("config.app.fileDefaultEditorPathPlaceholder")}
+              </div>
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={async () => {
+                    const selected = await openDialogFile({
+                      multiple: false,
+                      directory: false,
+                    });
+                    if (!selected || Array.isArray(selected)) return;
+                    setDefaultEditorPathDraft(selected);
+                    onFileDefaultEditorPathChange?.(selected);
+                  }}
+                >
+                  {t("config.app.pickEditor")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!defaultEditorPathDraft}
+                  onClick={() => {
+                    setDefaultEditorPathDraft("");
+                    onFileDefaultEditorPathChange?.("");
+                  }}
+                >
+                  {t("actions.clear")}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }

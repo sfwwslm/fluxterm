@@ -33,6 +33,12 @@ export const zh = {
   "config.app.sftpEnabled": "启用 SFTP",
   "config.app.sftpEnabledHint":
     "关闭后，不再初始化远端 SFTP，也不会驱动文件管理器和路径联动。",
+  "config.app.fileDefaultEditorPath": "默认编辑器路径",
+  "config.app.fileDefaultEditorPathHint":
+    "设置后，双击文件会优先使用该编辑器打开；留空时回退到系统默认程序。",
+  "config.app.fileDefaultEditorPathPlaceholder":
+    "例如 C:\\Program Files\\Notepad++\\notepad++.exe",
+  "config.app.pickEditor": "选择程序",
   "config.session.webLinksEnabled": "启用 Web Links",
   "config.session.webLinksEnabledHint":
     "关闭后，终端中的 URL 点击菜单将不再生效。",
@@ -144,6 +150,7 @@ export const zh = {
   "actions.close": "关闭",
   "actions.copy": "复制",
   "actions.copied": "已复制",
+  "actions.clear": "清空",
   "actions.settings": "设置",
   "actions.refresh": "刷新",
   "actions.more": "更多",
@@ -232,6 +239,8 @@ export const zh = {
   "sftp.openInFileManager": "文件管理器",
   "sftp.openInFileManagerFailed": "打开系统文件管理器失败",
   "sftp.openInFileManagerDenied": "当前路径不允许通过系统文件管理器打开",
+  "sftp.openFileFailed": "打开文件失败",
+  "sftp.downloadForOpenFailed": "下载远端文件后打开失败",
   "log.sessionState": "会话状态",
   "log.currentTask": "当前任务",
   "log.disconnectReason": "断开原因",

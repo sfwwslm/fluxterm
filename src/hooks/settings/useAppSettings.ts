@@ -17,6 +17,7 @@ type AppSettings = {
   locale?: Locale;
   themeId?: ThemeId;
   sftpEnabled?: boolean;
+  fileDefaultEditorPath?: string | null;
 };
 
 type UseAppSettingsProps = {
@@ -33,6 +34,8 @@ type UseAppSettingsResult = {
   setShellId: React.Dispatch<React.SetStateAction<string | null>>;
   sftpEnabled: boolean;
   setSftpEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  fileDefaultEditorPath: string;
+  setFileDefaultEditorPath: React.Dispatch<React.SetStateAction<string>>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
 };
@@ -64,6 +67,7 @@ export default function useAppSettings({
   );
   const [shellId, setShellId] = useState<string | null>(null);
   const [sftpEnabled, setSftpEnabled] = useState(true);
+  const [fileDefaultEditorPath, setFileDefaultEditorPath] = useState("");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const pendingShellIdRef = useRef<string | null>(null);
@@ -91,6 +95,9 @@ export default function useAppSettings({
       }
       if (typeof parsed?.sftpEnabled === "boolean") {
         setSftpEnabled(parsed.sftpEnabled);
+      }
+      if (typeof parsed?.fileDefaultEditorPath === "string") {
+        setFileDefaultEditorPath(parsed.fileDefaultEditorPath);
       }
       const normalizedThemeId = normalizeThemeId(parsed?.themeId);
       if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
@@ -177,6 +184,7 @@ export default function useAppSettings({
       locale,
       themeId,
       sftpEnabled,
+      fileDefaultEditorPath: fileDefaultEditorPath.trim() || null,
     }).catch((error) => {
       warn(
         JSON.stringify({
@@ -185,7 +193,14 @@ export default function useAppSettings({
         }),
       );
     });
-  }, [shellId, locale, themeId, sftpEnabled, settingsLoaded]);
+  }, [
+    shellId,
+    locale,
+    themeId,
+    sftpEnabled,
+    fileDefaultEditorPath,
+    settingsLoaded,
+  ]);
 
   return {
     locale,
@@ -196,6 +211,8 @@ export default function useAppSettings({
     setShellId,
     sftpEnabled,
     setSftpEnabled,
+    fileDefaultEditorPath,
+    setFileDefaultEditorPath,
     availableShells,
     settingsLoaded,
   };

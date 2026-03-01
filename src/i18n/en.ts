@@ -33,6 +33,12 @@ export const en = {
   "config.app.sftpEnabled": "Enable SFTP",
   "config.app.sftpEnabledHint":
     "When disabled, remote SFTP is not initialized and file manager sync is turned off.",
+  "config.app.fileDefaultEditorPath": "Default Editor Path",
+  "config.app.fileDefaultEditorPathHint":
+    "When set, double-clicking a file will try this editor first and fall back to the system default app when empty.",
+  "config.app.fileDefaultEditorPathPlaceholder":
+    "For example C:\\Program Files\\Notepad++\\notepad++.exe",
+  "config.app.pickEditor": "Choose App",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
     "When disabled, the URL click menu in the terminal will no longer respond.",
@@ -146,6 +152,7 @@ export const en = {
   "actions.close": "Close",
   "actions.copy": "Copy",
   "actions.copied": "Copied",
+  "actions.clear": "Clear",
   "actions.settings": "Settings",
   "actions.refresh": "Refresh",
   "actions.more": "More",
@@ -236,6 +243,8 @@ export const en = {
   "sftp.openInFileManagerFailed": "Failed to open system file manager",
   "sftp.openInFileManagerDenied":
     "This path is not allowed to open in the system file manager",
+  "sftp.openFileFailed": "Failed to open file",
+  "sftp.downloadForOpenFailed": "Failed to download and open remote file",
   "log.sessionState": "Session",
   "log.currentTask": "Task",
   "log.disconnectReason": "Disconnect reason",

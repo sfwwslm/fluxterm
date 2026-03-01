@@ -47,6 +47,7 @@ type SftpPanelProps = {
   entries: SftpEntry[];
   onRefresh: (path?: string) => void;
   onOpen: (path: string) => void;
+  onOpenFile: (entry: SftpEntry) => Promise<void>;
   onUpload: () => void;
   onDownload: (entry: SftpEntry) => void;
   onMkdir: (name: string) => void;
@@ -194,6 +195,7 @@ export default function SftpPanel({
   entries,
   onRefresh,
   onOpen,
+  onOpenFile,
   onUpload,
   onDownload,
   onMkdir,
@@ -308,9 +310,38 @@ export default function SftpPanel({
     setSelectedEntryPath(entry.path);
   }
 
-  function handleOpenEntry(entry: SftpEntry) {
+  async function handleOpenEntry(entry: SftpEntry) {
     if (entry.kind === "dir" || entry.kind === "link") {
       onOpen(entry.path);
+      return;
+    }
+    try {
+      await onOpenFile(entry);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" &&
+              error !== null &&
+              "message" in error &&
+              typeof error.message === "string"
+            ? error.message
+            : String(error);
+      pushToast({
+        level: "error",
+        message: isRemote
+          ? t("sftp.downloadForOpenFailed")
+          : t("sftp.openFileFailed"),
+      });
+      void logError(
+        JSON.stringify({
+          event: isRemote
+            ? "sftp:open-remote-file-failed"
+            : "local:file-open-failed",
+          path: entry.path,
+          message,
+        }),
+      );
     }
   }
 
@@ -406,7 +437,9 @@ export default function SftpPanel({
                   className={`sftp-table-row sftp-table-item ${entry.kind} ${selected ? "selected" : ""}`.trim()}
                   // 文件列表采用桌面文件管理器语义：单击只选中，双击目录才打开。
                   onClick={() => handleSelectEntry(entry)}
-                  onDoubleClick={() => handleOpenEntry(entry)}
+                  onDoubleClick={() => {
+                    void handleOpenEntry(entry);
+                  }}
                   onContextMenu={(event) => openMenu(event, entry)}
                 >
                   <span className="sftp-cell sftp-cell-name">

@@ -1,4 +1,5 @@
 //! Tauri 命令集合。
+pub mod file;
 pub mod local;
 pub mod local_shell;
 pub mod profile;

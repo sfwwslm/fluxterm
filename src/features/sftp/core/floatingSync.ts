@@ -28,6 +28,7 @@ export type FloatingFilesActionMessage =
   | { type: "files:request-snapshot" }
   | { type: "files:refresh"; path?: string }
   | { type: "files:open"; path: string }
+  | { type: "files:open-file"; entry: SftpEntry }
   | { type: "files:upload" }
   | { type: "files:download"; entry: SftpEntry }
   | { type: "files:mkdir"; name: string }

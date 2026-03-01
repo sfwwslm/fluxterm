@@ -52,6 +52,10 @@ import {
   type FloatingFilesMessage,
   type FloatingFilesSnapshot,
 } from "@/features/sftp/core/floatingSync";
+import {
+  openLocalFile,
+  openRemoteFileViaCache,
+} from "@/features/file-open/core/commands";
 import { subscribeTauri } from "@/shared/tauri/events";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
@@ -138,6 +142,8 @@ export default function AppShell() {
     setShellId,
     sftpEnabled,
     setSftpEnabled,
+    fileDefaultEditorPath,
+    setFileDefaultEditorPath,
     availableShells,
     settingsLoaded,
   } = useAppSettings({
@@ -209,8 +215,7 @@ export default function AppShell() {
   }, []);
   const layoutMenuDisabled = Boolean(floatingPanelKey);
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
-  const lastSftpProgressRef = useRef<Record<string, number>>({});
-  const lastSftpTransferKeyRef = useRef<Record<string, string>>({});
+  const lastSftpTransferIdRef = useRef<Record<string, string>>({});
   const activeResourceMonitorSessionIdRef = useRef<string | null>(null);
   const activeResourceMonitorKeyRef = useRef("");
   const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
@@ -853,6 +858,20 @@ export default function AppShell() {
           case "files:open":
             openRemoteDir(message.path).catch(() => {});
             break;
+          case "files:open-file":
+            if (!sessionState.activeSessionId) break;
+            if (filesPanelState.isRemoteConnected) {
+              openRemoteFileViaCache(
+                sessionState.activeSessionId,
+                message.entry,
+                fileDefaultEditorPath,
+              ).catch(() => {});
+            } else {
+              openLocalFile(message.entry.path, fileDefaultEditorPath).catch(
+                () => {},
+              );
+            }
+            break;
           case "files:upload":
             uploadFile().catch(() => {});
             break;
@@ -1040,6 +1059,11 @@ export default function AppShell() {
             openRemoteDir: async (path: string) => {
               postFloatingFilesMessage({ type: "files:open", path });
             },
+            openFile: async (
+              entry: (typeof filesPanelState.entries)[number],
+            ) => {
+              postFloatingFilesMessage({ type: "files:open-file", entry });
+            },
             uploadFile: async () => {
               postFloatingFilesMessage({ type: "files:upload" });
             },
@@ -1064,6 +1088,22 @@ export default function AppShell() {
         : {
             refreshList,
             openRemoteDir,
+            openFile: async (
+              entry: (typeof filesPanelState.entries)[number],
+            ) => {
+              if (
+                sessionState.isRemoteConnected &&
+                sessionState.activeSessionId
+              ) {
+                await openRemoteFileViaCache(
+                  sessionState.activeSessionId,
+                  entry,
+                  fileDefaultEditorPath,
+                );
+                return;
+              }
+              await openLocalFile(entry.path, fileDefaultEditorPath);
+            },
             uploadFile,
             downloadFile,
             createFolder,
@@ -1119,6 +1159,7 @@ export default function AppShell() {
         },
         onRefreshList: filesPanelActions.refreshList,
         onOpenRemoteDir: filesPanelActions.openRemoteDir,
+        onOpenFile: filesPanelActions.openFile,
         onUploadFile: filesPanelActions.uploadFile,
         onDownloadFile: filesPanelActions.downloadFile,
         onCreateFolder: filesPanelActions.createFolder,
@@ -1139,6 +1180,7 @@ export default function AppShell() {
       sftpState.progressBySession,
       sessionState.busyMessage,
       sessionState.logEntries,
+      fileDefaultEditorPath,
       filesPanelState.currentPath,
       filesPanelState.terminalPathSyncStatus,
       filesPanelState.sftpAvailability,
@@ -1163,23 +1205,17 @@ export default function AppShell() {
 
     let shouldRevealTransfers = false;
     Object.values(sftpState.progressBySession).forEach((progress) => {
-      const transferKey = `${progress.op}:${progress.path}`;
-      const previousTransferred =
-        lastSftpProgressRef.current[progress.sessionId];
-      const previousTransferKey =
-        lastSftpTransferKeyRef.current[progress.sessionId];
-
+      const previousTransferId =
+        lastSftpTransferIdRef.current[progress.sessionId];
       const isNewTransfer =
-        previousTransferred === undefined ||
-        previousTransferKey !== transferKey ||
-        progress.transferred < previousTransferred;
+        previousTransferId === undefined ||
+        previousTransferId !== progress.transferId;
 
       if (isNewTransfer) {
         shouldRevealTransfers = true;
       }
 
-      lastSftpProgressRef.current[progress.sessionId] = progress.transferred;
-      lastSftpTransferKeyRef.current[progress.sessionId] = transferKey;
+      lastSftpTransferIdRef.current[progress.sessionId] = progress.transferId;
     });
 
     if (!shouldRevealTransfers) return;
@@ -1364,6 +1400,7 @@ export default function AppShell() {
         activeSection={activeConfigSection}
         sections={configModalSections}
         sftpEnabled={sftpEnabled}
+        fileDefaultEditorPath={fileDefaultEditorPath}
         webLinksEnabled={webLinksEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
         scrollback={scrollback}
@@ -1371,6 +1408,7 @@ export default function AppShell() {
         resourceMonitorEnabled={resourceMonitorEnabled}
         resourceMonitorIntervalSec={resourceMonitorIntervalSec}
         onSftpEnabledChange={setSftpEnabled}
+        onFileDefaultEditorPathChange={setFileDefaultEditorPath}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
         onScrollbackChange={setScrollback}

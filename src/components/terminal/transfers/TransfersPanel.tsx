@@ -27,6 +27,7 @@ export default function TransfersPanel({
   const [progressStartedAt, setProgressStartedAt] = useState<number | null>(
     null,
   );
+  const [activeTransferId, setActiveTransferId] = useState<string | null>(null);
 
   const formatLogTime = (timestamp: number) =>
     formatTime(timestamp / 1000, locale);
@@ -39,15 +40,17 @@ export default function TransfersPanel({
 
   useEffect(() => {
     if (!progress) {
+      setActiveTransferId(null);
       setProgressStartedAt(null);
       return;
     }
-    if (progress.transferred === 0) {
+    if (progress.transferId !== activeTransferId) {
+      setActiveTransferId(progress.transferId);
       setProgressStartedAt(Date.now());
       return;
     }
     setProgressStartedAt((prev) => prev ?? Date.now());
-  }, [progress]);
+  }, [activeTransferId, progress]);
 
   return (
     <div className="log-panel">

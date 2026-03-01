@@ -31,6 +31,10 @@ struct TransferLogContext<'a> {
     total_bytes: Option<u64>,
 }
 
+fn next_transfer_id() -> String {
+    format!("sftp-{}", now_epoch_millis())
+}
+
 /// 读取远端目录条目列表。
 pub async fn sftp_list(
     session: &client::Handle<super::session::ClientHandler>,
@@ -108,6 +112,7 @@ pub async fn sftp_upload(
     remote_path: &str,
     on_event: &EventCallback,
 ) -> Result<(), EngineError> {
+    let transfer_id = next_transfer_id();
     let started_at = now_epoch_millis();
     let started = Instant::now();
     let (sftp, write_limit) = open_raw_sftp(session).await?;
@@ -162,6 +167,7 @@ pub async fn sftp_upload(
                         transferred += len as u64;
                         on_event(EngineEvent::SftpProgress(SftpProgress {
                             session_id: session_id.to_string(),
+                            transfer_id: transfer_id.clone(),
                             op: SftpProgressOp::Upload,
                             path: remote_path.to_string(),
                             transferred,
@@ -240,6 +246,7 @@ pub async fn sftp_upload(
                 transferred += len as u64;
                 on_event(EngineEvent::SftpProgress(SftpProgress {
                     session_id: session_id.to_string(),
+                    transfer_id: transfer_id.clone(),
                     op: SftpProgressOp::Upload,
                     path: remote_path.to_string(),
                     transferred,
@@ -319,6 +326,7 @@ pub async fn sftp_download(
     local_path: &str,
     on_event: &EventCallback,
 ) -> Result<(), EngineError> {
+    let transfer_id = next_transfer_id();
     let started_at = now_epoch_millis();
     let started = Instant::now();
     let sftp = open_sftp(session).await?;
@@ -341,6 +349,7 @@ pub async fn sftp_download(
         session_id,
         SftpProgressOp::Download,
         remote_path,
+        &transfer_id,
         &mut remote,
         &mut local,
         total,
@@ -554,6 +563,7 @@ async fn transfer_with_progress(
     session_id: &str,
     op: SftpProgressOp,
     path: &str,
+    transfer_id: &str,
     reader: &mut (impl AsyncRead + Unpin),
     writer: &mut (impl AsyncWrite + Unpin),
     total: Option<u64>,
@@ -590,6 +600,7 @@ async fn transfer_with_progress(
         transferred += n as u64;
         on_event(EngineEvent::SftpProgress(SftpProgress {
             session_id: session_id.to_string(),
+            transfer_id: transfer_id.to_string(),
             op: op.clone(),
             path: path.to_string(),
             transferred,

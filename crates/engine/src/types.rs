@@ -100,6 +100,7 @@ pub enum SftpProgressOp {
 #[serde(rename_all = "camelCase")]
 pub struct SftpProgress {
     pub session_id: String,
+    pub transfer_id: String,
     pub op: SftpProgressOp,
     pub path: String,
     pub transferred: u64,

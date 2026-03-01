@@ -60,6 +60,7 @@ type BuildPanelsProps = {
   onConnectLocalShell: (shell: LocalShellProfile | null) => void;
   onRefreshList: (path?: string) => Promise<void>;
   onOpenRemoteDir: (path: string) => Promise<void>;
+  onOpenFile: (entry: SftpEntry) => Promise<void>;
   onUploadFile: () => Promise<void>;
   onDownloadFile: (entry: SftpEntry) => Promise<void>;
   onCreateFolder: (name: string) => Promise<void>;
@@ -103,6 +104,7 @@ export function buildPanels(
     onConnectLocalShell,
     onRefreshList,
     onOpenRemoteDir,
+    onOpenFile,
     onUploadFile,
     onDownloadFile,
     onCreateFolder,
@@ -151,6 +153,7 @@ export function buildPanels(
         entries={entries}
         onRefresh={onRefreshList}
         onOpen={onOpenRemoteDir}
+        onOpenFile={onOpenFile}
         onUpload={onUploadFile}
         onDownload={onDownloadFile}
         onMkdir={onCreateFolder}

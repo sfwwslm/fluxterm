@@ -14,6 +14,7 @@ use engine::Engine;
 use log::LevelFilter;
 use tauri_plugin_log::{Target, TargetKind};
 
+use crate::commands::file::file_open;
 use crate::commands::local::{local_home, local_list, local_ssh_keys};
 use crate::commands::local_shell::{
     local_shell_connect, local_shell_disconnect, local_shell_list, local_shell_resize,
@@ -111,6 +112,7 @@ pub fn run() {
             local_home,
             local_list,
             local_ssh_keys,
+            file_open,
             local_shell_connect,
             local_shell_disconnect,
             local_shell_list,

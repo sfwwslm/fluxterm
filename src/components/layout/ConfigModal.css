@@ -162,6 +162,58 @@
   text-align: right;
 }
 
+.config-text-input {
+  width: 280px;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--input-text);
+  font: inherit;
+}
+
+.config-file-picker {
+  width: 320px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-file-picker-path {
+  padding: 10px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--input-text);
+  font: inherit;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.config-file-picker-path.empty {
+  color: var(--text-muted);
+}
+
+.config-file-picker-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.config-file-picker-actions button:hover {
+  background: inherit;
+  border-color: inherit;
+  color: inherit;
+}
+
+.config-text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .config-number-input:focus {
   outline: none;
   border-color: var(--accent);

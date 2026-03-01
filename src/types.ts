@@ -41,6 +41,7 @@ export type SftpEntry = {
 /** SFTP 传输进度。 */
 export type SftpProgress = {
   sessionId: string;
+  transferId: string;
   op: "upload" | "download";
   path: string;
   transferred: number;
