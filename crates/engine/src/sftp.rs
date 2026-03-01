@@ -31,6 +31,16 @@ struct TransferLogContext<'a> {
     total_bytes: Option<u64>,
 }
 
+/// SFTP 传输进度回调上下文。
+struct TransferProgressContext<'a> {
+    session_id: &'a str,
+    transfer_id: &'a str,
+    op: SftpProgressOp,
+    path: &'a str,
+    total: Option<u64>,
+    on_event: &'a EventCallback,
+}
+
 fn next_transfer_id() -> String {
     format!("sftp-{}", now_epoch_millis())
 }
@@ -346,14 +356,16 @@ pub async fn sftp_download(
         EngineError::with_detail("sftp_download_failed", "无法创建本地文件", err.to_string())
     })?;
     let result = transfer_with_progress(
-        session_id,
-        SftpProgressOp::Download,
-        remote_path,
-        &transfer_id,
+        TransferProgressContext {
+            session_id,
+            transfer_id: &transfer_id,
+            op: SftpProgressOp::Download,
+            path: remote_path,
+            total,
+            on_event,
+        },
         &mut remote,
         &mut local,
-        total,
-        on_event,
     )
     .await;
     match result {
@@ -560,14 +572,9 @@ pub async fn sftp_resolve_path(
 
 /// 以固定缓冲区大小复制并回调进度。
 async fn transfer_with_progress(
-    session_id: &str,
-    op: SftpProgressOp,
-    path: &str,
-    transfer_id: &str,
+    context: TransferProgressContext<'_>,
     reader: &mut (impl AsyncRead + Unpin),
     writer: &mut (impl AsyncWrite + Unpin),
-    total: Option<u64>,
-    on_event: &EventCallback,
 ) -> Result<u64, TransferProgressError> {
     let mut buf = vec![0u8; 256 * 1024];
     let mut transferred = 0u64;
@@ -598,13 +605,13 @@ async fn transfer_with_progress(
                 transferred,
             })?;
         transferred += n as u64;
-        on_event(EngineEvent::SftpProgress(SftpProgress {
-            session_id: session_id.to_string(),
-            transfer_id: transfer_id.to_string(),
-            op: op.clone(),
-            path: path.to_string(),
+        (context.on_event)(EngineEvent::SftpProgress(SftpProgress {
+            session_id: context.session_id.to_string(),
+            transfer_id: context.transfer_id.to_string(),
+            op: context.op.clone(),
+            path: context.path.to_string(),
             transferred,
-            total,
+            total: context.total,
         }));
     }
     Ok(transferred)
