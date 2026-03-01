@@ -193,6 +193,7 @@ export default function useFloatingPanels({
     const current = getCurrentWindow();
     if (current.label !== "main") return () => {};
     const closingRef = { current: false };
+    let stopCloseRequested: (() => void) | null = null;
 
     const closeWindowAndWait = (
       win?: {
@@ -234,6 +235,11 @@ export default function useFloatingPanels({
       if (closingRef.current) return;
       closingRef.current = true;
       event.preventDefault();
+      // 这里先卸载 close-requested 监听，再继续关闭浮动窗口并关闭主窗口；
+      // 否则 current.close() 触发的第二次关闭请求还会被同一个 handler 拦截，
+      // 造成“第一次只关闭浮动窗口，主窗口还要再点一次”的问题。
+      stopCloseRequested?.();
+      stopCloseRequested = null;
       const merged = new Map<
         string,
         {
@@ -256,7 +262,17 @@ export default function useFloatingPanels({
       );
       current.close().catch(() => {});
     });
+    unlisten
+      .then((fn) => {
+        stopCloseRequested = fn;
+      })
+      .catch(() => {});
     return () => {
+      if (stopCloseRequested) {
+        stopCloseRequested();
+        stopCloseRequested = null;
+        return;
+      }
       unlisten.then((fn) => fn()).catch(() => {});
     };
   }, []);
