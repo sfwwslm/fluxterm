@@ -12,7 +12,7 @@ import type {
 export const MAX_SIDE_SLOTS = 10;
 
 /** 所有可用组件键。 */
-export const allPanelKeys: PanelKey[] = [
+export const panelKeys: PanelKey[] = [
   "profiles",
   "files",
   "transfers",

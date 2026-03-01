@@ -27,7 +27,7 @@ import useLayoutState from "@/hooks/useLayoutState";
 import useFloatingPanels from "@/hooks/useFloatingPanels";
 import useMacAppMenu from "@/hooks/useMacAppMenu";
 import useQuickBarState from "@/hooks/useQuickBarState";
-import { allPanelKeys, moveWidgetToSlot } from "@/layout/model";
+import { moveWidgetToSlot, panelKeys } from "@/layout/model";
 import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
 import type {
   HostProfile,
@@ -421,7 +421,7 @@ export default function AppShell() {
     Object.keys(floatingOrigins).forEach((panel) => {
       occupied.add(panel as PanelKey);
     });
-    return allPanelKeys.filter((panel) => !occupied.has(panel));
+    return panelKeys.filter((panel) => !occupied.has(panel));
   }, [floatingOrigins, slotGroups]);
   const filesWidgetVisible = useMemo(() => {
     if (floatingPanelKey === "files") return true;
