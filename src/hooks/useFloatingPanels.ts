@@ -301,11 +301,9 @@ export default function useFloatingPanels({
           visible: false,
         });
         floatingWindowRef.current[widget] = win;
-        win.once("tauri://close-requested", async () => {
-          // 用户关闭浮动窗口时，按主窗口“关闭组件”语义清理浮动状态。
-          dismissFloatingPanel(widget);
-          await win.close();
-        });
+        // 正常关闭路径以下层窗口销毁为唯一事实源：
+        // 关闭按钮先让 Tauri 自己完成窗口关闭流程，只有真正 destroyed 后
+        // 主窗口才把该面板视为“已关闭”，避免先停掉 SFTP/联动、再关窗口的两段式体验。
         win.once("tauri://error", () => {
           // 创建失败时回滚状态，保证组件不丢失。
           delete floatingWindowRef.current[widget];
