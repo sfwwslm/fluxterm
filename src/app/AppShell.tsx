@@ -411,23 +411,49 @@ export default function AppShell() {
     setLocale,
     setThemeId,
   });
+
+  function isMainSlotVisible(slot: LayoutWidgetSlot) {
+    if (slot === "bottom") return !layoutCollapsed.bottom;
+    return slot.startsWith("left:")
+      ? !layoutCollapsed.left
+      : !layoutCollapsed.right;
+  }
+
   const availableWidgets = useMemo(() => {
-    // 组件实例在任意时刻只能存在于一个展示位置：
-    // 要么在主窗口槽位里，要么在 floating 配置里，不能两边同时出现。
+    // 主窗口里只有“当前真正可见”的组件才占用实例；
+    // 收起区域虽然保留布局配置，但不应阻止其他可见区域再次添加该组件。
+    // floating 中的组件仍然是独立可见实例，因此始终占用。
     const occupied = new Set<PanelKey>();
-    Object.values(slotGroups).forEach((group) => {
+    Object.entries(slotGroups).forEach(([slot, group]) => {
+      if (!isMainSlotVisible(slot as LayoutWidgetSlot)) return;
       if (group.active) occupied.add(group.active);
     });
     Object.keys(floatingOrigins).forEach((panel) => {
       occupied.add(panel as PanelKey);
     });
     return panelKeys.filter((panel) => !occupied.has(panel));
-  }, [floatingOrigins, slotGroups]);
+  }, [
+    floatingOrigins,
+    layoutCollapsed.bottom,
+    layoutCollapsed.left,
+    layoutCollapsed.right,
+    slotGroups,
+  ]);
   const filesWidgetVisible = useMemo(() => {
     if (floatingPanelKey === "files") return true;
     if (floatingPanels.files) return true;
-    return Object.values(slotGroups).some((group) => group.active === "files");
-  }, [floatingPanelKey, floatingPanels.files, slotGroups]);
+    return Object.entries(slotGroups).some(
+      ([slot, group]) =>
+        isMainSlotVisible(slot as LayoutWidgetSlot) && group.active === "files",
+    );
+  }, [
+    floatingPanelKey,
+    floatingPanels.files,
+    layoutCollapsed.bottom,
+    layoutCollapsed.left,
+    layoutCollapsed.right,
+    slotGroups,
+  ]);
 
   const { sftpState, sftpActions } = useSftpController({
     enabled: sftpEnabled,
