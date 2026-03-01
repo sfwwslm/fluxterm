@@ -4,10 +4,18 @@ type Options = {
   enabled?: boolean;
 };
 
+function isTerminalFocused(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest(".terminal-container, .terminal-xterm-host, .xterm"),
+  );
+}
+
 const isBlockedShortcut = (event: KeyboardEvent) => {
   const key = event.key.toLowerCase();
   const ctrlOrMeta = event.ctrlKey || event.metaKey;
   const isDev = import.meta.env.DEV;
+  const terminalFocused = isTerminalFocused(event.target);
 
   if (key === "f3" || key === "f7" || key === "f1") return true;
 
@@ -16,6 +24,26 @@ const isBlockedShortcut = (event: KeyboardEvent) => {
   }
 
   if (ctrlOrMeta) {
+    // 终端获得焦点时，应优先把大部分 Ctrl/Cmd 组合键交给 shell；
+    // 这里只保留真正会影响应用窗口或浏览器行为的快捷键拦截。
+    if (terminalFocused) {
+      if (
+        key === "w" ||
+        key === "n" ||
+        key === "t" ||
+        key === "p" ||
+        key === "tab" ||
+        key === "pageup" ||
+        key === "pagedown"
+      ) {
+        return true;
+      }
+      if (event.shiftKey && ["r", "i", "j", "c", "k"].includes(key)) {
+        return true;
+      }
+      if (event.shiftKey && key === "delete") return true;
+      return false;
+    }
     if (
       key === "r" ||
       key === "f" ||
