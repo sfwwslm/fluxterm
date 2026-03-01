@@ -171,7 +171,7 @@ export const zh = {
   "status.line": "行",
   "status.char": "字符",
   "quickbar.noSession": "当前没有活动会话",
-  "quickbar.empty": "暂无快捷命令，请在菜单中打开管理器添加",
+  "quickbar.empty": "暂无快速命令",
   "quickbar.group.default": "*默认",
   "quickbar.manager.open": "管理快捷栏",
   "quickbar.manager.title": "快速命令",

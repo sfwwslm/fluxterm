@@ -173,7 +173,7 @@ export const en = {
   "status.line": "Line",
   "status.char": "Char",
   "quickbar.noSession": "No active session",
-  "quickbar.empty": "No quick commands. Open manager from menu to add.",
+  "quickbar.empty": "No quick commands",
   "quickbar.group.default": "*Default",
   "quickbar.manager.open": "Manage Quick Bar",
   "quickbar.manager.title": "Quick Commands",
