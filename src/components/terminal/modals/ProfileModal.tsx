@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
-import { DEFAULT_SSH_GROUP_VALUE } from "@/constants/hostGroups";
+import { ROOT_PROFILE_GROUP_VALUE } from "@/constants/hostGroups";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import Modal from "@/components/terminal/modals/Modal";
@@ -199,11 +199,11 @@ export default function ProfileModal({
         <div className="form-row">
           <label>{t("profile.form.group")}</label>
           <Select
-            value={draft.tags?.[0]?.trim() || DEFAULT_SSH_GROUP_VALUE}
+            value={draft.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE}
             options={[
               {
-                value: DEFAULT_SSH_GROUP_VALUE,
-                label: t("host.defaultSshGroup"),
+                value: ROOT_PROFILE_GROUP_VALUE,
+                label: t("host.ungrouped"),
               },
               ...sshGroups.map((group) => ({
                 value: group,
@@ -213,7 +213,7 @@ export default function ProfileModal({
             onChange={(value) =>
               onDraftChange({
                 ...draft,
-                tags: value === DEFAULT_SSH_GROUP_VALUE ? null : [value],
+                tags: value === ROOT_PROFILE_GROUP_VALUE ? null : [value],
               })
             }
             aria-label={t("profile.form.group")}

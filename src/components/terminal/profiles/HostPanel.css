@@ -111,6 +111,19 @@
   color: var(--text-muted);
 }
 
+.host-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.host-row-icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--text-muted) 76%, var(--accent));
+}
+
 .host-group-list {
   display: flex;
   flex-direction: column;
@@ -147,6 +160,10 @@
 
 .host-list-body button.active {
   border-color: var(--accent);
+  color: var(--accent);
+}
+
+.host-list-body button.active .host-row-icon {
   color: var(--accent);
 }
 

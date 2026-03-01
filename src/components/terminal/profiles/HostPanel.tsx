@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { FiFolder, FiServer, FiTerminal } from "react-icons/fi";
 import type { HostProfile, LocalShellProfile } from "@/types";
 import type { Translate } from "@/i18n";
 import {
-  DEFAULT_SSH_GROUP_VALUE,
   LOCAL_SHELL_GROUP_VALUE,
+  ROOT_PROFILE_GROUP_VALUE,
 } from "@/constants/hostGroups";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Modal from "@/components/terminal/modals/Modal";
@@ -53,9 +54,7 @@ export default function HostPanel({
   t,
 }: HostPanelProps) {
   const localShellKey = LOCAL_SHELL_GROUP_VALUE;
-  const defaultSshKey = DEFAULT_SSH_GROUP_VALUE;
   const localShellLabel = t("host.shellGroup");
-  const defaultSshLabel = t("host.defaultSshGroup");
   const customGroups = useMemo(() => {
     const map = new Map<string, { label: string; items: HostProfile[] }>();
     sshGroups.forEach((group) => {
@@ -75,7 +74,8 @@ export default function HostPanel({
       a.label.localeCompare(b.label),
     );
   }, [profiles, sshGroups]);
-  const defaultSshProfiles = useMemo(
+  // 未设置分组的 SSH 会话直接挂在根级，不再包裹默认 SSH 分组。
+  const rootProfiles = useMemo(
     () =>
       profiles.filter((profile) => {
         const tag = profile.tags?.[0]?.trim() ?? "";
@@ -111,7 +111,7 @@ export default function HostPanel({
   } | null>(null);
   const [moveDialog, setMoveDialog] = useState<HostProfile | null>(null);
   const [moveGroupValue, setMoveGroupValue] = useState<string>(
-    DEFAULT_SSH_GROUP_VALUE,
+    ROOT_PROFILE_GROUP_VALUE,
   );
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -159,35 +159,29 @@ export default function HostPanel({
       );
   }, [customGroups, queryActive, normalizedQuery]);
 
-  const filteredDefaultGroup = useMemo(() => {
-    if (!queryActive) return defaultSshProfiles;
-    if (matchesGroup(defaultSshLabel)) return defaultSshProfiles;
-    return defaultSshProfiles.filter(matchesProfile);
-  }, [defaultSshProfiles, queryActive, normalizedQuery, defaultSshLabel]);
-
-  const showDefaultGroup =
-    !queryActive ||
-    matchesGroup(defaultSshLabel) ||
-    filteredDefaultGroup.length > 0;
   const showLocalShellGroup =
     !queryActive ||
     matchesGroup(localShellLabel) ||
     filteredLocalShells.length > 0;
+  const filteredRootProfiles = useMemo(() => {
+    if (!queryActive) return rootProfiles;
+    return rootProfiles.filter(matchesProfile);
+  }, [rootProfiles, queryActive, normalizedQuery]);
 
   const moveGroupOptions = useMemo(
     () => [
-      { value: DEFAULT_SSH_GROUP_VALUE, label: defaultSshLabel },
+      { value: ROOT_PROFILE_GROUP_VALUE, label: t("host.ungrouped") },
       ...customGroups.map((group) => ({
         value: group.label,
         label: group.label,
       })),
     ],
-    [customGroups, defaultSshLabel],
+    [customGroups, t],
   );
 
   const currentMoveGroupValue = useMemo(() => {
-    if (!moveDialog) return DEFAULT_SSH_GROUP_VALUE;
-    return moveDialog.tags?.[0]?.trim() || DEFAULT_SSH_GROUP_VALUE;
+    if (!moveDialog) return ROOT_PROFILE_GROUP_VALUE;
+    return moveDialog.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE;
   }, [moveDialog]);
 
   const getGroupHostCount = (groupName: string) =>
@@ -301,7 +295,10 @@ export default function HostPanel({
                   toggleGroup(localShellKey, filteredLocalShells.length > 0)
                 }
               >
-                <span>{localShellLabel}</span>
+                <span className="host-row-label">
+                  <FiFolder className="host-row-icon" />
+                  <span>{localShellLabel}</span>
+                </span>
                 <em>{filteredLocalShells.length}</em>
               </Button>
               {(queryActive || expandedGroups.has(localShellKey)) && (
@@ -335,108 +332,68 @@ export default function HostPanel({
                       }
                       onDoubleClick={() => onConnectLocalShell(shell)}
                     >
-                      <span>{shell.label}</span>
+                      <span className="host-row-label">
+                        <FiTerminal className="host-row-icon" />
+                        <span>{shell.label}</span>
+                      </span>
                     </Button>
                   ))}
                 </div>
               )}
             </div>
           )}
-          {showDefaultGroup && (
-            <div key={defaultSshKey} className="host-group">
-              <Button
-                className={`host-group-title ${
-                  filteredDefaultGroup.length > 0 &&
-                  expandedGroups.has(defaultSshKey)
-                    ? "expanded"
-                    : ""
-                }`}
-                variant="ghost"
-                size="sm"
-                onContextMenu={(event) =>
-                  openMenu(event, [
-                    {
-                      label: t("profile.menu.new"),
-                      disabled: false,
-                      onClick: () => {
-                        setMenu(null);
-                        onOpenNewProfile();
-                      },
+          {filteredRootProfiles.map((profile) => (
+            <Button
+              key={profile.id}
+              className={profile.id === activeProfileId ? "active" : ""}
+              variant="ghost"
+              size="sm"
+              onContextMenu={(event) =>
+                openMenu(event, [
+                  {
+                    label: t("host.addGroup"),
+                    disabled: false,
+                    onClick: openAddGroupDialog,
+                  },
+                  {
+                    label: t("profile.menu.edit"),
+                    disabled: false,
+                    onClick: () => {
+                      setMenu(null);
+                      onOpenEditProfile(profile);
                     },
-                    {
-                      label: t("host.addGroup"),
-                      disabled: false,
-                      onClick: openAddGroupDialog,
+                  },
+                  {
+                    label: t("host.menu.moveTo"),
+                    disabled: false,
+                    onClick: () => {
+                      setMenu(null);
+                      setMoveDialog(profile);
+                      setMoveGroupValue(
+                        profile.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE,
+                      );
                     },
-                    {
-                      label: t("host.menu.renameGroup"),
-                      disabled: true,
-                      onClick: () => {},
+                  },
+                  {
+                    label: t("profile.menu.delete"),
+                    disabled: false,
+                    onClick: () => {
+                      setMenu(null);
+                      onRemoveProfile(profile);
                     },
-                  ])
-                }
-                onClick={() =>
-                  toggleGroup(defaultSshKey, filteredDefaultGroup.length > 0)
-                }
-              >
-                <span>{defaultSshLabel}</span>
-                <em>{filteredDefaultGroup.length}</em>
-              </Button>
-              {(queryActive || expandedGroups.has(defaultSshKey)) && (
-                <div className="host-group-list host-group-list--nested">
-                  {filteredDefaultGroup.map((profile) => (
-                    <Button
-                      key={profile.id}
-                      className={profile.id === activeProfileId ? "active" : ""}
-                      variant="ghost"
-                      size="sm"
-                      onContextMenu={(event) =>
-                        openMenu(event, [
-                          {
-                            label: t("host.addGroup"),
-                            disabled: false,
-                            onClick: openAddGroupDialog,
-                          },
-                          {
-                            label: t("profile.menu.edit"),
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              onOpenEditProfile(profile);
-                            },
-                          },
-                          {
-                            label: t("host.menu.moveTo"),
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              setMoveDialog(profile);
-                              setMoveGroupValue(
-                                profile.tags?.[0]?.trim() ||
-                                  DEFAULT_SSH_GROUP_VALUE,
-                              );
-                            },
-                          },
-                          {
-                            label: t("profile.menu.delete"),
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              onRemoveProfile(profile);
-                            },
-                          },
-                        ])
-                      }
-                      onClick={() => onPick(profile.id)}
-                      onDoubleClick={() => onConnectProfile(profile)}
-                    >
-                      <span>{profile.name || profile.host}</span>
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                  },
+                ])
+              }
+              onClick={() => onPick(profile.id)}
+              onDoubleClick={() => onConnectProfile(profile)}
+            >
+              {/* 分组与会话用不同图标区分，保持树结构语义一眼可辨。 */}
+              <span className="host-row-label">
+                <FiServer className="host-row-icon" />
+                <span>{profile.name || profile.host}</span>
+              </span>
+            </Button>
+          ))}
           {filteredGroups.map((group) => (
             <div key={group.label} className="host-group">
               <Button
@@ -491,7 +448,10 @@ export default function HostPanel({
                 }
                 onClick={() => toggleGroup(group.label, group.items.length > 0)}
               >
-                <span>{group.label}</span>
+                <span className="host-row-label">
+                  <FiFolder className="host-row-icon" />
+                  <span>{group.label}</span>
+                </span>
                 <em>{group.items.length}</em>
               </Button>
               {(queryActive || expandedGroups.has(group.label)) && (
@@ -525,7 +485,7 @@ export default function HostPanel({
                               setMoveDialog(profile);
                               setMoveGroupValue(
                                 profile.tags?.[0]?.trim() ||
-                                  DEFAULT_SSH_GROUP_VALUE,
+                                  ROOT_PROFILE_GROUP_VALUE,
                               );
                             },
                           },
@@ -542,7 +502,10 @@ export default function HostPanel({
                       onClick={() => onPick(profile.id)}
                       onDoubleClick={() => onConnectProfile(profile)}
                     >
-                      <span>{profile.name || profile.host}</span>
+                      <span className="host-row-label">
+                        <FiServer className="host-row-icon" />
+                        <span>{profile.name || profile.host}</span>
+                      </span>
                     </Button>
                   ))}
                 </div>
@@ -555,7 +518,7 @@ export default function HostPanel({
           {(profiles.length > 0 ||
             localShells.length > 0 ||
             customGroups.length > 0) &&
-            !filteredDefaultGroup.length &&
+            !filteredRootProfiles.length &&
             !filteredGroups.length &&
             !filteredLocalShells.length && (
               <div className="empty-hint">{t("host.noMatch")}</div>
@@ -637,7 +600,7 @@ export default function HostPanel({
                   onClick={() => {
                     onMoveProfileToGroup(
                       moveDialog.id,
-                      moveGroupValue === DEFAULT_SSH_GROUP_VALUE
+                      moveGroupValue === ROOT_PROFILE_GROUP_VALUE
                         ? null
                         : moveGroupValue,
                     )
@@ -702,7 +665,7 @@ export default function HostPanel({
               </p>
               <p>
                 {t("host.deleteGroupHint", {
-                  target: defaultSshLabel,
+                  target: t("host.ungrouped"),
                   count: removeGroupDialog.hostCount,
                 })}
               </p>
