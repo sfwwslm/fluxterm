@@ -14,7 +14,10 @@ pub fn file_open(
     default_editor_path: Option<String>,
 ) -> Result<(), EngineError> {
     if !Path::new(&file_path).is_file() {
-        return Err(EngineError::new("file_open_failed", "目标文件不存在或不可访问"));
+        return Err(EngineError::new(
+            "file_open_failed",
+            "目标文件不存在或不可访问",
+        ));
     }
 
     if let Some(editor_path) = default_editor_path
@@ -27,9 +30,7 @@ pub fn file_open(
                 Err(error) => {
                     warn!(
                         "{{\"event\":\"file:open-editor-fallback\",\"filePath\":\"{}\",\"editorPath\":\"{}\",\"message\":\"{}\"}}",
-                        file_path,
-                        editor_path,
-                        error
+                        file_path, editor_path, error
                     );
                 }
             }
