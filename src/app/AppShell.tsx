@@ -1161,23 +1161,6 @@ export default function AppShell() {
     setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
   }
 
-  function handleDropWidget(slot: LayoutWidgetSlot, key: PanelKey) {
-    // 拖拽投放同样遵循单实例语义：组件已存在于主窗口或浮动窗口时，不允许重复放置。
-    if (!availableWidgets.includes(key)) return;
-    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
-  }
-
-  function handleDragWidget(
-    event: React.DragEvent<HTMLDivElement>,
-    _slot: LayoutWidgetSlot,
-    key: PanelKey,
-  ) {
-    event.dataTransfer.setData(
-      "application/x-flux-widget",
-      JSON.stringify({ key }),
-    );
-  }
-
   return (
     <>
       {floatingPanelKey ? (
@@ -1279,8 +1262,6 @@ export default function AppShell() {
             onReplace={handleSlotReplace}
             onFloat={handleFloat}
             onCloseWidget={handleCloseSlot}
-            onDropWidget={handleDropWidget}
-            onDragWidget={handleDragWidget}
             onToggleSplit={handleToggleSplit}
             onStartResize={startResize}
             t={t}

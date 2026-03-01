@@ -22,12 +22,6 @@ type WidgetContainerProps = {
   onReplace: (slot: WidgetSlot, key: PanelKey) => void;
   onFloat: (slot: WidgetSlot) => void;
   onCloseWidget: (slot: WidgetSlot) => void;
-  onDropWidget: (slot: WidgetSlot, key: PanelKey) => void;
-  onDragWidget: (
-    event: React.DragEvent<HTMLDivElement>,
-    slot: WidgetSlot,
-    key: PanelKey,
-  ) => void;
   onToggleSplit: (side: WidgetSide) => void;
   t: Translate;
 };
@@ -42,8 +36,6 @@ export default function WidgetContainer({
   onReplace,
   onFloat,
   onCloseWidget,
-  onDropWidget,
-  onDragWidget,
   onToggleSplit,
   t,
 }: WidgetContainerProps) {
@@ -72,8 +64,6 @@ export default function WidgetContainer({
             onClose={onCloseWidget}
             onSplit={() => onToggleSplit(side)}
             splitDisabled={disableSplit}
-            onDropWidget={onDropWidget}
-            onDragWidget={onDragWidget}
             t={t}
           />
         ))}

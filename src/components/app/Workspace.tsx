@@ -21,12 +21,6 @@ type WorkspaceProps = {
   onReplace: (slot: WidgetSlot, key: PanelKey) => void;
   onFloat: (slot: WidgetSlot) => void;
   onCloseWidget: (slot: WidgetSlot) => void;
-  onDropWidget: (slot: WidgetSlot, key: PanelKey) => void;
-  onDragWidget: (
-    event: React.DragEvent<HTMLDivElement>,
-    slot: WidgetSlot,
-    key: PanelKey,
-  ) => void;
   onToggleSplit: (side: WidgetSide) => void;
   onStartResize: (
     mode: "left" | "right" | "bottom",
@@ -35,7 +29,7 @@ type WorkspaceProps = {
   t: Translate;
 };
 
-/** 主工作区布局（左右面板 + 底部面板）。 */
+/** 主工作区布局（左右面板 + 底部面板），当前只支持替换 / 浮动 / 关闭。 */
 export default function Workspace({
   layoutCollapsed,
   sideSlotCounts,
@@ -50,8 +44,6 @@ export default function Workspace({
   onReplace,
   onFloat,
   onCloseWidget,
-  onDropWidget,
-  onDragWidget,
   onToggleSplit,
   onStartResize,
   t,
@@ -90,8 +82,6 @@ export default function Workspace({
           onReplace={onReplace}
           onFloat={onFloat}
           onCloseWidget={onCloseWidget}
-          onDropWidget={onDropWidget}
-          onDragWidget={onDragWidget}
           onToggleSplit={onToggleSplit}
           t={t}
         />
@@ -118,8 +108,6 @@ export default function Workspace({
           onReplace={onReplace}
           onFloat={onFloat}
           onCloseWidget={onCloseWidget}
-          onDropWidget={onDropWidget}
-          onDragWidget={onDragWidget}
           onToggleSplit={onToggleSplit}
           t={t}
         />
@@ -144,8 +132,6 @@ export default function Workspace({
             onFloat={onFloat}
             onClose={onCloseWidget}
             closeDisabled={!bottomGroup.active}
-            onDropWidget={onDropWidget}
-            onDragWidget={onDragWidget}
             t={t}
           />
         </footer>

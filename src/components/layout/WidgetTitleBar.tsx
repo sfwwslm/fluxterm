@@ -1,6 +1,5 @@
 /** 组件槽位标题栏，提供替换/浮动/分割/关闭入口，并管理设置菜单状态。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type React from "react";
 import { createPortal } from "react-dom";
 import type { Translate } from "@/i18n";
 import type { PanelKey } from "@/types";
@@ -12,14 +11,12 @@ type WidgetTitleBarProps = {
   active: PanelKey | null;
   allWidgets: PanelKey[];
   labels: Record<PanelKey, string>;
-  draggableWidget?: PanelKey | null;
   onReplace: (key: PanelKey) => void;
   onFloat?: () => void;
   onClose?: () => void;
   onSplit?: () => void;
   splitDisabled?: boolean;
   closeDisabled?: boolean;
-  onDragStart?: (event: React.DragEvent<HTMLDivElement>, key: PanelKey) => void;
   t: Translate;
 };
 
@@ -27,14 +24,12 @@ export default function WidgetTitleBar({
   active,
   allWidgets,
   labels,
-  draggableWidget,
   onReplace,
   onFloat,
   onClose,
   onSplit,
   splitDisabled,
   closeDisabled,
-  onDragStart,
   t,
 }: WidgetTitleBarProps) {
   const MENU_GAP = 6;
@@ -116,14 +111,7 @@ export default function WidgetTitleBar({
   );
 
   return (
-    <div
-      className="widget-titlebar"
-      draggable={!!draggableWidget}
-      onDragStart={(event) => {
-        if (!draggableWidget || !onDragStart) return;
-        onDragStart(event, draggableWidget);
-      }}
-    >
+    <div className="widget-titlebar">
       <div className="widget-title-name">{displayName}</div>
       <div className="widget-title-actions">
         <div className="widget-settings" ref={anchorRef}>
