@@ -128,8 +128,23 @@ export const en = {
   "profile.menu.new": "Add Session",
   "profile.menu.edit": "Edit",
   "profile.menu.delete": "Delete",
-  "profile.modal.newTitle": "New Host",
-  "profile.modal.editTitle": "Edit Host",
+  "profile.modal.newTitle": "New Session",
+  "profile.modal.editTitle": "Edit Session",
+  "profile.type.shell": "shell",
+  "profile.type.ssh": "ssh",
+  "profile.section.session": "Session",
+  "profile.section.terminal": "Terminal",
+  "profile.section.window": "Window",
+  "profile.section.ssh": "SSH",
+  "profile.section.modem": "X/Y/Z Modem",
+  "profile.section.sshHint":
+    "This section is reserved for low-level SSH parameters such as charset, target system, proxy, key command, and host verification policy.",
+  "profile.section.terminalHint":
+    "Terminal-related settings such as keyboard behavior, bell, and encoding will be added here later.",
+  "profile.section.windowHint":
+    "Window-related settings such as cursor style, word separators, and selection behavior will be added here later.",
+  "profile.section.modemHint":
+    "Drag upload and download settings will be added here later, including X/Y/Z Modem options.",
   "profile.form.name": "Name",
   "profile.form.host": "Host",
   "profile.form.port": "Port",
@@ -146,6 +161,15 @@ export const en = {
   "profile.auth.password": "Password",
   "profile.auth.privateKey": "Private Key",
   "profile.actions.pickKey": "Choose file",
+  "profile.actions.restoreDefaults": "Restore Defaults",
+  "profile.shell.todo":
+    "The local shell configuration shell is ready. Charset, target system, proxy, and local launch options will be added here later.",
+  "profile.shell.terminalTodo":
+    "Terminal behavior settings for local shell will be added in a later version, such as keyboard behavior, bell, and encoding.",
+  "profile.shell.windowTodo":
+    "Window behavior settings for local shell will be added in a later version, such as cursor style and word separators.",
+  "profile.shell.saveDisabled":
+    "Saving local shell configuration is not available in this version",
   "actions.cancel": "Cancel",
   "actions.save": "Save",
   "actions.close": "Close",

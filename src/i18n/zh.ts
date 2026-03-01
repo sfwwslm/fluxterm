@@ -126,8 +126,23 @@ export const zh = {
   "profile.menu.new": "添加会话",
   "profile.menu.edit": "编辑",
   "profile.menu.delete": "删除",
-  "profile.modal.newTitle": "新增主机",
-  "profile.modal.editTitle": "编辑主机",
+  "profile.modal.newTitle": "新增会话",
+  "profile.modal.editTitle": "编辑会话",
+  "profile.type.shell": "shell",
+  "profile.type.ssh": "ssh",
+  "profile.section.session": "会话",
+  "profile.section.terminal": "终端",
+  "profile.section.window": "窗口",
+  "profile.section.ssh": "SSH",
+  "profile.section.modem": "X/Y/Z Modem",
+  "profile.section.sshHint":
+    "这里预留底层 SSH 参数配置，例如字符集、目标系统、代理、密钥指令和主机校验策略等。",
+  "profile.section.terminalHint":
+    "这里预留终端相关配置，例如键盘行为、Bell、编码等，后续会逐步补齐。",
+  "profile.section.windowHint":
+    "这里预留窗口相关配置，例如插入符样式、分词符和选择行为等。",
+  "profile.section.modemHint":
+    "这里预留拖拽上传下载相关配置，后续会补齐 X/Y/Z Modem 选项。",
   "profile.form.name": "名称",
   "profile.form.host": "地址",
   "profile.form.port": "端口",
@@ -144,6 +159,14 @@ export const zh = {
   "profile.auth.password": "密码",
   "profile.auth.privateKey": "私钥",
   "profile.actions.pickKey": "选择文件",
+  "profile.actions.restoreDefaults": "恢复默认配置",
+  "profile.shell.todo":
+    "本地 shell 配置壳层已就绪，后续会在这里扩展字符集、目标系统、代理和本地启动参数等选项。",
+  "profile.shell.terminalTodo":
+    "本地 shell 的终端行为配置将在后续版本开放，例如键盘行为、Bell 和编码策略。",
+  "profile.shell.windowTodo":
+    "本地 shell 的窗口行为配置将在后续版本开放，例如插入符样式和分词符。",
+  "profile.shell.saveDisabled": "当前版本暂未开放本地 shell 配置保存",
   "actions.cancel": "取消",
   "actions.save": "保存",
   "actions.close": "关闭",
