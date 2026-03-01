@@ -206,6 +206,7 @@ export default function SftpPanel({
   const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(
     null,
   );
+  const [showHiddenEntries, setShowHiddenEntries] = useState(true);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -221,6 +222,10 @@ export default function SftpPanel({
     isRemoteSession && sftpAvailability === "unsupported";
   const interactionsDisabled =
     showUnavailable || showSftpDisabled || showSftpUnsupported;
+  // 隐藏文件显示控制只作用于列表层，不改变后端目录读取结果。
+  const visibleEntries = showHiddenEntries
+    ? entries
+    : entries.filter((entry) => entry.hidden !== true);
 
   useEffect(() => {
     const listBody = listBodyRef.current;
@@ -242,9 +247,10 @@ export default function SftpPanel({
 
   useEffect(() => {
     if (!selectedEntryPath) return;
-    if (entries.some((entry) => entry.path === selectedEntryPath)) return;
+    if (visibleEntries.some((entry) => entry.path === selectedEntryPath))
+      return;
     setSelectedEntryPath(null);
-  }, [entries, selectedEntryPath]);
+  }, [selectedEntryPath, visibleEntries]);
 
   const pathSyncMeta =
     terminalPathSyncStatus === "active"
@@ -357,7 +363,6 @@ export default function SftpPanel({
                 size="icon"
                 onClick={openActionsMenu}
                 aria-label={t("actions.more")}
-                disabled={!isRemote}
               >
                 <FiMoreVertical />
               </Button>
@@ -389,7 +394,7 @@ export default function SftpPanel({
         )}
         <div className="sftp-list-body" ref={listBodyRef}>
           {!interactionsDisabled &&
-            entries.map((entry) => {
+            visibleEntries.map((entry) => {
               const iconMeta = getEntryIconMeta(entry);
               const selected = selectedEntryPath === entry.path;
               return (
@@ -446,7 +451,7 @@ export default function SftpPanel({
           {showSftpUnsupported && (
             <div className="empty-hint">{t("sftp.unsupported")}</div>
           )}
-          {!interactionsDisabled && !entries.length && (
+          {!interactionsDisabled && !visibleEntries.length && (
             <div className="empty-hint">{t("sftp.empty")}</div>
           )}
         </div>
@@ -505,6 +510,16 @@ export default function SftpPanel({
           x={actionsMenu.x}
           y={actionsMenu.y}
           items={[
+            {
+              label: showHiddenEntries
+                ? t("sftp.hideHidden")
+                : t("sftp.showHidden"),
+              disabled: false,
+              onClick: () => {
+                setShowHiddenEntries((prev) => !prev);
+                closeActionsMenu();
+              },
+            },
             {
               label: t("actions.new"),
               disabled: !isRemote,

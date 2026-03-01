@@ -230,6 +230,8 @@ export const en = {
   "sftp.checking": "Checking SFTP",
   "sftp.disabled": "SFTP disabled",
   "sftp.unsupported": "SFTP unsupported for this session",
+  "sftp.hideHidden": "Hide Hidden",
+  "sftp.showHidden": "Show Hidden",
   "log.sessionState": "Session",
   "log.currentTask": "Task",
   "log.disconnectReason": "Disconnect reason",

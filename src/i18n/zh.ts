@@ -227,6 +227,8 @@ export const zh = {
   "sftp.checking": "正在检测 SFTP",
   "sftp.disabled": "SFTP 已关闭",
   "sftp.unsupported": "当前会话不支持 SFTP",
+  "sftp.hideHidden": "不显示隐藏",
+  "sftp.showHidden": "显示隐藏",
   "log.sessionState": "会话状态",
   "log.currentTask": "当前任务",
   "log.disconnectReason": "断开原因",

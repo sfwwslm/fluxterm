@@ -34,6 +34,7 @@ pub fn local_list_entries(path: &str) -> Result<Vec<SftpEntry>, EngineError> {
         } else {
             SftpEntryKind::File
         };
+        let hidden = local_hidden(&name, &metadata);
         let size = if file_type.is_file() {
             Some(metadata.len())
         } else {
@@ -50,6 +51,7 @@ pub fn local_list_entries(path: &str) -> Result<Vec<SftpEntry>, EngineError> {
             path: full_path,
             name,
             kind,
+            hidden: Some(hidden),
             size,
             mtime,
             permissions,
@@ -73,6 +75,7 @@ fn list_windows_drives() -> Result<Vec<SftpEntry>, EngineError> {
             path: drive.clone(),
             name: format!("{}:", letter as char),
             kind: SftpEntryKind::Dir,
+            hidden: Some(false),
             size: None,
             mtime: None,
             permissions: None,
@@ -108,6 +111,19 @@ fn local_permissions(metadata: &std::fs::Metadata) -> Option<String> {
 #[cfg(not(unix))]
 fn local_permissions(_metadata: &std::fs::Metadata) -> Option<String> {
     None
+}
+
+#[cfg(windows)]
+fn local_hidden(name: &str, metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+    let _ = name;
+    metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
+}
+
+#[cfg(not(windows))]
+fn local_hidden(name: &str, _metadata: &std::fs::Metadata) -> bool {
+    name.starts_with('.')
 }
 
 #[cfg(unix)]

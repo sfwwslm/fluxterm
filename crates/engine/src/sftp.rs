@@ -54,6 +54,7 @@ pub async fn sftp_list(
     let mut results = Vec::new();
     for entry in entries {
         let name = entry.file_name();
+        let hidden = name.starts_with('.');
         let base = path.trim_end_matches('/');
         let full_path = if base.is_empty() {
             format!("/{}", name)
@@ -78,6 +79,9 @@ pub async fn sftp_list(
             path: full_path,
             name,
             kind,
+            // 远端第一版仅按类 Unix 约定以 `.` 前缀识别隐藏文件，
+            // 不承诺支持 Windows 远端的隐藏属性语义。
+            hidden: Some(hidden),
             size: metadata.size,
             mtime: metadata.mtime.map(|t| t as u64),
             permissions: metadata.permissions.map(format_permissions),

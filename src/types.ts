@@ -30,6 +30,7 @@ export type SftpEntry = {
   path: string;
   name: string;
   kind: "file" | "dir" | "link";
+  hidden?: boolean | null;
   size?: number | null;
   mtime?: number | null;
   permissions?: string | null;

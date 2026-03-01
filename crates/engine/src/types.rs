@@ -71,6 +71,7 @@ pub struct SftpEntry {
     pub path: String,
     pub name: String,
     pub kind: SftpEntryKind,
+    pub hidden: Option<bool>,
     pub size: Option<u64>,
     pub mtime: Option<u64>,
     pub permissions: Option<String>,
