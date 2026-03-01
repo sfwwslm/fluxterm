@@ -1,5 +1,6 @@
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
+import "@/components/ui/notice-host.css";
 
 /** 通用提示容器（Toast + 对话框）。 */
 export default function NoticeHost() {
