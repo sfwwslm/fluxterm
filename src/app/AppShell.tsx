@@ -224,6 +224,9 @@ export default function AppShell() {
   const [terminalHomeDirs, setTerminalHomeDirs] = useState<
     Record<string, string>
   >({});
+  const [lastSyncedTerminalPaths, setLastSyncedTerminalPaths] = useState<
+    Record<string, string>
+  >({});
   const [terminalPathSyncStateBySession, setTerminalPathSyncStateBySession] =
     useState<Record<string, "active" | "paused-mismatch" | "unsupported">>({});
 
@@ -500,14 +503,24 @@ export default function AppShell() {
     }
     if (!activeSessionId) return "unsupported";
     if (sessionActions.isLocalSession(activeSessionId)) return "unsupported";
-    if (activeSftpAvailability === "checking") return "checking";
+    const pathSyncState = terminalPathSyncStateBySession[activeSessionId];
+    // `checking` 只用于首轮能力检测。
+    // 一旦该会话已经进入过 active，就不要再因为普通目录刷新时的 SFTP checking
+    // 把联动图标打回“检测中”，否则用户会看到路径切换时图标抖动。
+    if (
+      activeSftpAvailability === "checking" &&
+      pathSyncState !== "active" &&
+      pathSyncState !== "paused-mismatch"
+    ) {
+      return "checking";
+    }
     if (activeSftpAvailability === "unsupported") return "unsupported";
-    if (terminalPathSyncStateBySession[activeSessionId] === "unsupported") {
+    if (pathSyncState === "unsupported") {
       return "unsupported";
     }
-    return terminalPathSyncStateBySession[activeSessionId] === "paused-mismatch"
+    return pathSyncState === "paused-mismatch"
       ? "paused"
-      : terminalPathSyncStateBySession[activeSessionId] === "active"
+      : pathSyncState === "active"
         ? "active"
         : "unsupported";
   }, [
@@ -519,6 +532,7 @@ export default function AppShell() {
     terminalPathSyncEnabled,
     terminalPathSyncStateBySession,
   ]);
+
   const activeResourceSnapshot = useMemo(() => {
     const activeSessionId = sessionState.activeSessionId;
     if (!activeSessionId) return null;
@@ -756,8 +770,20 @@ export default function AppShell() {
       }));
     }
     const resolvedPath = resolvePromptWorkingDirectory(trackedPath, knownHome);
-    if (!resolvedPath || resolvedPath === sftpState.currentPath) return;
-    // 终端 cwd 只单向驱动文件管理器，避免文件管理器操作再反向干扰 shell。
+    if (!resolvedPath) return;
+    if (resolvedPath === sftpState.currentPath) {
+      // 当文件管理器已经处于终端 cwd 时，记住这次已同步的终端路径。
+      // 后续用户手动浏览目录时，只要终端 cwd 没变化，就不要再被这个旧路径覆盖回去。
+      setLastSyncedTerminalPaths((prev) =>
+        prev[activeSessionId] === resolvedPath
+          ? prev
+          : { ...prev, [activeSessionId]: resolvedPath },
+      );
+      return;
+    }
+    if (lastSyncedTerminalPaths[activeSessionId] === resolvedPath) return;
+    // 终端 cwd 只在“路径发生新变化”时单向驱动文件管理器，
+    // 避免文件管理器手动浏览后又被旧的终端路径持续覆盖。
     openRemoteDir(resolvedPath).catch((error) => {
       warn(
         JSON.stringify({
@@ -769,7 +795,12 @@ export default function AppShell() {
         }),
       );
     });
+    setLastSyncedTerminalPaths((prev) => ({
+      ...prev,
+      [activeSessionId]: resolvedPath,
+    }));
   }, [
+    lastSyncedTerminalPaths,
     openRemoteDir,
     sessionState.activeSessionProfile,
     sessionState.activeSessionId,
