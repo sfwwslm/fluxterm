@@ -295,7 +295,6 @@ export default function AppShell() {
     setConfigModalOpen(true);
   }
 
-  const availableWidgets = allPanelKeys;
   const panelLabels = useMemo(
     () => ({
       profiles: t(panelLabelKeys.profiles),
@@ -412,6 +411,18 @@ export default function AppShell() {
     setLocale,
     setThemeId,
   });
+  const availableWidgets = useMemo(() => {
+    // 组件实例在任意时刻只能存在于一个展示位置：
+    // 要么在主窗口槽位里，要么在 floating 配置里，不能两边同时出现。
+    const occupied = new Set<PanelKey>();
+    Object.values(slotGroups).forEach((group) => {
+      if (group.active) occupied.add(group.active);
+    });
+    Object.keys(floatingOrigins).forEach((panel) => {
+      occupied.add(panel as PanelKey);
+    });
+    return allPanelKeys.filter((panel) => !occupied.has(panel));
+  }, [floatingOrigins, slotGroups]);
   const filesWidgetVisible = useMemo(() => {
     if (floatingPanelKey === "files") return true;
     if (floatingPanels.files) return true;
@@ -1144,10 +1155,15 @@ export default function AppShell() {
   ]);
 
   function handleSlotReplace(slot: LayoutWidgetSlot, key: PanelKey) {
+    // UI 候选列表已经做过过滤，这里再做一次防守式保护，
+    // 避免未来新增入口时把“已存在或已浮动”的组件重新塞回主窗口。
+    if (!availableWidgets.includes(key)) return;
     setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
   }
 
   function handleDropWidget(slot: LayoutWidgetSlot, key: PanelKey) {
+    // 拖拽投放同样遵循单实例语义：组件已存在于主窗口或浮动窗口时，不允许重复放置。
+    if (!availableWidgets.includes(key)) return;
     setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
   }
 
