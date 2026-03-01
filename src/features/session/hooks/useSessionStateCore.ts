@@ -246,6 +246,10 @@ export default function useSessionState({
     return profile?.name || profile?.host || t("session.defaultName");
   }
 
+  function resolveProfileLabel(profile: HostProfile) {
+    return profile.name || profile.host || t("session.defaultName");
+  }
+
   function recordCommandInput(sessionId: string, data: string) {
     const cleaned = data.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
     let buffer = inputBufferRef.current[sessionId] ?? "";
@@ -469,7 +473,6 @@ export default function useSessionState({
           );
         }
         if (payload.state === "connecting") {
-          appendLog("log.event.connecting", { name: label });
           logInfo(
             JSON.stringify({
               event: "ssh.session.connecting",
@@ -485,6 +488,11 @@ export default function useSessionState({
   });
 
   async function connectProfile(profile: HostProfile) {
+    // “正在连接”在发起连接时就记录，避免状态事件先到、会话元数据尚未写入前端时，
+    // 日志对象退化成默认的“会话”占位文案。
+    appendLog("log.event.connecting", {
+      name: resolveProfileLabel(profile),
+    });
     await connectProfileCommand({
       profile,
       createSshSession,

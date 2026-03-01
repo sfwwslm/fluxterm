@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiActivity, FiDatabase, FiSettings } from "react-icons/fi";
-import type { Translate } from "@/i18n";
+import type { Locale, Translate } from "@/i18n";
 import type {
   QuickCommandGroup,
   QuickCommandItem,
   ResourceMonitorStatus,
   SessionResourceSnapshot,
 } from "@/types";
+import { formatDateTime } from "@/utils/format";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
@@ -58,16 +59,9 @@ type BottomAreaProps = {
   resourceMonitorEnabled: boolean;
   resourceMonitorStatus: ResourceMonitorStatus;
   resourceSnapshot: SessionResourceSnapshot | null;
+  locale: Locale;
   t: Translate;
 };
-
-function pad2(value: number) {
-  return value.toString().padStart(2, "0");
-}
-
-function formatDateTime(value: Date) {
-  return `${value.getFullYear()}/${value.getMonth() + 1}/${value.getDate()} ${pad2(value.getHours())}:${pad2(value.getMinutes())}`;
-}
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -134,6 +128,7 @@ export default function BottomArea({
   resourceMonitorEnabled,
   resourceMonitorStatus,
   resourceSnapshot,
+  locale,
   t,
 }: BottomAreaProps) {
   const [stats, setStats] = useState<TerminalStats>(() =>
@@ -581,7 +576,7 @@ export default function BottomArea({
                 <span>
                   [ {t("status.buffer")} {stats.bufferLines} ]
                 </span>
-                <span>[ {formatDateTime(now)} ]</span>
+                <span>[ {formatDateTime(now, locale)} ]</span>
               </div>
             </div>
           </div>

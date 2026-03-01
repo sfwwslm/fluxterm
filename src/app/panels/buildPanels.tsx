@@ -44,7 +44,6 @@ type BuildPanelsProps = {
     | "disabled";
   entries: SftpEntry[];
   locale: Locale;
-  canReconnect: boolean;
   t: Translate;
   pickProfile: (profileId: string) => void;
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
@@ -66,7 +65,6 @@ type BuildPanelsProps = {
   onCreateFolder: (name: string) => Promise<void>;
   onRenameEntry: (entry: SftpEntry, name: string) => Promise<void>;
   onRemoveEntry: (entry: SftpEntry) => Promise<void>;
-  onReconnectActive: () => void;
 };
 
 /** 构建工作区面板集合。 */
@@ -92,7 +90,6 @@ export function buildPanels(
     terminalPathSyncStatus,
     entries,
     locale,
-    canReconnect,
     t,
     pickProfile,
     onConnectProfile,
@@ -111,7 +108,6 @@ export function buildPanels(
     onCreateFolder,
     onRenameEntry,
     onRemoveEntry,
-    onReconnectActive,
   } = props;
 
   return {
@@ -169,8 +165,6 @@ export function buildPanels(
         sessionState={activeSessionState ?? "disconnected"}
         sessionReason={activeSessionReason}
         reconnectInfo={activeReconnectInfo}
-        onReconnect={onReconnectActive}
-        canReconnect={canReconnect}
         entries={logEntries}
         locale={locale}
         t={t}

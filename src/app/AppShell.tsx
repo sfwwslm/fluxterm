@@ -1047,7 +1047,6 @@ export default function AppShell() {
         terminalPathSyncStatus: filesPanelState.terminalPathSyncStatus,
         entries: filesPanelState.entries,
         locale,
-        canReconnect: sessionState.canReconnect,
         t,
         pickProfile,
         onConnectProfile: handleConnectProfile,
@@ -1068,12 +1067,6 @@ export default function AppShell() {
         onCreateFolder: filesPanelActions.createFolder,
         onRenameEntry: filesPanelActions.rename,
         onRemoveEntry: filesPanelActions.remove,
-        onReconnectActive: () => {
-          if (!sessionState.activeSessionId) return;
-          sessionActions
-            .reconnectSession(sessionState.activeSessionId)
-            .catch(() => {});
-        },
       }),
     [
       profiles,
@@ -1288,6 +1281,7 @@ export default function AppShell() {
             resourceMonitorEnabled={resourceMonitorEnabled}
             resourceMonitorStatus={activeResourceMonitorStatus}
             resourceSnapshot={activeResourceSnapshot}
+            locale={locale}
             t={t}
           />
 

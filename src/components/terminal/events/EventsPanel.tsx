@@ -1,12 +1,11 @@
 import type { Locale, Translate } from "@/i18n";
 import type { DisconnectReason, LogEntry, SessionStateUi } from "@/types";
+import { formatDateTimeMs } from "@/utils/format";
 
 type EventsPanelProps = {
   sessionState: SessionStateUi;
   sessionReason: DisconnectReason | null;
   reconnectInfo: { attempt: number; delayMs: number } | null;
-  onReconnect: () => void;
-  canReconnect: boolean;
   entries: LogEntry[];
   locale: Locale;
   t: Translate;
@@ -20,8 +19,6 @@ export default function EventsPanel({
   sessionState,
   sessionReason,
   reconnectInfo,
-  onReconnect,
-  canReconnect,
   entries,
   locale,
   t,
@@ -47,13 +44,6 @@ export default function EventsPanel({
 
   const eventEntries = entries.filter((entry) => !isTransferKey(entry.key));
 
-  const formatLogTime = (timestamp: number) =>
-    new Date(timestamp).toLocaleTimeString(locale, {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-
   return (
     <div className="log-panel">
       <div className="log-row">
@@ -63,14 +53,7 @@ export default function EventsPanel({
       {sessionState !== "connected" && sessionReason && (
         <div className="log-row">
           <span>{t("log.disconnectReason")}</span>
-          <div className="log-actions">
-            <strong>{reasonLabel}</strong>
-            {canReconnect && (
-              <button className="ghost" onClick={onReconnect}>
-                {t("actions.reconnect")}
-              </button>
-            )}
-          </div>
+          <strong>{reasonLabel}</strong>
         </div>
       )}
       {reconnectInfo && (
@@ -94,7 +77,7 @@ export default function EventsPanel({
                 className={`log-item ${entry.level ?? "info"}`}
               >
                 <span className="log-time">
-                  {formatLogTime(entry.timestamp)}
+                  {formatDateTimeMs(entry.timestamp, locale)}
                 </span>
                 <span className="log-message">{t(entry.key, entry.vars)}</span>
               </div>
