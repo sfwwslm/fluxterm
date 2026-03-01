@@ -232,6 +232,10 @@ export const en = {
   "sftp.unsupported": "SFTP unsupported for this session",
   "sftp.hideHidden": "Hide Hidden",
   "sftp.showHidden": "Show Hidden",
+  "sftp.openInFileManager": "File Manager",
+  "sftp.openInFileManagerFailed": "Failed to open system file manager",
+  "sftp.openInFileManagerDenied":
+    "This path is not allowed to open in the system file manager",
   "log.sessionState": "Session",
   "log.currentTask": "Task",
   "log.disconnectReason": "Disconnect reason",

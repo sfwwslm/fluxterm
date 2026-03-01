@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { error as logError, warn as logWarn } from "@tauri-apps/plugin-log";
+import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";
 import type { SftpAvailability, SftpEntry } from "@/types";
@@ -200,7 +202,7 @@ export default function SftpPanel({
   locale,
   t,
 }: SftpPanelProps) {
-  const { openDialog } = useNotices();
+  const { openDialog, pushToast } = useNotices();
   const headerScrollRef = useRef<HTMLDivElement | null>(null);
   const listBodyRef = useRef<HTMLDivElement | null>(null);
   const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(
@@ -518,6 +520,49 @@ export default function SftpPanel({
               onClick: () => {
                 setShowHiddenEntries((prev) => !prev);
                 closeActionsMenu();
+              },
+            },
+            {
+              label: t("sftp.openInFileManager"),
+              disabled: isRemote || !currentPath,
+              onClick: async () => {
+                if (isRemote || !currentPath) return;
+                try {
+                  await openPath(currentPath);
+                } catch (error) {
+                  const errorMessage =
+                    error instanceof Error
+                      ? error.message
+                      : typeof error === "object" &&
+                          error !== null &&
+                          "message" in error &&
+                          typeof error.message === "string"
+                        ? error.message
+                        : String(error);
+                  const message = errorMessage.includes(
+                    "Not allowed to open path",
+                  )
+                    ? t("sftp.openInFileManagerDenied")
+                    : t("sftp.openInFileManagerFailed");
+                  const logOpenFailure = errorMessage.includes(
+                    "Not allowed to open path",
+                  )
+                    ? logWarn
+                    : logError;
+                  pushToast({
+                    level: "error",
+                    message,
+                  });
+                  void logOpenFailure(
+                    JSON.stringify({
+                      event: "sftp:open-in-file-manager-failed",
+                      path: currentPath,
+                      message: errorMessage,
+                    }),
+                  );
+                } finally {
+                  closeActionsMenu();
+                }
               },
             },
             {
