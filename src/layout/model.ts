@@ -1,6 +1,7 @@
 /** 布局结构与槽位操作工具，负责默认布局与布局配置规范化。 */
 import type { PanelKey } from "@/types";
 import type {
+  FloatingPanelLayout,
   WidgetLayout,
   WidgetGroup,
   WidgetSide,
@@ -36,10 +37,11 @@ export const defaultWidgetLayout: WidgetLayout = {
     right: 1,
   },
   slots: {
-    "left:0": { active: "profiles", floating: false },
-    "right:0": { active: "files", floating: false },
-    bottom: { active: "transfers", floating: false },
+    "left:0": { active: "profiles" },
+    "right:0": { active: "files" },
+    bottom: { active: "transfers" },
   },
+  floating: {},
 };
 
 /** 创建侧边槽位 key。 */
@@ -49,7 +51,7 @@ export function sideSlotKey(side: WidgetSide, index: number): WidgetSlot {
 
 /** 创建空组件组。 */
 export function createEmptyGroup(): WidgetGroup {
-  return { active: null, floating: false };
+  return { active: null };
 }
 
 /** 统一规范组件组，单个槽位同一时刻只保留一个组件。 */
@@ -58,7 +60,6 @@ export function normalizeGroup(group: unknown): WidgetGroup {
   const raw = group as Partial<WidgetGroup>;
   return {
     active: normalizePanelKey(raw.active),
-    floating: false,
   };
 }
 
@@ -132,6 +133,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
   };
   const structured = normalizeSideSlotStructure(baseSlots, initialCounts);
   const dedupedSlots = dedupeActivePanels(structured.slots);
+  const floating = normalizeFloating(value.floating, dedupedSlots);
 
   return {
     version: 1,
@@ -174,6 +176,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
     },
     sideSlotCounts: structured.sideSlotCounts,
     slots: dedupedSlots,
+    floating,
   };
 }
 
@@ -191,7 +194,6 @@ export function moveWidgetToSlot(
   });
   if (!next[target]) next[target] = createEmptyGroup();
   next[target].active = widget;
-  next[target].floating = false;
   return next;
 }
 
@@ -232,6 +234,33 @@ function normalizeSlots(rawSlots: Record<string, unknown>) {
     const parsed = parseSideSlotKey(key);
     if (!parsed) return;
     next[sideSlotKey(parsed.side, parsed.index)] = normalizeGroup(value);
+  });
+  return next;
+}
+
+function normalizeFloating(
+  raw: unknown,
+  slots: Record<string, WidgetGroup>,
+): FloatingPanelLayout {
+  if (!raw || typeof raw !== "object") return {};
+  const activePanels = new Set<PanelKey>();
+  Object.values(slots).forEach((group) => {
+    if (group.active) activePanels.add(group.active);
+  });
+  const next: FloatingPanelLayout = {};
+  Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
+    const panel = normalizePanelKey(key);
+    if (!panel || activePanels.has(panel)) return;
+    if (!value || typeof value !== "object") return;
+    const origin = (value as { origin?: unknown }).origin;
+    if (origin !== "bottom") {
+      const parsed =
+        typeof origin === "string" ? parseSideSlotKey(origin) : null;
+      if (!parsed) return;
+      next[panel] = { origin: sideSlotKey(parsed.side, parsed.index) };
+      return;
+    }
+    next[panel] = { origin: "bottom" };
   });
   return next;
 }

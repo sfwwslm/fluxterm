@@ -62,7 +62,6 @@ export default function Workspace({
       const slot = sideSlotKey(side, index);
       const group = slotGroups[slot] ?? {
         active: null,
-        floating: false,
       };
       return {
         slot,
@@ -76,7 +75,6 @@ export default function Workspace({
   const rightSlots = sideSlots("right");
   const bottomGroup = slotGroups.bottom ?? {
     active: null,
-    floating: false,
   };
 
   return (

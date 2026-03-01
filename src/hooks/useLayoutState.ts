@@ -13,6 +13,7 @@ import {
   sideSlotKey,
 } from "@/layout/model";
 import type {
+  FloatingPanelLayout,
   WidgetLayout,
   WidgetGroup,
   WidgetSide,
@@ -25,6 +26,7 @@ type LayoutState = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   sideSlotCounts: Record<WidgetSide, number>;
   slotGroups: Record<string, WidgetGroup>;
+  floatingOrigins: FloatingPanelLayout;
   panelSizes: { left: number; right: number; bottom: number };
   leftVisible: boolean;
   rightVisible: boolean;
@@ -33,6 +35,7 @@ type LayoutState = {
   setSlotGroups: React.Dispatch<
     React.SetStateAction<Record<string, WidgetGroup>>
   >;
+  setFloatingOrigins: React.Dispatch<React.SetStateAction<FloatingPanelLayout>>;
   setPanelCollapsed: (side: WidgetSide | "bottom", collapsed: boolean) => void;
   handleToggleSplit: (side: WidgetSide) => void;
   handleCloseSlot: (slot: WidgetSlot) => void;
@@ -45,13 +48,11 @@ type LayoutState = {
 
 type UseLayoutStateProps = {
   floatingPanelKey: PanelKey | null;
-  floatingOriginRef: React.RefObject<Partial<Record<PanelKey, WidgetSlot>>>;
 };
 
 /** 布局状态管理（读取/保存/拖拽调整）。 */
 export default function useLayoutState({
   floatingPanelKey,
-  floatingOriginRef,
 }: UseLayoutStateProps): LayoutState {
   const [layoutCollapsed, setLayoutCollapsed] = useState(
     defaultWidgetLayout.collapsed,
@@ -60,6 +61,9 @@ export default function useLayoutState({
     defaultWidgetLayout.sideSlotCounts,
   );
   const [slotGroups, setSlotGroups] = useState(defaultWidgetLayout.slots);
+  const [floatingOrigins, setFloatingOrigins] = useState(
+    defaultWidgetLayout.floating,
+  );
   const [panelSizes, setPanelSizes] = useState(defaultWidgetLayout.sizes);
 
   const dragState = useRef<{
@@ -80,19 +84,6 @@ export default function useLayoutState({
     Object.entries(slots).forEach(([slot, group]) => {
       next[slot as WidgetSlot] = { ...group };
     });
-    (Object.keys(floatingOriginRef.current) as PanelKey[]).forEach((panel) => {
-      const origin = floatingOriginRef.current[panel];
-      if (!origin) return;
-      Object.values(next).forEach((group) => {
-        if (group.active === panel) {
-          group.active = null;
-        }
-      });
-      if (!next[origin]) {
-        next[origin] = { active: null, floating: false };
-      }
-      next[origin].active = panel;
-    });
     return next;
   }
 
@@ -109,7 +100,7 @@ export default function useLayoutState({
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
-      // layout.json 缺少 version 视为无效并回退默认布局。
+      // layout.json 版本不匹配时视为无效并回退默认布局。
       const normalized = normalizeWidgetLayout(parsed);
       if (!normalized) {
         layoutLoadedRef.current = true;
@@ -119,10 +110,12 @@ export default function useLayoutState({
         (count, group) => count + (group.active ? 1 : 0),
         0,
       );
-      if (totalWidgets === 0) {
+      const totalFloatingPanels = Object.keys(normalized.floating).length;
+      if (totalWidgets === 0 && totalFloatingPanels === 0) {
         setLayoutCollapsed(defaultWidgetLayout.collapsed);
         setSideSlotCounts(defaultWidgetLayout.sideSlotCounts);
         setSlotGroups(defaultWidgetLayout.slots);
+        setFloatingOrigins(defaultWidgetLayout.floating);
         setPanelSizes(defaultWidgetLayout.sizes);
         layoutLoadedRef.current = true;
         return;
@@ -130,6 +123,7 @@ export default function useLayoutState({
       setLayoutCollapsed(normalized.collapsed);
       setSideSlotCounts(normalized.sideSlotCounts);
       setSlotGroups(normalized.slots);
+      setFloatingOrigins(normalized.floating);
       setPanelSizes(normalized.sizes);
     } catch (error) {
       warn(
@@ -327,23 +321,24 @@ export default function useLayoutState({
       for (let i = 0; i < normalizedCounts.left; i += 1) {
         const key = sideSlotKey("left", i);
         if (!persistedSlots[key]) {
-          persistedSlots[key] = { active: null, floating: false };
+          persistedSlots[key] = { active: null };
         }
       }
       for (let i = 0; i < normalizedCounts.right; i += 1) {
         const key = sideSlotKey("right", i);
         if (!persistedSlots[key]) {
-          persistedSlots[key] = { active: null, floating: false };
+          persistedSlots[key] = { active: null };
         }
       }
       if (!persistedSlots.bottom) {
-        persistedSlots.bottom = { active: null, floating: false };
+        persistedSlots.bottom = { active: null };
       }
       saveLayoutConfig({
         version: 1,
         collapsed: layoutCollapsed,
         sideSlotCounts: normalizedCounts,
         slots: persistedSlots,
+        floating: floatingOrigins,
         sizes: panelSizes,
       }).catch((error) => {
         warn(
@@ -365,6 +360,7 @@ export default function useLayoutState({
     layoutCollapsed,
     sideSlotCounts,
     slotGroups,
+    floatingOrigins,
     panelSizes,
   ]);
 
@@ -372,12 +368,14 @@ export default function useLayoutState({
     layoutCollapsed,
     sideSlotCounts,
     slotGroups,
+    floatingOrigins,
     panelSizes,
     leftVisible,
     rightVisible,
     bottomVisible,
     layoutVars,
     setSlotGroups,
+    setFloatingOrigins,
     setPanelCollapsed,
     handleToggleSplit,
     handleCloseSlot,

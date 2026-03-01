@@ -10,8 +10,17 @@ export type WidgetSide = "left" | "right";
 /** 单个槽位的组件组。 */
 export type WidgetGroup = {
   active: PanelKey | null;
-  floating: boolean;
 };
+
+/** 持久化的浮动窗口布局。 */
+export type FloatingPanelLayout = Partial<
+  Record<
+    PanelKey,
+    {
+      origin: WidgetSlot;
+    }
+  >
+>;
 
 /** 小组件布局配置（左右动态槽位）。 */
 export type WidgetLayout = {
@@ -28,4 +37,5 @@ export type WidgetLayout = {
   };
   sideSlotCounts: Record<WidgetSide, number>;
   slots: Record<string, WidgetGroup>;
+  floating: FloatingPanelLayout;
 };

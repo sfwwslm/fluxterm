@@ -208,9 +208,6 @@ export default function AppShell() {
     return null;
   }, []);
   const layoutMenuDisabled = Boolean(floatingPanelKey);
-  const floatingOriginRef = useRef<Partial<Record<PanelKey, LayoutWidgetSlot>>>(
-    {},
-  );
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
   const lastSftpProgressRef = useRef<Record<string, number>>({});
   const lastSftpTransferKeyRef = useRef<Record<string, string>>({});
@@ -387,11 +384,13 @@ export default function AppShell() {
     layoutCollapsed,
     sideSlotCounts,
     slotGroups,
+    floatingOrigins,
     leftVisible,
     rightVisible,
     bottomVisible,
     layoutVars,
     setSlotGroups,
+    setFloatingOrigins,
     setPanelCollapsed,
     handleToggleSplit,
     handleCloseSlot,
@@ -399,11 +398,11 @@ export default function AppShell() {
     startResize,
   } = useLayoutState({
     floatingPanelKey,
-    floatingOriginRef,
   });
   const { floatingPanels, handleFloat } = useFloatingPanels({
     floatingPanelKey,
-    floatingOriginRef,
+    floatingOrigins,
+    setFloatingOrigins,
     slotGroups,
     setSlotGroups,
     panelLabels,
@@ -416,7 +415,6 @@ export default function AppShell() {
   const filesWidgetVisible = useMemo(() => {
     if (floatingPanelKey === "files") return true;
     if (floatingPanels.files) return true;
-    // 单槽位模型下，只有当前激活组件就是 files 时才算真正可见。
     return Object.values(slotGroups).some((group) => group.active === "files");
   }, [floatingPanelKey, floatingPanels.files, slotGroups]);
 
