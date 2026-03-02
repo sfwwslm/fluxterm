@@ -50,7 +50,8 @@ There is no dedicated JS test runner configured yet. For Rust, use `cargo test` 
 
 ## Commit & Pull Request Guidelines
 
-The Git history only contains an initial commit, so no established message convention exists yet. Use concise, imperative subjects (e.g., "Add SFTP path sync").
+- Commit messages follow a Conventional Commits-style prefix such as `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `style:`, or `build:`.
+- Keep commits scoped and descriptive; separate refactors from behavior changes when possible.
 
 For pull requests:
 
