@@ -152,13 +152,16 @@ function PaneNodeView({
           {node.sessionIds.map((sessionId) => {
             const sessionActive = sessionId === paneActiveSessionId;
             const disconnected = getSessionState(sessionId) === "disconnected";
+            const showCloseButton = sessionActive;
             return (
               <div
                 key={sessionId}
                 data-pane-session-id={sessionId}
                 className={`session-tab session-tab-trigger-inline ${
                   sessionActive ? "active" : ""
-                } ${disconnected ? "disconnected" : ""}`}
+                } ${disconnected ? "disconnected" : ""} ${
+                  showCloseButton ? "show-close" : ""
+                }`}
                 onPointerDown={(event) =>
                   handleSessionPointerDown(
                     event,
@@ -191,17 +194,19 @@ function PaneNodeView({
                 >
                   {getSessionLabel(sessionId)}
                 </button>
-                <button
-                  type="button"
-                  className="close"
-                  aria-label="close-pane-session"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onClosePaneSession(node.paneId, sessionId);
-                  }}
-                >
-                  <FiX />
-                </button>
+                {showCloseButton && (
+                  <button
+                    type="button"
+                    className="close"
+                    aria-label="close-pane-session"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onClosePaneSession(node.paneId, sessionId);
+                    }}
+                  >
+                    <FiX />
+                  </button>
+                )}
               </div>
             );
           })}

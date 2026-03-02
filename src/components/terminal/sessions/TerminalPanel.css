@@ -104,6 +104,10 @@ button.session-tab {
   background: var(--border-weak);
 }
 
+.session-tab:not(.show-close) .close {
+  display: none;
+}
+
 .session-tab .close svg {
   width: 12px;
   height: 12px;
