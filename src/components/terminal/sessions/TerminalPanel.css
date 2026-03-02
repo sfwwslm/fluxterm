@@ -49,7 +49,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--tab-bg);
   border: 1px solid var(--tab-border);
   color: var(--text-secondary);
@@ -90,8 +90,13 @@ button.session-tab {
 }
 
 .session-tab .session-tab-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
   min-width: 3.5rem;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .session-tab .close {
@@ -199,7 +204,7 @@ button.session-tab {
 
 .session-tab-trigger-inline {
   flex: 0 0 auto;
-  max-width: 220px;
+  max-width: 150px;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
