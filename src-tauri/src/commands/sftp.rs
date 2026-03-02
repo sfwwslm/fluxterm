@@ -107,6 +107,28 @@ pub async fn sftp_download(
 }
 
 #[tauri::command]
+/// 下载远端目录到本地目录。
+pub async fn sftp_download_dir(
+    state: State<'_, EngineState>,
+    session_id: String,
+    remote_path: String,
+    local_dir: String,
+) -> Result<(), EngineError> {
+    let engine: Arc<Engine> = Arc::clone(&state.engine);
+    tauri::async_runtime::spawn_blocking(move || {
+        engine.sftp_download_dir(&session_id, &remote_path, &local_dir)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 目录下载",
+            err.to_string(),
+        )
+    })?
+}
+
+#[tauri::command]
 /// 重命名远端文件或目录。
 pub async fn sftp_rename(
     state: State<'_, EngineState>,

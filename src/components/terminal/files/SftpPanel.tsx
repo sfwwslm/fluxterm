@@ -509,9 +509,9 @@ export default function SftpPanel({
             {
               label: t("actions.download"),
               icon: <FiDownload />,
-              disabled: !isRemote || menu.entry.kind === "dir",
+              disabled: !isRemote,
               onClick: () => {
-                if (!isRemote || menu.entry.kind === "dir") return;
+                if (!isRemote) return;
                 onDownload(menu.entry);
                 closeMenu();
               },

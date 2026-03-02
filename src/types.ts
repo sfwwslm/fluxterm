@@ -64,13 +64,28 @@ export type SftpEntry = {
 };
 
 /** SFTP 传输进度。 */
+export type SftpTransferKind = "file" | "directory";
+export type SftpTransferStatus =
+  | "running"
+  | "success"
+  | "partial_success"
+  | "failed";
+
+/** SFTP 传输进度。 */
 export type SftpProgress = {
   sessionId: string;
   transferId: string;
   op: "upload" | "download";
+  kind: SftpTransferKind;
   path: string;
+  displayName: string;
+  itemLabel: string;
   transferred: number;
   total?: number | null;
+  completedItems: number;
+  totalItems?: number | null;
+  status: SftpTransferStatus;
+  failedItems: number;
 };
 
 /** SFTP 可用性状态。 */

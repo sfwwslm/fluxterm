@@ -8,8 +8,8 @@ use tokio::sync::mpsc;
 use crate::auth::authenticate;
 use crate::error::EngineError;
 use crate::sftp::{
-    sftp_download, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename, sftp_resolve_path,
-    sftp_upload,
+    sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename,
+    sftp_resolve_path, sftp_upload,
 };
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, TerminalSize,
@@ -47,6 +47,11 @@ pub enum SessionCommand {
     SftpDownload {
         remote_path: String,
         local_path: String,
+        respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
+    },
+    SftpDownloadDir {
+        remote_path: String,
+        local_dir: String,
         respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
     },
     SftpRename {
@@ -157,6 +162,9 @@ pub async fn run_session_loop(
                     }
                     SessionCommand::SftpDownload { remote_path, local_path, respond_to } => {
                         let _ = respond_to.send(sftp_download(&session, &session_id, &remote_path, &local_path, &on_event).await);
+                    }
+                    SessionCommand::SftpDownloadDir { remote_path, local_dir, respond_to } => {
+                        let _ = respond_to.send(sftp_download_dir(&session, &session_id, &remote_path, &local_dir, &on_event).await);
                     }
                     SessionCommand::SftpRename { from, to, respond_to } => {
                         let _ = respond_to.send(sftp_rename(&session, &from, &to).await);

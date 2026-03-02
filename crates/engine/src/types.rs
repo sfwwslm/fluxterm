@@ -88,11 +88,29 @@ pub struct TerminalSize {
 }
 
 /// SFTP 传输方向。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SftpProgressOp {
     Upload,
     Download,
+}
+
+/// SFTP 传输任务类型。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SftpTransferKind {
+    File,
+    Directory,
+}
+
+/// SFTP 传输任务状态。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SftpTransferStatus {
+    Running,
+    Success,
+    PartialSuccess,
+    Failed,
 }
 
 /// SFTP 传输进度。
@@ -102,9 +120,16 @@ pub struct SftpProgress {
     pub session_id: String,
     pub transfer_id: String,
     pub op: SftpProgressOp,
+    pub kind: SftpTransferKind,
     pub path: String,
+    pub display_name: String,
+    pub item_label: String,
     pub transferred: u64,
     pub total: Option<u64>,
+    pub completed_items: u64,
+    pub total_items: Option<u64>,
+    pub status: SftpTransferStatus,
+    pub failed_items: u64,
 }
 
 /// 资源监控状态。

@@ -48,6 +48,15 @@ export function sftpDownload(
   return callTauri("sftp_download", { sessionId, remotePath, localPath });
 }
 
+/** 下载目录。 */
+export function sftpDownloadDir(
+  sessionId: string,
+  remotePath: string,
+  localDir: string,
+) {
+  return callTauri("sftp_download_dir", { sessionId, remotePath, localDir });
+}
+
 /** 新建目录。 */
 export function sftpMkdir(sessionId: string, path: string) {
   return callTauri("sftp_mkdir", { sessionId, path });

@@ -1,3 +1,12 @@
+/**
+ * 传输面板。
+ * 职责：展示当前活动会话最近一个传输任务的聚合进度与传输日志。
+ *
+ * 当前视图以 job 为单位展示：
+ * - 单文件传输显示文件名
+ * - 目录传输优先显示 items count
+ * - 进度条优先使用字节进度，未知总字节时退回项目数进度
+ */
 import { useEffect, useState } from "react";
 import type { Locale, Translate } from "@/i18n";
 import type { LogEntry, SftpProgress } from "@/types";
@@ -37,6 +46,27 @@ export default function TransfersPanel({
       ? t("log.upload")
       : t("log.download")
     : "";
+  const progressTitle = progress
+    ? progress.totalItems && progress.totalItems > 1
+      ? t("log.transferItems", { count: progress.totalItems })
+      : progress.displayName || progress.itemLabel || progress.path
+    : "";
+  const progressPercent = progress
+    ? progress.total && progress.total > 0
+      ? Math.min(100, (progress.transferred / progress.total) * 100)
+      : progress.totalItems && progress.totalItems > 0
+        ? Math.min(100, (progress.completedItems / progress.totalItems) * 100)
+        : 30
+    : 0;
+  const progressStatus = progress
+    ? progress.status === "partial_success"
+      ? t("log.transferPartialSuccess", { failed: progress.failedItems })
+      : progress.status === "failed"
+        ? t("log.transferFailed")
+        : progress.status === "success"
+          ? t("log.transferSuccess")
+          : t("log.transferRunning")
+    : "";
 
   useEffect(() => {
     if (!progress) {
@@ -69,17 +99,24 @@ export default function TransfersPanel({
               ] [{progressLabel}]{" "}
             </span>
             <strong className="log-transfer-path" title={progress.path}>
-              {progress.path}
+              {progressTitle}
             </strong>
           </div>
           <div className="progress-bar">
             <span
               style={{
-                width: progress.total
-                  ? `${Math.min(100, (progress.transferred / progress.total) * 100)}%`
-                  : "30%",
+                width: `${progressPercent}%`,
               }}
             />
+          </div>
+          <div className="log-row small">
+            <span>
+              {t("log.transferItemsProgress", {
+                completed: progress.completedItems,
+                total: progress.totalItems ?? "?",
+              })}
+            </span>
+            <span>{progressStatus}</span>
           </div>
           <div className="log-row small">
             <span>{formatBytes(progress.transferred)}</span>

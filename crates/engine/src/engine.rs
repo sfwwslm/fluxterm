@@ -252,6 +252,34 @@ impl Engine {
         self.await_response(resp_rx, "无法接收 SFTP 下载响应")
     }
 
+    /// 下载远端目录到本地目录。
+    pub fn sftp_download_dir(
+        &self,
+        session_id: &str,
+        remote_path: &str,
+        local_dir: &str,
+    ) -> Result<(), EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::SftpDownloadDir {
+                remote_path: remote_path.to_string(),
+                local_dir: local_dir.to_string(),
+                respond_to: resp_tx,
+            })
+            .map_err(|_| {
+                EngineError::new("session_command_failed", "无法发送 SFTP 目录下载命令")
+            })?;
+        self.await_response(resp_rx, "无法接收 SFTP 目录下载响应")
+    }
+
     /// 重命名远端文件或目录。
     pub fn sftp_rename(&self, session_id: &str, from: &str, to: &str) -> Result<(), EngineError> {
         let (resp_tx, resp_rx) = oneshot::channel();

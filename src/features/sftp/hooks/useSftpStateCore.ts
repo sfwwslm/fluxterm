@@ -19,6 +19,7 @@ import {
   localHome,
   localList,
   sftpDownload,
+  sftpDownloadDir,
   sftpHome,
   sftpList,
   sftpMkdir,
@@ -83,6 +84,7 @@ export default function useSftpState({
     Record<string, SftpAvailability>
   >({});
   const unsupportedLoggedRef = useRef<Record<string, boolean>>({});
+  const progressBySessionRef = useRef<Record<string, SftpProgress>>({});
 
   const activeFileView = useMemo(() => {
     if (!activeSessionId) return null;
@@ -116,6 +118,18 @@ export default function useSftpState({
         ? prev
         : { ...prev, [sessionId]: availability },
     );
+  }
+
+  /** 同步最近一次传输进度，供传输面板展示与下载完成日志复用。 */
+  function syncProgressEntry(payload: SftpProgress) {
+    progressBySessionRef.current = {
+      ...progressBySessionRef.current,
+      [payload.sessionId]: payload,
+    };
+    setProgressBySession((prev) => ({
+      ...prev,
+      [payload.sessionId]: payload,
+    }));
   }
 
   function clearFileView(sessionId: string) {
@@ -296,17 +310,61 @@ export default function useSftpState({
     }
   }
 
+  /**
+   * 下载文件或目录条目。
+   *
+   * 文件下载使用“保存文件”对话框；
+   * 目录下载使用“选择目录”对话框，并交给后端执行递归下载。
+   */
   async function downloadFile(entry: SftpEntry) {
     if (!activeSession) return;
     if (!enabled && !isLocalSession(activeSession.sessionId)) return;
-    const target = await save({ defaultPath: entry.name });
+    const target =
+      entry.kind === "dir"
+        ? await open({ directory: true, multiple: false })
+        : await save({ defaultPath: entry.name });
     if (!target) return;
     appendLog("log.event.downloadStart", { name: entry.name });
     setBusyMessage(t("messages.downloading"));
     try {
-      await sftpDownload(activeSession.sessionId, entry.path, target);
+      if (entry.kind === "dir") {
+        if (Array.isArray(target)) return;
+        await sftpDownloadDir(activeSession.sessionId, entry.path, target);
+      } else {
+        if (Array.isArray(target)) return;
+        await sftpDownload(activeSession.sessionId, entry.path, target);
+      }
       setBusyMessage(null);
-      appendLog("log.event.downloadDone", { name: entry.name }, "success");
+      const latestProgress =
+        progressBySessionRef.current[activeSession.sessionId] ?? null;
+      if (
+        latestProgress &&
+        latestProgress.transferId &&
+        latestProgress.status === "partial_success"
+      ) {
+        appendLog(
+          "log.event.downloadPartial",
+          {
+            name:
+              latestProgress.totalItems && latestProgress.totalItems > 1
+                ? t("log.itemsCount", { count: latestProgress.totalItems })
+                : entry.name,
+            failed: latestProgress.failedItems,
+          },
+          "error",
+        );
+      } else {
+        appendLog(
+          "log.event.downloadDone",
+          {
+            name:
+              latestProgress?.totalItems && latestProgress.totalItems > 1
+                ? t("log.itemsCount", { count: latestProgress.totalItems })
+                : entry.name,
+          },
+          "success",
+        );
+      }
     } catch {
       setBusyMessage("下载失败");
       appendLog("log.event.downloadFailed", { name: entry.name }, "error");
@@ -364,10 +422,7 @@ export default function useSftpState({
     let teardown: (() => void) | null = null;
     const registerListeners = async () => {
       const progressUnlisten = await registerSftpProgressListener((payload) => {
-        setProgressBySession((prev) => ({
-          ...prev,
-          [payload.sessionId]: payload,
-        }));
+        syncProgressEntry(payload);
       });
       if (cancelled) {
         progressUnlisten();
