@@ -3,18 +3,20 @@ use engine::{EngineError, HostProfile};
 use tauri::AppHandle;
 use uuid::Uuid;
 
-use crate::commands::security::{decrypt_secret, encrypt_secret, require_secret_key};
+use crate::profile_secrets::{decrypt_profile_secrets, encrypt_profile_secrets};
 use crate::profile_store::{read_profiles, write_profiles};
+use crate::security::{CryptoService, SecretStore};
 
 #[tauri::command]
 /// 读取主机配置列表。
 pub fn profile_list(app: AppHandle) -> Result<Vec<HostProfile>, EngineError> {
     let store = read_profiles(&app)?;
-    let key = require_secret_key()?;
+    let crypto = CryptoService::new(store.secret.as_ref())?;
+    let secret_store = SecretStore::new(&crypto);
     store
         .profiles
         .into_iter()
-        .map(|profile| decrypt_profile(profile, &key))
+        .map(|profile| decrypt_profile_secrets(profile, &secret_store))
         .collect()
 }
 
@@ -43,14 +45,24 @@ pub fn profile_groups_save(
 /// 新增或更新主机配置。
 pub fn profile_save(app: AppHandle, mut profile: HostProfile) -> Result<HostProfile, EngineError> {
     let mut store = read_profiles(&app)?;
-    let key = require_secret_key()?;
+    let crypto = CryptoService::new(store.secret.as_ref())?;
+    let secret_store = SecretStore::new(&crypto);
     if profile.id.is_empty() {
         profile.id = Uuid::new_v4().to_string();
     }
     if profile.port == 0 {
         profile.port = 22;
     }
-    let encrypted_profile = encrypt_profile(profile.clone(), &key)?;
+    store
+        .secret
+        .get_or_insert_with(|| crate::profile_store::SecretConfig {
+            version: 1,
+            provider: CryptoService::provider_name(&crypto.provider_kind()).to_string(),
+            active_key_id: Some(crypto.key_id().to_string()),
+            kdf_salt: None,
+            verify_hash: None,
+        });
+    let encrypted_profile = encrypt_profile_secrets(profile.clone(), &secret_store)?;
     let existing = store.profiles.iter_mut().find(|item| item.id == profile.id);
     if let Some(item) = existing {
         *item = encrypted_profile;
@@ -71,34 +83,6 @@ pub fn profile_remove(app: AppHandle, profile_id: String) -> Result<bool, Engine
     store.updated_at = now_epoch();
     write_profiles(&app, &store)?;
     Ok(before != store.profiles.len())
-}
-
-fn encrypt_profile(mut profile: HostProfile, key: &[u8; 32]) -> Result<HostProfile, EngineError> {
-    if let Some(value) = profile.password_ref.clone() {
-        if value.is_empty() {
-            profile.password_ref = None;
-        } else {
-            profile.password_ref = Some(encrypt_secret(key, &value)?);
-        }
-    }
-    if let Some(value) = profile.private_key_passphrase_ref.clone() {
-        if value.is_empty() {
-            profile.private_key_passphrase_ref = None;
-        } else {
-            profile.private_key_passphrase_ref = Some(encrypt_secret(key, &value)?);
-        }
-    }
-    Ok(profile)
-}
-
-fn decrypt_profile(mut profile: HostProfile, key: &[u8; 32]) -> Result<HostProfile, EngineError> {
-    if let Some(value) = profile.password_ref.clone() {
-        profile.password_ref = Some(decrypt_secret(key, &value)?);
-    }
-    if let Some(value) = profile.private_key_passphrase_ref.clone() {
-        profile.private_key_passphrase_ref = Some(decrypt_secret(key, &value)?);
-    }
-    Ok(profile)
 }
 
 fn dedupe_groups(values: Vec<String>) -> Vec<String> {

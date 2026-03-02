@@ -12,7 +12,9 @@ use crate::config_paths::resolve_profiles_path;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretConfig {
     pub version: u32,
-    pub mode: String,
+    pub provider: String,
+    #[serde(default)]
+    pub active_key_id: Option<String>,
     #[serde(default)]
     pub kdf_salt: Option<String>,
     #[serde(default)]
@@ -37,7 +39,13 @@ impl Default for ProfileStore {
             version: 1,
             updated_at: now_epoch(),
             ssh_groups: Vec::new(),
-            secret: None,
+            secret: Some(SecretConfig {
+                version: 1,
+                provider: "hardcoded_key".to_string(),
+                active_key_id: Some("builtin-v1".to_string()),
+                kdf_salt: None,
+                verify_hash: None,
+            }),
             profiles: Vec::new(),
         }
     }

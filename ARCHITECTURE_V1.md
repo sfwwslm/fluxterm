@@ -72,6 +72,7 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 相关设计文档：
 
 - `docs/terminal-split-workspace-design.md`：终端拆分工作区、区域工作区栏与会话重建策略设计。
+- `docs/security-crypto-refactor-design.md`：公共加密模块、Provider 抽象与 Profile 凭据存储重构设计。
 
 ## 前端布局规则
 
@@ -103,7 +104,7 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 
 - 配置数据存放于 `$HOME/.vust/flux-term`，按 `global` 与 `terminal` 子目录区分应用级配置和终端域配置。
 - 应用使用数据存放于 `app_data_dir`，例如远端文件下载缓存。
-- 凭据优先使用系统钥匙串，无法使用时回退到本地加密存储。
+- Alpha 阶段当前默认使用本地 Provider 加密存储凭据，后续可切换到系统钥匙串等更强方案。
 
 ## 安全性考虑
 
