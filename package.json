@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "prune": "ts-prune",
     "tauri": "tauri",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "code:stats": "node --experimental-strip-types scripts/count-code-lines.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "2.10.1",
