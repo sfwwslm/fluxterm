@@ -56,11 +56,16 @@ type TerminalPaneTreeProps = {
 
 /** 会话 pane 树。 */
 export default function TerminalPaneTree(props: TerminalPaneTreeProps) {
+  const hasSplitPanes = props.root.kind === "split";
   return (
     <div className="terminal-pane-tree">
       <div className="terminal-split terminal-split-single">
         <div className="terminal-split-slot">
-          <PaneNodeView {...props} node={props.root} />
+          <PaneNodeView
+            {...props}
+            node={props.root}
+            hasSplitPanes={hasSplitPanes}
+          />
         </div>
       </div>
     </div>
@@ -69,6 +74,7 @@ export default function TerminalPaneTree(props: TerminalPaneTreeProps) {
 
 type PaneNodeViewProps = Omit<TerminalPaneTreeProps, "root"> & {
   node: SessionPaneNode;
+  hasSplitPanes: boolean;
 };
 
 function PaneNodeView({
@@ -91,6 +97,7 @@ function PaneNodeView({
   autocomplete,
   autocompleteAnchor,
   onApplyAutocompleteSuggestion,
+  hasSplitPanes,
 }: PaneNodeViewProps) {
   if (node.kind === "split") {
     const firstBasis = `${node.ratio * 100}%`;
@@ -118,6 +125,7 @@ function PaneNodeView({
             autocomplete={autocomplete}
             autocompleteAnchor={autocompleteAnchor}
             onApplyAutocompleteSuggestion={onApplyAutocompleteSuggestion}
+            hasSplitPanes={hasSplitPanes}
           />
         </div>
         <PaneResizeHandle
@@ -149,13 +157,16 @@ function PaneNodeView({
             autocomplete={autocomplete}
             autocompleteAnchor={autocompleteAnchor}
             onApplyAutocompleteSuggestion={onApplyAutocompleteSuggestion}
+            hasSplitPanes={hasSplitPanes}
           />
         </div>
       </div>
     );
   }
 
-  const activePane = node.paneId === activePaneId;
+  // 单工作区时外层 terminal-panel 已有边框，pane 内层不再重复显示激活边框；
+  // 只有拆分出多个工作区后，才用 pane 激活边框表达当前聚焦区域。
+  const activePane = hasSplitPanes && node.paneId === activePaneId;
   const paneActiveSessionId =
     node.activeSessionId ?? node.sessionIds[node.sessionIds.length - 1] ?? null;
   const showExitBanner =
