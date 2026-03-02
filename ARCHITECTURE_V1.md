@@ -35,7 +35,7 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 - SFTP 客户端：列出/上传/下载/重命名/删除。
 - 会话生命周期、重试与超时抽象。
 
-### `crates/tauri`
+### `src-tauri`
 
 桌面 GUI 外壳。
 
@@ -97,7 +97,7 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 
 ## 配置与存储
 
-- 本地存储主机配置目录`~/.flux-term`（先使用纯 JSON）。
+- 本地存储主机配置目录`~/flux-term`（先使用纯 JSON）。
 - 凭据优先使用系统钥匙串，无法使用时回退到本地加密存储。
 
 ## 安全性考虑
