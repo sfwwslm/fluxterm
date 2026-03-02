@@ -192,7 +192,10 @@ function countCommentAndCodeLines(lines, language) {
  */
 function isLineComment(trimmed, language) {
   if (trimmed.startsWith("//")) return true;
-  if (language === "Rust" && (trimmed.startsWith("//!") || trimmed.startsWith("///"))) {
+  if (
+    language === "Rust" &&
+    (trimmed.startsWith("//!") || trimmed.startsWith("///"))
+  ) {
     return true;
   }
   return false;
@@ -240,15 +243,40 @@ function padText(value, width) {
 }
 
 /**
+ * 计算部分在总体中的百分比。
+ * @param {number} part
+ * @param {number} total
+ */
+function formatPercentValue(part, total) {
+  if (total === 0) {
+    return "0.0%";
+  }
+  return `${((part / total) * 100).toFixed(1)}%`;
+}
+
+/**
+ * 右对齐百分比文本。
+ * @param {string} value
+ * @param {number} width
+ */
+function padPercent(value, width) {
+  return value.padStart(width, " ");
+}
+
+/**
  * 生成语言汇总表格。
  * @param {LanguageSummary[]} rows
+ * @param {number} totalCodeLines
  */
-function formatLanguageTable(rows) {
+function formatLanguageTable(rows, totalCodeLines) {
   const languageWidth = Math.max(
     "Language".length,
     ...rows.map((row) => row.language.length),
   );
-  const fileWidth = Math.max("Files".length, ...rows.map((row) => String(row.files).length));
+  const fileWidth = Math.max(
+    "Files".length,
+    ...rows.map((row) => String(row.files).length),
+  );
   const totalWidth = Math.max(
     "Total".length,
     ...rows.map((row) => String(row.totalLines).length),
@@ -265,6 +293,13 @@ function formatLanguageTable(rows) {
     "Blank".length,
     ...rows.map((row) => String(row.blankLines).length),
   );
+  const codePercentValues = rows.map((row) =>
+    formatPercentValue(row.codeLines, totalCodeLines),
+  );
+  const codePercentWidth = Math.max(
+    "Code %".length,
+    ...codePercentValues.map((value) => value.length),
+  );
 
   const lines = [
     [
@@ -274,10 +309,12 @@ function formatLanguageTable(rows) {
       padNumber("Code", codeWidth),
       padNumber("Comment", commentWidth),
       padNumber("Blank", blankWidth),
+      padPercent("Code %", codePercentWidth),
     ].join("  "),
   ];
 
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
+    const codePercent = codePercentValues[index];
     lines.push(
       [
         padText(row.language, languageWidth),
@@ -286,6 +323,7 @@ function formatLanguageTable(rows) {
         padNumber(row.codeLines, codeWidth),
         padNumber(row.commentLines, commentWidth),
         padNumber(row.blankLines, blankWidth),
+        padPercent(codePercent, codePercentWidth),
       ].join("  "),
     );
   }
@@ -308,19 +346,19 @@ async function main() {
     try {
       const stats = await countFileLines(filePath, language);
       mergeStats(total, stats);
-      const existing =
-        summaries.get(language) ??
-        {
-          language,
-          files: 0,
-          ...createEmptyStats(),
-        };
+      const existing = summaries.get(language) ?? {
+        language,
+        files: 0,
+        ...createEmptyStats(),
+      };
       existing.files += 1;
       mergeStats(existing, stats);
       summaries.set(language, existing);
     } catch (error) {
       skippedFiles += 1;
-      console.warn(`[warn] skipped file: ${path.relative(rootDir, filePath)} (${String(error)})`);
+      console.warn(
+        `[warn] skipped file: ${path.relative(rootDir, filePath)} (${String(error)})`,
+      );
     }
   }
 
@@ -328,20 +366,33 @@ async function main() {
     (left, right) => right.codeLines - left.codeLines,
   );
 
+  const totalCodePercent = formatPercentValue(
+    total.codeLines,
+    total.totalLines,
+  );
+  const totalCommentPercent = formatPercentValue(
+    total.commentLines,
+    total.totalLines,
+  );
+  const totalBlankPercent = formatPercentValue(
+    total.blankLines,
+    total.totalLines,
+  );
+
   console.log("FluxTerm Code Stats");
   console.log(`Root: ${rootDir}`);
   console.log("");
   console.log(`Files: ${files.length - skippedFiles}`);
   console.log(`Total lines: ${total.totalLines}`);
-  console.log(`Code lines: ${total.codeLines}`);
-  console.log(`Comment lines: ${total.commentLines}`);
-  console.log(`Blank lines: ${total.blankLines}`);
+  console.log(`Code lines: ${total.codeLines} (${totalCodePercent})`);
+  console.log(`Comment lines: ${total.commentLines} (${totalCommentPercent})`);
+  console.log(`Blank lines: ${total.blankLines} (${totalBlankPercent})`);
   if (skippedFiles > 0) {
     console.log(`Warnings: ${skippedFiles} file(s) skipped`);
   }
   console.log("");
   console.log("By language");
-  console.log(formatLanguageTable(languageRows));
+  console.log(formatLanguageTable(languageRows, total.codeLines));
 }
 
 main().catch((error) => {
