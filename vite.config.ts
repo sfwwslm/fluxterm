@@ -6,16 +6,19 @@ import react from "@vitejs/plugin-react";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+let gitHash: string | undefined;
 const getGitHash = () => {
+  if (gitHash !== undefined) return gitHash;
   try {
-    return execSync("git rev-parse --short HEAD", {
+    gitHash = execSync("git rev-parse --short HEAD", {
       stdio: ["ignore", "pipe", "ignore"],
     })
       .toString()
       .trim();
   } catch {
-    return "";
+    gitHash = "";
   }
+  return gitHash;
 };
 
 // https://vite.dev/config/
@@ -48,7 +51,7 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/crates/**"],
     },
   },
 }));
