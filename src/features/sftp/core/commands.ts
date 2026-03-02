@@ -57,6 +57,11 @@ export function sftpDownloadDir(
   return callTauri("sftp_download_dir", { sessionId, remotePath, localDir });
 }
 
+/** 取消传输。 */
+export function sftpCancelTransfer(sessionId: string, transferId: string) {
+  return callTauri("sftp_cancel_transfer", { sessionId, transferId });
+}
+
 /** 新建目录。 */
 export function sftpMkdir(sessionId: string, path: string) {
   return callTauri("sftp_mkdir", { sessionId, path });

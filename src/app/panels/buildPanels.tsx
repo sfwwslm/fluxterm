@@ -63,6 +63,7 @@ type BuildPanelsProps = {
   onOpenFile: (entry: SftpEntry) => Promise<void>;
   onUploadFile: () => Promise<void>;
   onDownloadFile: (entry: SftpEntry) => Promise<void>;
+  onCancelTransfer: () => Promise<void>;
   onCreateFolder: (name: string) => Promise<void>;
   onRenameEntry: (entry: SftpEntry, name: string) => Promise<void>;
   onRemoveEntry: (entry: SftpEntry) => Promise<void>;
@@ -107,6 +108,7 @@ export function buildPanels(
     onOpenFile,
     onUploadFile,
     onDownloadFile,
+    onCancelTransfer,
     onCreateFolder,
     onRenameEntry,
     onRemoveEntry,
@@ -139,6 +141,7 @@ export function buildPanels(
         }
         busyMessage={busyMessage}
         entries={logEntries}
+        onCancel={onCancelTransfer}
         locale={locale}
         t={t}
       />

@@ -280,6 +280,32 @@ impl Engine {
         self.await_response(resp_rx, "无法接收 SFTP 目录下载响应")
     }
 
+    /// 取消指定传输任务。
+    pub fn sftp_cancel_transfer(
+        &self,
+        session_id: &str,
+        transfer_id: &str,
+    ) -> Result<(), EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::SftpCancelTransfer {
+                transfer_id: transfer_id.to_string(),
+                respond_to: resp_tx,
+            })
+            .map_err(|_| {
+                EngineError::new("session_command_failed", "无法发送 SFTP 取消传输命令")
+            })?;
+        self.await_response(resp_rx, "无法接收 SFTP 取消传输响应")
+    }
+
     /// 重命名远端文件或目录。
     pub fn sftp_rename(&self, session_id: &str, from: &str, to: &str) -> Result<(), EngineError> {
         let (resp_tx, resp_rx) = oneshot::channel();

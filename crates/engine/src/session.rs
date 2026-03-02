@@ -1,15 +1,20 @@
 //! 会话执行与命令分发。
+//!
+//! 除了终端读写，本模块还负责把 SFTP 传输命令调度到独立异步任务。
+//! 这样长时间运行的上传/下载不会阻塞会话主循环，取消命令也能被及时接收。
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use russh::client;
 use russh::keys;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 
 use crate::auth::authenticate;
 use crate::error::EngineError;
 use crate::sftp::{
-    sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir, sftp_remove, sftp_rename,
-    sftp_resolve_path, sftp_upload,
+    next_transfer_id, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
+    sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload,
 };
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, TerminalSize,
@@ -52,6 +57,11 @@ pub enum SessionCommand {
     SftpDownloadDir {
         remote_path: String,
         local_dir: String,
+        respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
+    },
+    /// 标记指定 transfer_id 的传输任务为取消状态。
+    SftpCancelTransfer {
+        transfer_id: String,
         respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
     },
     SftpRename {
@@ -135,8 +145,13 @@ pub async fn run_session_loop(
         state: SessionState::Connected,
         error: None,
     });
+    let session = Arc::new(session);
 
     let mut running = true;
+    // 传输任务使用 transfer_id 作为取消粒度；主循环只负责分发命令和置位取消标记，
+    // 真正的读写执行发生在独立任务中，避免大文件传输期间无法响应取消请求。
+    let transfer_cancellations: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     while running {
         tokio::select! {
@@ -158,13 +173,85 @@ pub async fn run_session_loop(
                         let _ = respond_to.send(sftp_resolve_path(&session, &path).await);
                     }
                     SessionCommand::SftpUpload { local_path, remote_path, respond_to } => {
-                        let _ = respond_to.send(sftp_upload(&session, &session_id, &local_path, &remote_path, &on_event).await);
+                        let transfer_id = next_transfer_id();
+                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                        transfer_cancellations.lock().await.insert(transfer_id.clone(), Arc::clone(&cancel_flag));
+                        let session_handle = Arc::clone(&session);
+                        let session_id = session_id.clone();
+                        let on_event = Arc::clone(&on_event);
+                        let transfer_cancellations = Arc::clone(&transfer_cancellations);
+                        tokio::spawn(async move {
+                            let result = sftp_upload(
+                                &session_handle,
+                                &session_id,
+                                &local_path,
+                                &remote_path,
+                                &transfer_id,
+                                &cancel_flag,
+                                &on_event,
+                            )
+                            .await;
+                            transfer_cancellations.lock().await.remove(&transfer_id);
+                            let _ = respond_to.send(result);
+                        });
                     }
                     SessionCommand::SftpDownload { remote_path, local_path, respond_to } => {
-                        let _ = respond_to.send(sftp_download(&session, &session_id, &remote_path, &local_path, &on_event).await);
+                        let transfer_id = next_transfer_id();
+                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                        transfer_cancellations.lock().await.insert(transfer_id.clone(), Arc::clone(&cancel_flag));
+                        let session_handle = Arc::clone(&session);
+                        let session_id = session_id.clone();
+                        let on_event = Arc::clone(&on_event);
+                        let transfer_cancellations = Arc::clone(&transfer_cancellations);
+                        tokio::spawn(async move {
+                            let result = sftp_download(
+                                &session_handle,
+                                &session_id,
+                                &remote_path,
+                                &local_path,
+                                &transfer_id,
+                                &cancel_flag,
+                                &on_event,
+                            )
+                            .await;
+                            transfer_cancellations.lock().await.remove(&transfer_id);
+                            let _ = respond_to.send(result);
+                        });
                     }
                     SessionCommand::SftpDownloadDir { remote_path, local_dir, respond_to } => {
-                        let _ = respond_to.send(sftp_download_dir(&session, &session_id, &remote_path, &local_dir, &on_event).await);
+                        let transfer_id = next_transfer_id();
+                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                        transfer_cancellations.lock().await.insert(transfer_id.clone(), Arc::clone(&cancel_flag));
+                        let session_handle = Arc::clone(&session);
+                        let session_id = session_id.clone();
+                        let on_event = Arc::clone(&on_event);
+                        let transfer_cancellations = Arc::clone(&transfer_cancellations);
+                        tokio::spawn(async move {
+                            let result = sftp_download_dir(
+                                &session_handle,
+                                &session_id,
+                                &remote_path,
+                                &local_dir,
+                                &transfer_id,
+                                &cancel_flag,
+                                &on_event,
+                            )
+                            .await;
+                            transfer_cancellations.lock().await.remove(&transfer_id);
+                            let _ = respond_to.send(result);
+                        });
+                    }
+                    SessionCommand::SftpCancelTransfer { transfer_id, respond_to } => {
+                        let result = transfer_cancellations
+                            .lock()
+                            .await
+                            .get(&transfer_id)
+                            .cloned()
+                            .ok_or_else(|| EngineError::new("sftp_transfer_not_found", "传输任务不存在"))
+                            .map(|flag| {
+                                flag.store(true, Ordering::Relaxed);
+                            });
+                        let _ = respond_to.send(result.map(|_| ()));
                     }
                     SessionCommand::SftpRename { from, to, respond_to } => {
                         let _ = respond_to.send(sftp_rename(&session, &from, &to).await);

@@ -5,18 +5,22 @@
  * 当前视图以 job 为单位展示：
  * - 单文件传输显示文件名
  * - 目录传输优先显示 items count
+ * - 目录传输会额外展示当前正在处理的文件名
  * - 进度条优先使用字节进度，未知总字节时退回项目数进度
+ * - 只有 running 状态才显示取消按钮
  */
 import { useEffect, useState } from "react";
 import type { Locale, Translate } from "@/i18n";
 import type { LogEntry, SftpProgress } from "@/types";
 import { formatBytes, formatTime } from "@/utils/format";
+import Button from "@/components/ui/button";
 import "./TransfersPanel.css";
 
 type TransfersPanelProps = {
   progress: SftpProgress | null;
   busyMessage: string | null;
   entries: LogEntry[];
+  onCancel: () => Promise<void>;
   locale: Locale;
   t: Translate;
 };
@@ -29,6 +33,7 @@ export default function TransfersPanel({
   progress,
   busyMessage,
   entries,
+  onCancel,
   locale,
   t,
 }: TransfersPanelProps) {
@@ -65,8 +70,18 @@ export default function TransfersPanel({
         ? t("log.transferFailed")
         : progress.status === "success"
           ? t("log.transferSuccess")
-          : t("log.transferRunning")
+          : progress.status === "cancelled"
+            ? t("log.transferCancelled")
+            : t("log.transferRunning")
     : "";
+  // 目录任务是批处理，用户需要知道当前具体卡在哪个文件上；
+  // 单文件任务本身标题已经足够明确，不再额外重复一行。
+  const currentItemName =
+    progress?.kind === "directory" ? (progress.currentItemName ?? "") : "";
+  const targetName =
+    progress?.targetName && progress.targetName !== progress.displayName
+      ? progress.targetName
+      : "";
 
   useEffect(() => {
     if (!progress) {
@@ -86,7 +101,23 @@ export default function TransfersPanel({
     <div className="log-panel">
       <div className="log-row">
         <span>{t("log.currentTask")}</span>
-        <strong>{busyMessage ?? t("log.idle")}</strong>
+        {progress?.status === "running" ? (
+          <span className="log-current-task-actions">
+            <strong>{busyMessage ?? t("log.idle")}</strong>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="log-cancel-button"
+              onClick={() => {
+                onCancel().catch(() => {});
+              }}
+            >
+              {t("actions.cancelTransfer")}
+            </Button>
+          </span>
+        ) : (
+          <strong>{busyMessage ?? t("log.idle")}</strong>
+        )}
       </div>
       {progress && (
         <div className="log-progress">
@@ -118,6 +149,22 @@ export default function TransfersPanel({
             </span>
             <span>{progressStatus}</span>
           </div>
+          {!!currentItemName && (
+            <div className="log-row small">
+              <span>{t("log.transferCurrentItem")}</span>
+              <span className="log-transfer-current" title={currentItemName}>
+                {currentItemName}
+              </span>
+            </div>
+          )}
+          {!!targetName && (
+            <div className="log-row small">
+              <span>{t("log.transferTargetName")}</span>
+              <span className="log-transfer-current" title={targetName}>
+                {targetName}
+              </span>
+            </div>
+          )}
           <div className="log-row small">
             <span>{formatBytes(progress.transferred)}</span>
             <span>

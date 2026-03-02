@@ -3,7 +3,7 @@
  * 职责：维护目录视图、传输进度与文件操作流程。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { warn } from "@tauri-apps/plugin-log";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
@@ -18,6 +18,7 @@ import { normalizeLocalPath } from "@/features/sftp/core/path";
 import {
   localHome,
   localList,
+  sftpCancelTransfer,
   sftpDownload,
   sftpDownloadDir,
   sftpHome,
@@ -56,6 +57,7 @@ type UseSftpStateResult = {
   openRemoteDir: (path: string) => Promise<void>;
   uploadFile: () => Promise<void>;
   downloadFile: (entry: SftpEntry) => Promise<void>;
+  cancelTransfer: () => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   rename: (entry: SftpEntry, name: string) => Promise<void>;
   remove: (entry: SftpEntry) => Promise<void>;
@@ -97,6 +99,17 @@ export default function useSftpState({
 
   const currentPath = activeFileView?.path ?? "";
   const entries = activeFileView?.entries ?? [];
+
+  function joinLocalTargetPath(directory: string, name: string) {
+    const normalizedDirectory = normalizeLocalPath(directory);
+    if (
+      normalizedDirectory.endsWith("\\") ||
+      normalizedDirectory.endsWith("/")
+    ) {
+      return `${normalizedDirectory}${name}`;
+    }
+    return `${normalizedDirectory}\\${name}`;
+  }
 
   function updateFileView(
     sessionId: string,
@@ -303,7 +316,13 @@ export default function useSftpState({
       await sftpUpload(activeSession.sessionId, file, remotePath);
       await refreshList();
       setBusyMessage(null);
-      appendLog("log.event.uploadDone", { name: fileName }, "success");
+      const latestProgress =
+        progressBySessionRef.current[activeSession.sessionId] ?? null;
+      if (latestProgress?.status === "cancelled") {
+        appendLog("log.event.uploadCancelled", { name: fileName });
+      } else {
+        appendLog("log.event.uploadDone", { name: fileName }, "success");
+      }
     } catch {
       setBusyMessage("上传失败");
       appendLog("log.event.uploadFailed", { name: fileName }, "error");
@@ -313,16 +332,13 @@ export default function useSftpState({
   /**
    * 下载文件或目录条目。
    *
-   * 文件下载使用“保存文件”对话框；
-   * 目录下载使用“选择目录”对话框，并交给后端执行递归下载。
+   * 单文件和目录下载都使用“选择目录”对话框，
+   * 由后端统一决定最终落地文件名和重名避让策略。
    */
   async function downloadFile(entry: SftpEntry) {
     if (!activeSession) return;
     if (!enabled && !isLocalSession(activeSession.sessionId)) return;
-    const target =
-      entry.kind === "dir"
-        ? await open({ directory: true, multiple: false })
-        : await save({ defaultPath: entry.name });
+    const target = await open({ directory: true, multiple: false });
     if (!target) return;
     appendLog("log.event.downloadStart", { name: entry.name });
     setBusyMessage(t("messages.downloading"));
@@ -332,16 +348,23 @@ export default function useSftpState({
         await sftpDownloadDir(activeSession.sessionId, entry.path, target);
       } else {
         if (Array.isArray(target)) return;
-        await sftpDownload(activeSession.sessionId, entry.path, target);
+        await sftpDownload(
+          activeSession.sessionId,
+          entry.path,
+          joinLocalTargetPath(target, entry.name),
+        );
       }
       setBusyMessage(null);
       const latestProgress =
         progressBySessionRef.current[activeSession.sessionId] ?? null;
-      if (
-        latestProgress &&
-        latestProgress.transferId &&
-        latestProgress.status === "partial_success"
-      ) {
+      if (latestProgress?.status === "cancelled") {
+        appendLog("log.event.downloadCancelled", {
+          name:
+            latestProgress.totalItems && latestProgress.totalItems > 1
+              ? t("log.itemsCount", { count: latestProgress.totalItems })
+              : entry.name,
+        });
+      } else if (latestProgress?.status === "partial_success") {
         appendLog(
           "log.event.downloadPartial",
           {
@@ -369,6 +392,20 @@ export default function useSftpState({
       setBusyMessage("下载失败");
       appendLog("log.event.downloadFailed", { name: entry.name }, "error");
     }
+  }
+
+  /**
+   * 取消当前活动会话最近一个运行中的传输任务。
+   *
+   * 取消请求会发给后端真实传输任务，而不是只在前端隐藏进度。
+   * 任务最终状态会由后端进度事件回写为 `cancelled`。
+   */
+  async function cancelTransfer() {
+    if (!activeSessionId) return;
+    const progress = progressBySessionRef.current[activeSessionId];
+    if (!progress || progress.status !== "running") return;
+    await sftpCancelTransfer(activeSessionId, progress.transferId);
+    setBusyMessage(null);
   }
 
   async function createFolder(name: string) {
@@ -449,6 +486,7 @@ export default function useSftpState({
     openRemoteDir,
     uploadFile,
     downloadFile,
+    cancelTransfer,
     createFolder,
     rename,
     remove,

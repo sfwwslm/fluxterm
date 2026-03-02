@@ -129,6 +129,27 @@ pub async fn sftp_download_dir(
 }
 
 #[tauri::command]
+/// 取消指定传输任务。
+pub async fn sftp_cancel_transfer(
+    state: State<'_, EngineState>,
+    session_id: String,
+    transfer_id: String,
+) -> Result<(), EngineError> {
+    let engine: Arc<Engine> = Arc::clone(&state.engine);
+    tauri::async_runtime::spawn_blocking(move || {
+        engine.sftp_cancel_transfer(&session_id, &transfer_id)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 取消传输",
+            err.to_string(),
+        )
+    })?
+}
+
+#[tauri::command]
 /// 重命名远端文件或目录。
 pub async fn sftp_rename(
     state: State<'_, EngineState>,

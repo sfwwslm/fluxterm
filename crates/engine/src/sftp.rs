@@ -10,6 +10,7 @@ use russh_sftp::extensions;
 use russh_sftp::protocol::{FileAttributes, OpenFlags};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::task::JoinSet;
@@ -38,6 +39,7 @@ struct TransferLogContext<'a> {
 }
 
 /// SFTP 传输进度回调上下文。
+#[derive(Clone, Copy)]
 struct TransferProgressContext<'a> {
     session_id: &'a str,
     transfer_id: &'a str,
@@ -46,6 +48,8 @@ struct TransferProgressContext<'a> {
     path: &'a str,
     display_name: &'a str,
     item_label: &'a str,
+    target_name: Option<&'a str>,
+    current_item_name: Option<&'a str>,
     total: Option<u64>,
     completed_items: u64,
     total_items: Option<u64>,
@@ -69,8 +73,21 @@ struct RemoteFilePlan {
     relative_path: String,
 }
 
-fn next_transfer_id() -> String {
+/// 生成 SFTP 传输任务标识。
+///
+/// 该标识会跨 session 主循环与具体传输任务共享，用于进度归集和取消定位。
+pub(crate) fn next_transfer_id() -> String {
     format!("sftp-{}", now_epoch_millis())
+}
+
+/// 构造统一的“用户主动取消”错误。
+fn transfer_cancelled_error() -> EngineError {
+    EngineError::new("sftp_transfer_cancelled", "传输已取消")
+}
+
+/// 读取传输取消标记。
+fn is_transfer_cancelled(cancel_flag: &AtomicBool) -> bool {
+    cancel_flag.load(Ordering::Relaxed)
 }
 
 /// 根据项目总数生成任务展示标签。
@@ -79,6 +96,22 @@ fn items_label(total_items: Option<u64>) -> String {
         Some(count) => format!("{count} items"),
         None => "items".to_string(),
     }
+}
+
+/// 发出任务取消的最终状态事件。
+fn emit_cancelled_progress(
+    on_event: &EventCallback,
+    context: TransferProgressContext<'_>,
+    transferred: u64,
+) {
+    emit_transfer_progress(
+        on_event,
+        TransferProgressContext {
+            status: SftpTransferStatus::Cancelled,
+            ..context
+        },
+        transferred,
+    );
 }
 
 /// 读取远端目录条目列表。
@@ -156,9 +189,10 @@ pub async fn sftp_upload(
     session_id: &str,
     local_path: &str,
     remote_path: &str,
+    transfer_id: &str,
+    cancel_flag: &AtomicBool,
     on_event: &EventCallback,
 ) -> Result<(), EngineError> {
-    let transfer_id = next_transfer_id();
     let started_at = now_epoch_millis();
     let started = Instant::now();
     let display_name = file_name_from_path(local_path);
@@ -169,6 +203,25 @@ pub async fn sftp_upload(
     })?;
     let metadata = local.metadata().await.ok();
     let total = metadata.map(|m| m.len());
+    let target_name = file_name_from_path(remote_path);
+    let progress_context = TransferProgressContext {
+        session_id,
+        transfer_id,
+        op: SftpProgressOp::Upload,
+        kind: SftpTransferKind::File,
+        path: remote_path,
+        display_name: &display_name,
+        item_label: &item_label,
+        target_name: Some(&target_name),
+        current_item_name: Some(&display_name),
+        total,
+        completed_items: 0,
+        total_items: Some(1),
+        failed_items: 0,
+        status: SftpTransferStatus::Running,
+        on_event,
+    };
+    emit_transfer_progress(on_event, progress_context, 0);
     debug!(
         "sftp_upload_start session_id={} local_path={} remote_path={} started_at_ms={} total_bytes={}",
         session_id,
@@ -202,6 +255,13 @@ pub async fn sftp_upload(
     let max_in_flight = 8usize;
 
     loop {
+        if is_transfer_cancelled(cancel_flag) {
+            in_flight.abort_all();
+            let _ = sftp.close(handle_id.clone()).await;
+            let _ = sftp.close_session();
+            emit_cancelled_progress(on_event, progress_context, transferred);
+            return Ok(());
+        }
         let n = local.read(&mut buf).await.map_err(|err| {
             EngineError::with_detail("sftp_transfer_failed", "无法读取文件数据", err.to_string())
         })?;
@@ -213,21 +273,7 @@ pub async fn sftp_upload(
                 match result {
                     Ok(Ok(len)) => {
                         transferred += len as u64;
-                        on_event(EngineEvent::SftpProgress(SftpProgress {
-                            session_id: session_id.to_string(),
-                            transfer_id: transfer_id.clone(),
-                            op: SftpProgressOp::Upload,
-                            kind: SftpTransferKind::File,
-                            path: remote_path.to_string(),
-                            display_name: display_name.clone(),
-                            item_label: item_label.clone(),
-                            transferred,
-                            total,
-                            completed_items: 0,
-                            total_items: Some(1),
-                            status: SftpTransferStatus::Running,
-                            failed_items: 0,
-                        }));
+                        emit_transfer_progress(on_event, progress_context, transferred);
                     }
                     Ok(Err(err)) => {
                         log_sftp_failure(
@@ -296,24 +342,17 @@ pub async fn sftp_upload(
     }
 
     while let Some(result) = in_flight.join_next().await {
+        if is_transfer_cancelled(cancel_flag) {
+            in_flight.abort_all();
+            let _ = sftp.close(handle_id.clone()).await;
+            let _ = sftp.close_session();
+            emit_cancelled_progress(on_event, progress_context, transferred);
+            return Ok(());
+        }
         match result {
             Ok(Ok(len)) => {
                 transferred += len as u64;
-                on_event(EngineEvent::SftpProgress(SftpProgress {
-                    session_id: session_id.to_string(),
-                    transfer_id: transfer_id.clone(),
-                    op: SftpProgressOp::Upload,
-                    kind: SftpTransferKind::File,
-                    path: remote_path.to_string(),
-                    display_name: display_name.clone(),
-                    item_label: item_label.clone(),
-                    transferred,
-                    total,
-                    completed_items: 0,
-                    total_items: Some(1),
-                    status: SftpTransferStatus::Running,
-                    failed_items: 0,
-                }));
+                emit_transfer_progress(on_event, progress_context, transferred);
             }
             Ok(Err(err)) => {
                 log_sftp_failure(
@@ -365,21 +404,15 @@ pub async fn sftp_upload(
         EngineError::with_detail("sftp_upload_failed", "无法关闭远端文件", err.to_string())
     })?;
     let _ = sftp.close_session();
-    on_event(EngineEvent::SftpProgress(SftpProgress {
-        session_id: session_id.to_string(),
-        transfer_id: transfer_id.clone(),
-        op: SftpProgressOp::Upload,
-        kind: SftpTransferKind::File,
-        path: remote_path.to_string(),
-        display_name,
-        item_label,
+    emit_transfer_progress(
+        on_event,
+        TransferProgressContext {
+            completed_items: 1,
+            status: SftpTransferStatus::Success,
+            ..progress_context
+        },
         transferred,
-        total,
-        completed_items: 1,
-        total_items: Some(1),
-        status: SftpTransferStatus::Success,
-        failed_items: 0,
-    }));
+    );
     log_sftp_success(
         "sftp_upload_success",
         &TransferLogContext {
@@ -401,9 +434,10 @@ pub async fn sftp_download(
     session_id: &str,
     remote_path: &str,
     local_path: &str,
+    transfer_id: &str,
+    cancel_flag: &AtomicBool,
     on_event: &EventCallback,
 ) -> Result<(), EngineError> {
-    let transfer_id = next_transfer_id();
     let started_at = now_epoch_millis();
     let started = Instant::now();
     let display_name = file_name_from_path(remote_path);
@@ -421,52 +455,59 @@ pub async fn sftp_download(
         started_at,
         total.unwrap_or(0)
     );
-    let mut local = tokio::fs::File::create(local_path).await.map_err(|err| {
-        EngineError::with_detail("sftp_download_failed", "无法创建本地文件", err.to_string())
-    })?;
+    let resolved_local_path = resolve_available_local_path(Path::new(local_path)).await?;
+    let resolved_target_name = resolved_local_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(display_name.as_str())
+        .to_string();
+    let progress_context = TransferProgressContext {
+        session_id,
+        transfer_id,
+        op: SftpProgressOp::Download,
+        kind: SftpTransferKind::File,
+        path: remote_path,
+        display_name: &display_name,
+        item_label: &item_label,
+        target_name: Some(&resolved_target_name),
+        current_item_name: Some(&display_name),
+        total,
+        completed_items: 0,
+        total_items: Some(1),
+        failed_items: 0,
+        status: SftpTransferStatus::Running,
+        on_event,
+    };
+    emit_transfer_progress(on_event, progress_context, 0);
+    let mut local = tokio::fs::File::create(&resolved_local_path)
+        .await
+        .map_err(|err| {
+            EngineError::with_detail("sftp_download_failed", "无法创建本地文件", err.to_string())
+        })?;
     let result = transfer_with_progress(
-        TransferProgressContext {
-            session_id,
-            transfer_id: &transfer_id,
-            op: SftpProgressOp::Download,
-            kind: SftpTransferKind::File,
-            path: remote_path,
-            display_name: &display_name,
-            item_label: &item_label,
-            total,
-            completed_items: 0,
-            total_items: Some(1),
-            failed_items: 0,
-            status: SftpTransferStatus::Running,
-            on_event,
-        },
+        TransferProgressContext { ..progress_context },
         &mut remote,
         &mut local,
+        cancel_flag,
     )
     .await;
     match result {
         Ok(transferred) => {
-            on_event(EngineEvent::SftpProgress(SftpProgress {
-                session_id: session_id.to_string(),
-                transfer_id: transfer_id.clone(),
-                op: SftpProgressOp::Download,
-                kind: SftpTransferKind::File,
-                path: remote_path.to_string(),
-                display_name,
-                item_label,
+            emit_transfer_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items: 1,
+                    status: SftpTransferStatus::Success,
+                    ..progress_context
+                },
                 transferred,
-                total,
-                completed_items: 1,
-                total_items: Some(1),
-                status: SftpTransferStatus::Success,
-                failed_items: 0,
-            }));
+            );
             log_sftp_success(
                 "sftp_download_success",
                 &TransferLogContext {
                     session_id,
                     source_path: remote_path,
-                    target_path: local_path,
+                    target_path: resolved_local_path.to_string_lossy().as_ref(),
                     started_at_ms: started_at,
                     elapsed_ms: started.elapsed().as_millis(),
                     transferred_bytes: transferred,
@@ -476,27 +517,26 @@ pub async fn sftp_download(
             Ok(())
         }
         Err(err) => {
-            on_event(EngineEvent::SftpProgress(SftpProgress {
-                session_id: session_id.to_string(),
-                transfer_id: transfer_id.clone(),
-                op: SftpProgressOp::Download,
-                kind: SftpTransferKind::File,
-                path: remote_path.to_string(),
-                display_name,
-                item_label,
-                transferred: err.transferred,
-                total,
-                completed_items: 0,
-                total_items: Some(1),
-                status: SftpTransferStatus::Failed,
-                failed_items: 1,
-            }));
+            if err.error.code == "sftp_transfer_cancelled" {
+                let _ = tokio::fs::remove_file(&resolved_local_path).await;
+                emit_cancelled_progress(on_event, progress_context, err.transferred);
+                return Ok(());
+            }
+            emit_transfer_progress(
+                on_event,
+                TransferProgressContext {
+                    failed_items: 1,
+                    status: SftpTransferStatus::Failed,
+                    ..progress_context
+                },
+                err.transferred,
+            );
             log_sftp_failure(
                 "sftp_download_failed",
                 &TransferLogContext {
                     session_id,
                     source_path: remote_path,
-                    target_path: local_path,
+                    target_path: resolved_local_path.to_string_lossy().as_ref(),
                     started_at_ms: started_at,
                     elapsed_ms: started.elapsed().as_millis(),
                     transferred_bytes: err.transferred,
@@ -523,18 +563,37 @@ pub async fn sftp_download_dir(
     session_id: &str,
     remote_path: &str,
     local_dir: &str,
+    transfer_id: &str,
+    cancel_flag: &AtomicBool,
     on_event: &EventCallback,
 ) -> Result<(), EngineError> {
-    let transfer_id = next_transfer_id();
     let started_at = now_epoch_millis();
     let started = Instant::now();
     let sftp = open_sftp(session).await?;
     let plan = collect_remote_dir_plan(&sftp, remote_path).await?;
     let item_label = items_label(Some(plan.total_items));
-    let root_path = Path::new(local_dir).join(&plan.root_name);
+    let root_path =
+        resolve_available_local_path(&Path::new(local_dir).join(&plan.root_name)).await?;
     let mut completed_items = 0u64;
     let mut failed_items = 0u64;
     let mut transferred = 0u64;
+    let progress_context = TransferProgressContext {
+        session_id,
+        transfer_id,
+        op: SftpProgressOp::Download,
+        kind: SftpTransferKind::Directory,
+        path: remote_path,
+        display_name: &plan.root_name,
+        item_label: &item_label,
+        target_name: root_path.file_name().and_then(|value| value.to_str()),
+        current_item_name: None,
+        total: plan.total_bytes,
+        completed_items: 0,
+        total_items: Some(plan.total_items),
+        failed_items: 0,
+        status: SftpTransferStatus::Running,
+        on_event,
+    };
 
     debug!(
         "sftp_download_dir_start session_id={} remote_path={} local_dir={} started_at_ms={} total_items={} total_bytes={}",
@@ -552,19 +611,9 @@ pub async fn sftp_download_dir(
             emit_transfer_progress(
                 on_event,
                 TransferProgressContext {
-                    session_id,
-                    transfer_id: &transfer_id,
-                    op: SftpProgressOp::Download,
-                    kind: SftpTransferKind::Directory,
-                    path: remote_path,
-                    display_name: &plan.root_name,
-                    item_label: &item_label,
-                    total: plan.total_bytes,
                     completed_items,
-                    total_items: Some(plan.total_items),
-                    failed_items,
-                    status: SftpTransferStatus::Running,
-                    on_event,
+                    current_item_name: None,
+                    ..progress_context
                 },
                 transferred,
             );
@@ -578,19 +627,11 @@ pub async fn sftp_download_dir(
             emit_transfer_progress(
                 on_event,
                 TransferProgressContext {
-                    session_id,
-                    transfer_id: &transfer_id,
-                    op: SftpProgressOp::Download,
-                    kind: SftpTransferKind::Directory,
-                    path: remote_path,
-                    display_name: &plan.root_name,
-                    item_label: &item_label,
-                    total: plan.total_bytes,
                     completed_items: 0,
-                    total_items: Some(plan.total_items),
                     failed_items: plan.total_items,
                     status: SftpTransferStatus::Failed,
-                    on_event,
+                    current_item_name: None,
+                    ..progress_context
                 },
                 0,
             );
@@ -612,6 +653,18 @@ pub async fn sftp_download_dir(
     }
 
     for dir in &plan.directories {
+        if is_transfer_cancelled(cancel_flag) {
+            emit_cancelled_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    ..progress_context
+                },
+                transferred,
+            );
+            return Ok(());
+        }
         let target = root_path.join(relative_path_to_local_path(dir));
         match tokio::fs::create_dir_all(&target).await {
             Ok(()) => {
@@ -624,25 +677,29 @@ pub async fn sftp_download_dir(
         emit_transfer_progress(
             on_event,
             TransferProgressContext {
-                session_id,
-                transfer_id: &transfer_id,
-                op: SftpProgressOp::Download,
-                kind: SftpTransferKind::Directory,
-                path: remote_path,
-                display_name: &plan.root_name,
-                item_label: &item_label,
-                total: plan.total_bytes,
                 completed_items,
-                total_items: Some(plan.total_items),
                 failed_items,
-                status: SftpTransferStatus::Running,
-                on_event,
+                ..progress_context
             },
             transferred,
         );
     }
 
     for file in &plan.files {
+        let current_file_name = file_name_from_path(&file.remote_path);
+        if is_transfer_cancelled(cancel_flag) {
+            emit_cancelled_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    current_item_name: Some(&current_file_name),
+                    ..progress_context
+                },
+                transferred,
+            );
+            return Ok(());
+        }
         let target = root_path.join(relative_path_to_local_path(&file.relative_path));
         if let Some(parent) = target.parent()
             && tokio::fs::create_dir_all(parent).await.is_err()
@@ -651,51 +708,52 @@ pub async fn sftp_download_dir(
             emit_transfer_progress(
                 on_event,
                 TransferProgressContext {
-                    session_id,
-                    transfer_id: &transfer_id,
-                    op: SftpProgressOp::Download,
-                    kind: SftpTransferKind::Directory,
-                    path: remote_path,
-                    display_name: &plan.root_name,
-                    item_label: &item_label,
-                    total: plan.total_bytes,
                     completed_items,
-                    total_items: Some(plan.total_items),
                     failed_items,
-                    status: SftpTransferStatus::Running,
-                    on_event,
+                    current_item_name: Some(&current_file_name),
+                    ..progress_context
                 },
                 transferred,
             );
             continue;
         }
-        match download_remote_file_to_local(&sftp, &file.remote_path, &target, |file_transferred| {
-            let current_transferred = transferred + file_transferred;
-            emit_transfer_progress(
-                on_event,
-                TransferProgressContext {
-                    session_id,
-                    transfer_id: &transfer_id,
-                    op: SftpProgressOp::Download,
-                    kind: SftpTransferKind::Directory,
-                    path: remote_path,
-                    display_name: &plan.root_name,
-                    item_label: &item_label,
-                    total: plan.total_bytes,
-                    completed_items,
-                    total_items: Some(plan.total_items),
-                    failed_items,
-                    status: SftpTransferStatus::Running,
+        match download_remote_file_to_local(
+            &sftp,
+            &file.remote_path,
+            &target,
+            cancel_flag,
+            |file_transferred| {
+                let current_transferred = transferred + file_transferred;
+                emit_transfer_progress(
                     on_event,
-                },
-                current_transferred,
-            );
-        })
+                    TransferProgressContext {
+                        completed_items,
+                        failed_items,
+                        current_item_name: Some(&current_file_name),
+                        ..progress_context
+                    },
+                    current_transferred,
+                );
+            },
+        )
         .await
         {
             Ok(file_transferred) => {
                 transferred += file_transferred;
                 completed_items += 1;
+            }
+            Err(err) if err.code == "sftp_transfer_cancelled" => {
+                emit_cancelled_progress(
+                    on_event,
+                    TransferProgressContext {
+                        completed_items,
+                        failed_items,
+                        current_item_name: Some(&current_file_name),
+                        ..progress_context
+                    },
+                    transferred,
+                );
+                return Ok(());
             }
             Err(_) => {
                 failed_items += 1;
@@ -704,19 +762,10 @@ pub async fn sftp_download_dir(
         emit_transfer_progress(
             on_event,
             TransferProgressContext {
-                session_id,
-                transfer_id: &transfer_id,
-                op: SftpProgressOp::Download,
-                kind: SftpTransferKind::Directory,
-                path: remote_path,
-                display_name: &plan.root_name,
-                item_label: &item_label,
-                total: plan.total_bytes,
                 completed_items,
-                total_items: Some(plan.total_items),
                 failed_items,
-                status: SftpTransferStatus::Running,
-                on_event,
+                current_item_name: Some(&current_file_name),
+                ..progress_context
             },
             transferred,
         );
@@ -732,19 +781,11 @@ pub async fn sftp_download_dir(
     emit_transfer_progress(
         on_event,
         TransferProgressContext {
-            session_id,
-            transfer_id: &transfer_id,
-            op: SftpProgressOp::Download,
-            kind: SftpTransferKind::Directory,
-            path: remote_path,
-            display_name: &plan.root_name,
-            item_label: &item_label,
-            total: plan.total_bytes,
             completed_items,
-            total_items: Some(plan.total_items),
             failed_items,
+            current_item_name: None,
             status: final_status,
-            on_event,
+            ..progress_context
         },
         transferred,
     );
@@ -782,6 +823,7 @@ pub async fn sftp_download_dir(
             );
             Err(err)
         }
+        SftpTransferStatus::Cancelled => Ok(()),
         SftpTransferStatus::Running => Ok(()),
     }
 }
@@ -976,9 +1018,10 @@ async fn collect_remote_dir_plan(
     )
     .await?;
 
+    let total_items = (directories.len() + files.len()) as u64;
     Ok(RemoteDirPlan {
         root_name,
-        total_items: 1 + directories.len() as u64 + files.len() as u64,
+        total_items: total_items.max(1),
         directories,
         files,
         total_bytes,
@@ -1054,6 +1097,7 @@ async fn download_remote_file_to_local(
     sftp: &SftpSession,
     remote_path: &str,
     local_path: &Path,
+    cancel_flag: &AtomicBool,
     mut on_progress: impl FnMut(u64),
 ) -> Result<u64, EngineError> {
     let mut remote = sftp.open(remote_path.to_string()).await.map_err(|err| {
@@ -1065,6 +1109,11 @@ async fn download_remote_file_to_local(
     let mut buf = vec![0u8; 256 * 1024];
     let mut transferred = 0u64;
     loop {
+        if is_transfer_cancelled(cancel_flag) {
+            // 当前文件尚未完成时直接删除半截目标文件，避免在本地留下无法识别的残缺文件。
+            let _ = tokio::fs::remove_file(local_path).await;
+            return Err(transfer_cancelled_error());
+        }
         let n = remote.read(&mut buf).await.map_err(|err| {
             EngineError::with_detail("sftp_transfer_failed", "无法读取文件数据", err.to_string())
         })?;
@@ -1097,6 +1146,8 @@ fn emit_transfer_progress(
         path: context.path.to_string(),
         display_name: context.display_name.to_string(),
         item_label: context.item_label.to_string(),
+        target_name: context.target_name.map(|value| value.to_string()),
+        current_item_name: context.current_item_name.map(|value| value.to_string()),
         transferred,
         total: context.total,
         completed_items: context.completed_items,
@@ -1114,6 +1165,53 @@ fn relative_path_to_local_path(relative_path: &str) -> PathBuf {
     result
 }
 
+/// 为本地下载目标生成一个不与已有文件/目录冲突的路径。
+///
+/// 规则与桌面文件管理器一致，优先尝试：
+/// - `name`
+/// - `name (1)`
+/// - `name (2)`
+///
+/// 这样可以避免单文件下载覆盖已有文件，也避免目录下载把新内容合并进旧目录。
+async fn resolve_available_local_path(path: &Path) -> Result<PathBuf, EngineError> {
+    if tokio::fs::metadata(path).await.is_err() {
+        return Ok(path.to_path_buf());
+    }
+
+    let parent = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("download");
+    let extension = path.extension().and_then(|value| value.to_str());
+    let file_name_fallback = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("download")
+        .to_string();
+
+    for index in 1.. {
+        let candidate_name = if let Some(extension) = extension {
+            format!("{stem} ({index}).{extension}")
+        } else if path.extension().is_none() && path.file_name().is_some() {
+            format!("{file_name_fallback} ({index})")
+        } else {
+            format!("{stem} ({index})")
+        };
+        let candidate = parent.join(candidate_name);
+        if tokio::fs::metadata(&candidate).await.is_err() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(EngineError::new(
+        "sftp_download_failed",
+        "无法生成可用的本地目标路径",
+    ))
+}
+
 fn file_name_from_path(path: &str) -> String {
     path.trim_end_matches('/')
         .rsplit('/')
@@ -1128,10 +1226,17 @@ async fn transfer_with_progress(
     context: TransferProgressContext<'_>,
     reader: &mut (impl AsyncRead + Unpin),
     writer: &mut (impl AsyncWrite + Unpin),
+    cancel_flag: &AtomicBool,
 ) -> Result<u64, TransferProgressError> {
     let mut buf = vec![0u8; 256 * 1024];
     let mut transferred = 0u64;
     loop {
+        if is_transfer_cancelled(cancel_flag) {
+            return Err(TransferProgressError {
+                error: transfer_cancelled_error(),
+                transferred,
+            });
+        }
         let n = reader
             .read(&mut buf)
             .await
@@ -1168,6 +1273,8 @@ async fn transfer_with_progress(
                 path: context.path,
                 display_name: context.display_name,
                 item_label: context.item_label,
+                target_name: context.target_name,
+                current_item_name: context.current_item_name,
                 total: context.total,
                 completed_items: context.completed_items,
                 total_items: context.total_items,

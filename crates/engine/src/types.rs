@@ -111,6 +111,7 @@ pub enum SftpTransferStatus {
     Success,
     PartialSuccess,
     Failed,
+    Cancelled,
 }
 
 /// SFTP 传输进度。
@@ -124,6 +125,8 @@ pub struct SftpProgress {
     pub path: String,
     pub display_name: String,
     pub item_label: String,
+    pub target_name: Option<String>,
+    pub current_item_name: Option<String>,
     pub transferred: u64,
     pub total: Option<u64>,
     pub completed_items: u64,

@@ -482,6 +482,7 @@ export default function AppShell() {
     openRemoteDir,
     uploadFile,
     downloadFile,
+    cancelTransfer,
     createFolder,
     rename: renameEntry,
     remove: removeEntry,
@@ -1094,6 +1095,7 @@ export default function AppShell() {
             ) => {
               postFloatingFilesMessage({ type: "files:download", entry });
             },
+            cancelTransfer: async () => {},
             createFolder: async (name: string) => {
               postFloatingFilesMessage({ type: "files:mkdir", name });
             },
@@ -1128,6 +1130,7 @@ export default function AppShell() {
             },
             uploadFile,
             downloadFile,
+            cancelTransfer,
             createFolder,
             rename: renameEntry,
             remove: removeEntry,
@@ -1142,6 +1145,7 @@ export default function AppShell() {
       removeEntry,
       renameEntry,
       uploadFile,
+      cancelTransfer,
     ],
   );
 
@@ -1184,6 +1188,7 @@ export default function AppShell() {
         onOpenFile: filesPanelActions.openFile,
         onUploadFile: filesPanelActions.uploadFile,
         onDownloadFile: filesPanelActions.downloadFile,
+        onCancelTransfer: filesPanelActions.cancelTransfer,
         onCreateFolder: filesPanelActions.createFolder,
         onRenameEntry: filesPanelActions.rename,
         onRemoveEntry: filesPanelActions.remove,

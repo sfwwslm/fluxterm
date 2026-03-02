@@ -72,6 +72,18 @@
   font-weight: 600;
 }
 
+.log-current-task-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-cancel-button {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .log-row-transfer {
   gap: 12px;
 }
@@ -91,6 +103,15 @@
 
 .log-row.small {
   font-size: 12px;
+}
+
+.log-transfer-current {
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .progress-bar {

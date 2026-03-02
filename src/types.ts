@@ -69,7 +69,8 @@ export type SftpTransferStatus =
   | "running"
   | "success"
   | "partial_success"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 /** SFTP 传输进度。 */
 export type SftpProgress = {
@@ -80,6 +81,8 @@ export type SftpProgress = {
   path: string;
   displayName: string;
   itemLabel: string;
+  targetName?: string | null;
+  currentItemName?: string | null;
   transferred: number;
   total?: number | null;
   completedItems: number;
