@@ -167,6 +167,37 @@
   color: var(--accent);
 }
 
+.host-list-body .host-root-profile {
+  flex-shrink: 0;
+  margin-top: 5px;
+  margin-left: 10px;
+  border-radius: 12px;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--border-soft) 62%, transparent);
+  background: color-mix(in srgb, var(--surface-alt) 38%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 84%, var(--text-muted));
+  box-shadow: none;
+}
+
+.host-list-body .host-root-profile .host-row-icon {
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--accent) 18%);
+}
+
+.host-list-body .host-root-profile:hover {
+  border-color: color-mix(in srgb, var(--border-weak) 78%, var(--accent) 22%);
+  background: color-mix(in srgb, var(--surface-alt) 54%, transparent);
+  color: var(--text-secondary);
+}
+
+.host-list-body .host-root-profile:hover .host-row-icon {
+  color: color-mix(in srgb, var(--text-muted) 68%, var(--accent) 32%);
+}
+
+.host-list-body .host-root-profile.active {
+  border-style: solid;
+  color: var(--accent);
+}
+
 .host-list-body em {
   font-style: normal;
   font-size: 11px;

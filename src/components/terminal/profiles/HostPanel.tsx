@@ -28,6 +28,7 @@ import PathViewDialog from "@/components/ui/PathViewDialog";
 import Select from "@/components/ui/select";
 import "@/components/terminal/profiles/HostPanel.css";
 
+/** 主机面板需要的上层数据与操作。 */
 type HostPanelProps = {
   profiles: HostProfile[];
   sshGroups: string[];
@@ -69,6 +70,7 @@ export default function HostPanel({
 }: HostPanelProps) {
   const localShellKey = LOCAL_SHELL_GROUP_VALUE;
   const localShellLabel = t("host.shellGroup");
+  // 自定义分组以“分组名 -> 主机列表”的结构整理，便于统一渲染和筛选。
   const customGroups = useMemo(() => {
     const map = new Map<string, { label: string; items: HostProfile[] }>();
     sshGroups.forEach((group) => {
@@ -101,24 +103,29 @@ export default function HostPanel({
     () => new Set(),
   );
   const [query, setQuery] = useState("");
+  // 所有右键菜单共用同一个浮层状态，点击不同目标时仅替换菜单项。
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
     items: ContextMenuItem[];
   } | null>(null);
+  // 分组新增与重命名共用同一个输入对话框。
   const [groupDialog, setGroupDialog] = useState<{
     mode: "add" | "rename";
     sourceGroup?: string;
     initialValue?: string;
   } | null>(null);
+  // 本地 Shell 路径查看对话框。
   const [pathDialog, setPathDialog] = useState<{
     title: string;
     path: string;
   } | null>(null);
+  // 删除非空分组前，先弹确认框提示主机会被移回根级。
   const [removeGroupDialog, setRemoveGroupDialog] = useState<{
     name: string;
     hostCount: number;
   } | null>(null);
+  // 主机移动分组对话框及当前选中的目标分组值。
   const [moveDialog, setMoveDialog] = useState<HostProfile | null>(null);
   const [moveGroupValue, setMoveGroupValue] = useState<string>(
     ROOT_PROFILE_GROUP_VALUE,
@@ -126,14 +133,17 @@ export default function HostPanel({
 
   const normalizedQuery = query.trim().toLowerCase();
   const queryActive = normalizedQuery.length > 0;
+  /** 判断某个 SSH 主机是否命中搜索条件。 */
   const matchesProfile = (profile: HostProfile) => {
     if (!queryActive) return true;
     const text =
       `${profile.name} ${profile.host} ${profile.username}`.toLowerCase();
     return text.includes(normalizedQuery);
   };
+  /** 判断分组标题是否命中搜索条件。 */
   const matchesGroup = (group: string) =>
     queryActive && group.toLowerCase().includes(normalizedQuery);
+  /** 判断本地 Shell 是否命中搜索条件。 */
   const matchesShell = (shell: LocalShellProfile) => {
     if (!queryActive) return true;
     const text = `${shell.label} ${shell.path}`.toLowerCase();
@@ -146,6 +156,7 @@ export default function HostPanel({
     return localShells.filter(matchesShell);
   }, [localShells, queryActive, normalizedQuery, localShellLabel]);
 
+  // 搜索时优先保留命中的整组；如果只命中了组内部分主机，则收缩成过滤后的结果。
   const filteredGroups = useMemo(() => {
     if (!queryActive) return customGroups;
     return customGroups
@@ -178,6 +189,7 @@ export default function HostPanel({
     return rootProfiles.filter(matchesProfile);
   }, [rootProfiles, queryActive, normalizedQuery]);
 
+  // 移动主机时的目标分组选项，根级通过保留值映射为“未分组”。
   const moveGroupOptions = useMemo(
     () => [
       { value: ROOT_PROFILE_GROUP_VALUE, label: t("host.ungrouped") },
@@ -194,6 +206,7 @@ export default function HostPanel({
     return moveDialog.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE;
   }, [moveDialog]);
 
+  /** 统计指定分组下当前包含的主机数量，用于删除确认提示。 */
   const getGroupHostCount = (groupName: string) =>
     profiles.filter(
       (profile) =>
@@ -201,6 +214,7 @@ export default function HostPanel({
         groupName.trim().toLowerCase(),
     ).length;
 
+  /** 打开右键菜单，并阻止原生菜单继续冒泡。 */
   function openMenu(
     event: {
       preventDefault: () => void;
@@ -215,6 +229,7 @@ export default function HostPanel({
     setMenu({ x: event.clientX, y: event.clientY, items });
   }
 
+  /** 切换分组展开状态；空分组或不可展开项不处理。 */
   function toggleGroup(group: string, expandable: boolean) {
     if (!expandable) return;
     setExpandedGroups((prev) => {
@@ -228,6 +243,7 @@ export default function HostPanel({
     });
   }
 
+  /** 打开新增分组输入框，并关闭当前右键菜单。 */
   function openAddGroupDialog() {
     setMenu(null);
     setGroupDialog({ mode: "add", initialValue: "" });
@@ -479,7 +495,9 @@ export default function HostPanel({
           {filteredRootProfiles.map((profile) => (
             <Button
               key={profile.id}
-              className={profile.id === activeProfileId ? "active" : ""}
+              className={`host-root-profile${
+                profile.id === activeProfileId ? " active" : ""
+              }`}
               variant="ghost"
               size="sm"
               onContextMenu={(event) =>
