@@ -96,7 +96,7 @@ fn collect_windows_shells() -> Vec<LocalShellProfile> {
     if path_exists(windows_ps) {
         shells.push(LocalShellProfile {
             id: "powershell".to_string(),
-            label: "Windows PowerShell".to_string(),
+            label: "PowerShell".to_string(),
             path: windows_ps.to_string(),
             args: Vec::new(),
         });
