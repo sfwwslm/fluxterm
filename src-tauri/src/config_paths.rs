@@ -37,12 +37,8 @@ pub fn load_dotenv_strict() -> Result<(), String> {
     Ok(())
 }
 
-/// 解析应用配置目录。
-///
-/// 解析顺序：
-/// 1. 环境变量 `FLUXTERM_CONFIG_DIR`（非空时优先）；
-/// 2. 用户主目录下的 `.vust/flux-term`。
-pub fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+/// 解析应用配置根目录。
+pub fn resolve_config_root_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
     let home = app.path().home_dir().map_err(|err| {
         EngineError::with_detail("config_path_failed", "无法获取用户主目录", err.to_string())
     })?;
@@ -51,27 +47,14 @@ pub fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
             let path = PathBuf::from(trimmed);
-            if path.is_absolute() {
-                if path.starts_with(&home) {
-                    debug!(
-                        "config_dir_resolved source=env mode=absolute path={}",
-                        path.to_string_lossy()
-                    );
-                    return Ok(path);
-                }
-                warn!(
-                    "config_dir_invalid source=env mode=absolute path={} reason=outside_home",
-                    path.to_string_lossy()
-                );
-                return Err(EngineError::new(
-                    "config_path_invalid",
-                    "配置目录必须位于用户主目录下",
-                ));
-            }
-            // 相对路径统一锚定到用户主目录，避免受当前工作目录影响。
-            let resolved = home.join(path);
+            let resolved = if path.is_absolute() {
+                path
+            } else {
+                // 相对路径统一锚定到用户主目录，避免受当前工作目录影响。
+                home.join(path)
+            };
             debug!(
-                "config_dir_resolved source=env mode=relative path={}",
+                "config_dir_resolved source=env path={}",
                 resolved.to_string_lossy()
             );
             return Ok(resolved);
@@ -79,10 +62,30 @@ pub fn resolve_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
         warn!("config_dir_env_ignored reason=empty");
     }
 
-    let default_path = home.join(DEFAULT_CONFIG_DIR_NAME);
-    debug!(
-        "config_dir_resolved source=default mode=home path={}",
-        default_path.to_string_lossy()
-    );
-    Ok(default_path)
+    Ok(home.join(DEFAULT_CONFIG_DIR_NAME))
+}
+
+/// 解析应用数据根目录。
+pub fn resolve_data_root_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    app.path().app_data_dir().map_err(|err| {
+        EngineError::with_detail("data_path_failed", "无法获取应用数据目录", err.to_string())
+    })
+}
+
+/// 解析应用级配置目录。
+pub fn resolve_global_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_config_root_dir(app)?;
+    Ok(dir.join("global"))
+}
+
+/// 解析终端域配置目录。
+pub fn resolve_terminal_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_config_root_dir(app)?;
+    Ok(dir.join("terminal"))
+}
+
+/// 解析主机配置文件路径。
+pub fn resolve_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_global_config_dir(app)?;
+    Ok(dir.join("profiles.json"))
 }

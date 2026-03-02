@@ -6,7 +6,7 @@ import type { Translate } from "@/i18n";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
-import { getFluxTermConfigDir } from "@/shared/config/paths";
+import { getAppConfigDir, getAppDataDir } from "@/shared/config/paths";
 import {
   DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   MAX_SCROLLBACK,
@@ -84,6 +84,7 @@ export default function ConfigModal({
 }: ConfigModalProps) {
   const { pushToast } = useNotices();
   const [configDir, setConfigDir] = useState("");
+  const [dataDir, setDataDir] = useState("");
   const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useState(
     fileDefaultEditorPath,
   );
@@ -96,12 +97,19 @@ export default function ConfigModal({
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
-    getFluxTermConfigDir()
+    getAppConfigDir()
       .then((path) => {
         setConfigDir(normalizeConfigDirectoryPath(path));
       })
       .catch(() => {
         setConfigDir("");
+      });
+    getAppDataDir()
+      .then((path) => {
+        setDataDir(normalizeConfigDirectoryPath(path));
+      })
+      .catch(() => {
+        setDataDir("");
       });
   }, [activeSection, open]);
 
@@ -371,8 +379,13 @@ export default function ConfigModal({
       <div className="config-modal-panel config-modal-panel-scrollable">
         <h3>{t("config.section.configDirectory")}</h3>
         <div className="config-dir-card">
+          <div className="config-toggle-copy">
+            <span className="config-toggle-title">
+              {t("config.directory.configTitle")}
+            </span>
+          </div>
           <div className="config-dir-path">
-            {configDir || t("config.directory.unavailable")}
+            {configDir || t("config.directory.configUnavailable")}
           </div>
           <Button
             variant="primary"
@@ -385,7 +398,7 @@ export default function ConfigModal({
               } catch (error) {
                 pushToast({
                   level: "error",
-                  message: t("config.directory.openFailed"),
+                  message: t("config.directory.configOpenFailed"),
                 });
                 void logError(
                   JSON.stringify({
@@ -398,7 +411,43 @@ export default function ConfigModal({
               }
             }}
           >
-            {t("config.directory.open")}
+            {t("config.directory.openConfig")}
+          </Button>
+        </div>
+        <div className="config-dir-card">
+          <div className="config-toggle-copy">
+            <span className="config-toggle-title">
+              {t("config.directory.dataTitle")}
+            </span>
+          </div>
+          <div className="config-dir-path">
+            {dataDir || t("config.directory.dataUnavailable")}
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!dataDir}
+            onClick={async () => {
+              if (!dataDir) return;
+              try {
+                await openPath(dataDir);
+              } catch (error) {
+                pushToast({
+                  level: "error",
+                  message: t("config.directory.dataOpenFailed"),
+                });
+                void logError(
+                  JSON.stringify({
+                    event: "data-directory:open-failed",
+                    path: dataDir,
+                    message:
+                      error instanceof Error ? error.message : String(error),
+                  }),
+                );
+              }
+            }}
+          >
+            {t("config.directory.openData")}
           </Button>
         </div>
       </div>

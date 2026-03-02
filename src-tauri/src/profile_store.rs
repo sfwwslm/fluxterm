@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 use engine::{EngineError, HostProfile};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
-use crate::config_paths::resolve_config_dir;
+use crate::config_paths::resolve_profiles_path;
 
 /// 主密码配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,16 +46,10 @@ impl Default for ProfileStore {
 /// 读取配置文件并解析为存储结构。
 pub fn read_profiles(app: &AppHandle) -> Result<ProfileStore, EngineError> {
     let path = profiles_path(app)?;
-    let content = if path.exists() {
-        fs::read_to_string(&path)
-    } else {
-        let legacy = legacy_profiles_path(app)?;
-        if !legacy.exists() {
-            return Ok(ProfileStore::default());
-        }
-        fs::read_to_string(&legacy)
+    if !path.exists() {
+        return Ok(ProfileStore::default());
     }
-    .map_err(|err| {
+    let content = fs::read_to_string(&path).map_err(|err| {
         EngineError::with_detail("profile_read_failed", "无法读取配置文件", err.to_string())
     })?;
     serde_json::from_str(&content).map_err(|err| {
@@ -84,19 +78,7 @@ pub fn write_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), Engin
 }
 
 fn profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_config_dir(app)?;
-    Ok(dir.join("profiles.json"))
-}
-
-fn legacy_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = app.path().app_data_dir().map_err(|err| {
-        EngineError::with_detail(
-            "profile_path_failed",
-            "无法获取应用数据目录",
-            err.to_string(),
-        )
-    })?;
-    Ok(dir.join("profiles.json"))
+    resolve_profiles_path(app)
 }
 
 fn now_epoch() -> u64 {

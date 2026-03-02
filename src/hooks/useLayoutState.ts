@@ -20,7 +20,7 @@ import type {
   WidgetSlot,
 } from "@/layout/types";
 import type { PanelKey } from "@/types";
-import { getFluxTermConfigDir, getLayoutPath } from "@/shared/config/paths";
+import { getLayoutPath, getTerminalConfigDir } from "@/shared/config/paths";
 
 type LayoutState = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
@@ -138,7 +138,7 @@ export default function useLayoutState({
   }
 
   async function saveLayoutConfig(payload: WidgetLayout) {
-    const dir = await getFluxTermConfigDir();
+    const dir = await getTerminalConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getLayoutPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));

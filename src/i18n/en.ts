@@ -58,9 +58,15 @@ export const en = {
   "config.session.resourceMonitorIntervalSec": "Resource Sampling Interval",
   "config.session.resourceMonitorIntervalSecHint":
     "Sampling interval in seconds, minimum {min}s and default 5s.",
-  "config.directory.open": "Open in File Manager",
-  "config.directory.openFailed": "Failed to open configuration directory",
-  "config.directory.unavailable": "Configuration directory is unavailable",
+  "config.directory.configTitle": "Config Directory",
+  "config.directory.dataTitle": "Data Directory",
+  "config.directory.openConfig": "Open Config Directory",
+  "config.directory.openData": "Open Data Directory",
+  "config.directory.configOpenFailed": "Failed to open configuration directory",
+  "config.directory.dataOpenFailed": "Failed to open data directory",
+  "config.directory.configUnavailable":
+    "Configuration directory is unavailable",
+  "config.directory.dataUnavailable": "Data directory is unavailable",
   "language.zh": "Chinese",
   "language.en": "English",
   "settings.language": "Language",

@@ -14,7 +14,10 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { info, warn } from "@tauri-apps/plugin-log";
 import { callTauri } from "@/shared/tauri/commands";
-import { getFluxTermConfigDir } from "@/shared/config/paths";
+import {
+  getRemoteFileCacheDir as resolveRemoteFileCacheDir,
+  getRemoteFilesCacheRootDir as resolveRemoteFilesCacheRootDir,
+} from "@/shared/config/paths";
 import type { SftpEntry } from "@/types";
 import { sftpDownload } from "@/features/sftp/core/commands";
 
@@ -29,13 +32,11 @@ function sanitizeFileName(name: string) {
 
 /** 获取远端文件缓存目录。 */
 async function getRemoteFileCacheDir(sessionId: string) {
-  const configDir = await getFluxTermConfigDir();
-  return join(configDir, "cache", "remote-files", sessionId);
+  return resolveRemoteFileCacheDir(sessionId);
 }
 
 async function getRemoteFileCacheRootDir() {
-  const configDir = await getFluxTermConfigDir();
-  return join(configDir, "cache", "remote-files");
+  return resolveRemoteFilesCacheRootDir();
 }
 
 function getCleanupDayStamp() {

@@ -97,7 +97,8 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 
 ## 配置与存储
 
-- 本地存储主机配置目录`~/flux-term`（先使用纯 JSON）。
+- 配置数据存放于 `$HOME/.vust/flux-term`，按 `global` 与 `terminal` 子目录区分应用级配置和终端域配置。
+- 应用使用数据存放于 `app_data_dir`，例如远端文件下载缓存。
 - 凭据优先使用系统钥匙串，无法使用时回退到本地加密存储。
 
 ## 安全性考虑

@@ -9,7 +9,7 @@ import {
 import { warn, debug } from "@tauri-apps/plugin-log";
 import type { Locale } from "@/i18n";
 import type { LocalShellProfile, ThemeId } from "@/types";
-import { getFluxTermConfigDir, getSettingsPath } from "@/shared/config/paths";
+import { getGlobalConfigDir, getSettingsPath } from "@/shared/config/paths";
 
 type AppSettings = {
   version: 1;
@@ -116,7 +116,7 @@ export default function useAppSettings({
   }
 
   async function saveSettings(payload: AppSettings) {
-    const dir = await getFluxTermConfigDir();
+    const dir = await getGlobalConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getSettingsPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));

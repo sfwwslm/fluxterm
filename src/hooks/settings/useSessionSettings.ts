@@ -11,7 +11,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { info, warn } from "@tauri-apps/plugin-log";
 import {
-  getFluxTermConfigDir,
+  getTerminalConfigDir,
   getSessionSettingsPath,
 } from "@/shared/config/paths";
 
@@ -238,7 +238,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   }
 
   async function saveSessionSettings(payload: SessionSettings) {
-    const dir = await getFluxTermConfigDir();
+    const dir = await getTerminalConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getSessionSettingsPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));

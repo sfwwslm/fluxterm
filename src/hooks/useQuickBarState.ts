@@ -12,7 +12,7 @@ import type {
   QuickCommandGroup,
   QuickCommandItem,
 } from "@/types";
-import { getFluxTermConfigDir, getQuickbarPath } from "@/shared/config/paths";
+import { getGlobalConfigDir, getQuickbarPath } from "@/shared/config/paths";
 import {
   DEFAULT_QUICKBAR_GROUP_ID,
   LEGACY_DEFAULT_QUICKBAR_GROUP_ID,
@@ -237,7 +237,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
   }
 
   async function saveConfig(payload: QuickBarConfig) {
-    const dir = await getFluxTermConfigDir();
+    const dir = await getGlobalConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getQuickbarPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));
