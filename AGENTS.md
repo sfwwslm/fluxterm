@@ -68,6 +68,8 @@ For pull requests:
 
 - If a task requires modifying more than three files, pause first and break it down into updated tasks.
 - Before writing any code, please describe your proposed approach and wait for approval. If the requirements are unclear, make sure to ask clarifying questions before writing any code.
+- After modifying frontend code, run `pnpm format` before final verification to avoid style drift and reduce unnecessary diffs.
+- After modifying backend Rust code, run `cargo fmt` before final verification so the written code and the checked code stay consistent.
 - During this development-stage refactor, compatibility is not required; prioritize a clean redesign.
 - When a bug is caused by backend, engine, state machine, or lifecycle timing issues, do not add frontend “stopgap” patches to mask it. Fix the source of truth first, and only adjust frontend logic when the root cause is genuinely on the frontend side.
 
