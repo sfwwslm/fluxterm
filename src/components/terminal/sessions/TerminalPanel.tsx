@@ -50,6 +50,7 @@ type TerminalPanelProps = {
   activeSessionState: SessionStateUi | null;
   activeSessionReason: DisconnectReason | null;
   sessionStates: Record<string, SessionStateUi>;
+  sessionReasons: Record<string, DisconnectReason>;
   registerTerminalContainer: (
     sessionId: string,
     element: HTMLDivElement | null,
@@ -107,6 +108,7 @@ export default function TerminalPanel({
   activeSessionState,
   activeSessionReason,
   sessionStates,
+  sessionReasons,
   registerTerminalContainer,
   isTerminalReady,
   activeLinkMenu,
@@ -160,6 +162,10 @@ export default function TerminalPanel({
 
   function resolveSessionState(sessionId: string) {
     return sessionStates[sessionId] ?? "connecting";
+  }
+
+  function resolveSessionReason(sessionId: string) {
+    return sessionReasons[sessionId] ?? null;
   }
 
   function getTerminalContainerRef(sessionId: string) {
@@ -219,6 +225,8 @@ export default function TerminalPanel({
             isTerminalReady={isTerminalReady}
             getSessionLabel={resolveSessionLabel}
             getSessionState={resolveSessionState}
+            getSessionReason={resolveSessionReason}
+            exitHint={t("terminal.exitHint")}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}
@@ -242,10 +250,6 @@ export default function TerminalPanel({
             }}
           />
         )}
-        {activeSessionState === "disconnected" &&
-          activeSessionReason === "exit" && (
-            <div className="terminal-banner">{t("terminal.exitHint")}</div>
-          )}
         {!activeSession && (
           <div className="terminal-empty">{t("terminal.empty")}</div>
         )}

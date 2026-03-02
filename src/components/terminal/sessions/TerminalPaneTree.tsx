@@ -7,7 +7,7 @@
  */
 import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { FiX } from "react-icons/fi";
-import type { SessionPaneNode } from "@/types";
+import type { DisconnectReason, SessionPaneNode } from "@/types";
 
 type TerminalPaneTreeProps = {
   root: SessionPaneNode;
@@ -18,6 +18,8 @@ type TerminalPaneTreeProps = {
   isTerminalReady: (sessionId: string) => boolean;
   getSessionLabel: (sessionId: string) => string;
   getSessionState: (sessionId: string) => string;
+  getSessionReason: (sessionId: string) => DisconnectReason | null;
+  exitHint: string;
   onFocusPane: (paneId: string) => void;
   onSwitchSession: (sessionId: string) => void;
   onReorderPaneSessions: (
@@ -64,6 +66,8 @@ function PaneNodeView({
   isTerminalReady,
   getSessionLabel,
   getSessionState,
+  getSessionReason,
+  exitHint,
   onFocusPane,
   onSwitchSession,
   onReorderPaneSessions,
@@ -86,6 +90,8 @@ function PaneNodeView({
             isTerminalReady={isTerminalReady}
             getSessionLabel={getSessionLabel}
             getSessionState={getSessionState}
+            getSessionReason={getSessionReason}
+            exitHint={exitHint}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}
@@ -112,6 +118,8 @@ function PaneNodeView({
             isTerminalReady={isTerminalReady}
             getSessionLabel={getSessionLabel}
             getSessionState={getSessionState}
+            getSessionReason={getSessionReason}
+            exitHint={exitHint}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}
@@ -129,6 +137,10 @@ function PaneNodeView({
   const activePane = node.paneId === activePaneId;
   const paneActiveSessionId =
     node.activeSessionId ?? node.sessionIds[node.sessionIds.length - 1] ?? null;
+  const showExitBanner =
+    !!paneActiveSessionId &&
+    getSessionState(paneActiveSessionId) === "disconnected" &&
+    getSessionReason(paneActiveSessionId) === "exit";
 
   return (
     <div
@@ -209,6 +221,7 @@ function PaneNodeView({
           />
         );
       })}
+      {showExitBanner && <div className="terminal-banner">{exitHint}</div>}
     </div>
   );
 }

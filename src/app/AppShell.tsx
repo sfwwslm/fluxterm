@@ -1344,6 +1344,7 @@ export default function AppShell() {
                 activeSessionState={sessionState.activeSessionState}
                 activeSessionReason={sessionState.activeSessionReason}
                 sessionStates={sessionState.sessionStates}
+                sessionReasons={sessionState.sessionReasons}
                 registerTerminalContainer={
                   terminalActions.registerTerminalContainer
                 }
