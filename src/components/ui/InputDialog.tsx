@@ -9,6 +9,7 @@ type InputDialogProps = {
   label: string;
   placeholder?: string;
   initialValue?: string;
+  maxLength?: number;
   errorText?: string | null;
   confirmText: string;
   cancelText: string;
@@ -25,6 +26,7 @@ export default function InputDialog({
   label,
   placeholder,
   initialValue = "",
+  maxLength,
   errorText,
   confirmText,
   cancelText,
@@ -68,6 +70,7 @@ export default function InputDialog({
         <input
           value={value}
           placeholder={placeholder}
+          maxLength={maxLength}
           onChange={(event) => {
             setValue(event.target.value);
             // 输入变更后通知外层清理校验错误，避免旧错误文案残留。

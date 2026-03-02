@@ -28,6 +28,8 @@ import PathViewDialog from "@/components/ui/PathViewDialog";
 import Select from "@/components/ui/select";
 import "@/components/terminal/profiles/HostPanel.css";
 
+const GROUP_NAME_MAX_LENGTH = 12;
+
 /** 主机面板需要的上层数据与操作。 */
 type HostPanelProps = {
   profiles: HostProfile[];
@@ -115,6 +117,7 @@ export default function HostPanel({
     sourceGroup?: string;
     initialValue?: string;
   } | null>(null);
+  const [groupDialogError, setGroupDialogError] = useState<string | null>(null);
   // 本地 Shell 路径查看对话框。
   const [pathDialog, setPathDialog] = useState<{
     title: string;
@@ -246,7 +249,22 @@ export default function HostPanel({
   /** 打开新增分组输入框，并关闭当前右键菜单。 */
   function openAddGroupDialog() {
     setMenu(null);
+    setGroupDialogError(null);
     setGroupDialog({ mode: "add", initialValue: "" });
+  }
+
+  /** 校验分组名：不能为空，且长度不能超过限定上限。 */
+  function validateGroupName(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return t("host.groupNameRequired");
+    }
+    if (trimmed.length > GROUP_NAME_MAX_LENGTH) {
+      return t("host.groupNameTooLong", {
+        max: GROUP_NAME_MAX_LENGTH,
+      });
+    }
+    return null;
   }
 
   /** 根级空白区域右键菜单。 */
@@ -619,15 +637,29 @@ export default function HostPanel({
             label={t("profile.form.group")}
             placeholder={t("profile.placeholder.group")}
             initialValue={groupDialog.initialValue ?? ""}
+            maxLength={GROUP_NAME_MAX_LENGTH}
             confirmText={t("actions.save")}
             cancelText={t("actions.cancel")}
             closeText={t("actions.close")}
-            onClose={() => setGroupDialog(null)}
+            errorText={groupDialogError}
+            onClose={() => {
+              setGroupDialog(null);
+              setGroupDialogError(null);
+            }}
+            onValueChange={() => setGroupDialogError(null)}
             onConfirm={(value) => {
-              if (!value) return;
+              const errorText = validateGroupName(value);
+              if (errorText) {
+                setGroupDialogError(errorText);
+                return;
+              }
               if (groupDialog.mode === "add") {
-                onAddGroup(value);
+                if (!onAddGroup(value)) {
+                  setGroupDialogError(t("host.groupNameDuplicate"));
+                  return;
+                }
                 setGroupDialog(null);
+                setGroupDialogError(null);
                 return;
               }
               if (
@@ -635,10 +667,18 @@ export default function HostPanel({
                 value === groupDialog.sourceGroup
               ) {
                 setGroupDialog(null);
+                setGroupDialogError(null);
                 return;
               }
               onRenameGroup(groupDialog.sourceGroup, value)
-                .then(() => setGroupDialog(null))
+                .then((ok) => {
+                  if (!ok) {
+                    setGroupDialogError(t("host.groupNameDuplicate"));
+                    return;
+                  }
+                  setGroupDialogError(null);
+                  setGroupDialog(null);
+                })
                 .catch(() => {});
             }}
           />

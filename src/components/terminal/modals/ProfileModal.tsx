@@ -9,6 +9,8 @@ import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import "@/components/terminal/modals/ProfileModal.css";
 
+const PROFILE_NAME_MAX_LENGTH = 14;
+
 type ProfileModalProps = {
   open: boolean;
   mode: "new" | "edit";
@@ -38,12 +40,14 @@ export default function ProfileModal({
   const [profileType, setProfileType] = useState<ProfileModalType>("ssh");
   const [activeSection, setActiveSection] =
     useState<ProfileModalSection>("session");
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       autoFilledRef.current = false;
       setProfileType("ssh");
       setActiveSection("session");
+      setNameError(null);
     }
   }, [open]);
 
@@ -86,6 +90,18 @@ export default function ProfileModal({
   function handleSwitchProfileType(next: ProfileModalType) {
     setProfileType(next);
     setActiveSection("session");
+  }
+
+  /** 当前产品要求会话名称必填，且限制在较短范围内避免列表与标签过度截断。 */
+  function validateProfileName(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return t("profile.nameRequired");
+    }
+    if (trimmed.length > PROFILE_NAME_MAX_LENGTH) {
+      return t("profile.nameTooLong", { max: PROFILE_NAME_MAX_LENGTH });
+    }
+    return null;
   }
 
   /** 当前版本只支持保存 SSH 会话，shell 页签先作为后续本地配置壳层。 */
@@ -143,11 +159,18 @@ export default function ProfileModal({
             <label>{t("profile.form.name")}</label>
             <input
               value={draft.name}
-              onChange={(event) =>
-                onDraftChange({ ...draft, name: event.target.value })
-              }
+              maxLength={PROFILE_NAME_MAX_LENGTH}
+              onChange={(event) => {
+                onDraftChange({ ...draft, name: event.target.value });
+                if (nameError) {
+                  setNameError(null);
+                }
+              }}
               placeholder={t("profile.placeholder.name")}
             />
+            {nameError ? (
+              <div className="profile-form-error">{nameError}</div>
+            ) : null}
           </div>
           <div className="form-row">
             <label>{t("profile.form.group")}</label>
@@ -342,7 +365,15 @@ export default function ProfileModal({
             <Button
               className="primary"
               variant="primary"
-              onClick={onSubmit}
+              onClick={() => {
+                const errorText = validateProfileName(draft.name);
+                if (errorText) {
+                  setNameError(errorText);
+                  return;
+                }
+                setNameError(null);
+                onSubmit();
+              }}
               disabled={!canSubmit}
               title={canSubmit ? undefined : t("profile.shell.saveDisabled")}
             >

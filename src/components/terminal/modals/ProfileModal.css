@@ -107,6 +107,12 @@
   gap: 6px;
 }
 
+.profile-form-error {
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .form-row.split {
   flex-direction: row;
   gap: 12px;
