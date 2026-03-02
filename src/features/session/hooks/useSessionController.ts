@@ -16,6 +16,7 @@ export default function useSessionController(
   return {
     sessionState: {
       sessions: raw.sessions,
+      workspace: raw.workspace,
       activeSessionId: raw.activeSessionId,
       sessionStates: raw.sessionStates,
       sessionReasons: raw.sessionReasons,
@@ -55,6 +56,14 @@ export default function useSessionController(
       reconnectSession: raw.reconnectSession,
       reconnectLocalShell: raw.reconnectLocalShell,
       switchSession: raw.switchSession,
+      focusPane: raw.focusPane,
+      reorderPaneSessions: raw.reorderPaneSessions,
+      splitActivePane: raw.splitActivePane,
+      closePaneSession: raw.closePaneSession,
+      resizePaneSplit: raw.resizePaneSplit,
+      closeOtherSessionsInPane: raw.closeOtherSessionsInPane,
+      closeSessionsToRightInPane: raw.closeSessionsToRightInPane,
+      closeAllSessionsInPane: raw.closeAllSessionsInPane,
     },
   };
 }

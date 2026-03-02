@@ -69,6 +69,10 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 - 优先通过 Controller 组合能力，减少顶层组件中的跨域耦合。
 - 重构阶段保留兼容封装，逐步将大 Hook 内部逻辑下沉到 feature/core。
 
+相关设计文档：
+
+- `docs/terminal-split-workspace-design.md`：终端拆分工作区、区域工作区栏与会话重建策略设计。
+
 ## 前端布局规则
 
 - 开发阶段采用破坏性重构策略，不考虑旧布局配置兼容，优先保证结构清晰与可维护性。

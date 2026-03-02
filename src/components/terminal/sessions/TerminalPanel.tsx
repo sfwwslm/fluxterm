@@ -1,13 +1,22 @@
-import { useEffect, useRef, useState } from "react";
-import { FiChevronDown, FiChevronUp, FiX } from "react-icons/fi";
+/**
+ * 终端主面板编排层。
+ * 职责：
+ * 1. 把会话数据映射为 pane 树所需的展示字段。
+ * 2. 串联终端容器注册、区域交互和活动会话切换。
+ * 3. 挂载搜索栏与右键菜单等局部交互模块。
+ */
+import { useRef } from "react";
 import type { Translate } from "@/i18n";
 import type {
   DisconnectReason,
   HostProfile,
   Session,
   SessionStateUi,
+  SessionWorkspaceState,
 } from "@/types";
-import ContextMenu from "@/components/terminal/menu/ContextMenu";
+import TerminalPaneTree from "@/components/terminal/sessions/TerminalPaneTree";
+import useTerminalMenus from "@/components/terminal/sessions/useTerminalMenus";
+import useTerminalSearchBar from "@/components/terminal/sessions/TerminalSearchBar";
 import "@/components/terminal/sessions/TerminalPanel.css";
 
 type LocalSessionMeta = Record<
@@ -15,33 +24,24 @@ type LocalSessionMeta = Record<
   { shellId: string | null; label: string }
 >;
 
-type SearchDecorations = {
-  matchBackground?: string;
-  matchBorder?: string;
-  matchOverviewRuler: string;
-  activeMatchBackground?: string;
-  activeMatchBorder?: string;
-  activeMatchColorOverviewRuler: string;
-};
-
 type SearchOptions = {
   regex?: boolean;
   wholeWord?: boolean;
   caseSensitive?: boolean;
   incremental?: boolean;
-  decorations?: SearchDecorations;
-};
-
-/** 搜索高亮的视觉配置。 */
-const searchDecorations: SearchDecorations = {
-  matchBackground: "#314154",
-  matchOverviewRuler: "#4b5563",
-  activeMatchBackground: "#f2c94c",
-  activeMatchColorOverviewRuler: "#f59e0b",
+  decorations?: {
+    matchBackground?: string;
+    matchBorder?: string;
+    matchOverviewRuler: string;
+    activeMatchBackground?: string;
+    activeMatchBorder?: string;
+    activeMatchColorOverviewRuler: string;
+  };
 };
 
 type TerminalPanelProps = {
   sessions: Session[];
+  workspace: SessionWorkspaceState;
   profiles: HostProfile[];
   editingProfile: HostProfile;
   localSessionMeta: LocalSessionMeta;
@@ -72,13 +72,33 @@ type TerminalPanelProps = {
   searchResultStats: { resultIndex: number; resultCount: number } | null;
   isLocalSession: (sessionId: string | null) => boolean;
   onSwitchSession: (sessionId: string) => void;
-  onDisconnectSession: (sessionId: string) => void;
+  onFocusPane: (paneId: string) => void;
+  onReorderPaneSessions: (
+    paneId: string,
+    sourceSessionId: string,
+    targetSessionId: string,
+  ) => void;
+  onReconnectSession: (sessionId: string) => Promise<void>;
+  onSaveSession: (sessionId: string) => Promise<void>;
+  onSplitActivePane: (axis: "horizontal" | "vertical") => Promise<void>;
+  onClosePaneSession: (paneId: string, sessionId: string) => Promise<void>;
+  onResizePaneSplit: (paneId: string, ratio: number) => void;
+  onCloseOtherSessionsInPane: (
+    paneId: string,
+    sessionId: string,
+  ) => Promise<void>;
+  onCloseSessionsToRightInPane: (
+    paneId: string,
+    sessionId: string,
+  ) => Promise<void>;
+  onCloseAllSessionsInPane: (paneId: string) => Promise<void>;
   t: Translate;
 };
 
-/** 终端主区域（头部标签 + 终端画布）。 */
+/** 终端主区域。 */
 export default function TerminalPanel({
   sessions,
+  workspace,
   profiles,
   editingProfile,
   localSessionMeta,
@@ -106,131 +126,122 @@ export default function TerminalPanel({
   searchResultStats,
   isLocalSession,
   onSwitchSession,
-  onDisconnectSession,
+  onFocusPane,
+  onReorderPaneSessions,
+  onReconnectSession,
+  onSaveSession,
+  onSplitActivePane,
+  onClosePaneSession,
+  onResizePaneSplit,
+  onCloseOtherSessionsInPane,
+  onCloseSessionsToRightInPane,
+  onCloseAllSessionsInPane,
   t,
 }: TerminalPanelProps) {
   const containerRefs = useRef<
     Record<string, (element: HTMLDivElement | null) => void>
   >({});
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [searchMiss, setSearchMiss] = useState(false);
-  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
-  const [searchRegex, setSearchRegex] = useState(false);
-  const [searchWholeWord, setSearchWholeWord] = useState(false);
-  const [searchHighlightAll, setSearchHighlightAll] = useState(true);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (!searchVisible) return;
-    searchInputRef.current?.focus();
-    searchInputRef.current?.select();
-  }, [searchVisible]);
-
-  function closeMenu() {
-    setMenu(null);
+  function findSession(sessionId: string) {
+    return sessions.find((item) => item.sessionId === sessionId) ?? null;
   }
 
-  function search(direction: "next" | "prev") {
-    const keyword = searchKeyword.trim();
-    if (!keyword) {
-      setSearchMiss(false);
-      return;
+  function resolveSessionLabel(sessionId: string) {
+    const session = findSession(sessionId);
+    if (!session) return t("session.defaultName");
+    if (isLocalSession(sessionId)) {
+      return localSessionMeta[sessionId]?.label ?? t("session.local");
     }
-    const options: SearchOptions = {
-      caseSensitive: searchCaseSensitive,
-      regex: searchRegex,
-      wholeWord: searchWholeWord,
-      decorations: searchHighlightAll ? searchDecorations : undefined,
-    };
-    const found =
-      direction === "next"
-        ? onSearchNext(keyword, options)
-        : onSearchPrev(keyword, options);
-    setSearchMiss(!found);
+    const profile =
+      profiles.find((entry) => entry.id === session.profileId) ??
+      editingProfile;
+    return profile.name || profile.host || t("session.defaultName");
   }
 
-  const searchResultText = (() => {
-    if (!searchHighlightAll) return "--";
-    const total = searchResultStats?.resultCount ?? 0;
-    if (total <= 0) return "0/0";
-    const index = searchResultStats?.resultIndex ?? -1;
-    const current = index >= 0 ? index + 1 : 0;
-    return `${current}/${total}`;
-  })();
+  function resolveSessionState(sessionId: string) {
+    return sessionStates[sessionId] ?? "connecting";
+  }
+
+  function getTerminalContainerRef(sessionId: string) {
+    const existing = containerRefs.current[sessionId];
+    if (existing) return existing;
+    const refCallback = (element: HTMLDivElement | null) => {
+      registerTerminalContainer(sessionId, element);
+    };
+    containerRefs.current[sessionId] = refCallback;
+    return refCallback;
+  }
+
+  const { openSearch, renderedSearchBar } = useTerminalSearchBar({
+    activeSessionId,
+    onSearchNext,
+    onSearchPrev,
+    onSearchClear,
+    searchResultStats,
+    t,
+  });
+
+  const { openTerminalMenu, openSessionMenu, renderedMenus } = useTerminalMenus(
+    {
+      activeSessionId,
+      activeLinkMenu,
+      hasFocusedLine,
+      hasActiveSelection,
+      onCopyFocusedLine,
+      onCopySelection,
+      onPaste,
+      onClear,
+      onOpenSearch: openSearch,
+      onOpenLink,
+      onCopyLink,
+      onCloseLinkMenu,
+      onFocusPane,
+      onSwitchSession,
+      onReconnectSession,
+      onSaveSession,
+      onSplitActivePane,
+      onClosePaneSession,
+      onCloseOtherSessionsInPane,
+      onCloseSessionsToRightInPane,
+      onCloseAllSessionsInPane,
+      t,
+    },
+  );
 
   return (
     <main className="terminal-panel">
-      <div className="terminal-header">
-        <div className="session-tabs">
-          {sessions.map((item) => {
-            const localSession = isLocalSession(item.sessionId);
-            const profile =
-              profiles.find((entry) => entry.id === item.profileId) ??
-              editingProfile;
-            const localLabel =
-              localSessionMeta[item.sessionId]?.label ?? t("session.local");
-            const label = localSession
-              ? localLabel
-              : profile.name || profile.host || t("session.defaultName");
-            const active = item.sessionId === activeSessionId;
-            const state = sessionStates[item.sessionId];
-            return (
-              <div
-                key={item.sessionId}
-                className={`session-tab ${active ? "active" : ""} ${
-                  state === "disconnected" ? "disconnected" : ""
-                }`}
-              >
-                {/* 短标签也保留稳定点击区，避免切换会话时误点到右侧关闭按钮。 */}
-                <button
-                  className="session-tab-trigger"
-                  onClick={() => onSwitchSession(item.sessionId)}
-                >
-                  {label}
-                </button>
-                <button
-                  className="close"
-                  onClick={() => onDisconnectSession(item.sessionId)}
-                >
-                  x
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
       <div className="terminal-body">
-        {sessions.map((item) => {
-          const active = item.sessionId === activeSessionId;
-          const ready = isTerminalReady(item.sessionId);
-          const refCallback =
-            containerRefs.current[item.sessionId] ??
-            ((element) => {
-              registerTerminalContainer(item.sessionId, element);
-            });
-          containerRefs.current[item.sessionId] = refCallback;
-          return (
-            <div
-              key={item.sessionId}
-              className={`terminal-container ${active ? "active" : ""} ${
-                ready ? "ready" : ""
-              }`}
-              ref={refCallback}
-              onClick={(event) => {
-                onFocusLineAtPoint(item.sessionId, event.clientY);
-              }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                if (!active) return;
-                onFocusLineAtPoint(item.sessionId, event.clientY);
-                onCloseLinkMenu();
-                setMenu({ x: event.clientX, y: event.clientY });
-              }}
-            />
-          );
-        })}
+        {workspace.root && (
+          <TerminalPaneTree
+            root={workspace.root}
+            activePaneId={workspace.activePaneId}
+            getTerminalContainerRef={getTerminalContainerRef}
+            isTerminalReady={isTerminalReady}
+            getSessionLabel={resolveSessionLabel}
+            getSessionState={resolveSessionState}
+            onFocusPane={onFocusPane}
+            onSwitchSession={onSwitchSession}
+            onReorderPaneSessions={onReorderPaneSessions}
+            onOpenSessionMenu={openSessionMenu}
+            onClosePaneSession={(paneId, sessionId) => {
+              if (activeSessionId !== sessionId) {
+                onSwitchSession(sessionId);
+              }
+              onClosePaneSession(paneId, sessionId).catch(() => {});
+            }}
+            onResizePaneSplit={onResizePaneSplit}
+            onPaneClick={(sessionId, event) => {
+              onSwitchSession(sessionId);
+              onFocusLineAtPoint(sessionId, event.clientY);
+            }}
+            onPaneContextMenu={(sessionId, event) => {
+              event.preventDefault();
+              onSwitchSession(sessionId);
+              onFocusLineAtPoint(sessionId, event.clientY);
+              openTerminalMenu(event.clientX, event.clientY);
+            }}
+          />
+        )}
         {activeSessionState === "disconnected" &&
           activeSessionReason === "exit" && (
             <div className="terminal-banner">{t("terminal.exitHint")}</div>
@@ -242,201 +253,8 @@ export default function TerminalPanel({
           activeSessionReason !== "exit" && (
             <div className="terminal-empty">{t("terminal.empty")}</div>
           )}
-        {menu && (
-          <ContextMenu
-            x={menu.x}
-            y={menu.y}
-            items={[
-              {
-                label: t("terminal.menu.copy"),
-                disabled: !hasFocusedLine() && !hasActiveSelection(),
-                onClick: () => {
-                  // 右键菜单只保留一个“复制”入口：
-                  // 有选区时优先复制选中内容，否则退回复制当前聚焦行。
-                  if (hasActiveSelection()) {
-                    onCopySelection().catch(() => {});
-                  } else {
-                    onCopyFocusedLine().catch(() => {});
-                  }
-                  closeMenu();
-                },
-              },
-              {
-                label: t("terminal.menu.paste"),
-                disabled: !activeSessionId,
-                onClick: () => {
-                  onPaste().catch(() => {});
-                  closeMenu();
-                },
-              },
-              {
-                label: t("terminal.menu.clear"),
-                disabled: !activeSessionId,
-                onClick: () => {
-                  onClear();
-                  closeMenu();
-                },
-              },
-              {
-                label: t("terminal.menu.search"),
-                disabled: !activeSessionId,
-                onClick: () => {
-                  closeMenu();
-                  setSearchVisible(true);
-                },
-              },
-            ]}
-            onClose={closeMenu}
-          />
-        )}
-        {/* 终端 URL 点击菜单：与普通右键菜单分开维护，避免互相覆盖。 */}
-        {activeLinkMenu && (
-          <ContextMenu
-            x={activeLinkMenu.x}
-            y={activeLinkMenu.y}
-            items={[
-              {
-                label: t("terminal.menu.openLink"),
-                disabled: false,
-                onClick: () => {
-                  onOpenLink().catch(() => {});
-                },
-              },
-              {
-                label: t("terminal.menu.copyLink"),
-                disabled: false,
-                onClick: () => {
-                  onCopyLink().catch(() => {});
-                },
-              },
-            ]}
-            onClose={onCloseLinkMenu}
-          />
-        )}
-        {searchVisible && (
-          <div className="terminal-search-bar">
-            <input
-              ref={searchInputRef}
-              className={`terminal-search-input ${searchMiss ? "miss" : ""}`}
-              value={searchKeyword}
-              placeholder={t("terminal.search.placeholder")}
-              onChange={(event) => {
-                setSearchKeyword(event.target.value);
-                setSearchMiss(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  search(event.shiftKey ? "prev" : "next");
-                  return;
-                }
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  setSearchVisible(false);
-                  setSearchMiss(false);
-                  onSearchClear();
-                }
-              }}
-            />
-            <div className="terminal-search-options">
-              <button
-                className={`terminal-search-toggle ${
-                  searchCaseSensitive ? "active" : ""
-                }`}
-                type="button"
-                aria-pressed={searchCaseSensitive}
-                aria-label={t("terminal.search.caseSensitive")}
-                title={t("terminal.search.caseSensitive")}
-                onClick={() => {
-                  setSearchCaseSensitive((prev) => !prev);
-                  setSearchMiss(false);
-                }}
-              >
-                Aa
-              </button>
-              <button
-                className={`terminal-search-toggle ${
-                  searchRegex ? "active" : ""
-                }`}
-                type="button"
-                aria-pressed={searchRegex}
-                aria-label={t("terminal.search.regex")}
-                title={t("terminal.search.regex")}
-                onClick={() => {
-                  setSearchRegex((prev) => !prev);
-                  setSearchMiss(false);
-                }}
-              >
-                .*
-              </button>
-              <button
-                className={`terminal-search-toggle ${
-                  searchWholeWord ? "active" : ""
-                }`}
-                type="button"
-                aria-pressed={searchWholeWord}
-                aria-label={t("terminal.search.wholeWord")}
-                title={t("terminal.search.wholeWord")}
-                onClick={() => {
-                  setSearchWholeWord((prev) => !prev);
-                  setSearchMiss(false);
-                }}
-              >
-                W
-              </button>
-              <button
-                className={`terminal-search-toggle ${
-                  searchHighlightAll ? "active" : ""
-                }`}
-                type="button"
-                aria-pressed={searchHighlightAll}
-                aria-label={t("terminal.search.highlightAll")}
-                title={t("terminal.search.highlightAll")}
-                onClick={() => {
-                  setSearchHighlightAll((prev) => {
-                    const next = !prev;
-                    if (!next) onSearchClear();
-                    return next;
-                  });
-                  setSearchMiss(false);
-                }}
-              >
-                HL
-              </button>
-            </div>
-            <div
-              className="terminal-search-results"
-              aria-label={t("terminal.search.results")}
-            >
-              {searchResultText}
-            </div>
-            <button
-              className="terminal-search-icon-button"
-              aria-label="search-prev"
-              onClick={() => search("prev")}
-            >
-              <FiChevronUp />
-            </button>
-            <button
-              className="terminal-search-icon-button"
-              aria-label="search-next"
-              onClick={() => search("next")}
-            >
-              <FiChevronDown />
-            </button>
-            <button
-              className="terminal-search-icon-button"
-              aria-label={t("actions.close")}
-              onClick={() => {
-                setSearchVisible(false);
-                setSearchMiss(false);
-                onSearchClear();
-              }}
-            >
-              <FiX />
-            </button>
-          </div>
-        )}
+        {renderedMenus}
+        {renderedSearchBar}
       </div>
     </main>
   );

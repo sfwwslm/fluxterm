@@ -25,6 +25,31 @@ export type Session = {
   lastError?: { code: string; message: string; detail?: string | null } | null;
 };
 
+/** 会话窗格标识。 */
+export type SessionPaneId = string;
+
+/** 会话窗格树节点。 */
+export type SessionPaneNode =
+  | {
+      kind: "leaf";
+      paneId: SessionPaneId;
+      sessionIds: string[];
+      activeSessionId: string | null;
+    }
+  | {
+      kind: "split";
+      axis: "horizontal" | "vertical";
+      ratio: number;
+      first: SessionPaneNode;
+      second: SessionPaneNode;
+    };
+
+/** 会话工作区状态。 */
+export type SessionWorkspaceState = {
+  root: SessionPaneNode | null;
+  activePaneId: SessionPaneId | null;
+};
+
 /** SFTP 文件条目。 */
 export type SftpEntry = {
   path: string;

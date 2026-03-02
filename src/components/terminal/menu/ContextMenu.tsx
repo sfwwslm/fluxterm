@@ -1,9 +1,13 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import "./ContextMenu.css";
 
-type ContextMenuItem = {
+export type ContextMenuItem = {
+  id?: string;
   label: string;
-  disabled: boolean;
+  disabled?: boolean;
+  icon?: ReactNode | null;
+  danger?: boolean;
   onClick: () => void;
 };
 
@@ -61,11 +65,15 @@ export default function ContextMenu({
       >
         {items.map((item) => (
           <button
-            key={item.label}
+            key={item.id ?? item.label}
+            className={item.danger ? "danger" : ""}
             disabled={item.disabled}
             onClick={item.onClick}
           >
-            {item.label}
+            <span className="context-menu-icon" aria-hidden="true">
+              {item.icon ?? null}
+            </span>
+            <span className="context-menu-label">{item.label}</span>
           </button>
         ))}
       </div>

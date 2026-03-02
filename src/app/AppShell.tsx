@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import { info, warn } from "@tauri-apps/plugin-log";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
 import ConfigModal, {
   type ConfigSectionItem,
@@ -991,6 +993,26 @@ export default function AppShell() {
     }
   }
 
+  async function handleSaveSessionBuffer(sessionId: string) {
+    const session = sessionState.sessions.find(
+      (item) => item.sessionId === sessionId,
+    );
+    if (!session) return;
+    const text = terminalQuery.getSessionBufferText(sessionId) ?? "";
+    const isLocal = sessionActions.isLocalSession(sessionId);
+    const profile =
+      profiles.find((item) => item.id === session.profileId) ?? editingProfile;
+    const baseName = isLocal
+      ? (sessionState.localSessionMeta[sessionId]?.label ?? t("session.local"))
+      : profile.name || profile.host || t("session.defaultName");
+    const target = await save({
+      defaultPath: `${baseName}.log`,
+      filters: [{ name: "Log", extensions: ["log", "txt"] }],
+    });
+    if (!target) return;
+    await writeTextFile(target, text);
+  }
+
   const floatingFilesChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
@@ -1308,6 +1330,7 @@ export default function AppShell() {
             terminalPanel={
               <TerminalPanel
                 sessions={sessionState.sessions}
+                workspace={sessionState.workspace}
                 profiles={profiles}
                 editingProfile={editingProfile}
                 localSessionMeta={sessionState.localSessionMeta}
@@ -1337,7 +1360,20 @@ export default function AppShell() {
                 searchResultStats={terminalQuery.getActiveSearchStats()}
                 isLocalSession={sessionActions.isLocalSession}
                 onSwitchSession={sessionActions.switchSession}
-                onDisconnectSession={sessionActions.disconnectSession}
+                onFocusPane={sessionActions.focusPane}
+                onReorderPaneSessions={sessionActions.reorderPaneSessions}
+                onReconnectSession={sessionActions.reconnectSession}
+                onSaveSession={handleSaveSessionBuffer}
+                onSplitActivePane={sessionActions.splitActivePane}
+                onClosePaneSession={sessionActions.closePaneSession}
+                onResizePaneSplit={sessionActions.resizePaneSplit}
+                onCloseOtherSessionsInPane={
+                  sessionActions.closeOtherSessionsInPane
+                }
+                onCloseSessionsToRightInPane={
+                  sessionActions.closeSessionsToRightInPane
+                }
+                onCloseAllSessionsInPane={sessionActions.closeAllSessionsInPane}
                 t={t}
               />
             }

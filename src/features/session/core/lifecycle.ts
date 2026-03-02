@@ -11,10 +11,12 @@ export type ReplaceSessionConnectionParams = {
   nextSession: Session;
   nextState?: SessionStateUi;
   nextLocalMeta?: { shellId: string | null; label: string };
-  activeSessionIdRef: React.RefObject<string | null>;
   localSessionIdsRef: React.RefObject<Set<string>>;
   clearReconnectState: (sessionId: string) => void;
-  setActiveSessionId: (sessionId: string) => void;
+  replaceWorkspaceSession: (
+    oldSessionId: string,
+    nextSessionId: string,
+  ) => void;
   setSessions: Setter<Session[]>;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
   setSessionReasons: Setter<Record<string, import("@/types").DisconnectReason>>;
@@ -33,10 +35,9 @@ export function replaceSessionConnectionState({
   nextSession,
   nextState = "connecting",
   nextLocalMeta,
-  activeSessionIdRef,
   localSessionIdsRef,
   clearReconnectState,
-  setActiveSessionId,
+  replaceWorkspaceSession,
   setSessions,
   setSessionStates,
   setSessionReasons,
@@ -80,8 +81,5 @@ export function replaceSessionConnectionState({
     delete next[oldSessionId];
     return next;
   });
-
-  if (activeSessionIdRef.current === oldSessionId) {
-    setActiveSessionId(nextSession.sessionId);
-  }
+  replaceWorkspaceSession(oldSessionId, nextSession.sessionId);
 }

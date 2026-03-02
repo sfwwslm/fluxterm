@@ -1,6 +1,9 @@
 /**
  * 终端运行时核心 Hook。
- * 职责：管理 xterm 生命周期、输入输出与搜索能力。
+ * 职责：
+ * 1. 管理 xterm 实例创建、挂载、重建与销毁。
+ * 2. 维护终端输出缓存，保证 split/重挂载后仍能回放完整会话内容。
+ * 3. 提供搜索、复制、链接菜单和尺寸同步等终端能力。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -70,6 +73,7 @@ type TerminalRuntime = {
     windowCols: number;
     bufferLines: number;
   };
+  getSessionBufferText: (sessionId: string) => string | null;
   getActiveSearchStats: () => {
     resultIndex: number;
     resultCount: number;
@@ -262,6 +266,10 @@ export default function useTerminalRuntime({
   const terminalsRef = useRef<Record<string, TerminalBundle>>({});
   const containersRef = useRef<Record<string, HTMLDivElement | null>>({});
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const observedContainersRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const observedSessionIdByElementRef = useRef<WeakMap<Element, string>>(
+    new WeakMap(),
+  );
   const lastResizedSizeRef = useRef<Record<string, string>>({});
   const activeSessionIdRef = useRef<string | null>(null);
   const xtermModulesRef = useRef<XtermModules | null>(null);
@@ -373,33 +381,88 @@ export default function useTerminalRuntime({
     writeToSession,
   ]);
 
-  function observeActiveContainer(
+  function syncTerminalSize(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return;
+    safeFit(bundle.fitAddon, bundle.host);
+    const sizeKey = `${bundle.terminal.cols}x${bundle.terminal.rows}`;
+    if (lastResizedSizeRef.current[sessionId] === sizeKey) {
+      return;
+    }
+    lastResizedSizeRef.current[sessionId] = sizeKey;
+    handlersRef.current
+      .resizeSession(sessionId, bundle.terminal.cols, bundle.terminal.rows)
+      .catch(() => {});
+  }
+
+  function ensureResizeObserver() {
+    if (!resizeObserverRef.current) {
+      resizeObserverRef.current = new ResizeObserver((entries) => {
+        entries.forEach((entry) => {
+          const sessionId = observedSessionIdByElementRef.current.get(
+            entry.target,
+          );
+          if (!sessionId) return;
+          syncTerminalSize(sessionId);
+        });
+      });
+    }
+    return resizeObserverRef.current;
+  }
+
+  function observeTerminalContainer(
     container: HTMLDivElement | null,
     sessionId: string,
   ) {
-    if (!container || !sessionId) return;
-    if (!resizeObserverRef.current) {
-      resizeObserverRef.current = new ResizeObserver(() => {
-        const activeId = activeSessionIdRef.current;
-        if (!activeId) return;
-        const bundle = terminalsRef.current[activeId];
-        if (!bundle) return;
-        safeFit(bundle.fitAddon, bundle.host);
-        const sizeKey = `${bundle.terminal.cols}x${bundle.terminal.rows}`;
-        if (lastResizedSizeRef.current[activeId] !== sizeKey) {
-          lastResizedSizeRef.current[activeId] = sizeKey;
-          handlersRef.current
-            .resizeSession(activeId, bundle.terminal.cols, bundle.terminal.rows)
-            .catch(() => {});
-        }
-      });
+    if (!sessionId) return;
+    const observer = ensureResizeObserver();
+    const previousContainer = observedContainersRef.current.get(sessionId);
+    if (previousContainer && previousContainer !== container) {
+      observer.unobserve(previousContainer);
+      observedContainersRef.current.delete(sessionId);
     }
-    resizeObserverRef.current.disconnect();
-    resizeObserverRef.current.observe(container);
+    if (!container) return;
+    // 每个会话容器尺寸都可能因 split/折叠/切换区域而变化，必须各自独立观察。
+    observedContainersRef.current.set(sessionId, container);
+    observedSessionIdByElementRef.current.set(container, sessionId);
+    observer.observe(container);
   }
 
   function writeToBundle(bundle: TerminalBundle, data: string) {
     bundle.terminal.write(data);
+  }
+
+  function appendSessionBuffer(sessionId: string, data: string) {
+    const buffer = sessionBuffersRef.current[sessionId] ?? "";
+    sessionBuffersRef.current[sessionId] = buffer + data;
+  }
+
+  /**
+   * xterm 首次 mount 后，宿主容器尺寸、字体测量和 pane 布局可能还没稳定。
+   * 这里统一做延迟 fit/focus/resize，避免把同类补丁散落到多个 effect。
+   */
+  function finalizeTerminalMount(sessionId: string, attempt = 0) {
+    const latest = terminalsRef.current[sessionId];
+    if (!latest) return;
+    safeFit(latest.fitAddon, latest.host);
+    const hostHeight = latest.host.clientHeight;
+    const rows = latest.terminal.rows;
+    const cols = latest.terminal.cols;
+    const readyForUse = hostHeight > 24 && rows > 1 && cols > 1;
+
+    if (!readyForUse && attempt < 8) {
+      window.requestAnimationFrame(() => {
+        finalizeTerminalMount(sessionId, attempt + 1);
+      });
+      return;
+    }
+
+    if (activeSessionIdRef.current === sessionId) {
+      if (!shouldPreserveFocusedElement()) {
+        latest.terminal.focus();
+      }
+    }
+    syncTerminalSize(sessionId);
   }
 
   function disposeFocusedLine(sessionId: string) {
@@ -639,7 +702,6 @@ export default function useTerminalRuntime({
     const fit = new modules.FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    safeFit(fit, host);
     let webglAddon: WebglAddon | null = null;
     // 优先启用 WebGL 渲染；不可用时保持默认渲染路径，确保兼容性。
     if (modules.WebglAddon) {
@@ -771,19 +833,16 @@ export default function useTerminalRuntime({
     terminalsRef.current[sessionId] = bundle;
     setTerminalReadyBySession((prev) => ({ ...prev, [sessionId]: true }));
 
-    // 新建或重建当前激活会话时立即聚焦，避免回车重连后需要鼠标点击。
-    if (
-      activeSessionIdRef.current === sessionId &&
-      !shouldPreserveFocusedElement()
-    ) {
-      bundle.terminal.focus();
-    }
-
     const bufferedData = sessionBuffersRef.current[sessionId];
     if (bufferedData) {
       writeToBundle(bundle, bufferedData);
-      delete sessionBuffersRef.current[sessionId];
     }
+
+    // 首次挂载时，pane/header 布局和字体测量可能还没稳定。
+    // 这里补一轮延迟 fit/focus，避免首个默认会话进入“active ready 但无法正常交互”的状态。
+    window.requestAnimationFrame(() => {
+      finalizeTerminalMount(sessionId);
+    });
   }
 
   function disposeTerminal(sessionId: string) {
@@ -814,10 +873,13 @@ export default function useTerminalRuntime({
       containersRef.current[sessionId] = element;
       if (element) {
         ensureTerminal(sessionId, element).catch(() => {});
-        if (sessionId === activeSessionIdRef.current) {
-          observeActiveContainer(element, sessionId);
-        }
+        observeTerminalContainer(element, sessionId);
       } else {
+        const observedContainer = observedContainersRef.current.get(sessionId);
+        if (observedContainer && resizeObserverRef.current) {
+          resizeObserverRef.current.unobserve(observedContainer);
+        }
+        observedContainersRef.current.delete(sessionId);
         disposeTerminal(sessionId);
       }
     },
@@ -832,12 +894,10 @@ export default function useTerminalRuntime({
       const outputUnlisten = await registerTerminalOutputListener(
         ({ sessionId, data }) => {
           parseWorkingDirectoryFromPrompt(sessionId, data);
+          appendSessionBuffer(sessionId, data);
           const bundle = terminalsRef.current[sessionId];
           if (bundle) {
             writeToBundle(bundle, data);
-          } else {
-            const buffer = sessionBuffersRef.current[sessionId] ?? "";
-            sessionBuffersRef.current[sessionId] = buffer + data;
           }
         },
       );
@@ -869,30 +929,19 @@ export default function useTerminalRuntime({
   }, [scrollback]);
 
   useEffect(() => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !activeSession) return;
+    observeTerminalContainer(
+      terminalsRef.current[activeSessionId]?.container ?? null,
+      activeSessionId,
+    );
+    finalizeTerminalMount(activeSessionId);
     const bundle = terminalsRef.current[activeSessionId];
     if (!bundle) return;
-    safeFit(bundle.fitAddon, bundle.host);
-    // 会话切换/重连替换后，主动恢复焦点到当前终端实例。
-    if (!shouldPreserveFocusedElement()) {
-      bundle.terminal.focus();
-    }
-    if (!activeSession) return;
     onSizeChange?.({
       cols: bundle.terminal.cols,
       rows: bundle.terminal.rows,
     });
-    const sizeKey = `${bundle.terminal.cols}x${bundle.terminal.rows}`;
-    if (lastResizedSizeRef.current[activeSession.sessionId] !== sizeKey) {
-      lastResizedSizeRef.current[activeSession.sessionId] = sizeKey;
-      resizeSession(
-        activeSession.sessionId,
-        bundle.terminal.cols,
-        bundle.terminal.rows,
-      ).catch(() => {});
-    }
-    observeActiveContainer(bundle.container, activeSessionId);
-  }, [activeSession, activeSessionId, onSizeChange, resizeSession]);
+  }, [activeSession, activeSessionId, onSizeChange, terminalReadyBySession]);
 
   useEffect(() => {
     const activeIds = new Set(sessions.map((item) => item.sessionId));
@@ -902,6 +951,14 @@ export default function useTerminalRuntime({
       }
     });
   }, [sessions]);
+
+  useEffect(
+    () => () => {
+      resizeObserverRef.current?.disconnect();
+      observedContainersRef.current.clear();
+    },
+    [],
+  );
 
   function isTerminalReady(sessionId: string) {
     return !!terminalReadyBySession[sessionId];
@@ -929,6 +986,18 @@ export default function useTerminalRuntime({
       windowCols: bundle.terminal.cols,
       bufferLines: getAbsoluteCursorLine(bundle.terminal) + 1,
     };
+  }
+
+  function getSessionBufferText(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return sessionBuffersRef.current[sessionId] ?? null;
+    const maxLine = getAbsoluteCursorLine(bundle.terminal);
+    const lines: string[] = [];
+    for (let lineIndex = 0; lineIndex <= maxLine; lineIndex += 1) {
+      const line = bundle.terminal.buffer.active.getLine(lineIndex);
+      lines.push(line ? line.translateToString(true) : "");
+    }
+    return lines.join("\n");
   }
 
   /** 获取当前终端的搜索统计信息（仅在开启高亮时可用）。 */
@@ -1076,9 +1145,11 @@ export default function useTerminalRuntime({
   }
 
   function clearActiveTerminal() {
+    const sessionId = activeSessionIdRef.current;
     const bundle = getActiveBundle();
-    if (!bundle) return false;
+    if (!bundle || !sessionId) return false;
     bundle.terminal.clear();
+    sessionBuffersRef.current[sessionId] = "";
     return true;
   }
 
@@ -1149,6 +1220,7 @@ export default function useTerminalRuntime({
     isTerminalReady,
     getTerminalSize,
     getActiveTerminalStats,
+    getSessionBufferText,
     getActiveSearchStats,
     getActiveLinkMenu,
     focusActiveTerminal,

@@ -13,6 +13,7 @@ import type {
   LogLevel,
   Session,
   SessionStateUi,
+  SessionWorkspaceState,
 } from "@/types";
 import { useNotices } from "@/hooks/useNotices";
 import { inferDisconnectReason } from "@/features/session/core/disconnectReason";
@@ -24,6 +25,7 @@ import {
   clearReconnectStateById,
   scheduleReconnectAttempt,
 } from "@/features/session/core/reconnectRuntime";
+import useSessionWorkspace from "@/features/session/hooks/useSessionWorkspace";
 import {
   connectLocalShellCommand,
   connectProfileCommand,
@@ -47,6 +49,7 @@ type UseSessionStateProps = {
 
 type UseSessionStateResult = {
   sessions: Session[];
+  workspace: SessionWorkspaceState;
   activeSessionId: string | null;
   sessionStates: Record<string, SessionStateUi>;
   sessionReasons: Record<string, DisconnectReason>;
@@ -95,6 +98,24 @@ type UseSessionStateResult = {
   reconnectSession: (sessionId: string) => Promise<void>;
   reconnectLocalShell: (sessionId: string) => Promise<void>;
   switchSession: (sessionId: string) => void;
+  focusPane: (paneId: string) => void;
+  reorderPaneSessions: (
+    paneId: string,
+    sourceSessionId: string,
+    targetSessionId: string,
+  ) => void;
+  splitActivePane: (axis: "horizontal" | "vertical") => Promise<void>;
+  closePaneSession: (paneId: string, sessionId: string) => Promise<void>;
+  resizePaneSplit: (paneId: string, ratio: number) => void;
+  closeOtherSessionsInPane: (
+    paneId: string,
+    sessionId: string,
+  ) => Promise<void>;
+  closeSessionsToRightInPane: (
+    paneId: string,
+    sessionId: string,
+  ) => Promise<void>;
+  closeAllSessionsInPane: (paneId: string) => Promise<void>;
 };
 
 /** 会话与连接状态管理。 */
@@ -107,8 +128,8 @@ export default function useSessionState({
   getTerminalSize,
 }: UseSessionStateProps): UseSessionStateResult {
   const { openDialog } = useNotices();
+  const sessionWorkspace = useSessionWorkspace();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessionStates, setSessionStates] = useState<
     Record<string, SessionStateUi>
   >({});
@@ -177,9 +198,12 @@ export default function useSessionState({
   });
 
   const activeSession = useMemo(() => {
+    const activeSessionId = sessionWorkspace.activeSessionId;
     if (!activeSessionId) return null;
     return sessions.find((item) => item.sessionId === activeSessionId) ?? null;
-  }, [sessions, activeSessionId]);
+  }, [sessions, sessionWorkspace.activeSessionId]);
+
+  const activeSessionId = sessionWorkspace.activeSessionId;
 
   const activeSessionState = activeSessionId
     ? (sessionStates[activeSessionId] ?? null)
@@ -289,10 +313,9 @@ export default function useSessionState({
       nextSession,
       nextState,
       nextLocalMeta,
-      activeSessionIdRef,
       localSessionIdsRef,
       clearReconnectState,
-      setActiveSessionId,
+      replaceWorkspaceSession: sessionWorkspace.replaceSession,
       setSessions,
       setSessionStates,
       setSessionReasons,
@@ -498,7 +521,14 @@ export default function useSessionState({
       createSshSession,
       sessionStatesRef,
       setSessions,
-      setActiveSessionId,
+      attachSessionToWorkspace: (sessionId) =>
+        sessionWorkspace.attachSession(
+          sessionId,
+          true,
+          sessionWorkspace.workspace.root
+            ? { paneId: sessionWorkspace.getActivePaneId() ?? undefined }
+            : undefined,
+        ),
       setSessionStates,
       setSessionReasons,
       t,
@@ -519,7 +549,14 @@ export default function useSessionState({
       localSessionIdsRef,
       setLocalSessionMeta,
       setSessions,
-      setActiveSessionId,
+      attachSessionToWorkspace: (sessionId, nextActivate = activate) =>
+        sessionWorkspace.attachSession(
+          sessionId,
+          nextActivate,
+          sessionWorkspace.workspace.root
+            ? { paneId: sessionWorkspace.getActivePaneId() ?? undefined }
+            : undefined,
+        ),
       setSessionStates,
       setSessionReasons,
       t,
@@ -533,15 +570,14 @@ export default function useSessionState({
       sessionId,
       state,
       localSession,
-      activeSessionId,
       sendDisconnect: (id, local) =>
         callTauri(local ? "local_shell_disconnect" : "ssh_disconnect", {
           sessionId: id,
         }),
+      detachSessionFromWorkspace: sessionWorkspace.detachSession,
       localSessionIdsRef,
       setLocalSessionMeta,
       setSessions,
-      setActiveSessionId,
       setSessionStates,
       setSessionReasons,
       setReconnectInfoBySession,
@@ -572,7 +608,109 @@ export default function useSessionState({
   }
 
   function switchSession(sessionId: string) {
-    setActiveSessionId(sessionId);
+    sessionWorkspace.activateSession(sessionId);
+  }
+
+  function focusPane(paneId: string) {
+    sessionWorkspace.focusPane(paneId);
+  }
+
+  function reorderPaneSessions(
+    paneId: string,
+    sourceSessionId: string,
+    targetSessionId: string,
+  ) {
+    sessionWorkspace.reorderPaneSessions(
+      paneId,
+      sourceSessionId,
+      targetSessionId,
+    );
+  }
+
+  async function closeSessions(sessionIds: string[]) {
+    for (const sessionId of sessionIds) {
+      await disconnectSession(sessionId);
+    }
+  }
+
+  function getPaneSessions(paneId: string) {
+    const pane = sessionWorkspace
+      .getLeafPanes()
+      .find((item) => item.paneId === paneId);
+    return pane?.sessionIds ?? [];
+  }
+
+  async function closePaneSession(paneId: string, sessionId: string) {
+    const paneSessions = getPaneSessions(paneId);
+    if (!paneSessions.includes(sessionId)) return;
+    await disconnectSession(sessionId);
+  }
+
+  async function closeOtherSessionsInPane(paneId: string, sessionId: string) {
+    const paneSessions = getPaneSessions(paneId);
+    await closeSessions(paneSessions.filter((item) => item !== sessionId));
+  }
+
+  async function closeSessionsToRightInPane(paneId: string, sessionId: string) {
+    const paneSessions = getPaneSessions(paneId);
+    const sessionIndex = paneSessions.indexOf(sessionId);
+    if (sessionIndex < 0) return;
+    await closeSessions(paneSessions.slice(sessionIndex + 1));
+  }
+
+  async function closeAllSessionsInPane(paneId: string) {
+    await closeSessions(getPaneSessions(paneId));
+  }
+
+  function resizePaneSplit(paneId: string, ratio: number) {
+    sessionWorkspace.resizeSplit(paneId, ratio);
+  }
+
+  async function splitActivePane(axis: "horizontal" | "vertical") {
+    const activePaneId = sessionWorkspace.getActivePaneId();
+    const activeSessionId = sessionWorkspace.activeSessionId;
+    if (!activePaneId || !activeSessionId) return;
+
+    const currentSession = sessionsRef.current.find(
+      (item) => item.sessionId === activeSessionId,
+    );
+    if (!currentSession) return;
+
+    let nextSession: Session;
+    if (isLocalSession(activeSessionId)) {
+      const meta = localSessionMetaRef.current[activeSessionId];
+      nextSession = await createLocalShellSession(meta?.shellId ?? null);
+      localSessionIdsRef.current.add(nextSession.sessionId);
+      setLocalSessionMeta((prev) => ({
+        ...prev,
+        [nextSession.sessionId]: {
+          shellId: meta?.shellId ?? null,
+          label: meta?.label ?? t("session.local"),
+        },
+      }));
+      setSessionStates((prev) => ({
+        ...prev,
+        [nextSession.sessionId]: "connected",
+      }));
+    } else {
+      const profile = profilesRef.current.find(
+        (item) => item.id === currentSession.profileId,
+      );
+      if (!profile) return;
+      nextSession = await createSshSession(profile);
+      setSessionStates((prev) => ({
+        ...prev,
+        [nextSession.sessionId]: "connecting",
+      }));
+    }
+
+    setSessions((prev) => prev.concat(nextSession));
+    setSessionReasons((prev) => {
+      const next = { ...prev };
+      delete next[nextSession.sessionId];
+      return next;
+    });
+    sessionWorkspace.splitPane(activePaneId, nextSession.sessionId, axis);
   }
 
   useEffect(() => {
@@ -617,7 +755,7 @@ export default function useSessionState({
     localShellStartedRef.current = true;
     connectLocalShell(
       availableShells.find((shell) => shell.id === shellId) ?? null,
-      false,
+      true,
     ).catch(() => {});
   }, [availableShells, connectLocalShell, settingsLoaded, shellId]);
 
@@ -654,6 +792,7 @@ export default function useSessionState({
 
   return {
     sessions,
+    workspace: sessionWorkspace.workspace,
     activeSessionId,
     sessionStates,
     sessionReasons,
@@ -689,5 +828,13 @@ export default function useSessionState({
     reconnectSession,
     reconnectLocalShell,
     switchSession,
+    focusPane,
+    reorderPaneSessions,
+    splitActivePane,
+    closePaneSession,
+    resizePaneSplit,
+    closeOtherSessionsInPane,
+    closeSessionsToRightInPane,
+    closeAllSessionsInPane,
   };
 }

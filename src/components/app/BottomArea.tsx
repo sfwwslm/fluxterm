@@ -155,18 +155,23 @@ export default function BottomArea({
   >(null);
   const now = useMinuteClock();
   const quickbarMenuRef = useRef<HTMLDivElement | null>(null);
+  const getActiveTerminalStatsRef = useRef(getActiveTerminalStats);
   const [quickbarMenuOpen, setQuickbarMenuOpen] = useState(false);
   const [resourcePopoverOpen, setResourcePopoverOpen] = useState(false);
 
   useEffect(() => {
-    setStats(getActiveTerminalStats());
+    getActiveTerminalStatsRef.current = getActiveTerminalStats;
+  }, [getActiveTerminalStats]);
+
+  useEffect(() => {
+    setStats(getActiveTerminalStatsRef.current());
     const timer = window.setInterval(() => {
-      setStats(getActiveTerminalStats());
+      setStats(getActiveTerminalStatsRef.current());
     }, 250);
     return () => {
       window.clearInterval(timer);
     };
-  }, [getActiveTerminalStats]);
+  }, []);
 
   const sortedGroups = useMemo(
     () => [...groups].sort((a, b) => a.order - b.order),

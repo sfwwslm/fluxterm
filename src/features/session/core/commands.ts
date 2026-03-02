@@ -18,7 +18,7 @@ type ConnectProfileCommandParams = {
   createSshSession: (profile: HostProfile) => Promise<Session>;
   sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
   setSessions: Setter<Session[]>;
-  setActiveSessionId: Setter<string | null>;
+  attachSessionToWorkspace: (sessionId: string) => void;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
   setSessionReasons: Setter<Record<string, DisconnectReason>>;
   t: Translate;
@@ -37,7 +37,7 @@ export async function connectProfileCommand({
   createSshSession,
   sessionStatesRef,
   setSessions,
-  setActiveSessionId,
+  attachSessionToWorkspace,
   setSessionStates,
   setSessionReasons,
   t,
@@ -64,7 +64,7 @@ export async function connectProfileCommand({
       }),
     );
     setSessions((prev) => prev.concat(result));
-    setActiveSessionId(result.sessionId);
+    attachSessionToWorkspace(result.sessionId);
     if (existingState !== "error" && existingState !== "disconnected") {
       setSessionStates((prev) => ({
         ...prev,
@@ -103,7 +103,7 @@ type ConnectLocalShellCommandParams = {
     Record<string, { shellId: string | null; label: string }>
   >;
   setSessions: Setter<Session[]>;
-  setActiveSessionId: Setter<string | null>;
+  attachSessionToWorkspace: (sessionId: string, activate?: boolean) => void;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
   setSessionReasons: Setter<Record<string, DisconnectReason>>;
   t: Translate;
@@ -117,7 +117,7 @@ export async function connectLocalShellCommand({
   localSessionIdsRef,
   setLocalSessionMeta,
   setSessions,
-  setActiveSessionId,
+  attachSessionToWorkspace,
   setSessionStates,
   setSessionReasons,
   t,
@@ -132,11 +132,7 @@ export async function connectLocalShellCommand({
     },
   }));
   setSessions((prev) => prev.concat(session));
-  if (activate) {
-    setActiveSessionId(session.sessionId);
-  } else {
-    setActiveSessionId((prev) => prev ?? session.sessionId);
-  }
+  attachSessionToWorkspace(session.sessionId, activate);
   setSessionStates((prev) => ({ ...prev, [session.sessionId]: "connected" }));
   setSessionReasons((prev) => {
     const next = { ...prev };
@@ -149,14 +145,13 @@ type DisconnectSessionCommandParams = {
   sessionId: string;
   state: SessionStateUi | undefined;
   localSession: boolean;
-  activeSessionId: string | null;
   sendDisconnect: (sessionId: string, localSession: boolean) => Promise<void>;
+  detachSessionFromWorkspace: (sessionId: string) => void;
   localSessionIdsRef: React.RefObject<Set<string>>;
   setLocalSessionMeta: Setter<
     Record<string, { shellId: string | null; label: string }>
   >;
   setSessions: Setter<Session[]>;
-  setActiveSessionId: Setter<string | null>;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
   setSessionReasons: Setter<Record<string, DisconnectReason>>;
   setReconnectInfoBySession: Setter<
@@ -169,12 +164,11 @@ export async function disconnectSessionCommand({
   sessionId,
   state,
   localSession,
-  activeSessionId,
   sendDisconnect,
+  detachSessionFromWorkspace,
   localSessionIdsRef,
   setLocalSessionMeta,
   setSessions,
-  setActiveSessionId,
   setSessionStates,
   setSessionReasons,
   setReconnectInfoBySession,
@@ -201,12 +195,9 @@ export async function disconnectSessionCommand({
   }
 
   setSessions((prev) => {
-    const remaining = prev.filter((item) => item.sessionId !== sessionId);
-    if (activeSessionId === sessionId) {
-      setActiveSessionId(remaining[0]?.sessionId ?? null);
-    }
-    return remaining;
+    return prev.filter((item) => item.sessionId !== sessionId);
   });
+  detachSessionFromWorkspace(sessionId);
   setSessionStates((prev) => {
     const next = { ...prev };
     delete next[sessionId];

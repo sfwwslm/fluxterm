@@ -55,9 +55,24 @@
   color: var(--text-secondary);
 }
 
+button.session-tab {
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .session-tab.active {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.session-tab.dragging {
+  opacity: 0.55;
+  transform: scale(0.98);
+}
+
+.session-tab.drop-target {
+  border-color: color-mix(in srgb, var(--accent) 78%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .session-tab.disconnected {
@@ -89,6 +104,11 @@
   background: var(--border-weak);
 }
 
+.session-tab .close svg {
+  width: 12px;
+  height: 12px;
+}
+
 .terminal-body {
   flex: 1;
   position: relative;
@@ -96,11 +116,97 @@
   overflow: hidden;
 }
 
-.terminal-container {
+.terminal-pane-tree {
   position: absolute;
   inset: 0;
-  height: 100%;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.terminal-split {
+  display: flex;
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.terminal-split-horizontal {
+  flex-direction: row;
+}
+
+.terminal-split-vertical {
+  flex-direction: column;
+}
+
+.terminal-split-single {
+  flex: 1;
+  padding: 0;
+}
+
+.terminal-split-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.terminal-split-handle {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-weak) 82%, transparent);
+  transition: background 0.15s ease;
+}
+
+.terminal-split-handle:hover {
+  background: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.terminal-split-handle-horizontal {
+  width: 8px;
+  cursor: col-resize;
+}
+
+.terminal-split-handle-vertical {
+  height: 8px;
+  cursor: row-resize;
+}
+
+.terminal-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--surface-base) 82%, transparent);
+  overflow: hidden;
+}
+
+.terminal-pane.active {
+  border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.session-tab-trigger-inline {
+  flex: 0 0 auto;
+  max-width: 220px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-container {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
   display: none;
   opacity: 0;
   visibility: hidden;
@@ -167,7 +273,7 @@
 
 .terminal-container.active {
   display: block;
-  opacity: 0.65;
+  opacity: 1;
   visibility: visible;
   pointer-events: auto;
 }

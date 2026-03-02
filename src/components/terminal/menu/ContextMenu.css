@@ -16,6 +16,10 @@
 }
 
 .context-menu button {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
   text-align: left;
   padding: 8px 10px;
   border-radius: 8px;
@@ -25,9 +29,31 @@
   cursor: pointer;
 }
 
+.context-menu-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.context-menu-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.context-menu-label {
+  min-width: 0;
+}
+
 .context-menu button:hover {
   background: var(--accent-subtle);
   color: var(--accent);
+}
+
+.context-menu button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
 }
 
 .context-menu button:disabled {
