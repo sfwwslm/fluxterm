@@ -149,10 +149,12 @@ function PaneNodeView({
     >
       <div className="terminal-header">
         <div className="session-tabs">
-          {node.sessionIds.map((sessionId) => {
+          {node.sessionIds.map((sessionId, index) => {
             const sessionActive = sessionId === paneActiveSessionId;
             const disconnected = getSessionState(sessionId) === "disconnected";
             const showCloseButton = sessionActive;
+            // 标签序号按当前 pane 内顺序独立计算，分屏后各区域都从 1 开始。
+            const sessionLabel = `${index + 1}. ${getSessionLabel(sessionId)}`;
             return (
               <div
                 key={sessionId}
@@ -192,7 +194,7 @@ function PaneNodeView({
                     onSwitchSession(sessionId);
                   }}
                 >
-                  {getSessionLabel(sessionId)}
+                  {sessionLabel}
                 </button>
                 {showCloseButton && (
                   <button
