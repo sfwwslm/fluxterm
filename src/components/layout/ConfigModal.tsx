@@ -32,6 +32,7 @@ type ConfigModalProps = {
   sftpEnabled?: boolean;
   fileDefaultEditorPath?: string;
   webLinksEnabled?: boolean;
+  commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
@@ -40,6 +41,7 @@ type ConfigModalProps = {
   onSftpEnabledChange?: (enabled: boolean) => void;
   onFileDefaultEditorPathChange?: (value: string) => void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
+  onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
   onScrollbackChange?: (value: number) => void;
   onTerminalPathSyncEnabledChange?: (enabled: boolean) => void;
@@ -65,6 +67,7 @@ export default function ConfigModal({
   sftpEnabled = true,
   fileDefaultEditorPath = "",
   webLinksEnabled = true,
+  commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
   scrollback = 3000,
   terminalPathSyncEnabled = true,
@@ -73,6 +76,7 @@ export default function ConfigModal({
   onSftpEnabledChange,
   onFileDefaultEditorPathChange,
   onWebLinksEnabledChange,
+  onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
   onScrollbackChange,
   onTerminalPathSyncEnabledChange,
@@ -277,6 +281,23 @@ export default function ConfigModal({
               checked={selectionAutoCopyEnabled}
               onChange={(event) =>
                 onSelectionAutoCopyEnabledChange?.(event.target.checked)
+              }
+            />
+          </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.commandAutocompleteEnabled")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.commandAutocompleteEnabledHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={commandAutocompleteEnabled}
+              onChange={(event) =>
+                onCommandAutocompleteEnabledChange?.(event.target.checked)
               }
             />
           </label>

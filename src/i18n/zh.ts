@@ -45,6 +45,9 @@ export const zh = {
   "config.session.selectionAutoCopyEnabled": "选中文本自动复制",
   "config.session.selectionAutoCopyEnabledHint":
     "开启后，终端中只要选中文本，就会自动写入系统剪贴板。",
+  "config.session.commandAutocompleteEnabled": "启用命令联想",
+  "config.session.commandAutocompleteEnabledHint":
+    "开启后，终端会根据全局历史命令显示联想候选；关闭后不再弹出联想框。",
   "config.session.terminalPathSyncEnabled": "终端路径联动文件管理器",
   "config.session.terminalPathSyncEnabledHint":
     "开启后，支持的终端提示符路径会自动同步到文件管理器，当前仅支持 bash。",
@@ -80,6 +83,7 @@ export const zh = {
   "panel.files": "文件管理器",
   "panel.transfers": "传输",
   "panel.events": "事件",
+  "panel.history": "历史命令",
   "panel.empty": "空槽位",
   "panel.add": "添加组件",
   "panel.float": "浮动",
@@ -254,6 +258,13 @@ export const zh = {
   "terminal.tabMenu.closeAll": "关闭所有会话",
   "terminal.tabMenu.closeOthers": "关闭非活动会话",
   "terminal.tabMenu.closeRight": "关闭右侧所有会话",
+  "history.searchPlaceholder": "搜索历史命令",
+  "history.noSession": "当前没有活动会话",
+  "history.empty": "当前会话暂无历史命令",
+  "history.noMatch": "没有匹配的历史命令",
+  "history.listening": "监听中",
+  "history.liveStatus": "当前输入行",
+  "history.useCount": "使用 {count} 次",
   "sftp.columns.name": "名称",
   "sftp.columns.mtime": "修改时间",
   "sftp.columns.type": "类型",

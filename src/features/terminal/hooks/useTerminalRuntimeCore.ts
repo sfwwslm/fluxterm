@@ -19,7 +19,25 @@ import type {
 import type { Unicode11Addon } from "@xterm/addon-unicode11";
 import type { WebLinksAddon } from "@xterm/addon-web-links";
 import type { WebglAddon } from "@xterm/addon-webgl";
-import type { DisconnectReason, Session, SessionStateUi } from "@/types";
+import type {
+  CommandHistoryLiveCapture,
+  DisconnectReason,
+  Session,
+  SessionStateUi,
+} from "@/types";
+import type {
+  CommandAutocompleteCandidate,
+  CommandAutocompleteProvider,
+} from "@/features/command-history/core/autocomplete";
+import { updateCommandInputBuffer } from "@/features/command-history/core/inputTracker";
+import {
+  AUTOCOMPLETE_MIN_PANEL_HEIGHT,
+  AUTOCOMPLETE_VISIBLE_ITEMS,
+  COMMAND_CAPTURE_DEBOUNCE_MS,
+  DEFAULT_TERMINAL_SCROLLBACK,
+  SELECTION_AUTO_COPY_DEBOUNCE_MS,
+  TERMINAL_MOUNT_RETRY_LIMIT,
+} from "@/features/terminal/core/constants";
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
 
 type TerminalTheme = {
@@ -41,7 +59,7 @@ type UseTerminalRuntimeProps = {
   sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
   sessionReasonsRef: React.RefObject<Record<string, DisconnectReason>>;
   sessionBuffersRef: React.RefObject<Record<string, string>>;
-  recordCommandInput: (sessionId: string, data: string) => void;
+  setLastCommand: (sessionId: string, command: string) => void;
   writeToSession: (sessionId: string, data: string) => Promise<unknown>;
   resizeSession: (
     sessionId: string,
@@ -59,6 +77,26 @@ type UseTerminalRuntimeProps = {
   isLocalSession: (sessionId: string | null) => boolean;
   reconnectSession: (sessionId: string) => Promise<void>;
   reconnectLocalShell: (sessionId: string) => Promise<void>;
+  onCommandCaptureChange?: (
+    sessionId: string,
+    capture: CommandHistoryLiveCapture,
+  ) => void;
+  onCommandCommit?: (sessionId: string, command: string) => void;
+  autocompleteProvider?: CommandAutocompleteProvider | null;
+};
+
+type ActiveAutocompleteState = {
+  sessionId: string;
+  input: string;
+  items: CommandAutocompleteCandidate[];
+  selectedIndex: number;
+};
+
+type AutocompleteAnchor = {
+  offset: number;
+  maxHeight: number;
+  placement: "top" | "bottom";
+  left: number;
 };
 
 type TerminalRuntime = {
@@ -103,6 +141,11 @@ type TerminalRuntime = {
     keyword: string,
     options?: ISearchOptions,
   ) => boolean;
+  getActiveCommandCapture: () => CommandHistoryLiveCapture | null;
+  getActiveAutocomplete: () => ActiveAutocompleteState | null;
+  getActiveAutocompleteAnchor: () => AutocompleteAnchor | null;
+  applyActiveAutocompleteSuggestion: (command?: string) => Promise<boolean>;
+  closeActiveAutocomplete: () => void;
 };
 
 type XtermModules = {
@@ -152,6 +195,12 @@ type LinkMenuState = {
   x: number;
   y: number;
   uri: string;
+};
+
+/** 当前会话输入行监听的内部状态。 */
+type CommandCaptureMeta = {
+  promptPrefix: string | null;
+  waitingForNextPrompt: boolean;
 };
 
 /**
@@ -241,12 +290,22 @@ function looksLikeUnsupportedPrompt(line: string) {
   );
 }
 
+function normalizeCommandCaptureLine(line: string) {
+  return line.replace(/\u00a0/g, " ").trimEnd();
+}
+
+function looksLikePromptLine(line: string) {
+  const trimmed = line.trimEnd();
+  if (!trimmed) return false;
+  return /[#$>%]\s*$/.test(trimmed);
+}
+
 /** Xterm 初始化与输入输出处理。 */
 export default function useTerminalRuntime({
   theme,
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
-  scrollback = 3000,
+  scrollback = DEFAULT_TERMINAL_SCROLLBACK,
   activeSessionId,
   activeSession,
   sessions,
@@ -254,7 +313,7 @@ export default function useTerminalRuntime({
   sessionStatesRef,
   sessionReasonsRef,
   sessionBuffersRef,
-  recordCommandInput,
+  setLastCommand,
   writeToSession,
   resizeSession,
   onWorkingDirectoryChange,
@@ -262,6 +321,9 @@ export default function useTerminalRuntime({
   isLocalSession,
   reconnectSession,
   reconnectLocalShell,
+  onCommandCaptureChange,
+  onCommandCommit,
+  autocompleteProvider = null,
 }: UseTerminalRuntimeProps): TerminalRuntime {
   const terminalsRef = useRef<Record<string, TerminalBundle>>({});
   const containersRef = useRef<Record<string, HTMLDivElement | null>>({});
@@ -283,6 +345,9 @@ export default function useTerminalRuntime({
   const [terminalReadyBySession, setTerminalReadyBySession] = useState<
     Record<string, boolean>
   >({});
+  const [activeAutocomplete, setActiveAutocomplete] =
+    useState<ActiveAutocompleteState | null>(null);
+  const activeAutocompleteRef = useRef<ActiveAutocompleteState | null>(null);
   const focusedLineBySessionRef = useRef<Record<string, FocusedLineState>>({});
   const selectionAutoCopyTimerRef = useRef<Record<string, number>>({});
   const promptParseStateRef = useRef<Record<string, PromptParseState>>({});
@@ -291,8 +356,17 @@ export default function useTerminalRuntime({
     Record<string, string | null>
   >({});
   const disabledPromptParsingRef = useRef<Record<string, boolean>>({});
+  const autocompleteInputBufferRef = useRef<Record<string, string>>({});
+  const commandCaptureMetaRef = useRef<Record<string, CommandCaptureMeta>>({});
+  const commandCaptureTimersRef = useRef<Record<string, number>>({});
+  const activeCommandCaptureBySessionRef = useRef<
+    Record<string, CommandHistoryLiveCapture>
+  >({});
+  const autocompleteProviderRef = useRef<CommandAutocompleteProvider | null>(
+    autocompleteProvider,
+  );
   const handlersRef = useRef({
-    recordCommandInput,
+    setLastCommand,
     writeToSession,
     resizeSession,
     onWorkingDirectoryChange,
@@ -300,6 +374,8 @@ export default function useTerminalRuntime({
     isLocalSession,
     reconnectSession,
     reconnectLocalShell,
+    onCommandCaptureChange,
+    onCommandCommit,
   });
 
   const getTerminalSize = useMemo(
@@ -360,8 +436,12 @@ export default function useTerminalRuntime({
   }, [activeSessionId]);
 
   useEffect(() => {
+    autocompleteProviderRef.current = autocompleteProvider;
+  }, [autocompleteProvider]);
+
+  useEffect(() => {
     handlersRef.current = {
-      recordCommandInput,
+      setLastCommand,
       writeToSession,
       resizeSession,
       onWorkingDirectoryChange,
@@ -369,17 +449,245 @@ export default function useTerminalRuntime({
       isLocalSession,
       reconnectSession,
       reconnectLocalShell,
+      onCommandCaptureChange,
+      onCommandCommit,
     };
   }, [
     isLocalSession,
-    recordCommandInput,
     reconnectLocalShell,
     reconnectSession,
     resizeSession,
+    setLastCommand,
     onWorkingDirectoryChange,
     onPathSyncSupportChange,
+    onCommandCaptureChange,
+    onCommandCommit,
     writeToSession,
   ]);
+
+  useEffect(() => {
+    activeAutocompleteRef.current = activeAutocomplete;
+  }, [activeAutocomplete]);
+
+  useEffect(() => {
+    setActiveAutocomplete((prev) => {
+      if (!prev) return null;
+      return prev.sessionId === activeSessionId ? prev : null;
+    });
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    if (!activeAutocomplete) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest(".terminal-autocomplete")) return;
+      setActiveAutocomplete(null);
+    };
+    const handleWindowBlur = () => {
+      setActiveAutocomplete(null);
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [activeAutocomplete]);
+
+  /**
+   * 刷新当前会话的联想候选。
+   * 这里读取的是本地输入缓冲，不直接读取终端显示缓冲；
+   * 真实命令采集仍以后面的输入行监听为准。
+   */
+  function refreshAutocomplete(sessionId: string, input: string) {
+    autocompleteInputBufferRef.current[sessionId] = input;
+    if (activeSessionIdRef.current !== sessionId) {
+      setActiveAutocomplete((prev) =>
+        prev?.sessionId === sessionId ? null : prev,
+      );
+      return;
+    }
+    const provider = autocompleteProviderRef.current;
+    if (!provider) {
+      setActiveAutocomplete(null);
+      return;
+    }
+    const normalizedInput = input.trim();
+    if (!normalizedInput) {
+      setActiveAutocomplete((prev) =>
+        prev?.sessionId === sessionId ? null : prev,
+      );
+      return;
+    }
+    const items = provider
+      .getSuggestions(input)
+      .filter((item) => item.command.trim() !== normalizedInput);
+    if (items.length === 0) {
+      setActiveAutocomplete((prev) =>
+        prev?.sessionId === sessionId ? null : prev,
+      );
+      return;
+    }
+    setActiveAutocomplete((prev) => {
+      const selectedCommand =
+        prev?.sessionId === sessionId
+          ? prev.items[prev.selectedIndex]?.command
+          : null;
+      const nextIndex = selectedCommand
+        ? items.findIndex((item) => item.command === selectedCommand)
+        : -1;
+      return {
+        sessionId,
+        input,
+        items,
+        selectedIndex: nextIndex >= 0 ? nextIndex : -1,
+      };
+    });
+  }
+
+  /** 获取或初始化当前会话的输入行监听元数据。 */
+  function ensureCommandCaptureMeta(sessionId: string) {
+    if (!commandCaptureMetaRef.current[sessionId]) {
+      commandCaptureMetaRef.current[sessionId] = {
+        promptPrefix: null,
+        waitingForNextPrompt: false,
+      };
+    }
+    return commandCaptureMetaRef.current[sessionId];
+  }
+
+  /** 读取当前光标所在 buffer 行的可见文本，用于实时输入行监听。 */
+  function getCurrentCursorLineText(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return "";
+    const line = bundle.terminal.buffer.active.getLine(
+      getAbsoluteCursorLine(bundle.terminal),
+    );
+    return normalizeCommandCaptureLine(line?.translateToString(true) ?? "");
+  }
+
+  /** 向上层发布输入行监听状态；内容无变化时不重复派发。 */
+  function publishCommandCapture(
+    sessionId: string,
+    capture: CommandHistoryLiveCapture,
+  ) {
+    const current = activeCommandCaptureBySessionRef.current[sessionId];
+    if (
+      current?.state === capture.state &&
+      current.command === capture.command
+    ) {
+      return;
+    }
+    activeCommandCaptureBySessionRef.current[sessionId] = capture;
+    handlersRef.current.onCommandCaptureChange?.(sessionId, capture);
+  }
+
+  /**
+   * 从“当前光标行显示内容”里解析出输入中的命令文本。
+   * 如果已经识别到 prompt 前缀，则只截取 prompt 后半段。
+   */
+  function resolveTrackedCommand(sessionId: string) {
+    const meta = ensureCommandCaptureMeta(sessionId);
+    const currentLine = getCurrentCursorLineText(sessionId);
+    if (!currentLine) {
+      return {
+        promptPrefix: meta.promptPrefix,
+        command: "",
+      };
+    }
+    if (meta.promptPrefix && currentLine.startsWith(meta.promptPrefix)) {
+      return {
+        promptPrefix: meta.promptPrefix,
+        command: currentLine.slice(meta.promptPrefix.length).trim(),
+      };
+    }
+    return {
+      promptPrefix: meta.promptPrefix,
+      command: currentLine.trim(),
+    };
+  }
+
+  /**
+   * 刷新当前会话的输入行监听状态。
+   * 生命周期：
+   * 1. 空行显示 listening
+   * 2. 有内容显示 tracking
+   * 3. 回车后进入 waitingForNextPrompt，等待下一轮 prompt 出现
+   */
+  function refreshCommandCapture(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return;
+    const meta = ensureCommandCaptureMeta(sessionId);
+    const currentLine = getCurrentCursorLineText(sessionId);
+
+    if (meta.waitingForNextPrompt) {
+      if (looksLikePromptLine(currentLine)) {
+        meta.promptPrefix = currentLine;
+        meta.waitingForNextPrompt = false;
+        publishCommandCapture(sessionId, {
+          state: "listening",
+          command: "",
+          updatedAt: Date.now(),
+        });
+      }
+      return;
+    }
+
+    if (!meta.promptPrefix || looksLikePromptLine(currentLine)) {
+      meta.promptPrefix = currentLine;
+    }
+
+    const command = resolveTrackedCommand(sessionId).command;
+    publishCommandCapture(sessionId, {
+      state: command ? "tracking" : "listening",
+      command,
+      updatedAt: Date.now(),
+    });
+  }
+
+  /** 对终端输出触发的输入行监听刷新做防抖，避免快速编辑时频繁抖动。 */
+  function scheduleCommandCaptureRefresh(sessionId: string) {
+    const currentTimer = commandCaptureTimersRef.current[sessionId];
+    if (currentTimer) {
+      window.clearTimeout(currentTimer);
+    }
+    commandCaptureTimersRef.current[sessionId] = window.setTimeout(() => {
+      delete commandCaptureTimersRef.current[sessionId];
+      refreshCommandCapture(sessionId);
+    }, COMMAND_CAPTURE_DEBOUNCE_MS);
+  }
+
+  /**
+   * 将联想候选写回当前会话输入行，但不直接提交执行。
+   * 具体做法是回退当前本地输入缓冲长度，再写入选中的完整命令。
+   */
+  async function applyAutocompleteSuggestion(
+    sessionId: string,
+    command?: string,
+  ) {
+    const autocomplete =
+      activeAutocompleteRef.current?.sessionId === sessionId
+        ? activeAutocompleteRef.current
+        : null;
+    const selectedCommand =
+      command ??
+      (autocomplete && autocomplete.selectedIndex >= 0
+        ? autocomplete.items[autocomplete.selectedIndex]?.command
+        : null) ??
+      null;
+    if (!selectedCommand) return false;
+    const currentInput = autocompleteInputBufferRef.current[sessionId] ?? "";
+    const deleteSequence = "\u007f".repeat(currentInput.length);
+    await handlersRef.current.writeToSession(
+      sessionId,
+      `${deleteSequence}${selectedCommand}`,
+    );
+    autocompleteInputBufferRef.current[sessionId] = selectedCommand;
+    scheduleCommandCaptureRefresh(sessionId);
+    setActiveAutocomplete(null);
+    return true;
+  }
 
   function syncTerminalSize(sessionId: string) {
     const bundle = terminalsRef.current[sessionId];
@@ -450,7 +758,7 @@ export default function useTerminalRuntime({
     const cols = latest.terminal.cols;
     const readyForUse = hostHeight > 24 && rows > 1 && cols > 1;
 
-    if (!readyForUse && attempt < 8) {
+    if (!readyForUse && attempt < TERMINAL_MOUNT_RETRY_LIMIT) {
       window.requestAnimationFrame(() => {
         finalizeTerminalMount(sessionId, attempt + 1);
       });
@@ -786,8 +1094,86 @@ export default function useTerminalRuntime({
           }
           return;
         }
-        handlersRef.current.recordCommandInput(sessionId, data);
+        const autocomplete = activeAutocompleteRef.current;
+        if (
+          autocomplete?.sessionId === sessionId &&
+          (data === "\u001b[A" || data === "\u001b[B")
+        ) {
+          setActiveAutocomplete((prev) => {
+            if (!prev || prev.sessionId !== sessionId || !prev.items.length) {
+              return prev;
+            }
+            let nextIndex = prev.selectedIndex;
+            if (data === "\u001b[A") {
+              nextIndex =
+                prev.selectedIndex < 0
+                  ? prev.items.length - 1
+                  : (prev.selectedIndex - 1 + prev.items.length) %
+                    prev.items.length;
+            } else {
+              nextIndex =
+                prev.selectedIndex < 0
+                  ? 0
+                  : (prev.selectedIndex + 1) % prev.items.length;
+            }
+            return { ...prev, selectedIndex: nextIndex };
+          });
+          return;
+        }
+        if (
+          autocomplete?.sessionId === sessionId &&
+          (data === "\u001b[C" || data === "\u001b[D")
+        ) {
+          setActiveAutocomplete(null);
+          handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+          scheduleCommandCaptureRefresh(sessionId);
+          return;
+        }
+        if (data === "\r" || data === "\n") {
+          if (
+            autocomplete?.sessionId === sessionId &&
+            autocomplete.selectedIndex >= 0
+          ) {
+            applyAutocompleteSuggestion(sessionId).catch(() => {});
+            return;
+          }
+
+          const committedCommand =
+            activeCommandCaptureBySessionRef.current[
+              sessionId
+            ]?.command.trim() || resolveTrackedCommand(sessionId).command;
+          if (committedCommand) {
+            handlersRef.current.setLastCommand(sessionId, committedCommand);
+            handlersRef.current.onCommandCommit?.(sessionId, committedCommand);
+          }
+          ensureCommandCaptureMeta(sessionId).waitingForNextPrompt = true;
+          publishCommandCapture(sessionId, {
+            state: "listening",
+            command: "",
+            updatedAt: Date.now(),
+          });
+          const nextInput = updateCommandInputBuffer(
+            autocompleteInputBufferRef.current[sessionId] ?? "",
+            data,
+          ).buffer;
+          refreshAutocomplete(sessionId, nextInput);
+          handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+          return;
+        }
+        if (data === "\u001b") {
+          setActiveAutocomplete((prev) =>
+            prev?.sessionId === sessionId ? null : prev,
+          );
+          scheduleCommandCaptureRefresh(sessionId);
+          return;
+        }
+        const nextInput = updateCommandInputBuffer(
+          autocompleteInputBufferRef.current[sessionId] ?? "",
+          data,
+        ).buffer;
+        refreshAutocomplete(sessionId, nextInput);
         handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+        scheduleCommandCaptureRefresh(sessionId);
       }),
     );
 
@@ -810,7 +1196,7 @@ export default function useTerminalRuntime({
               }),
             );
           });
-        }, 120);
+        }, SELECTION_AUTO_COPY_DEBOUNCE_MS);
       }),
     );
 
@@ -842,12 +1228,20 @@ export default function useTerminalRuntime({
     // 这里补一轮延迟 fit/focus，避免首个默认会话进入“active ready 但无法正常交互”的状态。
     window.requestAnimationFrame(() => {
       finalizeTerminalMount(sessionId);
+      scheduleCommandCaptureRefresh(sessionId);
     });
   }
 
   function disposeTerminal(sessionId: string) {
     const bundle = terminalsRef.current[sessionId];
     if (!bundle) return;
+    const captureTimer = commandCaptureTimersRef.current[sessionId];
+    if (captureTimer) {
+      window.clearTimeout(captureTimer);
+      delete commandCaptureTimersRef.current[sessionId];
+    }
+    delete commandCaptureMetaRef.current[sessionId];
+    delete activeCommandCaptureBySessionRef.current[sessionId];
     disposeSelectionAutoCopyTimer(sessionId);
     disposeFocusedLine(sessionId);
     disposePromptParseState(sessionId);
@@ -898,6 +1292,7 @@ export default function useTerminalRuntime({
           const bundle = terminalsRef.current[sessionId];
           if (bundle) {
             writeToBundle(bundle, data);
+            scheduleCommandCaptureRefresh(sessionId);
           }
         },
       );
@@ -1215,6 +1610,101 @@ export default function useTerminalRuntime({
     return searchActiveTerminal(keyword, "prev", options);
   }
 
+  function getActiveAutocomplete() {
+    return activeAutocomplete;
+  }
+
+  function getActiveCommandCapture() {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return null;
+    return (
+      activeCommandCaptureBySessionRef.current[sessionId] ?? {
+        state: "listening",
+        command: "",
+        updatedAt: 0,
+      }
+    );
+  }
+
+  /**
+   * 计算联想浮层锚点。
+   * 规则：
+   * 1. 优先显示在 prompt 上方，空间不足时翻到下方
+   * 2. 左侧起点尽量对齐当前光标列
+   * 3. 始终保留 pane 内边距，避免浮层溢出
+   */
+  function getAutocompleteAnchor(sessionId: string): AutocompleteAnchor | null {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return null;
+    const hostWidth = bundle.host.clientWidth;
+    const hostHeight = bundle.host.clientHeight;
+    const rows = bundle.terminal.rows;
+    const cols = bundle.terminal.cols;
+    if (hostWidth <= 0 || hostHeight <= 0 || rows <= 0 || cols <= 0) {
+      return null;
+    }
+    const rowHeight = hostHeight / rows;
+    const cellWidth = hostWidth / cols;
+    if (rowHeight <= 0) return null;
+    const cursorViewportRow = bundle.terminal.buffer.active.cursorY;
+    const cursorViewportCol = bundle.terminal.buffer.active.cursorX;
+    const lineTop = Math.max(0, cursorViewportRow * rowHeight);
+    const promptBottom = Math.min(hostHeight, lineTop + rowHeight);
+    const spaceAbove = Math.max(0, lineTop - 8);
+    const spaceBelow = Math.max(0, hostHeight - promptBottom - 8);
+    const preferredHeight = Math.max(
+      AUTOCOMPLETE_MIN_PANEL_HEIGHT,
+      rowHeight * AUTOCOMPLETE_VISIBLE_ITEMS + 16,
+    );
+    const horizontalGutter = 12;
+    const preferredWidth = Math.min(320, Math.max(0, hostWidth - 24));
+    const cursorLeft = horizontalGutter + cursorViewportCol * cellWidth;
+    const maxLeft = Math.max(
+      horizontalGutter,
+      hostWidth - horizontalGutter - preferredWidth,
+    );
+    const left = Math.min(Math.max(horizontalGutter, cursorLeft), maxLeft);
+
+    if (
+      spaceAbove >= AUTOCOMPLETE_MIN_PANEL_HEIGHT ||
+      spaceAbove >= spaceBelow
+    ) {
+      return {
+        placement: "top",
+        offset: Math.max(16, hostHeight - lineTop + 6),
+        maxHeight: Math.max(AUTOCOMPLETE_MIN_PANEL_HEIGHT, spaceAbove),
+        left,
+      };
+    }
+
+    return {
+      placement: "bottom",
+      offset: Math.max(16, promptBottom + 6),
+      maxHeight: Math.max(
+        Math.min(
+          preferredHeight,
+          Math.max(spaceBelow, AUTOCOMPLETE_MIN_PANEL_HEIGHT),
+        ),
+        AUTOCOMPLETE_MIN_PANEL_HEIGHT,
+      ),
+      left,
+    };
+  }
+
+  function getActiveAutocompleteAnchor() {
+    if (!activeAutocomplete) return null;
+    return getAutocompleteAnchor(activeAutocomplete.sessionId);
+  }
+
+  async function applyActiveAutocompleteSuggestion(command?: string) {
+    if (!activeSessionIdRef.current) return false;
+    return applyAutocompleteSuggestion(activeSessionIdRef.current, command);
+  }
+
+  function closeActiveAutocomplete() {
+    setActiveAutocomplete(null);
+  }
+
   return {
     registerTerminalContainer,
     isTerminalReady,
@@ -1237,5 +1727,10 @@ export default function useTerminalRuntime({
     clearActiveSearchDecorations,
     searchActiveTerminalNext,
     searchActiveTerminalPrev,
+    getActiveCommandCapture,
+    getActiveAutocomplete,
+    getActiveAutocompleteAnchor,
+    applyActiveAutocompleteSuggestion,
+    closeActiveAutocomplete,
   };
 }

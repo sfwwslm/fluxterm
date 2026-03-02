@@ -7,8 +7,11 @@ import HostPanel from "@/components/terminal/profiles/HostPanel";
 import TransfersPanel from "@/components/terminal/transfers/TransfersPanel";
 import SftpPanel from "@/components/terminal/files/SftpPanel";
 import EventsPanel from "@/components/terminal/events/EventsPanel";
+import CommandHistoryPanel from "@/components/terminal/history/CommandHistoryPanel";
 import type { Locale, Translate } from "@/i18n";
 import type {
+  CommandHistoryItem,
+  CommandHistoryLiveCapture,
   DisconnectReason,
   HostProfile,
   LocalShellProfile,
@@ -34,6 +37,11 @@ type BuildPanelsProps = {
   progressBySession: Record<string, SftpProgress>;
   busyMessage: string | null;
   logEntries: LogEntry[];
+  historyLoaded: boolean;
+  hasActiveSession: boolean;
+  historyLiveCapture: CommandHistoryLiveCapture | null;
+  historyItems: CommandHistoryItem[];
+  historySearchQuery: string;
   currentPath: string;
   sftpAvailability: SftpAvailability;
   terminalPathSyncStatus:
@@ -50,6 +58,8 @@ type BuildPanelsProps = {
   onOpenNewProfile: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
   onRemoveProfile: (profile: HostProfile) => void;
+  onHistorySearchQueryChange: (value: string) => void;
+  onExecuteHistoryItem: (command: string) => void;
   onAddGroup: (groupName: string) => boolean;
   onRenameGroup: (from: string, to: string) => Promise<boolean>;
   onRemoveGroup: (groupName: string) => Promise<boolean>;
@@ -88,6 +98,11 @@ export function buildPanels(
     progressBySession,
     busyMessage,
     logEntries,
+    historyLoaded,
+    hasActiveSession,
+    historyLiveCapture,
+    historyItems,
+    historySearchQuery,
     currentPath,
     sftpAvailability,
     terminalPathSyncStatus,
@@ -99,6 +114,8 @@ export function buildPanels(
     onOpenNewProfile,
     onOpenEditProfile,
     onRemoveProfile,
+    onHistorySearchQueryChange,
+    onExecuteHistoryItem,
     onAddGroup,
     onRenameGroup,
     onRemoveGroup,
@@ -175,6 +192,19 @@ export function buildPanels(
         sessionReason={activeSessionReason}
         reconnectInfo={activeReconnectInfo}
         entries={logEntries}
+        locale={locale}
+        t={t}
+      />
+    ),
+    history: (
+      <CommandHistoryPanel
+        loaded={historyLoaded}
+        hasActiveSession={hasActiveSession}
+        liveCapture={historyLiveCapture}
+        items={historyItems}
+        searchQuery={historySearchQuery}
+        onSearchQueryChange={onHistorySearchQueryChange}
+        onExecute={onExecuteHistoryItem}
         locale={locale}
         t={t}
       />

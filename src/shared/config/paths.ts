@@ -60,6 +60,12 @@ export async function getSessionSettingsPath() {
   return join(dir, "session.json");
 }
 
+/** 获取历史命令配置路径。 */
+export async function getCommandHistoryPath() {
+  const dir = await getTerminalConfigDir();
+  return join(dir, "command-history.json");
+}
+
 /** 获取远端文件缓存根目录。 */
 export async function getRemoteFilesCacheRootDir() {
   const dir = await getAppDataDir();

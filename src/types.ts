@@ -145,8 +145,58 @@ export type LogEntry = {
   level?: LogLevel;
 };
 
+/** 历史命令来源。 */
+export type CommandHistorySource = "typed" | "quickbar" | "history";
+
+/** 历史命令实时监听状态。 */
+export type CommandHistoryLiveState = "listening" | "tracking";
+
+/** 当前输入行的实时监听项。 */
+export type CommandHistoryLiveCapture = {
+  state: CommandHistoryLiveState;
+  command: string;
+  updatedAt: number;
+};
+
+/** 历史命令项。 */
+export type CommandHistoryItem = {
+  id: string;
+  command: string;
+  firstUsedAt: number;
+  lastUsedAt: number;
+  useCount: number;
+  source: CommandHistorySource;
+};
+
+/**
+ * 历史命令作用域类型。
+ * 当前持久化与联想实际使用的是 `global`；
+ * `ssh` / `local` 预留给未来按作用域持久化历史命令的扩展。
+ */
+export type CommandHistoryScopeType = "ssh" | "local" | "global";
+
+/** 历史命令分桶。 */
+export type CommandHistoryBucket = {
+  scopeKey: string;
+  scopeType: CommandHistoryScopeType;
+  label: string;
+  updatedAt: number;
+  items: CommandHistoryItem[];
+};
+
+/** 历史命令存储结构。 */
+export type CommandHistoryStore = {
+  version: 1;
+  buckets: Record<string, CommandHistoryBucket>;
+};
+
 /** 功能面板类型。 */
-export type PanelKey = "profiles" | "files" | "transfers" | "events";
+export type PanelKey =
+  | "profiles"
+  | "files"
+  | "transfers"
+  | "events"
+  | "history";
 /** 功能面板区域。 */
 export type PanelArea = "left" | "right" | "bottom";
 

@@ -41,6 +41,14 @@ import { isMacOS } from "@/utils/platform";
 import useSessionController from "@/features/session/hooks/useSessionController";
 import useTerminalController from "@/features/terminal/hooks/useTerminalController";
 import useSftpController from "@/features/sftp/hooks/useSftpController";
+import useCommandHistoryState from "@/features/command-history/hooks/useCommandHistoryState";
+import { createHistoryAutocompleteProvider } from "@/features/command-history/core/autocomplete";
+import { filterHistoryItems } from "@/features/command-history/core/query";
+import {
+  FLOATING_HISTORY_CHANNEL,
+  type FloatingHistoryMessage,
+  type FloatingHistorySnapshot,
+} from "@/features/command-history/core/floatingSync";
 import { MIN_RESOURCE_MONITOR_INTERVAL_SEC } from "@/hooks/settings/useSessionSettings";
 import {
   startLocalResourceMonitor,
@@ -65,6 +73,7 @@ const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   files: "panel.files",
   transfers: "panel.transfers",
   events: "panel.events",
+  history: "panel.history",
 };
 
 function formatMessage(
@@ -155,12 +164,14 @@ export default function AppShell() {
   // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
   const {
     webLinksEnabled,
+    commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
     scrollback,
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
     resourceMonitorIntervalSec,
     setWebLinksEnabled,
+    setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
     setScrollback,
     setTerminalPathSyncEnabled,
@@ -212,6 +223,7 @@ export default function AppShell() {
     if (value === "files") return "files";
     if (value === "transfers") return "transfers";
     if (value === "events") return "events";
+    if (value === "history") return "history";
     if (value === "logs") return "events";
     return null;
   }, []);
@@ -222,6 +234,10 @@ export default function AppShell() {
   const activeResourceMonitorKeyRef = useRef("");
   const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
     useState<FloatingFilesSnapshot | null>(null);
+  const [floatingHistorySnapshot, setFloatingHistorySnapshot] =
+    useState<FloatingHistorySnapshot | null>(null);
+  const [floatingHistorySearchQuery, setFloatingHistorySearchQuery] =
+    useState("");
   const [resourceSnapshotsBySession, setResourceSnapshotsBySession] = useState<
     Record<string, SessionResourceSnapshot>
   >({});
@@ -236,6 +252,7 @@ export default function AppShell() {
   >({});
   const [terminalPathSyncStateBySession, setTerminalPathSyncStateBySession] =
     useState<Record<string, "active" | "paused-mismatch" | "unsupported">>({});
+  const focusActiveTerminalRef = useRef<() => boolean>(() => false);
 
   useEffect(() => {
     const theme = themePresets[themeId];
@@ -311,6 +328,7 @@ export default function AppShell() {
       files: t(panelLabelKeys.files),
       transfers: t(panelLabelKeys.transfers),
       events: t(panelLabelKeys.events),
+      history: t(panelLabelKeys.history),
     }),
     [t],
   );
@@ -324,6 +342,20 @@ export default function AppShell() {
     getTerminalSize: () => terminalSizeRef.current,
   });
 
+  const historyState = useCommandHistoryState({
+    activeSessionId: sessionState.activeSessionId,
+    writeToSession: sessionActions.writeToSession,
+    focusActiveTerminal: () => focusActiveTerminalRef.current(),
+  });
+
+  const autocompleteProvider = useMemo(
+    () =>
+      commandAutocompleteEnabled
+        ? createHistoryAutocompleteProvider(historyState.globalItems)
+        : null,
+    [commandAutocompleteEnabled, historyState.globalItems],
+  );
+
   const { terminalQuery, terminalActions } = useTerminalController({
     theme: themePresets[themeId].terminal,
     webLinksEnabled,
@@ -335,7 +367,7 @@ export default function AppShell() {
     sessionStatesRef: sessionRefs.sessionStatesRef,
     sessionReasonsRef: sessionRefs.sessionReasonsRef,
     sessionBuffersRef: sessionRefs.sessionBuffersRef,
-    recordCommandInput: sessionActions.recordCommandInput,
+    setLastCommand: sessionActions.setLastCommand,
     writeToSession: sessionActions.writeToSession,
     resizeSession: sessionActions.resizeSession,
     onWorkingDirectoryChange: (sessionId, payload) => {
@@ -356,10 +388,26 @@ export default function AppShell() {
     isLocalSession: sessionActions.isLocalSession,
     reconnectSession: sessionActions.reconnectSession,
     reconnectLocalShell: sessionActions.reconnectLocalShell,
+    onCommandCaptureChange: (sessionId, capture) => {
+      historyState.updateLiveCapture({
+        sessionId,
+        command: capture.command,
+        state: capture.state,
+      });
+    },
+    onCommandCommit: (sessionId, command) => {
+      historyState.recordCommand({
+        sessionId,
+        command,
+        source: "typed",
+      });
+    },
+    autocompleteProvider,
     onSizeChange: (size) => {
       terminalSizeRef.current = size;
     },
   });
+  focusActiveTerminalRef.current = terminalActions.focusActiveTerminal;
 
   useEffect(() => {
     const activeSessionId = sessionState.activeSessionId;
@@ -374,6 +422,7 @@ export default function AppShell() {
   }, [sessionState.activeSessionId]);
 
   const isFloatingFilesPanel = floatingPanelKey === "files";
+  const isFloatingHistoryPanel = floatingPanelKey === "history";
 
   const {
     showGroupTitle,
@@ -940,6 +989,70 @@ export default function AppShell() {
     uploadDroppedPaths,
   ]);
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(FLOATING_HISTORY_CHANNEL);
+
+    if (!floatingPanelKey) {
+      const broadcastSnapshot = () => {
+        const payload: FloatingHistorySnapshot = {
+          activeSessionId: sessionState.activeSessionId,
+          hasActiveSession: !!sessionState.activeSessionId,
+          liveCapture: historyState.activeLiveCapture,
+          items: historyState.activeSessionItems,
+        };
+        channel.postMessage({
+          type: "history:snapshot",
+          payload,
+        } satisfies FloatingHistoryMessage);
+      };
+
+      broadcastSnapshot();
+
+      channel.onmessage = (event) => {
+        const message = event.data as FloatingHistoryMessage | undefined;
+        if (!message) return;
+        switch (message.type) {
+          case "history:request-snapshot":
+            broadcastSnapshot();
+            break;
+          case "history:execute":
+            handleExecuteHistoryItem(message.command);
+            break;
+          case "history:snapshot":
+            break;
+        }
+      };
+      return () => {
+        channel.close();
+      };
+    }
+
+    if (isFloatingHistoryPanel) {
+      channel.onmessage = (event) => {
+        const message = event.data as FloatingHistoryMessage | undefined;
+        if (message?.type === "history:snapshot") {
+          setFloatingHistorySnapshot(message.payload);
+        }
+      };
+      channel.postMessage({
+        type: "history:request-snapshot",
+      } satisfies FloatingHistoryMessage);
+      return () => {
+        channel.close();
+      };
+    }
+
+    channel.close();
+    return undefined;
+  }, [
+    floatingPanelKey,
+    historyState.activeLiveCapture,
+    historyState.activeSessionItems,
+    isFloatingHistoryPanel,
+    sessionState.activeSessionId,
+  ]);
+
   useMacAppMenu({
     locale,
     themeId,
@@ -975,6 +1088,23 @@ export default function AppShell() {
     const parsed = decodeQuickCommandEscapes(command);
     const normalized = normalizeQuickCommandForSubmit(parsed);
     sessionActions.writeToSession(sessionId, normalized).catch(() => {});
+  }
+
+  function handleExecuteHistoryItem(command: string) {
+    historyState
+      .executeHistoryItem({
+        sessionId: sessionState.activeSessionId,
+        command,
+      })
+      .then((executed) => {
+        if (!executed || !sessionState.activeSessionId) return;
+        historyState.recordCommand({
+          sessionId: sessionState.activeSessionId,
+          command,
+          source: "history",
+        });
+      })
+      .catch(() => {});
   }
 
   async function handleConnectProfile(profileInput: HostProfile) {
@@ -1020,6 +1150,7 @@ export default function AppShell() {
   }
 
   const floatingFilesChannelRef = useRef<BroadcastChannel | null>(null);
+  const floatingHistoryChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined" || !isFloatingFilesPanel) {
@@ -1037,8 +1168,28 @@ export default function AppShell() {
     };
   }, [isFloatingFilesPanel]);
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined" || !isFloatingHistoryPanel) {
+      floatingHistoryChannelRef.current?.close();
+      floatingHistoryChannelRef.current = null;
+      return;
+    }
+    const channel = new BroadcastChannel(FLOATING_HISTORY_CHANNEL);
+    floatingHistoryChannelRef.current = channel;
+    return () => {
+      if (floatingHistoryChannelRef.current === channel) {
+        floatingHistoryChannelRef.current = null;
+      }
+      channel.close();
+    };
+  }, [isFloatingHistoryPanel]);
+
   function postFloatingFilesMessage(message: FloatingFilesMessage) {
     floatingFilesChannelRef.current?.postMessage(message);
+  }
+
+  function postFloatingHistoryMessage(message: FloatingHistoryMessage) {
+    floatingHistoryChannelRef.current?.postMessage(message);
   }
 
   // 主窗口直接读取本地 SFTP 状态；浮动文件面板则消费主窗口同步过来的只读快照。
@@ -1159,6 +1310,59 @@ export default function AppShell() {
     ],
   );
 
+  const historyPanelState = useMemo(
+    () =>
+      isFloatingHistoryPanel
+        ? {
+            loaded: true,
+            hasActiveSession:
+              floatingHistorySnapshot?.hasActiveSession ?? false,
+            liveCapture: floatingHistorySnapshot?.liveCapture ?? null,
+            items: filterHistoryItems(
+              floatingHistorySnapshot?.items ?? [],
+              floatingHistorySearchQuery,
+            ),
+            searchQuery: floatingHistorySearchQuery,
+          }
+        : {
+            loaded: historyState.loaded,
+            hasActiveSession: !!sessionState.activeSessionId,
+            liveCapture: historyState.activeLiveCapture,
+            items: historyState.activeItems,
+            searchQuery: historyState.searchQuery,
+          },
+    [
+      floatingHistorySearchQuery,
+      floatingHistorySnapshot,
+      historyState.activeItems,
+      historyState.activeLiveCapture,
+      historyState.loaded,
+      historyState.searchQuery,
+      isFloatingHistoryPanel,
+      sessionState.activeSessionId,
+    ],
+  );
+
+  const historyPanelActions = useMemo(
+    () =>
+      isFloatingHistoryPanel
+        ? {
+            setSearchQuery: setFloatingHistorySearchQuery,
+            execute: (command: string) => {
+              postFloatingHistoryMessage({ type: "history:execute", command });
+            },
+          }
+        : {
+            setSearchQuery: historyState.setSearchQuery,
+            execute: handleExecuteHistoryItem,
+          },
+    [
+      handleExecuteHistoryItem,
+      historyState.setSearchQuery,
+      isFloatingHistoryPanel,
+    ],
+  );
+
   const panels = useMemo(
     () =>
       buildPanels({
@@ -1175,6 +1379,11 @@ export default function AppShell() {
         progressBySession: sftpState.progressBySession,
         busyMessage: sessionState.busyMessage,
         logEntries: sessionState.logEntries,
+        historyLoaded: historyPanelState.loaded,
+        hasActiveSession: historyPanelState.hasActiveSession,
+        historyLiveCapture: historyPanelState.liveCapture,
+        historyItems: historyPanelState.items,
+        historySearchQuery: historyPanelState.searchQuery,
         currentPath: filesPanelState.currentPath,
         sftpAvailability: filesPanelState.sftpAvailability,
         terminalPathSyncStatus: filesPanelState.terminalPathSyncStatus,
@@ -1186,6 +1395,8 @@ export default function AppShell() {
         onOpenNewProfile: openNewProfile,
         onOpenEditProfile: openEditProfile,
         onRemoveProfile: (profile) => removeProfile(profile.id),
+        onHistorySearchQueryChange: historyPanelActions.setSearchQuery,
+        onExecuteHistoryItem: historyPanelActions.execute,
         onAddGroup: addGroup,
         onRenameGroup: renameGroup,
         onRemoveGroup: removeGroup,
@@ -1218,6 +1429,8 @@ export default function AppShell() {
       sftpState.progressBySession,
       sessionState.busyMessage,
       sessionState.logEntries,
+      historyPanelActions,
+      historyPanelState,
       fileDefaultEditorPath,
       filesPanelState.currentPath,
       filesPanelState.terminalPathSyncStatus,
@@ -1232,6 +1445,7 @@ export default function AppShell() {
       removeGroup,
       moveProfileToGroup,
       filesPanelActions,
+      handleExecuteHistoryItem,
     ],
   );
 
@@ -1375,6 +1589,29 @@ export default function AppShell() {
                 onSearchPrev={terminalActions.searchActiveTerminalPrev}
                 onSearchClear={terminalActions.clearActiveSearchDecorations}
                 searchResultStats={terminalQuery.getActiveSearchStats()}
+                autocomplete={
+                  terminalQuery.getActiveAutocomplete()
+                    ? {
+                        sessionId:
+                          terminalQuery.getActiveAutocomplete()!.sessionId,
+                        items: terminalQuery
+                          .getActiveAutocomplete()!
+                          .items.map((item) => ({
+                            command: item.command,
+                            useCount: item.useCount,
+                          })),
+                        selectedIndex:
+                          terminalQuery.getActiveAutocomplete()!.selectedIndex,
+                      }
+                    : null
+                }
+                autocompleteAnchor={terminalQuery.getActiveAutocompleteAnchor()}
+                onApplyAutocompleteSuggestion={(command) => {
+                  terminalActions
+                    .applyActiveAutocompleteSuggestion(command)
+                    .catch(() => {});
+                }}
+                onDismissAutocomplete={terminalActions.closeActiveAutocomplete}
                 isLocalSession={sessionActions.isLocalSession}
                 onSwitchSession={sessionActions.switchSession}
                 onFocusPane={sessionActions.focusPane}
@@ -1455,6 +1692,7 @@ export default function AppShell() {
         sftpEnabled={sftpEnabled}
         fileDefaultEditorPath={fileDefaultEditorPath}
         webLinksEnabled={webLinksEnabled}
+        commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
         scrollback={scrollback}
         terminalPathSyncEnabled={terminalPathSyncEnabled}
@@ -1463,6 +1701,7 @@ export default function AppShell() {
         onSftpEnabledChange={setSftpEnabled}
         onFileDefaultEditorPathChange={setFileDefaultEditorPath}
         onWebLinksEnabledChange={setWebLinksEnabled}
+        onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
         onScrollbackChange={setScrollback}
         onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}

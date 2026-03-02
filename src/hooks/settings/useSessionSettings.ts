@@ -18,6 +18,7 @@ import {
 type SessionSettings = {
   version: 1;
   webLinksEnabled?: boolean;
+  commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
@@ -27,12 +28,14 @@ type SessionSettings = {
 
 type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
+  commandAutocompleteEnabled: boolean;
   selectionAutoCopyEnabled: boolean;
   scrollback: number;
   terminalPathSyncEnabled: boolean;
   resourceMonitorEnabled: boolean;
   resourceMonitorIntervalSec: number;
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setCommandAutocompleteEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setScrollback: React.Dispatch<React.SetStateAction<number>>;
   setTerminalPathSyncEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -58,6 +61,7 @@ const defaultSessionSettings: Required<
   Pick<
     SessionSettings,
     | "webLinksEnabled"
+    | "commandAutocompleteEnabled"
     | "selectionAutoCopyEnabled"
     | "scrollback"
     | "terminalPathSyncEnabled"
@@ -66,6 +70,7 @@ const defaultSessionSettings: Required<
   >
 > = {
   webLinksEnabled: true,
+  commandAutocompleteEnabled: true,
   selectionAutoCopyEnabled: false,
   scrollback: 3000,
   terminalPathSyncEnabled: true,
@@ -77,6 +82,9 @@ const defaultSessionSettings: Required<
 export default function useSessionSettings(): UseSessionSettingsResult {
   const [webLinksEnabled, setWebLinksEnabled] = useState(
     defaultSessionSettings.webLinksEnabled,
+  );
+  const [commandAutocompleteEnabled, setCommandAutocompleteEnabled] = useState(
+    defaultSessionSettings.commandAutocompleteEnabled,
   );
   const [selectionAutoCopyEnabled, setSelectionAutoCopyEnabled] = useState(
     defaultSessionSettings.selectionAutoCopyEnabled,
@@ -97,6 +105,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   const loadedRef = useRef(false);
   const loggedSettingsRef = useRef({
     webLinksEnabled: defaultSessionSettings.webLinksEnabled,
+    commandAutocompleteEnabled:
+      defaultSessionSettings.commandAutocompleteEnabled,
     selectionAutoCopyEnabled: defaultSessionSettings.selectionAutoCopyEnabled,
     scrollback: defaultSessionSettings.scrollback,
     terminalPathSyncEnabled: defaultSessionSettings.terminalPathSyncEnabled,
@@ -117,6 +127,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       parsed = JSON.parse(raw) as SessionSettings;
       if (typeof parsed?.webLinksEnabled === "boolean") {
         setWebLinksEnabled(parsed.webLinksEnabled);
+      }
+      if (typeof parsed?.commandAutocompleteEnabled === "boolean") {
+        setCommandAutocompleteEnabled(parsed.commandAutocompleteEnabled);
       }
       if (typeof parsed?.selectionAutoCopyEnabled === "boolean") {
         setSelectionAutoCopyEnabled(parsed.selectionAutoCopyEnabled);
@@ -173,6 +186,10 @@ export default function useSessionSettings(): UseSessionSettingsResult {
             typeof parsed.webLinksEnabled === "boolean"
               ? parsed.webLinksEnabled
               : defaultSessionSettings.webLinksEnabled,
+          commandAutocompleteEnabled:
+            typeof parsed.commandAutocompleteEnabled === "boolean"
+              ? parsed.commandAutocompleteEnabled
+              : defaultSessionSettings.commandAutocompleteEnabled,
           selectionAutoCopyEnabled:
             typeof parsed.selectionAutoCopyEnabled === "boolean"
               ? parsed.selectionAutoCopyEnabled
@@ -209,6 +226,10 @@ export default function useSessionSettings(): UseSessionSettingsResult {
           typeof parsed?.webLinksEnabled === "boolean"
             ? parsed.webLinksEnabled
             : defaultSessionSettings.webLinksEnabled,
+        commandAutocompleteEnabled:
+          typeof parsed?.commandAutocompleteEnabled === "boolean"
+            ? parsed.commandAutocompleteEnabled
+            : defaultSessionSettings.commandAutocompleteEnabled,
         selectionAutoCopyEnabled:
           typeof parsed?.selectionAutoCopyEnabled === "boolean"
             ? parsed.selectionAutoCopyEnabled
@@ -256,6 +277,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     saveSessionSettings({
       version: 1,
       webLinksEnabled,
+      commandAutocompleteEnabled,
       selectionAutoCopyEnabled,
       terminalPathSyncEnabled,
       resourceMonitorEnabled,
@@ -273,12 +295,31 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     });
   }, [
     scrollback,
+    commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
     resourceMonitorIntervalSec,
     webLinksEnabled,
   ]);
+
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    if (
+      loggedSettingsRef.current.commandAutocompleteEnabled ===
+      commandAutocompleteEnabled
+    ) {
+      return;
+    }
+    info(
+      JSON.stringify({
+        event: "session-settings:command-autocomplete-changed",
+        enabled: commandAutocompleteEnabled,
+      }),
+    ).catch(() => {});
+    loggedSettingsRef.current.commandAutocompleteEnabled =
+      commandAutocompleteEnabled;
+  }, [commandAutocompleteEnabled]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -366,6 +407,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
 
   return {
     webLinksEnabled,
+    commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
     scrollback: normalizeScrollback(scrollback),
     terminalPathSyncEnabled,
@@ -374,6 +416,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       resourceMonitorIntervalSec,
     ),
     setWebLinksEnabled,
+    setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
     setScrollback,
     setTerminalPathSyncEnabled,

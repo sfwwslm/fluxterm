@@ -21,6 +21,9 @@ export default function useTerminalController(
       getSessionBufferText: raw.getSessionBufferText,
       getActiveSearchStats: raw.getActiveSearchStats,
       getActiveLinkMenu: raw.getActiveLinkMenu,
+      getActiveCommandCapture: raw.getActiveCommandCapture,
+      getActiveAutocomplete: raw.getActiveAutocomplete,
+      getActiveAutocompleteAnchor: raw.getActiveAutocompleteAnchor,
       hasFocusedLine: raw.hasFocusedLine,
       hasActiveSelection: raw.hasActiveSelection,
     },
@@ -38,6 +41,8 @@ export default function useTerminalController(
       clearActiveSearchDecorations: raw.clearActiveSearchDecorations,
       searchActiveTerminalNext: raw.searchActiveTerminalNext,
       searchActiveTerminalPrev: raw.searchActiveTerminalPrev,
+      applyActiveAutocompleteSuggestion: raw.applyActiveAutocompleteSuggestion,
+      closeActiveAutocomplete: raw.closeActiveAutocomplete,
     },
   };
 }

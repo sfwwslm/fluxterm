@@ -40,6 +40,18 @@ type TerminalPaneTreeProps = {
     sessionId: string,
     event: MouseEvent<HTMLDivElement>,
   ) => void;
+  autocomplete: {
+    sessionId: string;
+    items: Array<{ command: string; useCount: number }>;
+    selectedIndex: number;
+  } | null;
+  autocompleteAnchor: {
+    offset: number;
+    maxHeight: number;
+    placement: "top" | "bottom";
+    left: number;
+  } | null;
+  onApplyAutocompleteSuggestion: (command?: string) => void;
 };
 
 /** 会话 pane 树。 */
@@ -76,6 +88,9 @@ function PaneNodeView({
   onResizePaneSplit,
   onPaneClick,
   onPaneContextMenu,
+  autocomplete,
+  autocompleteAnchor,
+  onApplyAutocompleteSuggestion,
 }: PaneNodeViewProps) {
   if (node.kind === "split") {
     const firstBasis = `${node.ratio * 100}%`;
@@ -100,6 +115,9 @@ function PaneNodeView({
             onResizePaneSplit={onResizePaneSplit}
             onPaneClick={onPaneClick}
             onPaneContextMenu={onPaneContextMenu}
+            autocomplete={autocomplete}
+            autocompleteAnchor={autocompleteAnchor}
+            onApplyAutocompleteSuggestion={onApplyAutocompleteSuggestion}
           />
         </div>
         <PaneResizeHandle
@@ -128,6 +146,9 @@ function PaneNodeView({
             onResizePaneSplit={onResizePaneSplit}
             onPaneClick={onPaneClick}
             onPaneContextMenu={onPaneContextMenu}
+            autocomplete={autocomplete}
+            autocompleteAnchor={autocompleteAnchor}
+            onApplyAutocompleteSuggestion={onApplyAutocompleteSuggestion}
           />
         </div>
       </div>
@@ -141,6 +162,11 @@ function PaneNodeView({
     !!paneActiveSessionId &&
     getSessionState(paneActiveSessionId) === "disconnected" &&
     getSessionReason(paneActiveSessionId) === "exit";
+  const paneAutocomplete =
+    paneActiveSessionId && autocomplete?.sessionId === paneActiveSessionId
+      ? autocomplete
+      : null;
+  const paneAutocompleteAnchor = paneAutocomplete ? autocompleteAnchor : null;
 
   return (
     <div
@@ -214,21 +240,65 @@ function PaneNodeView({
           })}
         </div>
       </div>
-      {node.sessionIds.map((sessionId) => {
-        const activeSession = sessionId === paneActiveSessionId;
-        return (
-          <div
-            key={sessionId}
-            className={`terminal-container ${activeSession ? "active" : ""} ${
-              isTerminalReady(sessionId) ? "ready" : ""
-            }`}
-            ref={getTerminalContainerRef(sessionId)}
-            onClick={(event) => onPaneClick(sessionId, event)}
-            onContextMenu={(event) => onPaneContextMenu(sessionId, event)}
-          />
-        );
-      })}
-      {showExitBanner && <div className="terminal-banner">{exitHint}</div>}
+      <div className="terminal-pane-content">
+        {node.sessionIds.map((sessionId) => {
+          const activeSession = sessionId === paneActiveSessionId;
+          const showAutocomplete =
+            activeSession &&
+            paneAutocomplete &&
+            paneAutocompleteAnchor &&
+            paneAutocomplete.items.length > 0;
+          return (
+            <div
+              key={sessionId}
+              className={`terminal-container-shell ${activeSession ? "active" : ""}`}
+            >
+              <div
+                className={`terminal-container ${activeSession ? "active" : ""} ${
+                  isTerminalReady(sessionId) ? "ready" : ""
+                }`}
+                ref={getTerminalContainerRef(sessionId)}
+                onClick={(event) => onPaneClick(sessionId, event)}
+                onContextMenu={(event) => onPaneContextMenu(sessionId, event)}
+              />
+              {showAutocomplete && (
+                <div
+                  className={`terminal-autocomplete terminal-autocomplete-${paneAutocompleteAnchor.placement}`}
+                  style={{
+                    left: `${paneAutocompleteAnchor.left}px`,
+                    [paneAutocompleteAnchor.placement === "top"
+                      ? "bottom"
+                      : "top"]: `${paneAutocompleteAnchor.offset}px`,
+                    maxHeight: `${paneAutocompleteAnchor.maxHeight}px`,
+                  }}
+                >
+                  {paneAutocomplete.items.map((item, index) => (
+                    <button
+                      key={item.command}
+                      type="button"
+                      className={`terminal-autocomplete-item ${
+                        index === paneAutocomplete.selectedIndex ? "active" : ""
+                      }`}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        onApplyAutocompleteSuggestion(item.command);
+                      }}
+                    >
+                      <span className="terminal-autocomplete-command">
+                        {item.command}
+                      </span>
+                      <span className="terminal-autocomplete-meta">
+                        {item.useCount}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {showExitBanner && <div className="terminal-banner">{exitHint}</div>}
+      </div>
     </div>
   );
 }

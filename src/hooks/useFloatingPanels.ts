@@ -44,6 +44,7 @@ function normalizePanelKey(value: unknown): PanelKey | null {
   if (value === "files") return "files";
   if (value === "transfers") return "transfers";
   if (value === "events") return "events";
+  if (value === "history") return "history";
   if (value === "logs") return "events";
   return null;
 }

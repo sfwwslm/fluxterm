@@ -71,6 +71,19 @@ type TerminalPanelProps = {
   onSearchPrev: (keyword: string, options?: SearchOptions) => boolean;
   onSearchClear: () => void;
   searchResultStats: { resultIndex: number; resultCount: number } | null;
+  autocomplete: {
+    sessionId: string;
+    items: Array<{ command: string; useCount: number }>;
+    selectedIndex: number;
+  } | null;
+  autocompleteAnchor: {
+    offset: number;
+    maxHeight: number;
+    placement: "top" | "bottom";
+    left: number;
+  } | null;
+  onApplyAutocompleteSuggestion: (command?: string) => void;
+  onDismissAutocomplete: () => void;
   isLocalSession: (sessionId: string | null) => boolean;
   onSwitchSession: (sessionId: string) => void;
   onFocusPane: (paneId: string) => void;
@@ -123,6 +136,10 @@ export default function TerminalPanel({
   onSearchPrev,
   onSearchClear,
   searchResultStats,
+  autocomplete,
+  autocompleteAnchor,
+  onApplyAutocompleteSuggestion,
+  onDismissAutocomplete,
   isLocalSession,
   onSwitchSession,
   onFocusPane,
@@ -237,15 +254,20 @@ export default function TerminalPanel({
             }}
             onResizePaneSplit={onResizePaneSplit}
             onPaneClick={(sessionId, event) => {
+              onDismissAutocomplete();
               onSwitchSession(sessionId);
               onFocusLineAtPoint(sessionId, event.clientY);
             }}
             onPaneContextMenu={(sessionId, event) => {
               event.preventDefault();
+              onDismissAutocomplete();
               onSwitchSession(sessionId);
               onFocusLineAtPoint(sessionId, event.clientY);
               openTerminalMenu(event.clientX, event.clientY);
             }}
+            autocomplete={autocomplete}
+            autocompleteAnchor={autocompleteAnchor}
+            onApplyAutocompleteSuggestion={onApplyAutocompleteSuggestion}
           />
         )}
         {!hasWorkspaceSessions && (

@@ -45,6 +45,9 @@ export const en = {
   "config.session.selectionAutoCopyEnabled": "Auto Copy Selection",
   "config.session.selectionAutoCopyEnabledHint":
     "When enabled, selected text in the terminal is copied to the system clipboard automatically.",
+  "config.session.commandAutocompleteEnabled": "Enable Command Autocomplete",
+  "config.session.commandAutocompleteEnabledHint":
+    "When enabled, the terminal shows autocomplete suggestions from global command history. When disabled, the suggestion panel stays hidden.",
   "config.session.terminalPathSyncEnabled":
     "Sync Terminal Path to File Manager",
   "config.session.terminalPathSyncEnabledHint":
@@ -82,6 +85,7 @@ export const en = {
   "panel.files": "File Manager",
   "panel.transfers": "Transfers",
   "panel.events": "Events",
+  "panel.history": "Command History",
   "panel.empty": "Empty Slot",
   "panel.add": "Add Widget",
   "panel.float": "Floating",
@@ -259,6 +263,13 @@ export const en = {
   "terminal.tabMenu.closeAll": "Close All Sessions",
   "terminal.tabMenu.closeOthers": "Close Inactive Sessions",
   "terminal.tabMenu.closeRight": "Close Sessions To The Right",
+  "history.searchPlaceholder": "Search command history",
+  "history.noSession": "No active session",
+  "history.empty": "No command history for this session",
+  "history.noMatch": "No matching history commands",
+  "history.listening": "Listening",
+  "history.liveStatus": "Current input line",
+  "history.useCount": "Used {count} times",
   "sftp.columns.name": "Name",
   "sftp.columns.mtime": "Modified",
   "sftp.columns.type": "Type",

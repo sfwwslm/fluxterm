@@ -82,7 +82,7 @@ type UseSessionStateResult = {
   ) => void;
   setBusyMessage: React.Dispatch<React.SetStateAction<string | null>>;
   isLocalSession: (sessionId: string | null) => boolean;
-  recordCommandInput: (sessionId: string, data: string) => void;
+  setLastCommand: (sessionId: string, command: string) => void;
   writeToSession: (sessionId: string, data: string) => Promise<unknown>;
   resizeSession: (
     sessionId: string,
@@ -170,7 +170,6 @@ export default function useSessionState({
   const sessionReasonsRef = useRef<Record<string, DisconnectReason>>({});
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionBuffersRef = useRef<Record<string, string>>({});
-  const inputBufferRef = useRef<Record<string, string>>({});
   const lastCommandRef = useRef<Record<string, string>>({});
   const reconnectTimersRef = useRef<Record<string, number>>({});
   const reconnectAttemptsRef = useRef<Record<string, number>>({});
@@ -274,23 +273,11 @@ export default function useSessionState({
     return profile.name || profile.host || t("session.defaultName");
   }
 
-  function recordCommandInput(sessionId: string, data: string) {
-    const cleaned = data.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
-    let buffer = inputBufferRef.current[sessionId] ?? "";
-    for (const char of cleaned) {
-      if (char === "\r" || char === "\n") {
-        const command = buffer.trim();
-        if (command) {
-          lastCommandRef.current[sessionId] = command;
-        }
-        buffer = "";
-      } else if (char === "\u007f" || char === "\b") {
-        buffer = buffer.slice(0, -1);
-      } else if (char >= " ") {
-        buffer += char;
-      }
-    }
-    inputBufferRef.current[sessionId] = buffer;
+  /** 设置最近一次真正提交的命令，供断开原因推断复用。 */
+  function setLastCommand(sessionId: string, command: string) {
+    const normalized = command.trim();
+    if (!normalized) return;
+    lastCommandRef.current[sessionId] = normalized;
   }
 
   function clearReconnectState(sessionId: string) {
@@ -819,7 +806,7 @@ export default function useSessionState({
     appendLog,
     setBusyMessage,
     isLocalSession,
-    recordCommandInput,
+    setLastCommand,
     writeToSession,
     resizeSession,
     connectProfile,
