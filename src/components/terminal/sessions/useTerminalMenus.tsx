@@ -6,6 +6,13 @@
  * - 链接操作菜单
  */
 import { useState } from "react";
+import {
+  FiClipboard,
+  FiCopy,
+  FiExternalLink,
+  FiSearch,
+  FiSlash,
+} from "react-icons/fi";
 import type { Translate } from "@/i18n";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import SessionTabContextMenu from "@/components/terminal/sessions/SessionTabContextMenu";
@@ -100,6 +107,7 @@ export default function useTerminalMenus({
               {
                 id: "copy",
                 label: t("terminal.menu.copy"),
+                icon: <FiCopy />,
                 disabled: !hasFocusedLine() && !hasActiveSelection(),
                 onClick: () => {
                   if (hasActiveSelection()) {
@@ -113,6 +121,7 @@ export default function useTerminalMenus({
               {
                 id: "paste",
                 label: t("terminal.menu.paste"),
+                icon: <FiClipboard />,
                 disabled: !activeSessionId,
                 onClick: () => {
                   onPaste().catch(() => {});
@@ -122,6 +131,7 @@ export default function useTerminalMenus({
               {
                 id: "clear",
                 label: t("terminal.menu.clear"),
+                icon: <FiSlash />,
                 disabled: !activeSessionId,
                 onClick: () => {
                   onClear();
@@ -131,6 +141,7 @@ export default function useTerminalMenus({
               {
                 id: "search",
                 label: t("terminal.menu.search"),
+                icon: <FiSearch />,
                 disabled: !activeSessionId,
                 onClick: () => {
                   closeMenu();
@@ -202,6 +213,7 @@ export default function useTerminalMenus({
               {
                 id: "open-link",
                 label: t("terminal.menu.openLink"),
+                icon: <FiExternalLink />,
                 onClick: () => {
                   onOpenLink().catch(() => {});
                 },
@@ -209,6 +221,7 @@ export default function useTerminalMenus({
               {
                 id: "copy-link",
                 label: t("terminal.menu.copyLink"),
+                icon: <FiCopy />,
                 onClick: () => {
                   onCopyLink().catch(() => {});
                 },

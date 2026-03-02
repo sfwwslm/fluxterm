@@ -1,6 +1,12 @@
+/**
+ * 区域工作区栏中的会话菜单。
+ * 这里的关闭类语义都以“当前区域内的会话列表”为作用域。
+ */
 import {
+  FiChevronsRight,
   FiColumns,
   FiCornerDownRight,
+  FiMinusCircle,
   FiRefreshCw,
   FiSave,
   FiTrash2,
@@ -92,6 +98,7 @@ export default function SessionTabContextMenu({
               {
                 id: "close-others",
                 label: t("terminal.tabMenu.closeOthers"),
+                icon: <FiMinusCircle />,
                 onClick: onCloseOthers,
               },
             ]
@@ -101,6 +108,7 @@ export default function SessionTabContextMenu({
               {
                 id: "close-right",
                 label: t("terminal.tabMenu.closeRight"),
+                icon: <FiChevronsRight />,
                 onClick: onCloseRight,
               },
             ]

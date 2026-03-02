@@ -1,5 +1,15 @@
+/**
+ * 底部区域组件。
+ * 负责快捷命令栏、状态栏和资源监控展示，并承载快捷命令的上下文菜单。
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiActivity, FiDatabase, FiSettings } from "react-icons/fi";
+import {
+  FiActivity,
+  FiDatabase,
+  FiEdit2,
+  FiSettings,
+  FiTrash2,
+} from "react-icons/fi";
 import type { Locale, Translate } from "@/i18n";
 import type {
   QuickCommandGroup,
@@ -595,6 +605,7 @@ export default function BottomArea({
           items={[
             {
               label: t("quickbar.command.edit"),
+              icon: <FiEdit2 />,
               disabled: false,
               onClick: () => {
                 setPendingFocusCommandId(contextMenu.commandId);
@@ -604,6 +615,7 @@ export default function BottomArea({
             },
             {
               label: t("quickbar.command.delete"),
+              icon: <FiTrash2 />,
               disabled: false,
               onClick: () => {
                 onRemoveCommand(contextMenu.commandId);

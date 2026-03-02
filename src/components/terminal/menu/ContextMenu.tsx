@@ -1,3 +1,8 @@
+/**
+ * 通用右键菜单。
+ * 当前布局会始终预留左侧图标列，因此业务侧新增菜单项时应优先提供 icon，
+ * 避免菜单整组都为空图标时出现左侧留白过重、视觉失衡的问题。
+ */
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import "./ContextMenu.css";
@@ -6,6 +11,7 @@ export type ContextMenuItem = {
   id?: string;
   label: string;
   disabled?: boolean;
+  /** 尽量为菜单项提供图标，保持预留图标列的视觉平衡。 */
   icon?: ReactNode | null;
   danger?: boolean;
   onClick: () => void;

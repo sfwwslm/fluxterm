@@ -1,5 +1,18 @@
+/**
+ * 主机面板。
+ * 负责 SSH 主机、本地 Shell 和分组树展示，并提供主机相关右键菜单操作。
+ */
 import { useMemo, useState } from "react";
-import { FiFolder, FiServer, FiTerminal } from "react-icons/fi";
+import {
+  FiEdit2,
+  FiEye,
+  FiFolder,
+  FiFolderPlus,
+  FiPlus,
+  FiServer,
+  FiTerminal,
+  FiTrash2,
+} from "react-icons/fi";
 import type { HostProfile, LocalShellProfile } from "@/types";
 import type { Translate } from "@/i18n";
 import {
@@ -7,6 +20,7 @@ import {
   ROOT_PROFILE_GROUP_VALUE,
 } from "@/constants/hostGroups";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
+import type { ContextMenuItem } from "@/components/terminal/menu/ContextMenu";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import InputDialog from "@/components/ui/InputDialog";
@@ -90,11 +104,7 @@ export default function HostPanel({
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
-    items: Array<{
-      label: string;
-      disabled: boolean;
-      onClick: () => void;
-    }>;
+    items: ContextMenuItem[];
   } | null>(null);
   const [groupDialog, setGroupDialog] = useState<{
     mode: "add" | "rename";
@@ -198,11 +208,7 @@ export default function HostPanel({
       clientX: number;
       clientY: number;
     },
-    items: Array<{
-      label: string;
-      disabled: boolean;
-      onClick: () => void;
-    }>,
+    items: ContextMenuItem[],
   ) {
     event.preventDefault();
     event.stopPropagation();
@@ -312,11 +318,13 @@ export default function HostPanel({
                         openMenu(event, [
                           {
                             label: t("host.addGroup"),
+                            icon: <FiFolderPlus />,
                             disabled: false,
                             onClick: openAddGroupDialog,
                           },
                           {
                             label: t("host.menu.viewShellPath"),
+                            icon: <FiEye />,
                             disabled: false,
                             onClick: () => {
                               setMenu(null);
@@ -356,6 +364,7 @@ export default function HostPanel({
                   openMenu(event, [
                     {
                       label: t("profile.menu.new"),
+                      icon: <FiPlus />,
                       disabled: false,
                       onClick: () => {
                         setMenu(null);
@@ -364,11 +373,13 @@ export default function HostPanel({
                     },
                     {
                       label: t("host.addGroup"),
+                      icon: <FiFolderPlus />,
                       disabled: false,
                       onClick: openAddGroupDialog,
                     },
                     {
                       label: t("host.menu.renameGroup"),
+                      icon: <FiEdit2 />,
                       disabled: false,
                       onClick: () => {
                         setMenu(null);
@@ -381,6 +392,7 @@ export default function HostPanel({
                     },
                     {
                       label: t("host.menu.deleteGroup"),
+                      icon: <FiTrash2 />,
                       disabled: false,
                       onClick: () => {
                         setMenu(null);
@@ -414,11 +426,13 @@ export default function HostPanel({
                         openMenu(event, [
                           {
                             label: t("host.addGroup"),
+                            icon: <FiFolderPlus />,
                             disabled: false,
                             onClick: openAddGroupDialog,
                           },
                           {
                             label: t("profile.menu.edit"),
+                            icon: <FiEdit2 />,
                             disabled: false,
                             onClick: () => {
                               setMenu(null);
@@ -427,6 +441,7 @@ export default function HostPanel({
                           },
                           {
                             label: t("host.menu.moveTo"),
+                            icon: <FiFolder />,
                             disabled: false,
                             onClick: () => {
                               setMenu(null);
@@ -439,6 +454,7 @@ export default function HostPanel({
                           },
                           {
                             label: t("profile.menu.delete"),
+                            icon: <FiTrash2 />,
                             disabled: false,
                             onClick: () => {
                               setMenu(null);
@@ -470,11 +486,13 @@ export default function HostPanel({
                 openMenu(event, [
                   {
                     label: t("host.addGroup"),
+                    icon: <FiFolderPlus />,
                     disabled: false,
                     onClick: openAddGroupDialog,
                   },
                   {
                     label: t("profile.menu.edit"),
+                    icon: <FiEdit2 />,
                     disabled: false,
                     onClick: () => {
                       setMenu(null);
@@ -483,6 +501,7 @@ export default function HostPanel({
                   },
                   {
                     label: t("host.menu.moveTo"),
+                    icon: <FiFolder />,
                     disabled: false,
                     onClick: () => {
                       setMenu(null);
@@ -494,6 +513,7 @@ export default function HostPanel({
                   },
                   {
                     label: t("profile.menu.delete"),
+                    icon: <FiTrash2 />,
                     disabled: false,
                     onClick: () => {
                       setMenu(null);

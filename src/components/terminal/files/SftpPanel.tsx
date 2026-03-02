@@ -1,3 +1,7 @@
+/**
+ * SFTP 文件面板。
+ * 负责目录浏览、文件操作和文件面板上下文菜单。
+ */
 import { useEffect, useRef, useState } from "react";
 import { error as logError, warn as logWarn } from "@tauri-apps/plugin-log";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -14,10 +18,14 @@ import {
   FiRefreshCw,
   FiClock,
   FiCornerLeftUp,
+  FiDownload,
   FiDatabase,
+  FiEdit2,
+  FiEye,
   FiFile,
   FiFileText,
   FiFolder,
+  FiFolderPlus,
   FiInfo,
   FiImage,
   FiLink2,
@@ -28,6 +36,8 @@ import {
   FiPackage,
   FiSettings,
   FiTerminal,
+  FiTrash2,
+  FiUpload,
   FiVideo,
 } from "react-icons/fi";
 import Button from "@/components/ui/button";
@@ -498,6 +508,7 @@ export default function SftpPanel({
           items={[
             {
               label: t("actions.download"),
+              icon: <FiDownload />,
               disabled: !isRemote || menu.entry.kind === "dir",
               onClick: () => {
                 if (!isRemote || menu.entry.kind === "dir") return;
@@ -507,6 +518,7 @@ export default function SftpPanel({
             },
             {
               label: t("actions.rename"),
+              icon: <FiEdit2 />,
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
@@ -521,6 +533,7 @@ export default function SftpPanel({
             },
             {
               label: t("actions.remove"),
+              icon: <FiTrash2 />,
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
@@ -549,6 +562,7 @@ export default function SftpPanel({
               label: showHiddenEntries
                 ? t("sftp.hideHidden")
                 : t("sftp.showHidden"),
+              icon: <FiEye />,
               disabled: false,
               onClick: () => {
                 setShowHiddenEntries((prev) => !prev);
@@ -557,6 +571,7 @@ export default function SftpPanel({
             },
             {
               label: t("sftp.openInFileManager"),
+              icon: <FiFolder />,
               disabled: isRemote || !currentPath,
               onClick: async () => {
                 if (isRemote || !currentPath) return;
@@ -600,6 +615,7 @@ export default function SftpPanel({
             },
             {
               label: t("actions.new"),
+              icon: <FiFolderPlus />,
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
@@ -611,6 +627,7 @@ export default function SftpPanel({
             },
             {
               label: t("actions.upload"),
+              icon: <FiUpload />,
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
