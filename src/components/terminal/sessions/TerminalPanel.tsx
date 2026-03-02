@@ -104,9 +104,6 @@ export default function TerminalPanel({
   editingProfile,
   localSessionMeta,
   activeSessionId,
-  activeSession,
-  activeSessionState,
-  activeSessionReason,
   sessionStates,
   sessionReasons,
   registerTerminalContainer,
@@ -143,6 +140,7 @@ export default function TerminalPanel({
   const containerRefs = useRef<
     Record<string, (element: HTMLDivElement | null) => void>
   >({});
+  const hasWorkspaceSessions = !!workspace.root;
 
   function findSession(sessionId: string) {
     return sessions.find((item) => item.sessionId === sessionId) ?? null;
@@ -250,13 +248,9 @@ export default function TerminalPanel({
             }}
           />
         )}
-        {!activeSession && (
+        {!hasWorkspaceSessions && (
           <div className="terminal-empty">{t("terminal.empty")}</div>
         )}
-        {activeSessionState === "disconnected" &&
-          activeSessionReason !== "exit" && (
-            <div className="terminal-empty">{t("terminal.empty")}</div>
-          )}
         {renderedMenus}
         {renderedSearchBar}
       </div>
