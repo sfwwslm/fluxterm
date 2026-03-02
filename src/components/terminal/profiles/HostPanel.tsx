@@ -249,6 +249,216 @@ export default function HostPanel({
     setGroupDialog({ mode: "add", initialValue: "" });
   }
 
+  /** 根级空白区域右键菜单。 */
+  function buildRootBlankMenuItems(): ContextMenuItem[] {
+    return [
+      {
+        label: t("host.addGroup"),
+        icon: <FiFolderPlus />,
+        disabled: false,
+        onClick: openAddGroupDialog,
+      },
+      {
+        label: t("profile.menu.new"),
+        icon: <FiPlus />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenNewProfile();
+        },
+      },
+    ];
+  }
+
+  /** 本地 Shell 分组标题右键菜单。 */
+  function buildLocalShellGroupMenuItems(): ContextMenuItem[] {
+    return [
+      {
+        label: t("profile.menu.new"),
+        icon: <FiPlus />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenNewProfile();
+        },
+      },
+      {
+        label: t("host.addGroup"),
+        icon: <FiFolderPlus />,
+        disabled: false,
+        onClick: openAddGroupDialog,
+      },
+      {
+        label: t("host.menu.renameGroup"),
+        icon: <FiEdit2 />,
+        disabled: true,
+        onClick: () => {},
+      },
+    ];
+  }
+
+  /** 单个本地 Shell 条目右键菜单。 */
+  function buildLocalShellItemMenuItems(
+    shell: LocalShellProfile,
+  ): ContextMenuItem[] {
+    return [
+      {
+        label: t("host.addGroup"),
+        icon: <FiFolderPlus />,
+        disabled: false,
+        onClick: openAddGroupDialog,
+      },
+      {
+        label: t("host.menu.viewShellPath"),
+        icon: <FiEye />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          setPathDialog({
+            title: t("host.pathDialogTitle", {
+              name: shell.label,
+            }),
+            path: shell.path,
+          });
+        },
+      },
+    ];
+  }
+
+  /** 自定义分组标题右键菜单。 */
+  function buildCustomGroupMenuItems(groupLabel: string): ContextMenuItem[] {
+    return [
+      {
+        label: t("profile.menu.new"),
+        icon: <FiPlus />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenNewProfile();
+        },
+      },
+      {
+        label: t("host.addGroup"),
+        icon: <FiFolderPlus />,
+        disabled: false,
+        onClick: openAddGroupDialog,
+      },
+      {
+        label: t("host.menu.renameGroup"),
+        icon: <FiEdit2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          setGroupDialog({
+            mode: "rename",
+            sourceGroup: groupLabel,
+            initialValue: groupLabel,
+          });
+        },
+      },
+      {
+        label: t("host.menu.deleteGroup"),
+        icon: <FiTrash2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          const hostCount = getGroupHostCount(groupLabel);
+          if (hostCount === 0) {
+            onRemoveGroup(groupLabel).catch(() => {});
+            return;
+          }
+          setRemoveGroupDialog({ name: groupLabel, hostCount });
+        },
+      },
+    ];
+  }
+
+  /** 分组内 SSH 主机右键菜单。 */
+  function buildGroupedProfileMenuItems(
+    profile: HostProfile,
+  ): ContextMenuItem[] {
+    return [
+      {
+        label: t("host.addGroup"),
+        icon: <FiFolderPlus />,
+        disabled: false,
+        onClick: openAddGroupDialog,
+      },
+      {
+        label: t("profile.menu.edit"),
+        icon: <FiEdit2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenEditProfile(profile);
+        },
+      },
+      {
+        label: t("host.menu.moveTo"),
+        icon: <FiFolder />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          setMoveDialog(profile);
+          setMoveGroupValue(
+            profile.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE,
+          );
+        },
+      },
+      {
+        label: t("profile.menu.delete"),
+        icon: <FiTrash2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onRemoveProfile(profile);
+        },
+      },
+    ];
+  }
+
+  /** 根级 SSH 主机右键菜单。 */
+  function buildRootProfileMenuItems(profile: HostProfile): ContextMenuItem[] {
+    return [
+      {
+        label: t("host.addGroup"),
+        icon: <FiFolderPlus />,
+        disabled: false,
+        onClick: openAddGroupDialog,
+      },
+      {
+        label: t("profile.menu.edit"),
+        icon: <FiEdit2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenEditProfile(profile);
+        },
+      },
+      {
+        label: t("host.menu.moveTo"),
+        icon: <FiFolder />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          setMoveDialog(profile);
+          setMoveGroupValue(
+            profile.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE,
+          );
+        },
+      },
+      {
+        label: t("profile.menu.delete"),
+        icon: <FiTrash2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onRemoveProfile(profile);
+        },
+      },
+    ];
+  }
+
   return (
     <div className="host-panel">
       <div className="host-list">
@@ -263,21 +473,7 @@ export default function HostPanel({
         <div
           className="host-list-body"
           onContextMenu={(event) => {
-            openMenu(event, [
-              {
-                label: t("host.addGroup"),
-                disabled: false,
-                onClick: openAddGroupDialog,
-              },
-              {
-                label: t("profile.menu.new"),
-                disabled: false,
-                onClick: () => {
-                  setMenu(null);
-                  onOpenNewProfile();
-                },
-              },
-            ]);
+            openMenu(event, buildRootBlankMenuItems());
           }}
         >
           {showLocalShellGroup && (
@@ -292,26 +488,7 @@ export default function HostPanel({
                 variant="ghost"
                 size="sm"
                 onContextMenu={(event) =>
-                  openMenu(event, [
-                    {
-                      label: t("profile.menu.new"),
-                      disabled: false,
-                      onClick: () => {
-                        setMenu(null);
-                        onOpenNewProfile();
-                      },
-                    },
-                    {
-                      label: t("host.addGroup"),
-                      disabled: false,
-                      onClick: openAddGroupDialog,
-                    },
-                    {
-                      label: t("host.menu.renameGroup"),
-                      disabled: true,
-                      onClick: () => {},
-                    },
-                  ])
+                  openMenu(event, buildLocalShellGroupMenuItems())
                 }
                 onClick={() =>
                   toggleGroup(localShellKey, filteredLocalShells.length > 0)
@@ -331,28 +508,7 @@ export default function HostPanel({
                       variant="ghost"
                       size="sm"
                       onContextMenu={(event) =>
-                        openMenu(event, [
-                          {
-                            label: t("host.addGroup"),
-                            icon: <FiFolderPlus />,
-                            disabled: false,
-                            onClick: openAddGroupDialog,
-                          },
-                          {
-                            label: t("host.menu.viewShellPath"),
-                            icon: <FiEye />,
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              setPathDialog({
-                                title: t("host.pathDialogTitle", {
-                                  name: shell.label,
-                                }),
-                                path: shell.path,
-                              });
-                            },
-                          },
-                        ])
+                        openMenu(event, buildLocalShellItemMenuItems(shell))
                       }
                       onDoubleClick={() => onConnectLocalShell(shell)}
                     >
@@ -377,50 +533,7 @@ export default function HostPanel({
                 variant="ghost"
                 size="sm"
                 onContextMenu={(event) =>
-                  openMenu(event, [
-                    {
-                      label: t("profile.menu.new"),
-                      icon: <FiPlus />,
-                      disabled: false,
-                      onClick: () => {
-                        setMenu(null);
-                        onOpenNewProfile();
-                      },
-                    },
-                    {
-                      label: t("host.addGroup"),
-                      icon: <FiFolderPlus />,
-                      disabled: false,
-                      onClick: openAddGroupDialog,
-                    },
-                    {
-                      label: t("host.menu.renameGroup"),
-                      icon: <FiEdit2 />,
-                      disabled: false,
-                      onClick: () => {
-                        setMenu(null);
-                        setGroupDialog({
-                          mode: "rename",
-                          sourceGroup: group.label,
-                          initialValue: group.label,
-                        });
-                      },
-                    },
-                    {
-                      label: t("host.menu.deleteGroup"),
-                      icon: <FiTrash2 />,
-                      disabled: false,
-                      onClick: () => {
-                        setMenu(null);
-                        const hostCount = getGroupHostCount(group.label);
-                        if (hostCount === 0) {
-                          onRemoveGroup(group.label).catch(() => {});
-                          return;
-                        }
-                        setRemoveGroupDialog({ name: group.label, hostCount });
-                      },
-                    },
-                  ])
+                  openMenu(event, buildCustomGroupMenuItems(group.label))
                 }
                 onClick={() => toggleGroup(group.label, group.items.length > 0)}
               >
@@ -439,45 +552,7 @@ export default function HostPanel({
                       variant="ghost"
                       size="sm"
                       onContextMenu={(event) =>
-                        openMenu(event, [
-                          {
-                            label: t("host.addGroup"),
-                            icon: <FiFolderPlus />,
-                            disabled: false,
-                            onClick: openAddGroupDialog,
-                          },
-                          {
-                            label: t("profile.menu.edit"),
-                            icon: <FiEdit2 />,
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              onOpenEditProfile(profile);
-                            },
-                          },
-                          {
-                            label: t("host.menu.moveTo"),
-                            icon: <FiFolder />,
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              setMoveDialog(profile);
-                              setMoveGroupValue(
-                                profile.tags?.[0]?.trim() ||
-                                  ROOT_PROFILE_GROUP_VALUE,
-                              );
-                            },
-                          },
-                          {
-                            label: t("profile.menu.delete"),
-                            icon: <FiTrash2 />,
-                            disabled: false,
-                            onClick: () => {
-                              setMenu(null);
-                              onRemoveProfile(profile);
-                            },
-                          },
-                        ])
+                        openMenu(event, buildGroupedProfileMenuItems(profile))
                       }
                       onClick={() => onPick(profile.id)}
                       onDoubleClick={() => onConnectProfile(profile)}
@@ -501,44 +576,7 @@ export default function HostPanel({
               variant="ghost"
               size="sm"
               onContextMenu={(event) =>
-                openMenu(event, [
-                  {
-                    label: t("host.addGroup"),
-                    icon: <FiFolderPlus />,
-                    disabled: false,
-                    onClick: openAddGroupDialog,
-                  },
-                  {
-                    label: t("profile.menu.edit"),
-                    icon: <FiEdit2 />,
-                    disabled: false,
-                    onClick: () => {
-                      setMenu(null);
-                      onOpenEditProfile(profile);
-                    },
-                  },
-                  {
-                    label: t("host.menu.moveTo"),
-                    icon: <FiFolder />,
-                    disabled: false,
-                    onClick: () => {
-                      setMenu(null);
-                      setMoveDialog(profile);
-                      setMoveGroupValue(
-                        profile.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE,
-                      );
-                    },
-                  },
-                  {
-                    label: t("profile.menu.delete"),
-                    icon: <FiTrash2 />,
-                    disabled: false,
-                    onClick: () => {
-                      setMenu(null);
-                      onRemoveProfile(profile);
-                    },
-                  },
-                ])
+                openMenu(event, buildRootProfileMenuItems(profile))
               }
               onClick={() => onPick(profile.id)}
               onDoubleClick={() => onConnectProfile(profile)}
