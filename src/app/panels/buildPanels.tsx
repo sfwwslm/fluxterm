@@ -62,6 +62,7 @@ type BuildPanelsProps = {
   onOpenRemoteDir: (path: string) => Promise<void>;
   onOpenFile: (entry: SftpEntry) => Promise<void>;
   onUploadFile: () => Promise<void>;
+  onUploadDroppedPaths: (paths: string[]) => Promise<void>;
   onDownloadFile: (entry: SftpEntry) => Promise<void>;
   onCancelTransfer: () => Promise<void>;
   onCreateFolder: (name: string) => Promise<void>;
@@ -107,6 +108,7 @@ export function buildPanels(
     onOpenRemoteDir,
     onOpenFile,
     onUploadFile,
+    onUploadDroppedPaths,
     onDownloadFile,
     onCancelTransfer,
     onCreateFolder,
@@ -158,6 +160,7 @@ export function buildPanels(
         onOpen={onOpenRemoteDir}
         onOpenFile={onOpenFile}
         onUpload={onUploadFile}
+        onDropUpload={onUploadDroppedPaths}
         onDownload={onDownloadFile}
         onMkdir={onCreateFolder}
         onRename={onRenameEntry}

@@ -39,6 +39,15 @@ export function sftpUpload(
   return callTauri("sftp_upload", { sessionId, localPath, remotePath });
 }
 
+/** 批量上传文件或目录。 */
+export function sftpUploadBatch(
+  sessionId: string,
+  localPaths: string[],
+  remoteDir: string,
+) {
+  return callTauri("sftp_upload_batch", { sessionId, localPaths, remoteDir });
+}
+
 /** 下载文件。 */
 export function sftpDownload(
   sessionId: string,

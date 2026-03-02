@@ -77,7 +77,9 @@ export default function TransfersPanel({
   // 目录任务是批处理，用户需要知道当前具体卡在哪个文件上；
   // 单文件任务本身标题已经足够明确，不再额外重复一行。
   const currentItemName =
-    progress?.kind === "directory" ? (progress.currentItemName ?? "") : "";
+    progress && progress.kind !== "file"
+      ? (progress.currentItemName ?? "")
+      : "";
   const targetName =
     progress?.targetName && progress.targetName !== progress.displayName
       ? progress.targetName

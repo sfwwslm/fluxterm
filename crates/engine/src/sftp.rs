@@ -8,6 +8,7 @@ use russh::client;
 use russh_sftp::client::{RawSftpSession, SftpSession};
 use russh_sftp::extensions;
 use russh_sftp::protocol::{FileAttributes, OpenFlags};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -71,6 +72,25 @@ struct RemoteDirPlan {
 struct RemoteFilePlan {
     remote_path: String,
     relative_path: String,
+}
+
+/// 本地批量上传预扫描结果。
+struct LocalUploadPlan {
+    root_name: String,
+    root_is_dir: bool,
+    directories: Vec<String>,
+    files: Vec<LocalFilePlan>,
+    total_items: u64,
+    total_bytes: Option<u64>,
+    skipped_items: u64,
+}
+
+/// 单个本地文件上传计划。
+struct LocalFilePlan {
+    local_path: PathBuf,
+    remote_path: String,
+    relative_path: String,
+    size: Option<u64>,
 }
 
 /// 生成 SFTP 传输任务标识。
@@ -428,6 +448,696 @@ pub async fn sftp_upload(
     Ok(())
 }
 
+/// 递归上传本地文件或目录到远端目录。
+pub async fn sftp_upload_batch(
+    session: &client::Handle<super::session::ClientHandler>,
+    session_id: &str,
+    local_paths: &[String],
+    remote_dir: &str,
+    transfer_id: &str,
+    cancel_flag: &AtomicBool,
+    on_event: &EventCallback,
+) -> Result<(), EngineError> {
+    let started_at = now_epoch_millis();
+    let started = Instant::now();
+    let local_roots: Vec<PathBuf> = local_paths
+        .iter()
+        .filter(|path| !path.trim().is_empty())
+        .map(PathBuf::from)
+        .collect();
+    if local_roots.is_empty() {
+        return Err(EngineError::new(
+            "sftp_upload_failed",
+            "没有可上传的本地路径",
+        ));
+    }
+
+    let mut plans = Vec::new();
+    let mut total_items = 0u64;
+    let mut total_bytes = Some(0u64);
+    let mut failed_items = 0u64;
+
+    for root in &local_roots {
+        match collect_local_upload_plan(root, remote_dir) {
+            Ok(plan) => {
+                total_items += plan.total_items;
+                failed_items += plan.skipped_items;
+                if let Some(total) = total_bytes.as_mut() {
+                    if let Some(bytes) = plan.total_bytes {
+                        *total += bytes;
+                    } else {
+                        total_bytes = None;
+                    }
+                }
+                plans.push(plan);
+            }
+            Err(err) => {
+                failed_items += 1;
+                warn!(
+                    "sftp_upload_plan_failed session_id={} local_path={} error_code={} error_message={} error_detail={}",
+                    session_id,
+                    root.to_string_lossy(),
+                    err.code,
+                    err.message,
+                    err.detail.as_deref().unwrap_or("")
+                );
+            }
+        }
+    }
+
+    if total_items == 0 {
+        total_items = failed_items.max(1);
+    } else if failed_items > 0 {
+        total_items += failed_items;
+    }
+
+    let display_name = items_label(Some(total_items));
+    let progress_context = TransferProgressContext {
+        session_id,
+        transfer_id,
+        op: SftpProgressOp::Upload,
+        kind: SftpTransferKind::Batch,
+        path: remote_dir,
+        display_name: &display_name,
+        item_label: &display_name,
+        target_name: None,
+        current_item_name: None,
+        total: total_bytes,
+        completed_items: 0,
+        total_items: Some(total_items),
+        failed_items,
+        status: SftpTransferStatus::Running,
+        on_event,
+    };
+    emit_transfer_progress(on_event, progress_context, 0);
+    debug!(
+        "sftp_upload_batch_start session_id={} remote_dir={} started_at_ms={} total_items={} total_bytes={}",
+        session_id,
+        remote_dir,
+        started_at,
+        total_items,
+        total_bytes.unwrap_or(0)
+    );
+
+    let sftp = open_sftp(session).await?;
+    let (raw_sftp, write_limit) = open_raw_sftp(session).await?;
+    let mut transferred = 0u64;
+    let mut completed_items = 0u64;
+
+    for plan in &plans {
+        let root_remote_dir = remote_join(remote_dir, &plan.root_name);
+        if is_transfer_cancelled(cancel_flag) {
+            emit_cancelled_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    ..progress_context
+                },
+                transferred,
+            );
+            let _ = raw_sftp.close_session();
+            return Ok(());
+        }
+
+        if plan.root_is_dir {
+            if let Err(err) = ensure_remote_dir_exists(&sftp, &root_remote_dir).await {
+                failed_items += plan.total_items;
+                emit_transfer_progress(
+                    on_event,
+                    TransferProgressContext {
+                        completed_items,
+                        failed_items,
+                        status: if completed_items > 0 {
+                            SftpTransferStatus::PartialSuccess
+                        } else {
+                            SftpTransferStatus::Failed
+                        },
+                        ..progress_context
+                    },
+                    transferred,
+                );
+                log_sftp_failure(
+                    "sftp_upload_batch_failed",
+                    &TransferLogContext {
+                        session_id,
+                        source_path: plan.root_name.as_str(),
+                        target_path: root_remote_dir.as_str(),
+                        started_at_ms: started_at,
+                        elapsed_ms: started.elapsed().as_millis(),
+                        transferred_bytes: transferred,
+                        total_bytes,
+                    },
+                    &err,
+                );
+                continue;
+            }
+            if plan.directories.is_empty() && plan.files.is_empty() && plan.skipped_items == 0 {
+                completed_items += 1;
+                emit_transfer_progress(
+                    on_event,
+                    TransferProgressContext {
+                        completed_items,
+                        failed_items,
+                        ..progress_context
+                    },
+                    transferred,
+                );
+            }
+        }
+
+        for relative_dir in &plan.directories {
+            if is_transfer_cancelled(cancel_flag) {
+                emit_cancelled_progress(
+                    on_event,
+                    TransferProgressContext {
+                        completed_items,
+                        failed_items,
+                        ..progress_context
+                    },
+                    transferred,
+                );
+                let _ = raw_sftp.close_session();
+                return Ok(());
+            }
+            let target_dir = remote_join(&root_remote_dir, relative_dir);
+            match ensure_remote_dir_exists(&sftp, &target_dir).await {
+                Ok(()) => {
+                    completed_items += 1;
+                }
+                Err(_) => {
+                    failed_items += 1;
+                }
+            }
+            emit_transfer_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    ..progress_context
+                },
+                transferred,
+            );
+        }
+
+        failed_items += plan.skipped_items;
+        if plan.skipped_items > 0 {
+            emit_transfer_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    ..progress_context
+                },
+                transferred,
+            );
+        }
+
+        for file in &plan.files {
+            let current_name = if file.relative_path.is_empty() {
+                file_name_from_path(&file.remote_path)
+            } else {
+                file.relative_path.clone()
+            };
+            emit_transfer_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    current_item_name: Some(&current_name),
+                    ..progress_context
+                },
+                transferred,
+            );
+
+            let base_transferred = transferred;
+            let result = upload_local_file_to_remote(
+                &raw_sftp,
+                write_limit,
+                &file.local_path,
+                &file.remote_path,
+                cancel_flag,
+                |file_transferred| {
+                    emit_transfer_progress(
+                        on_event,
+                        TransferProgressContext {
+                            completed_items,
+                            failed_items,
+                            current_item_name: Some(&current_name),
+                            ..progress_context
+                        },
+                        base_transferred + file_transferred,
+                    );
+                },
+            )
+            .await;
+            match result {
+                Ok(file_transferred) => {
+                    transferred += file_transferred;
+                    completed_items += 1;
+                }
+                Err(err) if err.code == "sftp_transfer_cancelled" => {
+                    emit_cancelled_progress(
+                        on_event,
+                        TransferProgressContext {
+                            completed_items,
+                            failed_items,
+                            current_item_name: Some(&current_name),
+                            ..progress_context
+                        },
+                        transferred,
+                    );
+                    let _ = raw_sftp.close_session();
+                    return Ok(());
+                }
+                Err(err) => {
+                    failed_items += 1;
+                    log_sftp_failure(
+                        "sftp_upload_batch_file_failed",
+                        &TransferLogContext {
+                            session_id,
+                            source_path: file.local_path.to_string_lossy().as_ref(),
+                            target_path: file.remote_path.as_str(),
+                            started_at_ms: started_at,
+                            elapsed_ms: started.elapsed().as_millis(),
+                            transferred_bytes: transferred,
+                            total_bytes: total_bytes.or(file.size),
+                        },
+                        &err,
+                    );
+                }
+            }
+            emit_transfer_progress(
+                on_event,
+                TransferProgressContext {
+                    completed_items,
+                    failed_items,
+                    current_item_name: Some(&current_name),
+                    ..progress_context
+                },
+                transferred,
+            );
+        }
+    }
+
+    let _ = raw_sftp.close_session();
+    let final_status = if failed_items == 0 {
+        SftpTransferStatus::Success
+    } else if completed_items > 0 {
+        SftpTransferStatus::PartialSuccess
+    } else {
+        SftpTransferStatus::Failed
+    };
+    emit_transfer_progress(
+        on_event,
+        TransferProgressContext {
+            completed_items,
+            failed_items,
+            current_item_name: None,
+            status: final_status,
+            ..progress_context
+        },
+        transferred,
+    );
+
+    match final_status {
+        SftpTransferStatus::Success | SftpTransferStatus::PartialSuccess => {
+            log_sftp_success(
+                "sftp_upload_batch_success",
+                &TransferLogContext {
+                    session_id,
+                    source_path: display_name.as_str(),
+                    target_path: remote_dir,
+                    started_at_ms: started_at,
+                    elapsed_ms: started.elapsed().as_millis(),
+                    transferred_bytes: transferred,
+                    total_bytes,
+                },
+            );
+            Ok(())
+        }
+        _ => {
+            let err = EngineError::new("sftp_upload_failed", "批量上传失败");
+            log_sftp_failure(
+                "sftp_upload_batch_failed",
+                &TransferLogContext {
+                    session_id,
+                    source_path: display_name.as_str(),
+                    target_path: remote_dir,
+                    started_at_ms: started_at,
+                    elapsed_ms: started.elapsed().as_millis(),
+                    transferred_bytes: transferred,
+                    total_bytes,
+                },
+                &err,
+            );
+            Err(err)
+        }
+    }
+}
+
+/// 将单个本地文件上传到远端，并把文件级进度回调给上层聚合任务。
+async fn upload_local_file_to_remote(
+    sftp: &Arc<RawSftpSession>,
+    write_limit: Option<u64>,
+    local_path: &Path,
+    remote_path: &str,
+    cancel_flag: &AtomicBool,
+    mut on_progress: impl FnMut(u64),
+) -> Result<u64, EngineError> {
+    let mut local = tokio::fs::File::open(local_path).await.map_err(|err| {
+        EngineError::with_detail("sftp_upload_failed", "无法读取本地文件", err.to_string())
+    })?;
+    let handle = sftp
+        .open(
+            remote_path.to_string(),
+            OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE,
+            FileAttributes::empty(),
+        )
+        .await
+        .map_err(|err| {
+            EngineError::with_detail("sftp_upload_failed", "无法创建远端文件", err.to_string())
+        })?;
+    let handle_id = handle.handle.clone();
+    let mut chunk_size = 256 * 1024usize;
+    if let Some(limit) = write_limit {
+        chunk_size = chunk_size.min(limit as usize);
+    }
+    if chunk_size == 0 {
+        chunk_size = 256 * 1024;
+    }
+    let mut buf = vec![0u8; chunk_size];
+    let mut offset = 0u64;
+    let mut transferred = 0u64;
+    let mut in_flight: JoinSet<Result<usize, EngineError>> = JoinSet::new();
+    let max_in_flight = 8usize;
+
+    loop {
+        if is_transfer_cancelled(cancel_flag) {
+            in_flight.abort_all();
+            let _ = sftp.close(handle_id.clone()).await;
+            return Err(transfer_cancelled_error());
+        }
+        let n = local.read(&mut buf).await.map_err(|err| {
+            EngineError::with_detail("sftp_transfer_failed", "无法读取文件数据", err.to_string())
+        })?;
+        if n == 0 {
+            break;
+        }
+        while in_flight.len() >= max_in_flight {
+            match in_flight.join_next().await {
+                Some(Ok(Ok(len))) => {
+                    transferred += len as u64;
+                    on_progress(transferred);
+                }
+                Some(Ok(Err(err))) => {
+                    in_flight.abort_all();
+                    let _ = sftp.close(handle_id.clone()).await;
+                    return Err(err);
+                }
+                Some(Err(err)) => {
+                    in_flight.abort_all();
+                    let _ = sftp.close(handle_id.clone()).await;
+                    return Err(EngineError::with_detail(
+                        "sftp_transfer_failed",
+                        "无法写入文件数据",
+                        err.to_string(),
+                    ));
+                }
+                None => break,
+            }
+        }
+        let data = buf[..n].to_vec();
+        let session = Arc::clone(sftp);
+        let handle = handle_id.clone();
+        let write_offset = offset;
+        in_flight.spawn(async move {
+            session
+                .write(handle, write_offset, data)
+                .await
+                .map(|_| n)
+                .map_err(|err| {
+                    EngineError::with_detail(
+                        "sftp_transfer_failed",
+                        "无法写入文件数据",
+                        err.to_string(),
+                    )
+                })
+        });
+        offset += n as u64;
+    }
+
+    while let Some(result) = in_flight.join_next().await {
+        if is_transfer_cancelled(cancel_flag) {
+            in_flight.abort_all();
+            let _ = sftp.close(handle_id.clone()).await;
+            return Err(transfer_cancelled_error());
+        }
+        match result {
+            Ok(Ok(len)) => {
+                transferred += len as u64;
+                on_progress(transferred);
+            }
+            Ok(Err(err)) => {
+                in_flight.abort_all();
+                let _ = sftp.close(handle_id.clone()).await;
+                return Err(err);
+            }
+            Err(err) => {
+                in_flight.abort_all();
+                let _ = sftp.close(handle_id.clone()).await;
+                return Err(EngineError::with_detail(
+                    "sftp_transfer_failed",
+                    "无法写入文件数据",
+                    err.to_string(),
+                ));
+            }
+        }
+    }
+
+    sftp.close(handle_id).await.map_err(|err| {
+        EngineError::with_detail("sftp_upload_failed", "无法关闭远端文件", err.to_string())
+    })?;
+    Ok(transferred)
+}
+
+/// 扫描本地文件或目录，生成批量上传计划。
+fn collect_local_upload_plan(
+    root_path: &Path,
+    remote_dir: &str,
+) -> Result<LocalUploadPlan, EngineError> {
+    let metadata = fs::symlink_metadata(root_path).map_err(|err| {
+        EngineError::with_detail(
+            "sftp_upload_failed",
+            "无法读取本地文件信息",
+            err.to_string(),
+        )
+    })?;
+    if metadata.file_type().is_symlink() {
+        return Err(EngineError::new(
+            "sftp_upload_failed",
+            "暂不支持上传符号链接",
+        ));
+    }
+
+    let root_name = root_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| EngineError::new("sftp_upload_failed", "无法识别上传根目录名称"))?
+        .to_string();
+
+    if metadata.is_file() {
+        let remote_path = remote_join(remote_dir, &root_name);
+        return Ok(LocalUploadPlan {
+            root_name: root_name.clone(),
+            root_is_dir: false,
+            directories: Vec::new(),
+            files: vec![LocalFilePlan {
+                local_path: root_path.to_path_buf(),
+                remote_path,
+                relative_path: root_name.clone(),
+                size: Some(metadata.len()),
+            }],
+            total_items: 1,
+            total_bytes: Some(metadata.len()),
+            skipped_items: 0,
+        });
+    }
+
+    if !metadata.is_dir() {
+        return Err(EngineError::new(
+            "sftp_upload_failed",
+            "暂不支持上传该类型条目",
+        ));
+    }
+
+    let mut directories = Vec::new();
+    let mut files = Vec::new();
+    let mut total_bytes = Some(0u64);
+    let mut skipped_items = 0u64;
+    let remote_root_dir = remote_join(remote_dir, &root_name);
+    collect_local_dir_recursive(
+        root_path,
+        root_path,
+        &remote_root_dir,
+        &mut directories,
+        &mut files,
+        &mut total_bytes,
+        &mut skipped_items,
+    )?;
+    let total_items = (directories.len() as u64 + files.len() as u64 + skipped_items).max(1);
+    Ok(LocalUploadPlan {
+        root_name,
+        root_is_dir: true,
+        directories,
+        files,
+        total_items,
+        total_bytes,
+        skipped_items,
+    })
+}
+
+/// 深度优先扫描本地目录树，不递归跟随符号链接。
+fn collect_local_dir_recursive(
+    root_path: &Path,
+    current_path: &Path,
+    remote_root_dir: &str,
+    directories: &mut Vec<String>,
+    files: &mut Vec<LocalFilePlan>,
+    total_bytes: &mut Option<u64>,
+    skipped_items: &mut u64,
+) -> Result<(), EngineError> {
+    for entry in fs::read_dir(current_path).map_err(|err| {
+        EngineError::with_detail("sftp_upload_failed", "无法读取本地目录", err.to_string())
+    })? {
+        let entry = entry.map_err(|err| {
+            EngineError::with_detail(
+                "sftp_upload_failed",
+                "无法读取本地目录条目",
+                err.to_string(),
+            )
+        })?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|err| {
+            EngineError::with_detail(
+                "sftp_upload_failed",
+                "无法读取本地文件信息",
+                err.to_string(),
+            )
+        })?;
+        let relative = path
+            .strip_prefix(root_path)
+            .map_err(|err| {
+                EngineError::with_detail(
+                    "sftp_upload_failed",
+                    "无法计算本地相对路径",
+                    err.to_string(),
+                )
+            })?
+            .to_string_lossy()
+            .replace('\\', "/");
+        if metadata.file_type().is_symlink() {
+            *skipped_items += 1;
+            continue;
+        }
+        if metadata.is_dir() {
+            directories.push(relative.clone());
+            collect_local_dir_recursive(
+                root_path,
+                &path,
+                remote_root_dir,
+                directories,
+                files,
+                total_bytes,
+                skipped_items,
+            )?;
+            continue;
+        }
+        if metadata.is_file() {
+            if let Some(total) = total_bytes.as_mut() {
+                *total += metadata.len();
+            }
+            files.push(LocalFilePlan {
+                local_path: path,
+                remote_path: remote_join(remote_root_dir, &relative),
+                relative_path: relative,
+                size: Some(metadata.len()),
+            });
+            continue;
+        }
+        *skipped_items += 1;
+    }
+    Ok(())
+}
+
+/// 确保远端目录存在；若目录已存在则视为成功。
+async fn ensure_remote_dir_exists(sftp: &SftpSession, path: &str) -> Result<(), EngineError> {
+    if path.is_empty() || path == "/" {
+        return Ok(());
+    }
+    match sftp.create_dir(path.to_string()).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            if sftp.canonicalize(path).await.is_ok() {
+                Ok(())
+            } else {
+                Err(EngineError::with_detail(
+                    "sftp_mkdir_failed",
+                    "无法创建目录",
+                    err.to_string(),
+                ))
+            }
+        }
+    }
+}
+
+async fn remove_remote_path_recursive(sftp: &SftpSession, path: &str) -> Result<(), EngineError> {
+    if sftp.remove_file(path.to_string()).await.is_ok() {
+        return Ok(());
+    }
+    let entries = sftp.read_dir(path.to_string()).await.map_err(|err| {
+        EngineError::with_detail("sftp_remove_failed", "无法删除", err.to_string())
+    })?;
+    for entry in entries {
+        let name = entry.file_name();
+        if name == "." || name == ".." {
+            continue;
+        }
+        let child_path = remote_join(path, &name);
+        match entry.file_type() {
+            russh_sftp::protocol::FileType::Dir => {
+                Box::pin(remove_remote_path_recursive(sftp, &child_path)).await?;
+            }
+            _ => {
+                sftp.remove_file(child_path).await.map_err(|err| {
+                    EngineError::with_detail("sftp_remove_failed", "无法删除", err.to_string())
+                })?;
+            }
+        }
+    }
+    sftp.remove_dir(path.to_string()).await.map_err(|err| {
+        EngineError::with_detail("sftp_remove_failed", "无法删除", err.to_string())
+    })?;
+    Ok(())
+}
+
+fn remote_join(base: &str, child: &str) -> String {
+    let normalized_base = if base == "/" {
+        "/".to_string()
+    } else {
+        base.trim_end_matches('/').to_string()
+    };
+    let normalized_child = child.trim_matches('/');
+    if normalized_child.is_empty() {
+        return normalized_base;
+    }
+    if normalized_base.is_empty() || normalized_base == "/" {
+        return format!("/{}", normalized_child);
+    }
+    format!("{normalized_base}/{normalized_child}")
+}
+
 /// 下载远端文件至本地。
 pub async fn sftp_download(
     session: &client::Handle<super::session::ClientHandler>,
@@ -607,16 +1317,18 @@ pub async fn sftp_download_dir(
 
     match tokio::fs::create_dir_all(&root_path).await {
         Ok(()) => {
-            completed_items += 1;
-            emit_transfer_progress(
-                on_event,
-                TransferProgressContext {
-                    completed_items,
-                    current_item_name: None,
-                    ..progress_context
-                },
-                transferred,
-            );
+            if plan.directories.is_empty() && plan.files.is_empty() {
+                completed_items += 1;
+                emit_transfer_progress(
+                    on_event,
+                    TransferProgressContext {
+                        completed_items,
+                        current_item_name: None,
+                        ..progress_context
+                    },
+                    transferred,
+                );
+            }
         }
         Err(err) => {
             let err = EngineError::with_detail(
@@ -628,7 +1340,7 @@ pub async fn sftp_download_dir(
                 on_event,
                 TransferProgressContext {
                     completed_items: 0,
-                    failed_items: plan.total_items,
+                    failed_items: plan.total_items.max(1),
                     status: SftpTransferStatus::Failed,
                     current_item_name: None,
                     ..progress_context
@@ -877,17 +1589,17 @@ pub async fn sftp_remove(
         path, started_at
     );
     let sftp = open_sftp(session).await?;
-    sftp.remove_file(path.to_string()).await.map_err(|err| {
-        let err = EngineError::with_detail("sftp_remove_failed", "无法删除", err.to_string());
-        log_sftp_path_failure(
-            "sftp_remove_failed",
-            path,
-            started_at,
-            started.elapsed().as_millis(),
-            &err,
-        );
-        err
-    })?;
+    remove_remote_path_recursive(&sftp, path)
+        .await
+        .inspect_err(|err| {
+            log_sftp_path_failure(
+                "sftp_remove_failed",
+                path,
+                started_at,
+                started.elapsed().as_millis(),
+                err,
+            );
+        })?;
     debug!(
         "sftp_remove_success path={} started_at_ms={} elapsed_ms={}",
         path,

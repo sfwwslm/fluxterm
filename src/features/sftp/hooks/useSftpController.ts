@@ -24,6 +24,7 @@ export default function useSftpController(
       refreshList: raw.refreshList,
       openRemoteDir: raw.openRemoteDir,
       uploadFile: raw.uploadFile,
+      uploadDroppedPaths: raw.uploadDroppedPaths,
       downloadFile: raw.downloadFile,
       cancelTransfer: raw.cancelTransfer,
       createFolder: raw.createFolder,

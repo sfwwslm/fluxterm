@@ -226,6 +226,34 @@ impl Engine {
         self.await_response(resp_rx, "无法接收 SFTP 上传响应")
     }
 
+    /// 批量上传本地文件或目录到远端目录。
+    pub fn sftp_upload_batch(
+        &self,
+        session_id: &str,
+        local_paths: &[String],
+        remote_dir: &str,
+    ) -> Result<(), EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::SftpUploadBatch {
+                local_paths: local_paths.to_vec(),
+                remote_dir: remote_dir.to_string(),
+                respond_to: resp_tx,
+            })
+            .map_err(|_| {
+                EngineError::new("session_command_failed", "无法发送 SFTP 批量上传命令")
+            })?;
+        self.await_response(resp_rx, "无法接收 SFTP 批量上传响应")
+    }
+
     /// 下载远端文件到本地。
     pub fn sftp_download(
         &self,

@@ -64,7 +64,7 @@ export type SftpEntry = {
 };
 
 /** SFTP 传输进度。 */
-export type SftpTransferKind = "file" | "directory";
+export type SftpTransferKind = "file" | "directory" | "batch";
 export type SftpTransferStatus =
   | "running"
   | "success"

@@ -1,9 +1,57 @@
 .sftp-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
   height: 100%;
   min-height: 0;
+}
+
+.sftp-panel.drop-accept .sftp-list {
+  border-color: color-mix(in srgb, var(--accent-soft) 48%, var(--border-soft));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-soft) 36%, transparent);
+}
+
+.sftp-panel.drop-reject .sftp-list {
+  border-color: rgba(217, 107, 107, 0.3);
+  box-shadow: 0 0 0 1px rgba(217, 107, 107, 0.22);
+}
+
+.sftp-drop-overlay {
+  position: absolute;
+  inset: 42px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 3;
+  backdrop-filter: blur(3px);
+  font-size: 13px;
+  text-align: center;
+}
+
+.sftp-drop-overlay strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.sftp-drop-overlay.accept {
+  background:
+    linear-gradient(180deg, rgba(24, 46, 62, 0.58), rgba(13, 27, 38, 0.72)),
+    color-mix(in srgb, var(--accent-soft) 12%, transparent);
+  color: var(--text-secondary);
+}
+
+.sftp-drop-overlay.reject {
+  background: linear-gradient(
+    180deg,
+    rgba(61, 25, 25, 0.6),
+    rgba(40, 16, 16, 0.74)
+  );
+  color: #f0b4b4;
 }
 
 .sftp-toolbar {

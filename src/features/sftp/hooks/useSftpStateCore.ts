@@ -27,7 +27,7 @@ import {
   sftpRemove,
   sftpResolvePath,
   sftpRename,
-  sftpUpload,
+  sftpUploadBatch,
 } from "@/features/sftp/core/commands";
 import { registerSftpProgressListener } from "@/features/sftp/core/listeners";
 
@@ -56,6 +56,7 @@ type UseSftpStateResult = {
   refreshList: (path?: string, sessionId?: string | null) => Promise<void>;
   openRemoteDir: (path: string) => Promise<void>;
   uploadFile: () => Promise<void>;
+  uploadDroppedPaths: (paths: string[]) => Promise<void>;
   downloadFile: (entry: SftpEntry) => Promise<void>;
   cancelTransfer: () => Promise<void>;
   createFolder: (name: string) => Promise<void>;
@@ -307,13 +308,10 @@ export default function useSftpState({
     const file = await open({ multiple: false });
     if (!file || Array.isArray(file)) return;
     const fileName = file.split(/[\\/]/).pop() ?? "upload.bin";
-    const remotePath = currentPath.endsWith("/")
-      ? `${currentPath}${fileName}`
-      : `${currentPath}/${fileName}`;
     appendLog("log.event.uploadStart", { name: fileName });
     setBusyMessage(t("messages.uploading"));
     try {
-      await sftpUpload(activeSession.sessionId, file, remotePath);
+      await sftpUploadBatch(activeSession.sessionId, [file], currentPath);
       await refreshList();
       setBusyMessage(null);
       const latestProgress =
@@ -326,6 +324,40 @@ export default function useSftpState({
     } catch {
       setBusyMessage("上传失败");
       appendLog("log.event.uploadFailed", { name: fileName }, "error");
+    }
+  }
+
+  async function uploadDroppedPaths(paths: string[]) {
+    if (!activeSession) return;
+    if (!enabled && !isLocalSession(activeSession.sessionId)) return;
+    const normalizedPaths = paths.filter((path) => path.trim().length > 0);
+    if (!normalizedPaths.length) return;
+    const uploadLabel =
+      normalizedPaths.length > 1
+        ? t("log.itemsCount", { count: normalizedPaths.length })
+        : (normalizedPaths[0]?.split(/[\\/]/).pop() ?? "upload.bin");
+    appendLog("log.event.uploadStart", { name: uploadLabel });
+    setBusyMessage(t("messages.uploading"));
+    try {
+      await sftpUploadBatch(
+        activeSession.sessionId,
+        normalizedPaths,
+        currentPath,
+      );
+      await refreshList();
+      setBusyMessage(null);
+      const latestProgress =
+        progressBySessionRef.current[activeSession.sessionId] ?? null;
+      if (latestProgress?.status === "cancelled") {
+        appendLog("log.event.uploadCancelled", { name: uploadLabel });
+      } else if (latestProgress?.status === "partial_success") {
+        appendLog("log.event.uploadFailed", { name: uploadLabel }, "error");
+      } else {
+        appendLog("log.event.uploadDone", { name: uploadLabel }, "success");
+      }
+    } catch {
+      setBusyMessage("上传失败");
+      appendLog("log.event.uploadFailed", { name: uploadLabel }, "error");
     }
   }
 
@@ -485,6 +517,7 @@ export default function useSftpState({
     refreshList,
     openRemoteDir,
     uploadFile,
+    uploadDroppedPaths,
     downloadFile,
     cancelTransfer,
     createFolder,

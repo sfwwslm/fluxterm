@@ -101,6 +101,7 @@ pub enum SftpProgressOp {
 pub enum SftpTransferKind {
     File,
     Directory,
+    Batch,
 }
 
 /// SFTP 传输任务状态。

@@ -8,6 +8,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";
 import type { SftpAvailability, SftpEntry } from "@/types";
+import useSftpDropUpload from "@/features/sftp/hooks/useSftpDropUpload";
 import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
 import { useNotices } from "@/hooks/useNotices";
@@ -59,10 +60,11 @@ type SftpPanelProps = {
   onOpen: (path: string) => void;
   onOpenFile: (entry: SftpEntry) => Promise<void>;
   onUpload: () => void;
+  onDropUpload: (paths: string[]) => Promise<void>;
   onDownload: (entry: SftpEntry) => void;
   onMkdir: (name: string) => void;
   onRename: (entry: SftpEntry, name: string) => void;
-  onRemove: (entry: SftpEntry) => void;
+  onRemove: (entry: SftpEntry) => Promise<void>;
   locale: Locale;
   t: Translate;
 };
@@ -207,6 +209,7 @@ export default function SftpPanel({
   onOpen,
   onOpenFile,
   onUpload,
+  onDropUpload,
   onDownload,
   onMkdir,
   onRename,
@@ -215,6 +218,7 @@ export default function SftpPanel({
   t,
 }: SftpPanelProps) {
   const { openDialog, pushToast } = useNotices();
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const headerScrollRef = useRef<HTMLDivElement | null>(null);
   const listBodyRef = useRef<HTMLDivElement | null>(null);
   const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(
@@ -236,6 +240,12 @@ export default function SftpPanel({
     isRemoteSession && sftpAvailability === "unsupported";
   const interactionsDisabled =
     showUnavailable || showSftpDisabled || showSftpUnsupported;
+  const dropEnabled = !interactionsDisabled && isRemote && !!currentPath;
+  const dropState = useSftpDropUpload({
+    enabled: dropEnabled,
+    panelRef,
+    onDropPaths: onDropUpload,
+  });
   // 隐藏文件显示控制只作用于列表层，不改变后端目录读取结果。
   const visibleEntries = showHiddenEntries
     ? entries
@@ -356,7 +366,10 @@ export default function SftpPanel({
   }
 
   return (
-    <div className="sftp-panel">
+    <div
+      ref={panelRef}
+      className={`sftp-panel ${dropState !== "idle" ? `drop-${dropState}` : ""}`.trim()}
+    >
       <div className="sftp-toolbar">
         <div className="path-with-sync">
           <Tooltip content={pathSyncMeta.label}>
@@ -501,6 +514,16 @@ export default function SftpPanel({
           )}
         </div>
       </div>
+      {dropState !== "idle" && (
+        <div className={`sftp-drop-overlay ${dropState}`}>
+          <strong>{t("sftp.drop.title")}</strong>
+          <span>
+            {dropState === "accept"
+              ? t("sftp.drop.accept")
+              : t("sftp.drop.reject")}
+          </span>
+        </div>
+      )}
       {menu && (
         <ContextMenu
           x={menu.x}
@@ -545,7 +568,9 @@ export default function SftpPanel({
                   }),
                   confirmLabel: t("actions.remove"),
                   cancelLabel: t("actions.cancel"),
-                  onConfirm: () => onRemove(menu.entry),
+                  onConfirm: () => {
+                    void onRemove(menu.entry).catch(() => {});
+                  },
                 });
               },
             },

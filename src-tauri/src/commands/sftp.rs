@@ -85,6 +85,28 @@ pub async fn sftp_upload(
 }
 
 #[tauri::command]
+/// 批量上传本地文件或目录到远端目录。
+pub async fn sftp_upload_batch(
+    state: State<'_, EngineState>,
+    session_id: String,
+    local_paths: Vec<String>,
+    remote_dir: String,
+) -> Result<(), EngineError> {
+    let engine: Arc<Engine> = Arc::clone(&state.engine);
+    tauri::async_runtime::spawn_blocking(move || {
+        engine.sftp_upload_batch(&session_id, &local_paths, &remote_dir)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 批量上传",
+            err.to_string(),
+        )
+    })?
+}
+
+#[tauri::command]
 /// 下载远端文件到本地。
 pub async fn sftp_download(
     state: State<'_, EngineState>,

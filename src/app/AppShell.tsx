@@ -481,6 +481,7 @@ export default function AppShell() {
     refreshList,
     openRemoteDir,
     uploadFile,
+    uploadDroppedPaths,
     downloadFile,
     cancelTransfer,
     createFolder,
@@ -878,6 +879,9 @@ export default function AppShell() {
           case "files:upload":
             uploadFile().catch(() => {});
             break;
+          case "files:upload-paths":
+            uploadDroppedPaths(message.paths).catch(() => {});
+            break;
           case "files:download":
             downloadFile(message.entry).catch(() => {});
             break;
@@ -933,6 +937,7 @@ export default function AppShell() {
     removeEntry,
     renameEntry,
     uploadFile,
+    uploadDroppedPaths,
   ]);
 
   useMacAppMenu({
@@ -1090,6 +1095,9 @@ export default function AppShell() {
             uploadFile: async () => {
               postFloatingFilesMessage({ type: "files:upload" });
             },
+            uploadDroppedPaths: async (paths: string[]) => {
+              postFloatingFilesMessage({ type: "files:upload-paths", paths });
+            },
             downloadFile: async (
               entry: (typeof filesPanelState.entries)[number],
             ) => {
@@ -1129,6 +1137,7 @@ export default function AppShell() {
               await openLocalFile(entry.path, fileDefaultEditorPath);
             },
             uploadFile,
+            uploadDroppedPaths,
             downloadFile,
             cancelTransfer,
             createFolder,
@@ -1145,6 +1154,7 @@ export default function AppShell() {
       removeEntry,
       renameEntry,
       uploadFile,
+      uploadDroppedPaths,
       cancelTransfer,
     ],
   );
@@ -1187,6 +1197,7 @@ export default function AppShell() {
         onOpenRemoteDir: filesPanelActions.openRemoteDir,
         onOpenFile: filesPanelActions.openFile,
         onUploadFile: filesPanelActions.uploadFile,
+        onUploadDroppedPaths: filesPanelActions.uploadDroppedPaths,
         onDownloadFile: filesPanelActions.downloadFile,
         onCancelTransfer: filesPanelActions.cancelTransfer,
         onCreateFolder: filesPanelActions.createFolder,

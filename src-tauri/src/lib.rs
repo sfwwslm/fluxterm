@@ -31,7 +31,7 @@ use crate::commands::resource_monitor::{
 use crate::commands::security::security_status;
 use crate::commands::sftp::{
     sftp_cancel_transfer, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
-    sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload,
+    sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
 };
 use crate::commands::ssh::{ssh_connect, ssh_disconnect, ssh_resize, ssh_write};
 use crate::commands::system::{app_config_dir, app_data_dir};
@@ -109,6 +109,7 @@ pub fn run() {
             sftp_home,
             sftp_resolve_path,
             sftp_upload,
+            sftp_upload_batch,
             sftp_download,
             sftp_download_dir,
             sftp_cancel_transfer,

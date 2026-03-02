@@ -14,7 +14,7 @@ use crate::auth::authenticate;
 use crate::error::EngineError;
 use crate::sftp::{
     next_transfer_id, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
-    sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload,
+    sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
 };
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, TerminalSize,
@@ -47,6 +47,11 @@ pub enum SessionCommand {
     SftpUpload {
         local_path: String,
         remote_path: String,
+        respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
+    },
+    SftpUploadBatch {
+        local_paths: Vec<String>,
+        remote_dir: String,
         respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
     },
     SftpDownload {
@@ -186,6 +191,29 @@ pub async fn run_session_loop(
                                 &session_id,
                                 &local_path,
                                 &remote_path,
+                                &transfer_id,
+                                &cancel_flag,
+                                &on_event,
+                            )
+                            .await;
+                            transfer_cancellations.lock().await.remove(&transfer_id);
+                            let _ = respond_to.send(result);
+                        });
+                    }
+                    SessionCommand::SftpUploadBatch { local_paths, remote_dir, respond_to } => {
+                        let transfer_id = next_transfer_id();
+                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                        transfer_cancellations.lock().await.insert(transfer_id.clone(), Arc::clone(&cancel_flag));
+                        let session_handle = Arc::clone(&session);
+                        let session_id = session_id.clone();
+                        let on_event = Arc::clone(&on_event);
+                        let transfer_cancellations = Arc::clone(&transfer_cancellations);
+                        tokio::spawn(async move {
+                            let result = sftp_upload_batch(
+                                &session_handle,
+                                &session_id,
+                                &local_paths,
+                                &remote_dir,
                                 &transfer_id,
                                 &cancel_flag,
                                 &on_event,

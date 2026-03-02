@@ -30,6 +30,7 @@ export type FloatingFilesActionMessage =
   | { type: "files:open"; path: string }
   | { type: "files:open-file"; entry: SftpEntry }
   | { type: "files:upload" }
+  | { type: "files:upload-paths"; paths: string[] }
   | { type: "files:download"; entry: SftpEntry }
   | { type: "files:mkdir"; name: string }
   | { type: "files:rename"; entry: SftpEntry; name: string }
