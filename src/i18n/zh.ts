@@ -28,6 +28,8 @@ export const zh = {
   "menu.help.title": "帮助",
   "menu.help.about": "关于 FluxTerm",
   "config.section.appSettings": "设置",
+  "config.section.aiSettings": "AI助手",
+  "config.section.openaiSettings": "OpenAI",
   "config.section.sessionSettings": "会话设置",
   "config.section.configDirectory": "配置文件目录",
   "config.app.sftpEnabled": "启用 SFTP",
@@ -39,21 +41,38 @@ export const zh = {
   "config.app.fileDefaultEditorPathPlaceholder":
     "例如 C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.pickEditor": "选择程序",
-  "config.app.aiSettings": "终端 AI 助手",
-  "config.app.aiSettingsHint":
-    "调整终端 AI 助手的上下文预算、默认模型和调试日志开关。",
-  "config.app.aiDefaultModel": "默认模型",
-  "config.app.aiDefaultModelHint": "保存后将直接作为终端 AI 默认模型使用。",
-  "config.app.aiDefaultModelPlaceholder": "例如 deepseek-chat",
-  "config.app.aiSelectionMaxChars": "选中文本最大长度",
-  "config.app.aiSelectionMaxCharsHint":
+  "config.ai.selectionMaxChars": "选中文本最大长度",
+  "config.ai.selectionMaxCharsHint":
     "限制右键“发送给 AI”时允许发送的选中文本字符数。",
-  "config.app.aiSessionRecentOutputMaxChars": "会话问答上下文长度",
-  "config.app.aiSessionRecentOutputMaxCharsHint":
+  "config.ai.sessionRecentOutputMaxChars": "会话问答上下文长度",
+  "config.ai.sessionRecentOutputMaxCharsHint":
     "限制会话问答附带的最近终端输出总字符数。",
-  "config.app.aiDebugLoggingEnabled": "启用 AI 调试日志",
-  "config.app.aiDebugLoggingEnabledHint":
+  "config.ai.activeOpenAiConfig": "当前 OpenAI 接入",
+  "config.ai.activeOpenAiConfigHint": "选择 AI 助手当前使用的 OpenAI 接入。",
+  "config.ai.openaiConfigEmpty": "尚未添加 OpenAI 接入",
+  "config.ai.removeActiveOpenAiConfig": "删除当前接入",
+  "config.ai.debugLoggingEnabled": "启用 AI 调试日志",
+  "config.ai.debugLoggingEnabledHint":
     "记录最终发送给模型的消息和返回内容，适合调试时开启。",
+  "config.openai.name": "接入名称",
+  "config.openai.nameHint": "用于区分不同 OpenAI 接入配置。",
+  "config.openai.unnamed": "未命名接入",
+  "config.openai.baseUrl": "Base URL",
+  "config.openai.baseUrlHint": "填写 OpenAI-compatible 接口地址。",
+  "config.openai.model": "模型",
+  "config.openai.modelHint": "填写当前接入默认使用的模型名称。",
+  "config.openai.modelPlaceholder": "例如 deepseek-chat / qwen2.5:latest",
+  "config.openai.apiKey": "API Key",
+  "config.openai.apiKeyConfigured": "当前已配置 API Key，重新输入会覆盖原值。",
+  "config.openai.apiKeyEmpty":
+    "当前尚未配置 API Key。本地 Ollama 等无需认证的接入可以留空。",
+  "config.openai.apiKeyPlaceholder": "输入新的 OpenAI API Key",
+  "config.openai.apiKeySaved": "API Key 已保存",
+  "config.openai.apiKeyCleared": "API Key 已清除",
+  "config.openai.clearApiKey": "清除密钥",
+  "config.openai.addConfig": "添加接入",
+  "config.openai.test": "测试当前接入",
+  "config.openai.testSuccess": "OpenAI 接入测试成功",
   "config.session.webLinksEnabled": "启用 Web Links",
   "config.session.webLinksEnabledHint":
     "关闭后，终端中的 URL 点击菜单将不再生效。",
@@ -106,6 +125,8 @@ export const zh = {
   "panel.events": "事件",
   "panel.history": "历史命令",
   "panel.ai": "AI 助手",
+  "ai.unavailable.openaiIncomplete": "当前 OpenAI 配置未完成，请先完成配置。",
+  "ai.unavailable.generic": "AI 助手当前不可用，请先检查配置。",
   "panel.empty": "空槽位",
   "panel.add": "添加组件",
   "panel.float": "浮动",

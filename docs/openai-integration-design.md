@@ -177,16 +177,35 @@ type AiExplainSelectionResponse = {
 - 会话上下文仍由后端补齐
 - 选中文本需要裁剪长度
 
-## OpenAI 配置
+## OpenAI 标准接入配置
 
-当前由 `src-tauri` 读取环境变量：
+当前终端 AI 助手只提供一种接入方式：
 
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `OPENAI_MODEL`
-- `OPENAI_TIMEOUT_MS`
+- OpenAI 标准接入
 
-前端不保存 API Key，不直接请求模型接口。
+这里的“OpenAI”表示 OpenAI-compatible 接口，而不是固定绑定某一家服务。
+
+因此：
+
+- DeepSeek 可以通过这里接入
+- 本地 Ollama 的 OpenAI-compatible 接口也可以通过这里接入
+
+配置入口拆成两个配置分区：
+
+- `AI助手`
+- `OpenAI`
+
+职责边界：
+
+- `AI助手` 管理终端 AI 助手自身的本地能力配置，以及当前使用哪个 OpenAI 接入
+- `OpenAI` 管理多个 OpenAI-compatible 接入项的新增、编辑和测试
+
+当前产品入口是：
+
+- 一级“配置”菜单中只有 `AI助手`
+- 打开后在配置弹窗左侧导航中切换 `AI助手` 与 `OpenAI`
+
+前端不直接请求模型接口，不保存密文字段的可读明文。
 
 ## 终端域 AI 配置
 
@@ -206,7 +225,16 @@ type AiExplainSelectionResponse = {
   "selectionRecentOutputMaxSnippets": 2,
   "requestCacheTtlMs": 15000,
   "debugLoggingEnabled": true,
-  "defaultModel": "gpt-4.1-mini"
+  "activeOpenAiConfigId": "default",
+  "openaiConfigs": [
+    {
+      "id": "default",
+      "name": "默认 OpenAI",
+      "baseUrl": "",
+      "model": "",
+      "apiKeyRef": "enc:v1:..."
+    }
+  ]
 }
 ```
 
@@ -217,8 +245,12 @@ type AiExplainSelectionResponse = {
 - 会话问答与选中文本解释的最近输出预算分别独立控制
 - 短时间内相同请求由后端内存缓存复用，避免重复消耗 token
 - 前端设置页直接读写这份配置文件，不再额外维护一套 AI 设置副本
-- `defaultModel` 作为用户默认模型，优先级高于环境变量中的 `OPENAI_MODEL`
+- `activeOpenAiConfigId` 由 `AI助手` 分区维护
+- `openaiConfigs[].name`、`openaiConfigs[].baseUrl`、`openaiConfigs[].model` 与 `openaiConfigs[].apiKeyRef` 由 `OpenAI` 分区维护
+- `apiKeyRef` 使用当前已有的 `enc:v1:` 加密方案保存
 - `debugLoggingEnabled` 控制是否记录最终发送给模型的 messages 和模型返回内容
+- 当前仍允许通过 `OPENAI_TIMEOUT_MS` 控制统一请求超时
+- 当前激活接入的 `baseUrl` 与 `model` 任一缺失时，AI 助手不可用，前端组件会直接显示配置提示
 
 ## 当前实现说明
 
@@ -235,6 +267,11 @@ type AiExplainSelectionResponse = {
 - 选中文本按界面语言输出
 - 会话问答按用户输入语言输出
 - 前端设置页中的终端 AI 可控配置
+- 独立的 `AI助手` 分区
+- 独立的 `OpenAI` 配置分区
+- 多个 OpenAI-compatible 接入项的切换、删除与编辑
+- API Key 加密保存
+- `OpenAI` 分区中的接入测试按钮
 
 ## 验收标准
 

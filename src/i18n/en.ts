@@ -28,6 +28,8 @@ export const en = {
   "menu.help.title": "Help",
   "menu.help.about": "About FluxTerm",
   "config.section.appSettings": "Settings",
+  "config.section.aiSettings": "AI Assistant",
+  "config.section.openaiSettings": "OpenAI",
   "config.section.sessionSettings": "Session Settings",
   "config.section.configDirectory": "Config Directory",
   "config.app.sftpEnabled": "Enable SFTP",
@@ -39,22 +41,43 @@ export const en = {
   "config.app.fileDefaultEditorPathPlaceholder":
     "For example C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.pickEditor": "Choose App",
-  "config.app.aiSettings": "Terminal AI Assistant",
-  "config.app.aiSettingsHint":
-    "Adjust terminal AI context budget, default model, and debug logging.",
-  "config.app.aiDefaultModel": "Default Model",
-  "config.app.aiDefaultModelHint":
-    "Saved here and used directly as the default model for terminal AI.",
-  "config.app.aiDefaultModelPlaceholder": "For example deepseek-chat",
-  "config.app.aiSelectionMaxChars": "Selection Max Length",
-  "config.app.aiSelectionMaxCharsHint":
+  "config.ai.selectionMaxChars": "Selection Max Length",
+  "config.ai.selectionMaxCharsHint":
     "Limits how many characters can be sent by Send to AI from the terminal selection menu.",
-  "config.app.aiSessionRecentOutputMaxChars": "Session Context Length",
-  "config.app.aiSessionRecentOutputMaxCharsHint":
+  "config.ai.sessionRecentOutputMaxChars": "Session Context Length",
+  "config.ai.sessionRecentOutputMaxCharsHint":
     "Limits the total recent terminal output characters attached to session chat.",
-  "config.app.aiDebugLoggingEnabled": "Enable AI Debug Logging",
-  "config.app.aiDebugLoggingEnabledHint":
+  "config.ai.activeOpenAiConfig": "Current OpenAI Access",
+  "config.ai.activeOpenAiConfigHint":
+    "Choose which OpenAI access the AI assistant uses.",
+  "config.ai.openaiConfigEmpty": "No OpenAI access yet",
+  "config.ai.removeActiveOpenAiConfig": "Delete Current Access",
+  "config.ai.debugLoggingEnabled": "Enable AI Debug Logging",
+  "config.ai.debugLoggingEnabledHint":
     "Log the final outbound model messages and returned content for debugging.",
+  "config.openai.name": "Access Name",
+  "config.openai.nameHint":
+    "Use a short name to distinguish different OpenAI access configs.",
+  "config.openai.unnamed": "Unnamed Access",
+  "config.openai.baseUrl": "Base URL",
+  "config.openai.baseUrlHint": "Set the OpenAI-compatible endpoint.",
+  "config.openai.model": "Model",
+  "config.openai.modelHint":
+    "The default model used by the current OpenAI access.",
+  "config.openai.modelPlaceholder":
+    "For example deepseek-chat / qwen2.5:latest",
+  "config.openai.apiKey": "API Key",
+  "config.openai.apiKeyConfigured":
+    "An API key is already configured. Entering a new one will replace it.",
+  "config.openai.apiKeyEmpty":
+    "No API key is configured. Leave it empty for endpoints that do not require authentication.",
+  "config.openai.apiKeyPlaceholder": "Enter a new OpenAI API Key",
+  "config.openai.apiKeySaved": "API key saved",
+  "config.openai.apiKeyCleared": "API key cleared",
+  "config.openai.clearApiKey": "Clear Key",
+  "config.openai.addConfig": "Add Access",
+  "config.openai.test": "Test Connection",
+  "config.openai.testSuccess": "OpenAI connection test succeeded",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
     "When disabled, the URL click menu in the terminal will no longer respond.",
@@ -109,6 +132,10 @@ export const en = {
   "panel.events": "Events",
   "panel.history": "Command History",
   "panel.ai": "AI Assistant",
+  "ai.unavailable.openaiIncomplete":
+    "The current OpenAI configuration is incomplete. Complete the setup first.",
+  "ai.unavailable.generic":
+    "The AI assistant is unavailable. Check the configuration first.",
   "panel.empty": "Empty Slot",
   "panel.add": "Add Widget",
   "panel.float": "Floating",

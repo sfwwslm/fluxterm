@@ -1,7 +1,7 @@
 export type AiResponseLanguageStrategy = "follow_ui" | "follow_user_input";
 
 /** 终端域 AI 配置。 */
-export type AiSettings = {
+export type AiSettingsView = {
   version: 1;
   selectionMaxChars: number;
   sessionRecentOutputMaxChars: number;
@@ -10,7 +10,43 @@ export type AiSettings = {
   selectionRecentOutputMaxSnippets: number;
   requestCacheTtlMs: number;
   debugLoggingEnabled: boolean;
-  defaultModel: string;
+  activeOpenaiConfigId: string;
+  openaiConfigs: OpenAiConfigView[];
+};
+
+export type OpenAiConfigView = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  apiKeyConfigured: boolean;
+};
+
+/** 加密字段更新策略。 */
+export type SecretFieldUpdate =
+  | { mode: "keep" }
+  | { mode: "replace"; value: string }
+  | { mode: "clear" };
+
+/** 保存终端域 AI 配置时使用的输入结构。 */
+export type AiSettingsSaveInput = {
+  selectionMaxChars: number;
+  sessionRecentOutputMaxChars: number;
+  sessionRecentOutputMaxSnippets: number;
+  selectionRecentOutputMaxChars: number;
+  selectionRecentOutputMaxSnippets: number;
+  requestCacheTtlMs: number;
+  debugLoggingEnabled: boolean;
+  activeOpenaiConfigId: string;
+  openaiConfigs: OpenAiConfigInput[];
+};
+
+export type OpenAiConfigInput = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  apiKey: SecretFieldUpdate;
 };
 
 /** AI 对话消息。 */

@@ -10,7 +10,7 @@ pub mod error;
 pub mod prompts;
 pub mod types;
 
-pub use crate::client::{chat_session, chat_session_stream, explain_selection};
+pub use crate::client::{chat_session, chat_session_stream, explain_selection, test_connection};
 pub use crate::error::OpenAiError;
 pub use crate::types::{
     ChatMessage, OpenAiClientConfig, OpenAiSelectionExplainInput, OpenAiSessionChatInput,

@@ -18,9 +18,9 @@ use openai::OpenAiClientConfig;
 use tauri::{AppHandle, Manager};
 
 use crate::ai_settings::read_ai_settings;
+use crate::profile_store::{ProfileStore, read_profiles};
+use crate::security::CryptoService;
 
-const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com";
-const DEFAULT_OPENAI_MODEL: &str = "gpt-4.1-mini";
 const DEFAULT_OPENAI_TIMEOUT_MS: u64 = 20_000;
 const MAX_OUTPUT_CHARS: usize = 6_000;
 const MAX_OUTPUT_SNIPPETS: usize = 8;
@@ -103,30 +103,6 @@ impl SessionContextRecord {
 /// 读取当前 OpenAI 配置。
 pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineError> {
     let ai_settings = read_ai_settings(app)?;
-    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
-    if api_key.trim().is_empty() {
-        return Err(EngineError::new(
-            "ai_api_key_missing",
-            "未配置 OPENAI_API_KEY，AI 功能当前不可用",
-        ));
-    }
-
-    let base_url = std::env::var("OPENAI_BASE_URL")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_string());
-    let model = ai_settings
-        .default_model
-        .trim()
-        .to_string()
-        .if_empty_then(|| {
-            std::env::var("OPENAI_MODEL")
-                .ok()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(|| DEFAULT_OPENAI_MODEL.to_string())
-        });
     let timeout_ms = std::env::var("OPENAI_TIMEOUT_MS")
         .ok()
         .map(|value| value.trim().parse::<u64>())
@@ -139,6 +115,21 @@ pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineE
             )
         })?
         .unwrap_or(DEFAULT_OPENAI_TIMEOUT_MS);
+    let Some(active_config) = ai_settings.active_openai_config() else {
+        return Err(EngineError::new(
+            "ai_provider_config_invalid",
+            "当前 OpenAI 配置未完成，请先完成配置。",
+        ));
+    };
+    let base_url = active_config.base_url.trim().to_string();
+    let model = active_config.model.trim().to_string();
+    if base_url.is_empty() || model.is_empty() {
+        return Err(EngineError::new(
+            "ai_provider_config_invalid",
+            "当前 OpenAI 配置未完成，请先完成配置。",
+        ));
+    }
+    let api_key = resolve_openai_api_key(app, &ai_settings)?;
 
     Ok(OpenAiClientConfig {
         api_key,
@@ -147,6 +138,21 @@ pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineE
         timeout_ms,
         debug_logging_enabled: ai_settings.debug_logging_enabled,
     })
+}
+
+fn resolve_openai_api_key(
+    app: &AppHandle,
+    settings: &crate::ai_settings::AiSettings,
+) -> Result<String, EngineError> {
+    if let Some(token) = settings
+        .active_openai_config()
+        .and_then(|config| config.api_key_ref.as_ref())
+    {
+        let store = read_profiles(app).unwrap_or_else(|_| ProfileStore::default());
+        let crypto = CryptoService::new(store.secret.as_ref())?;
+        return crypto.decrypt_string(token);
+    }
+    Ok(String::new())
 }
 
 /// 记录 SSH 会话元数据，供后续 AI 上下文消费。
@@ -389,19 +395,6 @@ fn current_platform() -> &'static str {
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     {
         "unknown"
-    }
-}
-
-trait StringFallbackExt {
-    fn if_empty_then(self, fallback: impl FnOnce() -> String) -> String;
-}
-
-impl StringFallbackExt for String {
-    fn if_empty_then(self, fallback: impl FnOnce() -> String) -> String {
-        if self.trim().is_empty() {
-            return fallback();
-        }
-        self
     }
 }
 

@@ -118,6 +118,11 @@ async function createConfigMenu(
         action: () => onOpenConfigSection("app-settings"),
       }),
       await MenuItem.new({
+        id: "config-ai-settings",
+        text: t("config.section.aiSettings"),
+        action: () => onOpenConfigSection("ai-settings"),
+      }),
+      await MenuItem.new({
         id: "config-session-settings",
         text: t("config.section.sessionSettings"),
         action: () => onOpenConfigSection("session-settings"),

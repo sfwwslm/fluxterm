@@ -70,15 +70,28 @@ pub async fn chat_session_stream(
     .await
 }
 
+/// 测试当前 OpenAI-compatible 接入是否可用。
+pub async fn test_connection(config: &OpenAiClientConfig) -> Result<(), OpenAiError> {
+    let messages = vec![
+        ChatMessage {
+            role: "system".to_string(),
+            content: "Reply with exactly OK.".to_string(),
+        },
+        ChatMessage {
+            role: "user".to_string(),
+            content: "connection test".to_string(),
+        },
+    ];
+    complete_chat(config, messages, "connection_test")
+        .await
+        .map(|_| ())
+}
+
 async fn request_chat_completion(
     config: &OpenAiClientConfig,
     messages: Vec<ChatMessage>,
     json_mode: bool,
 ) -> Result<ChatCompletionsResponse, OpenAiError> {
-    if config.api_key.trim().is_empty() {
-        return Err(OpenAiError::Config("OpenAI API Key 不能为空".to_string()));
-    }
-
     let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(config.timeout_ms))
         .build()
@@ -93,10 +106,10 @@ async fn request_chat_completion(
         }),
     };
 
-    let response = client
+    let request_builder = client
         .post(format!("{base}/v1/chat/completions"))
-        .bearer_auth(&config.api_key)
-        .json(&request)
+        .json(&request);
+    let response = attach_bearer_auth(request_builder, &config.api_key)
         .send()
         .await
         .map_err(map_transport_error)?;
@@ -151,10 +164,6 @@ async fn stream_chat_completion(
     mut on_chunk: impl FnMut(&str) -> Result<(), OpenAiError>,
     is_cancelled: impl Fn() -> bool,
 ) -> Result<(), OpenAiError> {
-    if config.api_key.trim().is_empty() {
-        return Err(OpenAiError::Config("OpenAI API Key 不能为空".to_string()));
-    }
-
     let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(config.timeout_ms))
         .build()
@@ -180,10 +189,10 @@ async fn stream_chat_completion(
         );
     }
 
-    let mut response = client
+    let request_builder = client
         .post(format!("{base}/v1/chat/completions"))
-        .bearer_auth(&config.api_key)
-        .json(&request)
+        .json(&request);
+    let mut response = attach_bearer_auth(request_builder, &config.api_key)
         .send()
         .await
         .map_err(map_transport_error)?;
@@ -265,6 +274,13 @@ fn log_error(config: &OpenAiClientConfig, request_type: &str, error: &OpenAiErro
         return;
     }
     info!("openai_error type={} error={error}", request_type);
+}
+
+fn attach_bearer_auth(request: reqwest::RequestBuilder, api_key: &str) -> reqwest::RequestBuilder {
+    if api_key.trim().is_empty() {
+        return request;
+    }
+    request.bearer_auth(api_key)
 }
 
 fn map_transport_error(err: reqwest::Error) -> OpenAiError {

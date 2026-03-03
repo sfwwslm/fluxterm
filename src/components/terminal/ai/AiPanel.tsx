@@ -7,6 +7,8 @@ import "./AiPanel.css";
 
 type AiPanelProps = {
   activeSessionId: string | null;
+  aiAvailable: boolean;
+  aiUnavailableMessage: string | null;
   messages: AiChatMessage[];
   draft: string;
   pending: boolean;
@@ -22,6 +24,8 @@ type AiPanelProps = {
 /** AI 会话上下文问答面板。 */
 export default function AiPanel({
   activeSessionId,
+  aiAvailable,
+  aiUnavailableMessage,
   messages,
   draft,
   pending,
@@ -37,7 +41,7 @@ export default function AiPanel({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const canChat = !!activeSessionId && !pending;
+  const canChat = !!activeSessionId && !pending && aiAvailable;
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -98,9 +102,11 @@ export default function AiPanel({
       >
         {!messages.length && !errorMessage && (
           <div className="ai-panel-empty">
-            {activeSessionId
-              ? t("ai.emptyWithSession")
-              : t("ai.emptyWithoutSession")}
+            {!aiAvailable && activeSessionId
+              ? aiUnavailableMessage
+              : activeSessionId
+                ? t("ai.emptyWithSession")
+                : t("ai.emptyWithoutSession")}
           </div>
         )}
         {messages.map((message, index) => (
@@ -148,7 +154,7 @@ export default function AiPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             placeholder={t("ai.inputPlaceholder")}
-            disabled={!activeSessionId || pending}
+            disabled={!activeSessionId || pending || !aiAvailable}
             rows={1}
             onKeyDown={(event) => {
               if (event.key !== "Enter" || event.shiftKey) return;

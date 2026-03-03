@@ -7,6 +7,7 @@ import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
 import { getAppConfigDir, getAppDataDir } from "@/shared/config/paths";
+import type { OpenAiConfigView } from "@/features/ai/types";
 import {
   DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   type HostKeyPolicy,
@@ -18,6 +19,8 @@ import "@/components/layout/ConfigModal.css";
 
 export type ConfigSectionKey =
   | "app-settings"
+  | "ai-settings"
+  | "openai-settings"
   | "session-settings"
   | "config-directory";
 
@@ -25,6 +28,19 @@ export type ConfigSectionItem = {
   key: ConfigSectionKey;
   label: string;
 };
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+}
 
 type ConfigModalProps = {
   open: boolean;
@@ -35,7 +51,8 @@ type ConfigModalProps = {
   aiSelectionMaxChars?: number;
   aiSessionRecentOutputMaxChars?: number;
   aiDebugLoggingEnabled?: boolean;
-  aiDefaultModel?: string;
+  aiActiveOpenaiConfigId?: string;
+  aiOpenaiConfigs?: OpenAiConfigView[];
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
@@ -49,7 +66,15 @@ type ConfigModalProps = {
   onAiSelectionMaxCharsChange?: (value: number) => void;
   onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
   onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
-  onAiDefaultModelChange?: (value: string) => void;
+  onAiActiveOpenaiConfigIdChange?: (value: string) => void;
+  onAiOpenaiConfigAdd?: () => void;
+  onAiOpenaiConfigRemove?: () => void;
+  onAiOpenaiConfigNameChange?: (value: string) => void;
+  onAiOpenaiBaseUrlChange?: (value: string) => void;
+  onAiOpenaiModelChange?: (value: string) => void;
+  onAiOpenAiTest?: () => Promise<void> | void;
+  onAiOpenaiApiKeyReplace?: (value: string) => Promise<void> | void;
+  onAiOpenaiApiKeyClear?: () => Promise<void> | void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
@@ -80,7 +105,8 @@ export default function ConfigModal({
   aiSelectionMaxChars = 1500,
   aiSessionRecentOutputMaxChars = 1200,
   aiDebugLoggingEnabled = true,
-  aiDefaultModel = "",
+  aiActiveOpenaiConfigId = "",
+  aiOpenaiConfigs = [],
   webLinksEnabled = true,
   commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
@@ -94,7 +120,15 @@ export default function ConfigModal({
   onAiSelectionMaxCharsChange,
   onAiSessionRecentOutputMaxCharsChange,
   onAiDebugLoggingEnabledChange,
-  onAiDefaultModelChange,
+  onAiActiveOpenaiConfigIdChange,
+  onAiOpenaiConfigAdd,
+  onAiOpenaiConfigRemove,
+  onAiOpenaiConfigNameChange,
+  onAiOpenaiBaseUrlChange,
+  onAiOpenaiModelChange,
+  onAiOpenAiTest,
+  onAiOpenaiApiKeyReplace,
+  onAiOpenaiApiKeyClear,
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
@@ -113,8 +147,6 @@ export default function ConfigModal({
   const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useState(
     fileDefaultEditorPath,
   );
-  const [aiDefaultModelDraft, setAiDefaultModelDraft] =
-    useState(aiDefaultModel);
   const [aiSelectionMaxCharsDraft, setAiSelectionMaxCharsDraft] = useState(() =>
     String(aiSelectionMaxChars),
   );
@@ -122,12 +154,25 @@ export default function ConfigModal({
     aiSessionRecentOutputMaxCharsDraft,
     setAiSessionRecentOutputMaxCharsDraft,
   ] = useState(() => String(aiSessionRecentOutputMaxChars));
-  // 数字输入使用本地草稿字符串，避免受控 number 输入在清空/连续编辑时不断打断用户。
+  // 数字输入使用本地草稿字符串，允许用户先清空再继续输入。
   const [scrollbackDraft, setScrollbackDraft] = useState(() =>
     String(scrollback),
   );
   const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
     useState(() => String(resourceMonitorIntervalSec));
+  const activeOpenAiConfig =
+    aiOpenaiConfigs.find((config) => config.id === aiActiveOpenaiConfigId) ??
+    null;
+  const [aiOpenAiNameDraft, setAiOpenAiNameDraft] = useState(
+    activeOpenAiConfig?.name ?? "",
+  );
+  const [aiOpenAiBaseUrlDraft, setAiOpenAiBaseUrlDraft] = useState(
+    activeOpenAiConfig?.baseUrl ?? "",
+  );
+  const [aiOpenAiModelDraft, setAiOpenAiModelDraft] = useState(
+    activeOpenAiConfig?.model ?? "",
+  );
+  const [aiOpenAiApiKeyDraft, setAiOpenAiApiKeyDraft] = useState("");
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -152,10 +197,6 @@ export default function ConfigModal({
   }, [fileDefaultEditorPath]);
 
   useEffect(() => {
-    setAiDefaultModelDraft(aiDefaultModel);
-  }, [aiDefaultModel]);
-
-  useEffect(() => {
     setAiSelectionMaxCharsDraft(String(aiSelectionMaxChars));
   }, [aiSelectionMaxChars]);
 
@@ -173,7 +214,15 @@ export default function ConfigModal({
     setResourceMonitorIntervalDraft(String(resourceMonitorIntervalSec));
   }, [resourceMonitorIntervalSec]);
 
-  // 仅在失焦、回车或模态框关闭时提交草稿；非法输入则回退到当前生效值。
+  useEffect(() => {
+    // OpenAI 接入字段在当前分区内允许连续编辑，不应被自动保存后的同 id 回写覆盖。
+    // 这里只在真正切换当前接入 id 时重置草稿，避免 baseUrl/model 输入过程中被打断。
+    setAiOpenAiNameDraft(activeOpenAiConfig?.name ?? "");
+    setAiOpenAiBaseUrlDraft(activeOpenAiConfig?.baseUrl ?? "");
+    setAiOpenAiModelDraft(activeOpenAiConfig?.model ?? "");
+  }, [aiActiveOpenaiConfigId]);
+
+  // 数值草稿在失焦、回车或关闭模态框时统一提交；非法输入回退到当前生效值。
   function commitScrollbackDraft() {
     const value = scrollbackDraft.trim();
     if (!value) {
@@ -204,10 +253,6 @@ export default function ConfigModal({
 
   function commitDefaultEditorPathDraft() {
     onFileDefaultEditorPathChange?.(defaultEditorPathDraft.trim());
-  }
-
-  function commitAiDefaultModelDraft() {
-    onAiDefaultModelChange?.(aiDefaultModelDraft.trim());
   }
 
   function commitAiSelectionMaxCharsDraft() {
@@ -242,18 +287,39 @@ export default function ConfigModal({
     onAiSessionRecentOutputMaxCharsChange?.(next);
   }
 
+  function commitAiOpenAiNameDraft() {
+    onAiOpenaiConfigNameChange?.(aiOpenAiNameDraft.trim());
+  }
+
+  function commitAiOpenAiBaseUrlDraft() {
+    onAiOpenaiBaseUrlChange?.(aiOpenAiBaseUrlDraft.trim());
+  }
+
+  function commitAiOpenAiModelDraft() {
+    onAiOpenaiModelChange?.(aiOpenAiModelDraft.trim());
+  }
+
+  async function commitAiOpenAiApiKeyDraft() {
+    const value = aiOpenAiApiKeyDraft.trim();
+    if (!value) return;
+    await onAiOpenaiApiKeyReplace?.(value);
+    setAiOpenAiApiKeyDraft("");
+  }
+
   function handleClose() {
-    // 遮罩关闭发生在 input blur 之前，这里先提交草稿，避免用户点到模态框外部时丢失修改。
+    // 关闭模态框前统一提交当前草稿，保证当前分区的修改能进入设置状态。
     commitDefaultEditorPathDraft();
-    commitAiDefaultModelDraft();
     commitAiSelectionMaxCharsDraft();
     commitAiSessionRecentOutputMaxCharsDraft();
+    commitAiOpenAiNameDraft();
+    commitAiOpenAiBaseUrlDraft();
+    commitAiOpenAiModelDraft();
     commitScrollbackDraft();
     commitResourceMonitorIntervalDraft();
     onClose();
   }
 
-  // 左侧导航只渲染当前入口所属的配置分组，避免“设置 / 会话设置 / 配置文件目录”共享同一总导航。
+  // 当前入口只渲染所属配置分组，保证同一模态框内的导航与当前菜单语义一致。
   function renderSectionContent() {
     if (activeSection === "app-settings") {
       return (
@@ -326,105 +392,304 @@ export default function ConfigModal({
               </div>
             </div>
           </div>
+        </div>
+      );
+    }
+    if (activeSection === "ai-settings") {
+      return (
+        <div className="config-modal-panel config-modal-panel-scrollable">
+          <h3>{t("config.section.aiSettings")}</h3>
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
-                {t("config.app.aiSettings")}
+                {t("config.ai.selectionMaxChars")}
               </span>
               <span className="config-toggle-desc">
-                {t("config.app.aiSettingsHint")}
+                {t("config.ai.selectionMaxCharsHint")}
               </span>
             </div>
-            <div className="config-subsetting">
-              <div className="config-toggle-copy">
-                <span className="config-toggle-title">
-                  {t("config.app.aiDefaultModel")}
-                </span>
-                <span className="config-toggle-desc">
-                  {t("config.app.aiDefaultModelHint")}
-                </span>
-              </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="config-number-input"
+              value={aiSelectionMaxCharsDraft}
+              onChange={(event) =>
+                setAiSelectionMaxCharsDraft(event.target.value)
+              }
+              onBlur={commitAiSelectionMaxCharsDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitAiSelectionMaxCharsDraft();
+              }}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.sessionRecentOutputMaxChars")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.ai.sessionRecentOutputMaxCharsHint")}
+              </span>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="config-number-input"
+              value={aiSessionRecentOutputMaxCharsDraft}
+              onChange={(event) =>
+                setAiSessionRecentOutputMaxCharsDraft(event.target.value)
+              }
+              onBlur={commitAiSessionRecentOutputMaxCharsDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitAiSessionRecentOutputMaxCharsDraft();
+              }}
+            />
+          </div>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.activeOpenAiConfig")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.ai.activeOpenAiConfigHint")}
+              </span>
+            </div>
+            <select
+              className="config-number-input"
+              value={aiActiveOpenaiConfigId}
+              onChange={(event) =>
+                onAiActiveOpenaiConfigIdChange?.(event.target.value)
+              }
+            >
+              <option value="">{t("config.ai.openaiConfigEmpty")}</option>
+              {aiOpenaiConfigs.map((config) => (
+                <option key={config.id} value={config.id}>
+                  {config.name || t("config.openai.unnamed")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="config-file-picker-actions">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!activeOpenAiConfig}
+              onClick={() => onAiOpenaiConfigRemove?.()}
+            >
+              {t("config.ai.removeActiveOpenAiConfig")}
+            </Button>
+          </div>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.debugLoggingEnabled")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.ai.debugLoggingEnabledHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={aiDebugLoggingEnabled}
+              onChange={(event) =>
+                onAiDebugLoggingEnabledChange?.(event.target.checked)
+              }
+            />
+          </label>
+        </div>
+      );
+    }
+    if (activeSection === "openai-settings") {
+      return (
+        <div className="config-modal-panel config-modal-panel-scrollable">
+          <h3>{t("config.section.openaiSettings")}</h3>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.openai.name")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.openai.nameHint")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={aiOpenAiNameDraft}
+              onChange={(event) => setAiOpenAiNameDraft(event.target.value)}
+              onBlur={commitAiOpenAiNameDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitAiOpenAiNameDraft();
+              }}
+              disabled={!activeOpenAiConfig}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.openai.baseUrl")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.openai.baseUrlHint")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={aiOpenAiBaseUrlDraft}
+              onChange={(event) => setAiOpenAiBaseUrlDraft(event.target.value)}
+              onBlur={commitAiOpenAiBaseUrlDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitAiOpenAiBaseUrlDraft();
+              }}
+              disabled={!activeOpenAiConfig}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.openai.model")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.openai.modelHint")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={aiOpenAiModelDraft}
+              placeholder={t("config.openai.modelPlaceholder")}
+              onChange={(event) => setAiOpenAiModelDraft(event.target.value)}
+              onBlur={commitAiOpenAiModelDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitAiOpenAiModelDraft();
+              }}
+              disabled={!activeOpenAiConfig}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.openai.apiKey")}
+              </span>
+              <span className="config-toggle-desc">
+                {activeOpenAiConfig?.apiKeyConfigured
+                  ? t("config.openai.apiKeyConfigured")
+                  : t("config.openai.apiKeyEmpty")}
+              </span>
+            </div>
+            <div className="config-file-picker-actions">
               <input
-                type="text"
+                type="password"
                 className="config-text-input"
-                value={aiDefaultModelDraft}
-                placeholder={t("config.app.aiDefaultModelPlaceholder")}
-                onChange={(event) => setAiDefaultModelDraft(event.target.value)}
-                onBlur={commitAiDefaultModelDraft}
+                value={aiOpenAiApiKeyDraft}
+                placeholder={t("config.openai.apiKeyPlaceholder")}
+                onChange={(event) => setAiOpenAiApiKeyDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
                   event.preventDefault();
-                  commitAiDefaultModelDraft();
+                  commitAiOpenAiApiKeyDraft()
+                    .then(() => {
+                      pushToast({
+                        level: "success",
+                        message: t("config.openai.apiKeySaved"),
+                      });
+                    })
+                    .catch((error) => {
+                      pushToast({
+                        level: "error",
+                        message: getErrorMessage(error),
+                      });
+                    });
                 }}
+                disabled={!activeOpenAiConfig}
               />
-            </div>
-            <div className="config-subsetting">
-              <div className="config-toggle-copy">
-                <span className="config-toggle-title">
-                  {t("config.app.aiSelectionMaxChars")}
-                </span>
-                <span className="config-toggle-desc">
-                  {t("config.app.aiSelectionMaxCharsHint")}
-                </span>
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                className="config-number-input"
-                value={aiSelectionMaxCharsDraft}
-                onChange={(event) =>
-                  setAiSelectionMaxCharsDraft(event.target.value)
-                }
-                onBlur={commitAiSelectionMaxCharsDraft}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  commitAiSelectionMaxCharsDraft();
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!activeOpenAiConfig || !aiOpenAiApiKeyDraft.trim()}
+                onClick={() => {
+                  commitAiOpenAiApiKeyDraft()
+                    .then(() => {
+                      pushToast({
+                        level: "success",
+                        message: t("config.openai.apiKeySaved"),
+                      });
+                    })
+                    .catch((error) => {
+                      pushToast({
+                        level: "error",
+                        message: getErrorMessage(error),
+                      });
+                    });
                 }}
-              />
-            </div>
-            <div className="config-subsetting">
-              <div className="config-toggle-copy">
-                <span className="config-toggle-title">
-                  {t("config.app.aiSessionRecentOutputMaxChars")}
-                </span>
-                <span className="config-toggle-desc">
-                  {t("config.app.aiSessionRecentOutputMaxCharsHint")}
-                </span>
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                className="config-number-input"
-                value={aiSessionRecentOutputMaxCharsDraft}
-                onChange={(event) =>
-                  setAiSessionRecentOutputMaxCharsDraft(event.target.value)
-                }
-                onBlur={commitAiSessionRecentOutputMaxCharsDraft}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  commitAiSessionRecentOutputMaxCharsDraft();
+              >
+                {t("actions.save")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!activeOpenAiConfig?.apiKeyConfigured}
+                onClick={() => {
+                  setAiOpenAiApiKeyDraft("");
+                  Promise.resolve(onAiOpenaiApiKeyClear?.())
+                    .then(() => {
+                      pushToast({
+                        level: "success",
+                        message: t("config.openai.apiKeyCleared"),
+                      });
+                    })
+                    .catch((error) => {
+                      pushToast({
+                        level: "error",
+                        message: getErrorMessage(error),
+                      });
+                    });
                 }}
-              />
+              >
+                {t("config.openai.clearApiKey")}
+              </Button>
             </div>
-            <label className="config-subsetting">
-              <div className="config-toggle-copy">
-                <span className="config-toggle-title">
-                  {t("config.app.aiDebugLoggingEnabled")}
-                </span>
-                <span className="config-toggle-desc">
-                  {t("config.app.aiDebugLoggingEnabledHint")}
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={aiDebugLoggingEnabled}
-                onChange={(event) =>
-                  onAiDebugLoggingEnabledChange?.(event.target.checked)
+          </div>
+          <div className="config-file-picker-actions">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onAiOpenaiConfigAdd?.()}
+            >
+              {t("config.openai.addConfig")}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!activeOpenAiConfig}
+              onClick={async () => {
+                try {
+                  await onAiOpenAiTest?.();
+                  pushToast({
+                    level: "success",
+                    message: t("config.openai.testSuccess"),
+                  });
+                } catch (error) {
+                  pushToast({
+                    level: "error",
+                    message: getErrorMessage(error),
+                  });
                 }
-              />
-            </label>
+              }}
+            >
+              {t("config.openai.test")}
+            </Button>
           </div>
         </div>
       );

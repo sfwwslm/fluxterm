@@ -22,7 +22,7 @@ use log::LevelFilter;
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::ai::{
-    ai_explain_selection, ai_session_chat, ai_session_chat_stream_cancel,
+    ai_explain_selection, ai_openai_test, ai_session_chat, ai_session_chat_stream_cancel,
     ai_session_chat_stream_start, ai_settings_get, ai_settings_save,
 };
 use crate::commands::file::file_open;
@@ -120,6 +120,7 @@ pub fn run() {
             ai_explain_selection,
             ai_settings_get,
             ai_settings_save,
+            ai_openai_test,
             security_status,
             ssh_connect,
             ssh_disconnect,

@@ -46,6 +46,8 @@ type BuildPanelsProps = {
   historySearchQuery: string;
   aiMessages: AiChatMessage[];
   aiDraft: string;
+  aiAvailable: boolean;
+  aiUnavailableMessage: string | null;
   aiPending: boolean;
   aiWaitingFirstChunk: boolean;
   aiErrorMessage: string | null;
@@ -117,6 +119,8 @@ export function buildPanels(
     historySearchQuery,
     aiMessages,
     aiDraft,
+    aiAvailable,
+    aiUnavailableMessage,
     aiPending,
     aiWaitingFirstChunk,
     aiErrorMessage,
@@ -235,6 +239,8 @@ export function buildPanels(
     ai: (
       <AiPanel
         activeSessionId={activeSessionId}
+        aiAvailable={aiAvailable}
+        aiUnavailableMessage={aiUnavailableMessage}
         messages={aiMessages}
         draft={aiDraft}
         pending={aiPending}

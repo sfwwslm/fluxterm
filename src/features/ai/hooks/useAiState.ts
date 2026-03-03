@@ -20,6 +20,8 @@ type UseAiStateProps = {
   activeSessionId: string | null;
   locale: Locale;
   debugLoggingEnabled: boolean;
+  aiAvailable: boolean;
+  aiUnavailableMessage: string | null;
 };
 
 type UseAiStateResult = {
@@ -53,6 +55,8 @@ export default function useAiState({
   activeSessionId,
   locale,
   debugLoggingEnabled,
+  aiAvailable,
+  aiUnavailableMessage,
 }: UseAiStateProps): UseAiStateResult {
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -167,6 +171,10 @@ export default function useAiState({
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !activeSessionId || pending) return;
+    if (!aiAvailable) {
+      setErrorMessage(aiUnavailableMessage ?? "AI 助手当前不可用");
+      return;
+    }
 
     const nextUserMessage: AiChatMessage = {
       role: "user",
@@ -238,6 +246,10 @@ export default function useAiState({
   async function sendSelectionText(selectionText: string) {
     const content = selectionText.trim();
     if (!content || !activeSessionId || pending) return;
+    if (!aiAvailable) {
+      setErrorMessage(aiUnavailableMessage ?? "AI 助手当前不可用");
+      return;
+    }
 
     const nextUserMessage: AiChatMessage = {
       role: "user",

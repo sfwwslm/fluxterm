@@ -13,18 +13,33 @@ use crate::ai::{
     AiRuntimeState, cancel_chat_stream, context, finish_chat_stream, get_cached_response,
     read_openai_config, register_chat_stream, store_cached_response,
 };
-use crate::ai_settings::{AiSettings, read_ai_settings, write_ai_settings};
+use crate::ai_settings::{
+    AiSettingsSaveInput, AiSettingsView, read_ai_settings, read_ai_settings_view,
+    save_ai_settings_input,
+};
 
 /// 读取终端 AI 助手配置。
 #[tauri::command]
-pub fn ai_settings_get(app: AppHandle) -> Result<AiSettings, EngineError> {
-    read_ai_settings(&app)
+pub fn ai_settings_get(app: AppHandle) -> Result<AiSettingsView, EngineError> {
+    read_ai_settings_view(&app)
 }
 
 /// 保存终端 AI 助手配置。
 #[tauri::command]
-pub fn ai_settings_save(app: AppHandle, settings: AiSettings) -> Result<AiSettings, EngineError> {
-    write_ai_settings(&app, settings)
+pub fn ai_settings_save(
+    app: AppHandle,
+    settings: AiSettingsSaveInput,
+) -> Result<AiSettingsView, EngineError> {
+    save_ai_settings_input(&app, settings)
+}
+
+/// 测试当前 OpenAI-compatible 接入是否可用。
+#[tauri::command]
+pub async fn ai_openai_test(app: AppHandle) -> Result<(), EngineError> {
+    let config = read_openai_config(&app)?;
+    openai::test_connection(&config)
+        .await
+        .map_err(map_openai_error)
 }
 
 /// 基于当前会话上下文执行问答。

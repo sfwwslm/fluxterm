@@ -44,7 +44,11 @@ type MenuItem = {
 
 type MenusProps = {
   onOpenConfigSection: (
-    section: "app-settings" | "session-settings" | "config-directory",
+    section:
+      | "app-settings"
+      | "ai-settings"
+      | "session-settings"
+      | "config-directory",
   ) => void;
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
@@ -113,6 +117,11 @@ export default function Menus({
             id: "config-app-settings",
             label: t("config.section.appSettings"),
             onClick: () => onOpenConfigSection("app-settings"),
+          },
+          {
+            id: "config-ai-settings",
+            label: t("config.section.aiSettings"),
+            onClick: () => onOpenConfigSection("ai-settings"),
           },
           {
             id: "config-session-settings",

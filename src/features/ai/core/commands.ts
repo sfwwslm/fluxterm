@@ -1,6 +1,7 @@
 import { callTauri } from "@/shared/tauri/commands";
 import type {
-  AiSettings,
+  AiSettingsSaveInput,
+  AiSettingsView,
   AiChatDonePayload,
   AiChatErrorPayload,
   AiChatChunkPayload,
@@ -13,12 +14,17 @@ import { subscribeTauri } from "@/shared/tauri/events";
 
 /** 读取终端域 AI 配置。 */
 export function aiSettingsGet() {
-  return callTauri<AiSettings>("ai_settings_get");
+  return callTauri<AiSettingsView>("ai_settings_get");
 }
 
 /** 保存终端域 AI 配置。 */
-export function aiSettingsSave(settings: AiSettings) {
-  return callTauri<AiSettings>("ai_settings_save", { settings });
+export function aiSettingsSave(settings: AiSettingsSaveInput) {
+  return callTauri<AiSettingsView>("ai_settings_save", { settings });
+}
+
+/** 测试当前 OpenAI-compatible 接入。 */
+export function aiOpenAiTest() {
+  return callTauri<void>("ai_openai_test");
 }
 
 /** 发起会话上下文问答。 */

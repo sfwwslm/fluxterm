@@ -212,14 +212,25 @@ export default function AppShell() {
     defaultThemeId: "dark",
   });
   const {
+    aiAvailable,
+    aiUnavailableReason,
     selectionMaxChars: aiSelectionMaxChars,
     sessionRecentOutputMaxChars: aiSessionRecentOutputMaxChars,
     debugLoggingEnabled: aiDebugLoggingEnabled,
-    defaultModel: aiDefaultModel,
+    activeOpenaiConfigId: aiActiveOpenaiConfigId,
+    openaiConfigs: aiOpenaiConfigs,
     setSelectionMaxChars: setAiSelectionMaxChars,
     setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
     setDebugLoggingEnabled: setAiDebugLoggingEnabled,
-    setDefaultModel: setAiDefaultModel,
+    setActiveOpenaiConfigId: setAiActiveOpenaiConfigId,
+    updateActiveOpenaiConfigName,
+    updateActiveOpenaiConfigBaseUrl,
+    updateActiveOpenaiConfigModel,
+    addOpenaiConfig,
+    removeActiveOpenaiConfig,
+    testOpenAiConnection,
+    replaceOpenaiApiKey,
+    clearOpenaiApiKey,
   } = useAiSettings();
   // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
   const {
@@ -279,6 +290,13 @@ export default function AppShell() {
     () => (key, vars) => formatMessage(translations[locale][key] ?? key, vars),
     [locale],
   );
+  const aiUnavailableMessage = useMemo(() => {
+    if (!aiUnavailableReason) return null;
+    if (aiUnavailableReason === "openai_incomplete") {
+      return t("ai.unavailable.openaiIncomplete");
+    }
+    return t("ai.unavailable.generic");
+  }, [aiUnavailableReason, t]);
   const floatingPanelKey = useMemo<PanelKey | null>(() => {
     const match = window.location.hash.match(/float=([a-z]+)/i);
     if (!match) return null;
@@ -354,6 +372,8 @@ export default function AppShell() {
   const configSectionLabels = useMemo(
     () => ({
       "app-settings": t("config.section.appSettings"),
+      "ai-settings": t("config.section.aiSettings"),
+      "openai-settings": t("config.section.openaiSettings"),
       "session-settings": t("config.section.sessionSettings"),
       "config-directory": t("config.section.configDirectory"),
     }),
@@ -368,6 +388,26 @@ export default function AppShell() {
         {
           key: "app-settings",
           label: configSectionLabels["app-settings"],
+        },
+      ],
+      "ai-settings": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-settings",
+          label: configSectionLabels["openai-settings"],
+        },
+      ],
+      "openai-settings": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-settings",
+          label: configSectionLabels["openai-settings"],
         },
       ],
       "session-settings": [
@@ -419,6 +459,8 @@ export default function AppShell() {
     activeSessionId: sessionState.activeSessionId,
     locale,
     debugLoggingEnabled: aiDebugLoggingEnabled,
+    aiAvailable,
+    aiUnavailableMessage,
   });
 
   const autocompleteProvider = useMemo(
@@ -1476,6 +1518,8 @@ export default function AppShell() {
         historySearchQuery: historyPanelState.searchQuery,
         aiMessages: aiState.messages,
         aiDraft: aiState.draft,
+        aiAvailable,
+        aiUnavailableMessage,
         aiPending: aiState.pending,
         aiWaitingFirstChunk: aiState.waitingFirstChunk,
         aiErrorMessage: aiState.errorMessage,
@@ -1813,7 +1857,8 @@ export default function AppShell() {
         aiSelectionMaxChars={aiSelectionMaxChars}
         aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
         aiDebugLoggingEnabled={aiDebugLoggingEnabled}
-        aiDefaultModel={aiDefaultModel}
+        aiActiveOpenaiConfigId={aiActiveOpenaiConfigId}
+        aiOpenaiConfigs={aiOpenaiConfigs}
         webLinksEnabled={webLinksEnabled}
         commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
@@ -1827,7 +1872,15 @@ export default function AppShell() {
         onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
         onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
         onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
-        onAiDefaultModelChange={setAiDefaultModel}
+        onAiActiveOpenaiConfigIdChange={setAiActiveOpenaiConfigId}
+        onAiOpenaiConfigAdd={addOpenaiConfig}
+        onAiOpenaiConfigRemove={removeActiveOpenaiConfig}
+        onAiOpenaiConfigNameChange={updateActiveOpenaiConfigName}
+        onAiOpenaiBaseUrlChange={updateActiveOpenaiConfigBaseUrl}
+        onAiOpenaiModelChange={updateActiveOpenaiConfigModel}
+        onAiOpenAiTest={testOpenAiConnection}
+        onAiOpenaiApiKeyReplace={replaceOpenaiApiKey}
+        onAiOpenaiApiKeyClear={clearOpenaiApiKey}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}

@@ -17,11 +17,12 @@ pub fn build_session_chat_messages(input: &OpenAiSessionChatInput) -> Vec<ChatMe
     let recent_output = compact_recent_output(&context.recent_terminal_output, 1_000);
     let response_language =
         response_language_instruction(&input.response_language_strategy, &input.ui_language);
-    let environment_override = environment_override_instruction(&input.messages);
+    let environment_priority = environment_priority_instruction(&input.messages);
 
     let system_prompt = format!(
-        "You are FluxTerm's terminal AI assistant. Use only the current session context. Keep answers short, direct, and actionable. Avoid long tutorials. Prefer the minimum valid command or next step. If context is missing, say so. {}.\n\
-Environment priority: {}.\n\
+        "You are FluxTerm's terminal AI assistant. Use only the current session context as reference data. Keep answers short, direct, and actionable. Avoid long tutorials. Prefer the minimum valid command or next step. If context is missing, say so. {}.\n\
+Current session environment is reference context only. It does not decide the target environment by itself.\n\
+Environment rule: {}.\n\
 Format:\n\
 - Answer: 1-3 short paragraphs or up to 4 bullets\n\
 - Commands: only when useful, keep them minimal\n\
@@ -31,6 +32,7 @@ Environment: platform={} shell={}\n\
 Resource={} host_identity={}\n\
 Recent output:\n{}",
         response_language,
+        environment_priority,
         context.session_label,
         session_kind,
         context.session_state,
@@ -38,7 +40,6 @@ Recent output:\n{}",
         username,
         platform,
         shell_name,
-        environment_override,
         resource_status,
         host_key_status,
         recent_output
@@ -115,43 +116,47 @@ fn response_language_instruction(strategy: &ResponseLanguageStrategy, ui_languag
     }
 }
 
-fn environment_override_instruction(messages: &[ChatMessage]) -> &'static str {
+fn environment_priority_instruction(messages: &[ChatMessage]) -> String {
     let latest_user_message = messages
         .iter()
         .rev()
         .find(|message| message.role == "user")
         .map(|message| message.content.as_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+        .unwrap_or_default();
 
-    if contains_explicit_environment(&latest_user_message) {
-        "If the latest user message explicitly names a target environment such as Linux, Windows, PowerShell, bash, Ubuntu, macOS, or cmd, follow that named environment first"
-    } else {
-        "Prefer the current session environment"
+    if let Some(environment) = detect_explicit_environment(latest_user_message) {
+        return format!(
+            "The latest user message explicitly targets {environment}. Answer for {environment} first. Treat the current session environment as background context only. Do not switch the answer back to the current session environment. Do not give substitute commands for the current session platform unless the user explicitly asks for an equivalent command on that platform."
+        );
     }
+
+    "No explicit target environment is named in the latest user message. Prefer the current session environment.".to_string()
 }
 
-fn contains_explicit_environment(message: &str) -> bool {
-    const KEYWORDS: &[&str] = &[
-        "linux",
-        "ubuntu",
-        "debian",
-        "centos",
-        "redhat",
-        "rhel",
-        "alpine",
-        "macos",
-        "windows",
-        "powershell",
-        "pwsh",
-        "cmd",
-        "bash",
-        "zsh",
-        "fish",
-        "wsl",
+fn detect_explicit_environment(message: &str) -> Option<&'static str> {
+    let normalized = message.to_ascii_lowercase();
+    const KEYWORDS: &[(&str, &str)] = &[
+        ("powershell", "PowerShell"),
+        ("pwsh", "PowerShell"),
+        ("windows", "Windows"),
+        ("cmd", "Windows cmd"),
+        ("wsl", "WSL/Linux"),
+        ("ubuntu", "Linux"),
+        ("debian", "Linux"),
+        ("centos", "Linux"),
+        ("redhat", "Linux"),
+        ("rhel", "Linux"),
+        ("alpine", "Linux"),
+        ("linux", "Linux"),
+        ("bash", "bash"),
+        ("zsh", "zsh"),
+        ("fish", "fish"),
+        ("macos", "macOS"),
     ];
 
-    KEYWORDS.iter().any(|keyword| message.contains(keyword))
+    KEYWORDS
+        .iter()
+        .find_map(|(keyword, label)| normalized.contains(keyword).then_some(*label))
 }
 
 fn ui_language_name(value: &str) -> &'static str {
@@ -272,10 +277,55 @@ mod tests {
 
         let messages = build_session_chat_messages(&input);
 
+        assert!(messages[0].content.contains("explicitly targets Linux"));
         assert!(
             messages[0]
                 .content
-                .contains("follow that named environment first")
+                .contains("Do not switch the answer back to the current session environment")
+        );
+        assert!(
+            messages[0]
+                .content
+                .contains("Do not give substitute commands for the current session platform")
+        );
+    }
+
+    #[test]
+    fn session_chat_prompt_keeps_linux_question_out_of_windows_override() {
+        let input = OpenAiSessionChatInput {
+            context: SessionContextSnapshot {
+                session_id: "s1".to_string(),
+                session_label: "local".to_string(),
+                session_kind: "local".to_string(),
+                host: None,
+                username: None,
+                platform: Some("windows".to_string()),
+                shell_name: Some("powershell".to_string()),
+                session_state: "connected".to_string(),
+                resource_monitor_status: Some("ready".to_string()),
+                host_key_status: None,
+                recent_terminal_output: vec!["PS C:\\>".to_string()],
+            },
+            response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
+            ui_language: "zh".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "linux ps命令".to_string(),
+            }],
+        };
+
+        let messages = build_session_chat_messages(&input);
+
+        assert!(messages[0].content.contains("explicitly targets Linux"));
+        assert!(
+            messages[0]
+                .content
+                .contains("Current session environment is reference context only")
+        );
+        assert!(
+            messages[0]
+                .content
+                .contains("Do not give substitute commands for the current session platform")
         );
     }
 }
