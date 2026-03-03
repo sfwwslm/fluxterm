@@ -38,6 +38,7 @@ type HostPanelProps = {
   onPick: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
   onOpenNewProfile: () => void;
+  onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
   onRemoveProfile: (profile: HostProfile) => void;
   onAddGroup: (groupName: string) => boolean;
@@ -60,6 +61,7 @@ export default function HostPanel({
   onPick,
   onConnectProfile,
   onOpenNewProfile,
+  onImportOpenSshConfig,
   onOpenEditProfile,
   onRemoveProfile,
   onAddGroup,
@@ -277,6 +279,15 @@ export default function HostPanel({
         onClick: openAddGroupDialog,
       },
       {
+        label: t("host.menu.importOpenSshConfig"),
+        icon: <FiServer />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onImportOpenSshConfig();
+        },
+      },
+      {
         label: t("profile.menu.new"),
         icon: <FiPlus />,
         disabled: false,
@@ -301,6 +312,15 @@ export default function HostPanel({
         },
       },
       {
+        label: t("host.menu.importOpenSshConfig"),
+        icon: <FiServer />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onImportOpenSshConfig();
+        },
+      },
+      {
         label: t("host.addGroup"),
         icon: <FiFolderPlus />,
         disabled: false,
@@ -320,6 +340,15 @@ export default function HostPanel({
     shell: LocalShellProfile,
   ): ContextMenuItem[] {
     return [
+      {
+        label: t("host.menu.importOpenSshConfig"),
+        icon: <FiServer />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onImportOpenSshConfig();
+        },
+      },
       {
         label: t("host.addGroup"),
         icon: <FiFolderPlus />,

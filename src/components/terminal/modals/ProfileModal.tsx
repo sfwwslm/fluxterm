@@ -9,6 +9,7 @@ import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import "@/components/terminal/modals/ProfileModal.css";
 
+// 与后端 profile_save 的名称校验保持一致，避免保存前后出现不同结果。
 const PROFILE_NAME_MAX_LENGTH = 14;
 
 type ProfileModalProps = {

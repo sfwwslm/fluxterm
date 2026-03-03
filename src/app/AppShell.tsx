@@ -21,6 +21,7 @@ import TerminalPanel from "@/components/terminal/sessions/TerminalPanel";
 import AboutModal from "@/components/terminal/modals/AboutModal";
 import ProfileModal from "@/components/terminal/modals/ProfileModal";
 import NoticeHost from "@/components/ui/notice-host";
+import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import useProfiles from "@/hooks/profile/useProfiles";
 import useAppSettings from "@/hooks/settings/useAppSettings";
@@ -85,6 +86,52 @@ function formatMessage(
     (text, [key, value]) => text.split(`{${key}}`).join(String(value)),
     message,
   );
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+}
+
+function formatOpenSshImportToast(
+  t: Translate,
+  summary: {
+    addedCount: number;
+    skippedCount: number;
+    conflictCount: number;
+    unsupportedCount: number;
+    errorCount: number;
+  },
+) {
+  const parts = [
+    summary.addedCount > 0
+      ? t("host.import.item.added", { count: summary.addedCount })
+      : null,
+    summary.skippedCount > 0
+      ? t("host.import.item.skipped", { count: summary.skippedCount })
+      : null,
+    summary.conflictCount > 0
+      ? t("host.import.item.conflict", { count: summary.conflictCount })
+      : null,
+    summary.unsupportedCount > 0
+      ? t("host.import.item.unsupported", {
+          count: summary.unsupportedCount,
+        })
+      : null,
+    summary.errorCount > 0
+      ? t("host.import.item.error", { count: summary.errorCount })
+      : null,
+  ].filter(Boolean);
+
+  return `${t("host.import.done")}：${parts.join("，")}`;
 }
 
 /** 将快捷命令中的常见转义序列还原为真实控制字符。 */
@@ -189,11 +236,13 @@ export default function AppShell() {
     pickProfile,
     saveProfile,
     removeProfile,
+    importOpenSshConfig,
     addGroup,
     renameGroup,
     removeGroup,
     moveProfileToGroup,
   } = useProfiles();
+  const { pushToast } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -1413,6 +1462,21 @@ export default function AppShell() {
         pickProfile,
         onConnectProfile: handleConnectProfile,
         onOpenNewProfile: openNewProfile,
+        onImportOpenSshConfig: () => {
+          importOpenSshConfig()
+            .then((summary) => {
+              pushToast({
+                level: "success",
+                message: formatOpenSshImportToast(t, summary),
+              });
+            })
+            .catch((error) => {
+              pushToast({
+                level: "error",
+                message: getErrorMessage(error),
+              });
+            });
+        },
         onOpenEditProfile: openEditProfile,
         onRemoveProfile: (profile) => removeProfile(profile.id),
         onHistorySearchQueryChange: historyPanelActions.setSearchQuery,
@@ -1451,12 +1515,14 @@ export default function AppShell() {
       sessionState.logEntries,
       historyPanelActions,
       historyPanelState,
+      importOpenSshConfig,
       fileDefaultEditorPath,
       filesPanelState.currentPath,
       filesPanelState.terminalPathSyncStatus,
       filesPanelState.sftpAvailability,
       filesPanelState.entries,
       locale,
+      pushToast,
       sessionState.canReconnect,
       t,
       pickProfile,

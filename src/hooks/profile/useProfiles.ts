@@ -4,6 +4,10 @@
  */
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  importOpenSshConfig as importOpenSshConfigCommand,
+  type OpensshImportSummary,
+} from "@/features/profile/core/commands";
 import type { HostProfile } from "@/types";
 
 /** 主机配置状态 hook 的返回值。 */
@@ -16,6 +20,8 @@ type UseProfilesResult = {
   pickProfile: (profileId: string) => void;
   saveProfile: (profile: HostProfile) => Promise<HostProfile>;
   removeProfile: (profileId: string) => Promise<void>;
+  reloadProfiles: () => Promise<void>;
+  importOpenSshConfig: () => Promise<OpensshImportSummary>;
   addGroup: (groupName: string) => boolean;
   renameGroup: (from: string, to: string) => Promise<boolean>;
   removeGroup: (groupName: string) => Promise<boolean>;
@@ -106,6 +112,11 @@ export default function useProfiles(): UseProfilesResult {
       .filter(Boolean);
     setSshGroups(dedupeGroups([...persistedGroups, ...discoveredGroups]));
     setProfiles(normalized);
+  }
+
+  /** 重新加载主机配置与分组列表。 */
+  async function reloadProfiles() {
+    await loadProfiles();
   }
 
   /** 选择一个主机作为当前编辑对象。 */
@@ -299,6 +310,13 @@ export default function useProfiles(): UseProfilesResult {
     pickProfile,
     saveProfile,
     removeProfile,
+    reloadProfiles,
+    /** 执行 OpenSSH 导入并在成功后刷新当前主机列表与分组。 */
+    importOpenSshConfig: async () => {
+      const summary = await importOpenSshConfigCommand();
+      await loadProfiles();
+      return summary;
+    },
     addGroup,
     renameGroup,
     removeGroup,

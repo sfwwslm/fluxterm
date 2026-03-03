@@ -9,6 +9,7 @@ pub mod profile_store;
 pub mod resource_monitor;
 pub mod security;
 pub mod session_settings;
+pub mod ssh_config_import;
 pub mod ssh_host_keys;
 pub mod state;
 
@@ -26,6 +27,7 @@ use crate::commands::local_shell::{
 };
 use crate::commands::profile::{
     profile_groups_list, profile_groups_save, profile_list, profile_remove, profile_save,
+    ssh_import_openssh_config,
 };
 use crate::commands::resource_monitor::{
     resource_monitor_start_local, resource_monitor_start_ssh, resource_monitor_stop,
@@ -104,6 +106,7 @@ pub fn run() {
             profile_groups_save,
             profile_save,
             profile_remove,
+            ssh_import_openssh_config,
             security_status,
             ssh_connect,
             ssh_disconnect,

@@ -56,6 +56,7 @@ type BuildPanelsProps = {
   pickProfile: (profileId: string) => void;
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
   onOpenNewProfile: () => void;
+  onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
   onRemoveProfile: (profile: HostProfile) => void;
   onHistorySearchQueryChange: (value: string) => void;
@@ -112,6 +113,7 @@ export function buildPanels(
     pickProfile,
     onConnectProfile,
     onOpenNewProfile,
+    onImportOpenSshConfig,
     onOpenEditProfile,
     onRemoveProfile,
     onHistorySearchQueryChange,
@@ -142,6 +144,7 @@ export function buildPanels(
         onPick={pickProfile}
         onConnectProfile={onConnectProfile}
         onOpenNewProfile={onOpenNewProfile}
+        onImportOpenSshConfig={onImportOpenSshConfig}
         onOpenEditProfile={onOpenEditProfile}
         onRemoveProfile={onRemoveProfile}
         onAddGroup={onAddGroup}

@@ -8,6 +8,7 @@ use crate::profile_store::{read_profiles, write_profiles};
 use crate::security::{CryptoService, SecretStore};
 
 const GROUP_NAME_MAX_LENGTH: usize = 12;
+/// 会话名称上限与前端 ProfileModal 保持一致，避免前后端校验结果不同。
 const PROFILE_NAME_MAX_LENGTH: usize = 14;
 
 #[tauri::command]
@@ -90,7 +91,15 @@ pub fn profile_remove(app: AppHandle, profile_id: String) -> Result<bool, Engine
     Ok(before != store.profiles.len())
 }
 
-fn dedupe_groups(values: Vec<String>) -> Vec<String> {
+#[tauri::command]
+/// 从默认 OpenSSH config 导入主机配置。
+pub fn ssh_import_openssh_config(
+    app: AppHandle,
+) -> Result<crate::ssh_config_import::OpensshImportSummary, EngineError> {
+    crate::ssh_config_import::import_openssh_config(&app)
+}
+
+pub(crate) fn dedupe_groups(values: Vec<String>) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut list = Vec::new();
     for value in values {
@@ -108,7 +117,7 @@ fn dedupe_groups(values: Vec<String>) -> Vec<String> {
 }
 
 /// 校验并规范化会话名称：不能为空，且长度不能超过上限。
-fn validate_profile_name(value: String) -> Result<String, EngineError> {
+pub(crate) fn validate_profile_name(value: String) -> Result<String, EngineError> {
     let normalized = value.trim();
     if normalized.is_empty() {
         return Err(EngineError::new(
@@ -126,7 +135,7 @@ fn validate_profile_name(value: String) -> Result<String, EngineError> {
 }
 
 /// 校验并规范化分组名称列表：忽略空值，拒绝超长名称，再做去重排序。
-fn validate_and_dedupe_groups(values: Vec<String>) -> Result<Vec<String>, EngineError> {
+pub(crate) fn validate_and_dedupe_groups(values: Vec<String>) -> Result<Vec<String>, EngineError> {
     let mut normalized = Vec::new();
     for value in values {
         let trimmed = value.trim();
@@ -145,7 +154,9 @@ fn validate_and_dedupe_groups(values: Vec<String>) -> Result<Vec<String>, Engine
 }
 
 /// 规范化主机配置中的分组字段：空值移除，非空值要求长度合法。
-fn normalize_profile_tags(tags: Option<Vec<String>>) -> Result<Option<Vec<String>>, EngineError> {
+pub(crate) fn normalize_profile_tags(
+    tags: Option<Vec<String>>,
+) -> Result<Option<Vec<String>>, EngineError> {
     let Some(values) = tags else {
         return Ok(None);
     };
