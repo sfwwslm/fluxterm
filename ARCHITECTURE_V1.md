@@ -73,6 +73,7 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 
 - `docs/terminal-split-workspace-design.md`：终端拆分工作区、区域工作区栏与会话重建策略设计。
 - `docs/security-crypto-refactor-design.md`：公共加密模块、Provider 抽象与 Profile 凭据存储重构设计。
+- `docs/ssh-session-and-monitoring.md`：SSH 会话、主机身份校验与资源监控连接实现说明。
 
 ## 前端布局规则
 
@@ -102,15 +103,20 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 
 ## 配置与存储
 
-- 配置数据存放于 `$HOME/.vust/flux-term`，按 `global` 与 `terminal` 子目录区分应用级配置和终端域配置。
+- 配置根目录由 `src-tauri/src/config_paths.rs` 中的 `resolve_config_root_dir` 解析，终端域配置存放在该目录下的 `terminal` 子目录中。
 - 应用使用数据存放于 `app_data_dir`，例如远端文件下载缓存。
-- Alpha 阶段当前默认使用本地 Provider 加密存储凭据，后续可切换到系统钥匙串等更强方案。
+- 当前默认使用本地 Provider 加密存储凭据。
+
+具体的 SSH 相关存储与连接行为见 `docs/ssh-session-and-monitoring.md`。
 
 ## 安全性考虑
 
-- 首次连接进行主机指纹校验并持久化。
+- SSH 主机身份校验由应用独立维护。
+- SSH 连接与资源监控连接遵循统一的主机身份校验规则。
 - 尽量避免存储明文密码。
 - SFTP 操作范围限制在明确的目标路径。
+
+具体的主机身份校验与资源监控实现见 `docs/ssh-session-and-monitoring.md`。
 
 ## 平台说明
 
@@ -163,7 +169,6 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 - `keyPath`：密钥路径（可选）。
 - `keyPassphraseRef`：密钥口令引用（可选）。
 - `passwordRef`：密码引用（可选）。
-- `knownHost`：主机指纹记录（可选）。
 - `tags`：标签（可选）。
 
 ### 会话（Session）
@@ -191,4 +196,3 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 ## 待决问题
 
 - russh 的 SFTP 能力与稳定性边界如何评估？
-- 主机指纹存储位置与格式？
