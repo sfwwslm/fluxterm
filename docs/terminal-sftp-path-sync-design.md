@@ -83,7 +83,7 @@ zsh 默认提示符常见形态例如：
 
 - `root@MacBook-Pro ~ %`
 - `root@MacBook-Pro codes %`
-- `root@MacBook-Pro flux-term %`
+- `root@MacBook-Pro fluxterm %`
 
 这类提示符的问题是：
 

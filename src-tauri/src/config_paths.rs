@@ -6,7 +6,7 @@ use log::{debug, warn};
 use tauri::{AppHandle, Manager};
 
 const CONFIG_DIR_ENV_KEY: &str = "FLUXTERM_CONFIG_DIR";
-const DEFAULT_CONFIG_DIR_NAME: &str = ".vust/flux-term";
+const DEFAULT_CONFIG_DIR_NAME: &str = ".vust/fluxterm";
 
 /// 严格加载 dotenv 文件（仅 debug 构建启用）。
 ///
@@ -21,7 +21,7 @@ pub fn load_dotenv_strict() -> Result<(), String> {
     if tauri_env_path.exists() {
         return dotenvy::from_path(&tauri_env_path).map_err(|err| {
             format!(
-                "[flux-term] failed to load dotenv from {}: {}",
+                "[fluxterm] failed to load dotenv from {}: {}",
                 tauri_env_path.display(),
                 err
             )

@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "FluxTerm",
   "version": "0.1.0-alpha.4",
-  "identifier": "cc.vust.flux-term",
+  "identifier": "cc.vust.fluxterm",
   "build": {
     "beforeDevCommand": "pnpm web:dev",
     "devUrl": "http://localhost:1420",
@@ -50,7 +50,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4Rjc0OERCMUJEMUUxNzIKUldSeTRkRWIyMGozR0RjZVk2V0ZLeEFoUWR6V2dmUGxPeG4xLzdIMWFlaXVTZWt0UnpuTGp0cGQK",
       "endpoints": [
-        "https://github.com/sfwwslm/flux-term/releases/latest/download/latest.json"
+        "https://github.com/sfwwslm/fluxterm/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
