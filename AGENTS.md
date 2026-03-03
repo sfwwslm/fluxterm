@@ -47,6 +47,7 @@ There is no dedicated JS test runner configured yet. For Rust, use `cargo test` 
 - Add Chinese documentation comments for frontend/backend functions, structs, and modules; Rust docs must use `//!` and `///` and comply with `cargo doc` conventions.
 - CHANGELOG entries should be user-facing; avoid implementation details and internal refactors.
 - Please use Chinese for document content (including README and design documents).
+- For terminal AI assistant scope, context ownership, and prompt boundaries, follow docs/ai-context-contract.md.
 
 ## Commit & Pull Request Guidelines
 
