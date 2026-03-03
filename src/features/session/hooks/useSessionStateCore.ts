@@ -17,6 +17,7 @@ import type {
 } from "@/types";
 import { useNotices } from "@/hooks/useNotices";
 import { inferDisconnectReason } from "@/features/session/core/disconnectReason";
+import type { HostKeyVerificationRequiredPayload } from "@/features/session/core/listeners";
 import { callTauri } from "@/shared/tauri/commands";
 import { registerSessionListeners } from "@/features/session/core/listeners";
 import { replaceSessionConnectionState } from "@/features/session/core/lifecycle";
@@ -175,6 +176,12 @@ export default function useSessionState({
   const reconnectAttemptsRef = useRef<Record<string, number>>({});
   const sessionCloseHandledRef = useRef<Record<string, boolean>>({});
   const errorDialogShownRef = useRef<Record<string, boolean>>({});
+  // 按 profile 记录待确认的 Host Key 重连链路。
+  // Host Key 事件不带 sessionId，这里用 profileId 映射对应会话。
+  const pendingHostKeyReconnectSessionByProfileRef = useRef<
+    Record<string, string>
+  >({});
+  const pendingHostKeyDialogProfilesRef = useRef<Record<string, boolean>>({});
   const localSessionIdsRef = useRef<Set<string>>(new Set());
   const localShellStartedRef = useRef(false);
   const localSessionMetaRef = useRef<
@@ -189,11 +196,15 @@ export default function useSessionState({
     handleSessionStatus: (payload: {
       sessionId: string;
       state: SessionStateUi;
-      error?: { message: string };
+      error?: { code: string; message: string; detail?: string | null };
     }) => void;
+    handleHostKeyVerificationRequired: (
+      payload: HostKeyVerificationRequiredPayload,
+    ) => void;
   }>({
     handleSessionDisconnected: () => {},
     handleSessionStatus: () => {},
+    handleHostKeyVerificationRequired: () => {},
   });
 
   const activeSession = useMemo(() => {
@@ -289,6 +300,11 @@ export default function useSessionState({
     });
   }
 
+  function clearPendingHostKeyForProfile(profileId: string) {
+    delete pendingHostKeyReconnectSessionByProfileRef.current[profileId];
+    delete pendingHostKeyDialogProfilesRef.current[profileId];
+  }
+
   function replaceSessionConnection(
     oldSessionId: string,
     nextSession: Session,
@@ -377,6 +393,14 @@ export default function useSessionState({
   }
 
   async function attemptReconnect(sessionId: string) {
+    const session = sessionsRef.current.find(
+      (item) => item.sessionId === sessionId,
+    );
+    const profileId = session?.profileId ?? null;
+    if (profileId) {
+      // 记录当前重连会话，供 Host Key 确认后继续连接。
+      pendingHostKeyReconnectSessionByProfileRef.current[profileId] = sessionId;
+    }
     await attemptSessionReconnect({
       sessionId,
       sessionsRef,
@@ -388,6 +412,9 @@ export default function useSessionState({
       replaceSessionConnection,
       setSessionStates,
     });
+    if (profileId && !pendingHostKeyDialogProfilesRef.current[profileId]) {
+      delete pendingHostKeyReconnectSessionByProfileRef.current[profileId];
+    }
   }
 
   function scheduleReconnect(sessionId: string) {
@@ -494,10 +521,80 @@ export default function useSessionState({
           handleSessionDisconnected(payload.sessionId);
         }
       },
+      handleHostKeyVerificationRequired: (payload) => {
+        if (pendingHostKeyDialogProfilesRef.current[payload.profileId]) return;
+        const profile = profilesRef.current.find(
+          (item) => item.id === payload.profileId,
+        );
+        if (!profile) return;
+        // 同一个 profile 同时只显示一个待确认弹窗。
+        pendingHostKeyDialogProfilesRef.current[payload.profileId] = true;
+        const isMismatch = !!payload.previousFingerprintSha256;
+        openDialog({
+          title: isMismatch
+            ? t("dialog.sshHostKeyMismatchTitle")
+            : t("dialog.sshHostKeyUnknownTitle"),
+          message: isMismatch
+            ? t("dialog.sshHostKeyMismatchBody", {
+                host: `${payload.host}:${payload.port}`,
+                algorithm: payload.keyAlgorithm,
+                previous: payload.previousFingerprintSha256 ?? "-",
+                next: payload.fingerprintSha256,
+              })
+            : t("dialog.sshHostKeyUnknownBody", {
+                host: `${payload.host}:${payload.port}`,
+                algorithm: payload.keyAlgorithm,
+                fingerprint: payload.fingerprintSha256,
+              }),
+          confirmLabel: t("actions.save"),
+          cancelLabel: t("actions.cancel"),
+          onConfirm: () => {
+            const reconnectTargetSessionId =
+              pendingHostKeyReconnectSessionByProfileRef.current[
+                payload.profileId
+              ] ?? null;
+            callTauri("ssh_host_key_confirm", {
+              host: payload.host,
+              port: payload.port,
+              keyAlgorithm: payload.keyAlgorithm,
+              publicKeyBase64: payload.publicKeyBase64,
+            })
+              .then(async () => {
+                clearPendingHostKeyForProfile(payload.profileId);
+                if (reconnectTargetSessionId) {
+                  // 确认后继续当前重连会话。
+                  clearReconnectState(reconnectTargetSessionId);
+                  await reconnectSession(reconnectTargetSessionId);
+                  return;
+                }
+                await connectProfile(profile);
+              })
+              .catch(() => {
+                clearPendingHostKeyForProfile(payload.profileId);
+              });
+          },
+          onCancel: () => {
+            const reconnectTargetSessionId =
+              pendingHostKeyReconnectSessionByProfileRef.current[
+                payload.profileId
+              ] ?? null;
+            clearPendingHostKeyForProfile(payload.profileId);
+            if (reconnectTargetSessionId) {
+              // 取消后终止当前重连链路。
+              clearReconnectState(reconnectTargetSessionId);
+              setSessionStates((prev) => ({
+                ...prev,
+                [reconnectTargetSessionId]: "disconnected",
+              }));
+            }
+          },
+        });
+      },
     };
   });
 
   async function connectProfile(profile: HostProfile) {
+    clearPendingHostKeyForProfile(profile.id);
     // “正在连接”在发起连接时就记录，避免状态事件先到、会话元数据尚未写入前端时，
     // 日志对象退化成默认的“会话”占位文案。
     appendLog("log.event.connecting", {
@@ -760,6 +857,11 @@ export default function useSessionState({
         },
         onSessionStatus: (payload) => {
           sessionEventHandlersRef.current.handleSessionStatus(payload);
+        },
+        onHostKeyVerificationRequired: (payload) => {
+          sessionEventHandlersRef.current.handleHostKeyVerificationRequired(
+            payload,
+          );
         },
       });
       if (cancelled) {

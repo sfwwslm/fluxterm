@@ -145,6 +145,17 @@ pub enum ResourceMonitorStatus {
     Unsupported,
 }
 
+/// 资源监控不可用原因。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceMonitorUnsupportedReason {
+    HostKeyUntrusted,
+    ProbeFailed,
+    ConnectFailed,
+    UnsupportedPlatform,
+    SampleFailed,
+}
+
 /// CPU 资源快照。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -175,6 +186,7 @@ pub struct SessionResourceSnapshot {
     pub sampled_at: u64,
     pub source: String,
     pub status: ResourceMonitorStatus,
+    pub unsupported_reason: Option<ResourceMonitorUnsupportedReason>,
     pub cpu: Option<ResourceCpuSnapshot>,
     pub memory: Option<ResourceMemorySnapshot>,
 }

@@ -84,6 +84,24 @@ pub fn resolve_terminal_config_dir(app: &AppHandle) -> Result<PathBuf, EngineErr
     Ok(dir.join("terminal"))
 }
 
+/// 解析 SSH 域配置目录。
+pub fn resolve_terminal_ssh_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_terminal_config_dir(app)?;
+    Ok(dir.join("ssh"))
+}
+
+/// 解析终端域 session 配置文件路径。
+pub fn resolve_session_settings_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_terminal_config_dir(app)?;
+    Ok(dir.join("session.json"))
+}
+
+/// 解析应用私有 known_hosts 文件路径。
+pub fn resolve_known_hosts_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_terminal_ssh_config_dir(app)?;
+    Ok(dir.join("known_hosts"))
+}
+
 /// 解析主机配置文件路径。
 pub fn resolve_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
     let dir = resolve_global_config_dir(app)?;

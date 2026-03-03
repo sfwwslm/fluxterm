@@ -9,6 +9,7 @@ import { useNotices } from "@/hooks/useNotices";
 import { getAppConfigDir, getAppDataDir } from "@/shared/config/paths";
 import {
   DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
+  type HostKeyPolicy,
   MAX_SCROLLBACK,
   MIN_RESOURCE_MONITOR_INTERVAL_SEC,
   MIN_SCROLLBACK,
@@ -38,6 +39,7 @@ type ConfigModalProps = {
   terminalPathSyncEnabled?: boolean;
   resourceMonitorEnabled?: boolean;
   resourceMonitorIntervalSec?: number;
+  hostKeyPolicy?: HostKeyPolicy;
   onSftpEnabledChange?: (enabled: boolean) => void;
   onFileDefaultEditorPathChange?: (value: string) => void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
@@ -47,6 +49,7 @@ type ConfigModalProps = {
   onTerminalPathSyncEnabledChange?: (enabled: boolean) => void;
   onResourceMonitorEnabledChange?: (enabled: boolean) => void;
   onResourceMonitorIntervalSecChange?: (value: number) => void;
+  onHostKeyPolicyChange?: (value: HostKeyPolicy) => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -73,6 +76,7 @@ export default function ConfigModal({
   terminalPathSyncEnabled = true,
   resourceMonitorEnabled = false,
   resourceMonitorIntervalSec = DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
+  hostKeyPolicy = "ask",
   onSftpEnabledChange,
   onFileDefaultEditorPathChange,
   onWebLinksEnabledChange,
@@ -82,6 +86,7 @@ export default function ConfigModal({
   onTerminalPathSyncEnabledChange,
   onResourceMonitorEnabledChange,
   onResourceMonitorIntervalSecChange,
+  onHostKeyPolicyChange,
   onClose,
   onSectionChange,
   t,
@@ -392,6 +397,33 @@ export default function ConfigModal({
               />
             </div>
           </div>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.hostKeyPolicy")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.hostKeyPolicyHint")}
+              </span>
+            </div>
+            <select
+              className="config-number-input"
+              value={hostKeyPolicy}
+              onChange={(event) =>
+                onHostKeyPolicyChange?.(event.target.value as HostKeyPolicy)
+              }
+            >
+              <option value="ask">
+                {t("config.session.hostKeyPolicy.ask")}
+              </option>
+              <option value="strict">
+                {t("config.session.hostKeyPolicy.strict")}
+              </option>
+              <option value="off">
+                {t("config.session.hostKeyPolicy.off")}
+              </option>
+            </select>
+          </label>
         </div>
       );
     }

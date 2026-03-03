@@ -85,7 +85,15 @@ export async function attemptSessionReconnect({
   try {
     const result = await createSshSession(profile);
     replaceSessionConnection(sessionId, result);
-  } catch {
+  } catch (error: any) {
+    const code = error?.code ?? "";
+    if (code === "ssh_host_key_unknown" || code === "ssh_host_key_mismatch") {
+      setSessionStates((prev) => ({
+        ...prev,
+        [sessionId]: "disconnected",
+      }));
+      return;
+    }
     const attempts = reconnectAttemptsRef.current[sessionId] ?? 0;
     if (attempts >= maxReconnectAttempts) {
       clearReconnectState(sessionId);

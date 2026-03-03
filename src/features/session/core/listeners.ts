@@ -8,12 +8,26 @@ import { subscribeTauri } from "@/shared/tauri/events";
 type SessionStatusPayload = {
   sessionId: string;
   state: SessionStateUi;
-  error?: { message: string };
+  error?: { code: string; message: string; detail?: string | null };
+};
+
+export type HostKeyVerificationRequiredPayload = {
+  profileId: string;
+  host: string;
+  port: number;
+  keyAlgorithm: string;
+  publicKeyBase64: string;
+  fingerprintSha256: string;
+  previousFingerprintSha256?: string | null;
+  policy: string;
 };
 
 type RegisterSessionListenersProps = {
   onTerminalExit: (payload: { sessionId: string }) => void;
   onSessionStatus: (payload: SessionStatusPayload) => void;
+  onHostKeyVerificationRequired: (
+    payload: HostKeyVerificationRequiredPayload,
+  ) => void;
 };
 
 /**
@@ -22,6 +36,7 @@ type RegisterSessionListenersProps = {
 export async function registerSessionListeners({
   onTerminalExit,
   onSessionStatus,
+  onHostKeyVerificationRequired,
 }: RegisterSessionListenersProps) {
   const unlisteners: Array<() => void> = [];
 
@@ -36,6 +51,13 @@ export async function registerSessionListeners({
     (event) => onSessionStatus(event.payload),
   );
   unlisteners.push(statusUnlisten);
+
+  const hostKeyUnlisten =
+    await subscribeTauri<HostKeyVerificationRequiredPayload>(
+      "ssh:host-key-verification-required",
+      (event) => onHostKeyVerificationRequired(event.payload),
+    );
+  unlisteners.push(hostKeyUnlisten);
 
   return () => {
     unlisteners.forEach((unlisten) => unlisten());

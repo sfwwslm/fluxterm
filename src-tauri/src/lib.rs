@@ -8,6 +8,8 @@ pub mod profile_secrets;
 pub mod profile_store;
 pub mod resource_monitor;
 pub mod security;
+pub mod session_settings;
+pub mod ssh_host_keys;
 pub mod state;
 
 use std::sync::Arc;
@@ -33,7 +35,9 @@ use crate::commands::sftp::{
     sftp_cancel_transfer, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
     sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
 };
-use crate::commands::ssh::{ssh_connect, ssh_disconnect, ssh_resize, ssh_write};
+use crate::commands::ssh::{
+    ssh_connect, ssh_disconnect, ssh_host_key_confirm, ssh_resize, ssh_write,
+};
 use crate::commands::system::{app_config_dir, app_data_dir};
 use crate::local_shell::LocalShellState;
 use crate::resource_monitor::ResourceMonitorState;
@@ -103,6 +107,7 @@ pub fn run() {
             security_status,
             ssh_connect,
             ssh_disconnect,
+            ssh_host_key_confirm,
             ssh_resize,
             ssh_write,
             sftp_list,

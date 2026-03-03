@@ -61,6 +61,12 @@ export const en = {
   "config.session.resourceMonitorIntervalSec": "Resource Sampling Interval",
   "config.session.resourceMonitorIntervalSecHint":
     "Sampling interval in seconds, minimum {min}s and default 5s.",
+  "config.session.hostKeyPolicy": "SSH Host Key Policy",
+  "config.session.hostKeyPolicyHint":
+    "Control how SSH host identity is verified on first connection or fingerprint changes.",
+  "config.session.hostKeyPolicy.ask": "Ask",
+  "config.session.hostKeyPolicy.strict": "Strict",
+  "config.session.hostKeyPolicy.off": "Off",
   "config.directory.configTitle": "Config Directory",
   "config.directory.dataTitle": "Data Directory",
   "config.directory.openConfig": "Open Config Directory",
@@ -204,7 +210,16 @@ export const en = {
   "status.window": "Window",
   "status.buffer": "Buffer",
   "status.resource.checking": "Checking resources",
+  "status.resource.inactive": "Resource monitor inactive",
   "status.resource.unsupported": "Resource monitoring unsupported",
+  "status.resource.reason.hostKeyUntrusted":
+    "SSH host fingerprint is not trusted",
+  "status.resource.reason.probeFailed":
+    "Failed to probe remote host fingerprint",
+  "status.resource.reason.connectFailed": "Resource monitor connection failed",
+  "status.resource.reason.unsupportedPlatform":
+    "Remote system does not support resource monitoring",
+  "status.resource.reason.sampleFailed": "Resource sampling failed",
   "status.resource.cpu": "CPU",
   "status.resource.memory": "Memory",
   "status.resource.user": "User",
@@ -255,6 +270,12 @@ export const en = {
   "dialog.sshErrorTitle": "Connection failed",
   "dialog.sshErrorBody":
     "Unable to establish SSH connection. Check authentication and network.",
+  "dialog.sshHostKeyUnknownTitle": "Confirm Host Identity",
+  "dialog.sshHostKeyUnknownBody":
+    "The host {host} is not trusted yet.\nAlgorithm: {algorithm}\nFingerprint: {fingerprint}\nNote: confirm this is the host you intend to connect to.",
+  "dialog.sshHostKeyMismatchTitle": "Host Fingerprint Changed",
+  "dialog.sshHostKeyMismatchBody":
+    "The host identity for {host} does not match the local record.\nAlgorithm: {algorithm}\nPrevious: {previous}\nCurrent: {next}\nOnly continue if you have verified the host was rebuilt, migrated, or its fingerprint was intentionally changed.",
   "terminal.tabMenu.reconnect": "Reconnect Session",
   "terminal.tabMenu.save": "Save Session",
   "terminal.tabMenu.splitHorizontal": "Split Horizontally",

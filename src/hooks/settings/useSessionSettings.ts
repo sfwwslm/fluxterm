@@ -24,7 +24,10 @@ type SessionSettings = {
   terminalPathSyncEnabled?: boolean;
   resourceMonitorEnabled?: boolean;
   resourceMonitorIntervalSec?: number;
+  hostKeyPolicy?: HostKeyPolicy;
 };
+
+export type HostKeyPolicy = "ask" | "strict" | "off";
 
 type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
@@ -34,6 +37,7 @@ type UseSessionSettingsResult = {
   terminalPathSyncEnabled: boolean;
   resourceMonitorEnabled: boolean;
   resourceMonitorIntervalSec: number;
+  hostKeyPolicy: HostKeyPolicy;
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setCommandAutocompleteEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -41,6 +45,7 @@ type UseSessionSettingsResult = {
   setTerminalPathSyncEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setResourceMonitorEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setResourceMonitorIntervalSec: React.Dispatch<React.SetStateAction<number>>;
+  setHostKeyPolicy: React.Dispatch<React.SetStateAction<HostKeyPolicy>>;
   sessionSettingsLoaded: boolean;
 };
 
@@ -67,6 +72,7 @@ const defaultSessionSettings: Required<
     | "terminalPathSyncEnabled"
     | "resourceMonitorEnabled"
     | "resourceMonitorIntervalSec"
+    | "hostKeyPolicy"
   >
 > = {
   webLinksEnabled: true,
@@ -76,6 +82,7 @@ const defaultSessionSettings: Required<
   terminalPathSyncEnabled: true,
   resourceMonitorEnabled: false,
   resourceMonitorIntervalSec: DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
+  hostKeyPolicy: "ask",
 };
 
 /** 会话设置持久化：管理终端域的全局配置，统一写入 session.json。 */
@@ -101,6 +108,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   const [resourceMonitorIntervalSec, setResourceMonitorIntervalSec] = useState(
     defaultSessionSettings.resourceMonitorIntervalSec,
   );
+  const [hostKeyPolicy, setHostKeyPolicy] = useState<HostKeyPolicy>(
+    defaultSessionSettings.hostKeyPolicy,
+  );
   const [sessionSettingsLoaded, setSessionSettingsLoaded] = useState(false);
   const loadedRef = useRef(false);
   const loggedSettingsRef = useRef({
@@ -113,6 +123,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     resourceMonitorEnabled: defaultSessionSettings.resourceMonitorEnabled,
     resourceMonitorIntervalSec:
       defaultSessionSettings.resourceMonitorIntervalSec,
+    hostKeyPolicy: defaultSessionSettings.hostKeyPolicy,
   });
 
   async function loadSessionSettings() {
@@ -139,6 +150,13 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       }
       if (typeof parsed?.resourceMonitorEnabled === "boolean") {
         setResourceMonitorEnabled(parsed.resourceMonitorEnabled);
+      }
+      if (
+        parsed?.hostKeyPolicy === "ask" ||
+        parsed?.hostKeyPolicy === "strict" ||
+        parsed?.hostKeyPolicy === "off"
+      ) {
+        setHostKeyPolicy(parsed.hostKeyPolicy);
       }
       if (typeof parsed?.scrollback === "number") {
         const normalizedScrollback = normalizeScrollback(parsed.scrollback);
@@ -212,6 +230,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
                   parsed.resourceMonitorIntervalSec,
                 )
               : defaultSessionSettings.resourceMonitorIntervalSec,
+          hostKeyPolicy:
+            parsed.hostKeyPolicy === "ask" ||
+            parsed.hostKeyPolicy === "strict" ||
+            parsed.hostKeyPolicy === "off"
+              ? parsed.hostKeyPolicy
+              : defaultSessionSettings.hostKeyPolicy,
         }).catch((error) => {
           warn(
             JSON.stringify({
@@ -252,6 +276,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
                 parsed.resourceMonitorIntervalSec,
               )
             : defaultSessionSettings.resourceMonitorIntervalSec,
+        hostKeyPolicy:
+          parsed?.hostKeyPolicy === "ask" ||
+          parsed?.hostKeyPolicy === "strict" ||
+          parsed?.hostKeyPolicy === "off"
+            ? parsed.hostKeyPolicy
+            : defaultSessionSettings.hostKeyPolicy,
       };
       loadedRef.current = true;
       setSessionSettingsLoaded(true);
@@ -285,6 +315,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       resourceMonitorIntervalSec: normalizeResourceMonitorIntervalSec(
         resourceMonitorIntervalSec,
       ),
+      hostKeyPolicy,
     }).catch((error) => {
       warn(
         JSON.stringify({
@@ -301,6 +332,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     resourceMonitorEnabled,
     resourceMonitorIntervalSec,
     webLinksEnabled,
+    hostKeyPolicy,
   ]);
 
   useEffect(() => {
@@ -405,6 +437,20 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     loggedSettingsRef.current.resourceMonitorIntervalSec = nextInterval;
   }, [resourceMonitorIntervalSec]);
 
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    if (loggedSettingsRef.current.hostKeyPolicy === hostKeyPolicy) {
+      return;
+    }
+    info(
+      JSON.stringify({
+        event: "session-settings:host-key-policy-changed",
+        policy: hostKeyPolicy,
+      }),
+    ).catch(() => {});
+    loggedSettingsRef.current.hostKeyPolicy = hostKeyPolicy;
+  }, [hostKeyPolicy]);
+
   return {
     webLinksEnabled,
     commandAutocompleteEnabled,
@@ -415,6 +461,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     resourceMonitorIntervalSec: normalizeResourceMonitorIntervalSec(
       resourceMonitorIntervalSec,
     ),
+    hostKeyPolicy,
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
@@ -422,6 +469,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     setTerminalPathSyncEnabled,
     setResourceMonitorEnabled,
     setResourceMonitorIntervalSec,
+    setHostKeyPolicy,
     sessionSettingsLoaded,
   };
 }

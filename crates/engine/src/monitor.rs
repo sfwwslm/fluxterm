@@ -9,10 +9,10 @@ use tokio::sync::watch;
 
 use crate::auth::authenticate;
 use crate::error::EngineError;
-use crate::session::ClientHandler;
+use crate::session::{ClientHandler, ExpectedHostKey};
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, ResourceCpuSnapshot, ResourceMemorySnapshot,
-    ResourceMonitorStatus, SessionResourceSnapshot,
+    ResourceMonitorStatus, ResourceMonitorUnsupportedReason, SessionResourceSnapshot,
 };
 use crate::util::now_epoch;
 
@@ -48,13 +48,18 @@ impl CpuCounters {
 pub async fn run_ssh_resource_monitor(
     session_id: String,
     profile: HostProfile,
+    expected_host_key: Option<ExpectedHostKey>,
     interval_sec: u64,
     mut stop_rx: watch::Receiver<bool>,
     on_event: EventCallback,
 ) -> Result<(), EngineError> {
     let addr = format!("{}:{}", profile.host, profile.port);
     let config = Arc::new(client::Config::default());
-    let mut session = client::connect(config, addr, ClientHandler)
+    let handler = match expected_host_key {
+        Some(expected) => ClientHandler::with_expected(expected),
+        None => ClientHandler::unchecked(),
+    };
+    let mut session = client::connect(config, addr, handler)
         .await
         .map_err(|err| {
             EngineError::with_detail(
@@ -88,6 +93,9 @@ pub async fn run_ssh_resource_monitor(
                             sampled_at: now_epoch(),
                             source: "ssh-linux".to_string(),
                             status: ResourceMonitorStatus::Unsupported,
+                            unsupported_reason: Some(
+                                ResourceMonitorUnsupportedReason::UnsupportedPlatform,
+                            ),
                             cpu: None,
                             memory: None,
                         }));
@@ -134,6 +142,7 @@ async fn sample_linux_resource_snapshot(
             sampled_at: now_epoch(),
             source: "ssh-linux".to_string(),
             status: ResourceMonitorStatus::Ready,
+            unsupported_reason: None,
             cpu: Some(cpu_snapshot),
             memory: Some(memory),
         },
@@ -152,7 +161,7 @@ async fn exec_remote_resource_command(
         )
     })?;
     channel
-        .exec(true, REMOTE_RESOURCE_COMMAND)
+        .exec(false, REMOTE_RESOURCE_COMMAND)
         .await
         .map_err(|err| {
             EngineError::with_detail(

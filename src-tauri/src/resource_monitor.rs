@@ -4,14 +4,17 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use engine::{
-    EngineEvent, EventCallback, HostProfile, ResourceCpuSnapshot, ResourceMemorySnapshot,
-    ResourceMonitorStatus, SessionResourceSnapshot, monitor::run_ssh_resource_monitor,
-    util::now_epoch,
+    EngineEvent, EventCallback, ExpectedHostKey, HostProfile, ResourceCpuSnapshot,
+    ResourceMemorySnapshot, ResourceMonitorStatus, ResourceMonitorUnsupportedReason,
+    SessionResourceSnapshot, monitor::run_ssh_resource_monitor, probe_host_key, util::now_epoch,
 };
 use log::{info, warn};
 use sysinfo::System;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::watch;
+
+use crate::session_settings::{HostKeyPolicy, read_session_settings};
+use crate::ssh_host_keys::{HostKeyMatchStatus, match_host_key};
 
 pub const MIN_RESOURCE_MONITOR_INTERVAL_SEC: u64 = 3;
 
@@ -73,10 +76,24 @@ impl ResourceMonitorState {
             session_id, profile.id, profile.host, interval_sec
         );
         tauri::async_runtime::spawn(async move {
-            let on_event = build_resource_event_bridge(app);
+            let on_event = build_resource_event_bridge(app.clone());
+            // 资源监控使用独立 SSH 连接，并执行主机身份校验。
+            // 未受信任时直接回传 unsupported。
+            let expected_host_key = match resolve_monitor_expected_host_key(&app, &profile).await {
+                Ok(expected_host_key) => expected_host_key,
+                Err(reason) => {
+                    warn!(
+                        "resource_monitor_ssh_skipped session_id={} profile_id={} host={} reason={:?}",
+                        session_id, profile.id, profile.host, reason
+                    );
+                    emit_resource_monitor_unsupported(&app, &session_id, "ssh-linux", reason);
+                    return;
+                }
+            };
             if let Err(error) = run_ssh_resource_monitor(
                 session_id.clone(),
                 profile,
+                expected_host_key,
                 interval_sec,
                 stop_rx,
                 on_event,
@@ -90,6 +107,16 @@ impl ResourceMonitorState {
                     error.message,
                     error.detail.unwrap_or_default()
                 );
+                let reason = match error.code.as_str() {
+                    "resource_monitor_connect_failed" => {
+                        ResourceMonitorUnsupportedReason::ConnectFailed
+                    }
+                    "resource_monitor_unsupported" => {
+                        ResourceMonitorUnsupportedReason::UnsupportedPlatform
+                    }
+                    _ => ResourceMonitorUnsupportedReason::SampleFailed,
+                };
+                emit_resource_monitor_unsupported(&app, &session_id, "ssh-linux", reason);
             }
         });
     }
@@ -137,6 +164,7 @@ async fn run_local_resource_monitor(
                     sampled_at: now_epoch(),
                     source: "local".to_string(),
                     status: ResourceMonitorStatus::Ready,
+                    unsupported_reason: None,
                     cpu: Some(ResourceCpuSnapshot {
                         total_percent: system.global_cpu_info().cpu_usage(),
                         user_percent: 0.0,
@@ -164,4 +192,92 @@ fn build_resource_event_bridge(app: AppHandle) -> EventCallback {
             let _ = app.emit("session:resource", payload);
         }
     })
+}
+
+fn emit_resource_monitor_unsupported(
+    app: &AppHandle,
+    session_id: &str,
+    source: &str,
+    reason: ResourceMonitorUnsupportedReason,
+) {
+    // 回推资源监控不可用终态。
+    let _ = app.emit(
+        "session:resource",
+        build_unsupported_resource_snapshot(session_id, source, reason),
+    );
+}
+
+fn build_unsupported_resource_snapshot(
+    session_id: &str,
+    source: &str,
+    reason: ResourceMonitorUnsupportedReason,
+) -> SessionResourceSnapshot {
+    SessionResourceSnapshot {
+        session_id: session_id.to_string(),
+        sampled_at: now_epoch(),
+        source: source.to_string(),
+        status: ResourceMonitorStatus::Unsupported,
+        unsupported_reason: Some(reason),
+        cpu: None,
+        memory: None,
+    }
+}
+
+async fn resolve_monitor_expected_host_key(
+    app: &AppHandle,
+    profile: &HostProfile,
+) -> Result<Option<ExpectedHostKey>, ResourceMonitorUnsupportedReason> {
+    let settings =
+        read_session_settings(app).map_err(|_| ResourceMonitorUnsupportedReason::ProbeFailed)?;
+    if settings.host_key_policy == HostKeyPolicy::Off {
+        return Ok(None);
+    }
+    // 为资源监控连接生成正式握手阶段使用的 ExpectedHostKey。
+    let probe = probe_host_key(profile)
+        .await
+        .map_err(|_| ResourceMonitorUnsupportedReason::ProbeFailed)?;
+    let matched = match_host_key(
+        app,
+        &profile.host,
+        profile.port,
+        &probe.key_algorithm,
+        &probe.public_key_base64,
+    )
+    .map_err(|_| ResourceMonitorUnsupportedReason::ProbeFailed)?;
+    match matched.status {
+        HostKeyMatchStatus::Trusted => Ok(Some(ExpectedHostKey {
+            public_key_base64: probe.public_key_base64,
+            fingerprint_sha256: probe.fingerprint_sha256,
+        })),
+        HostKeyMatchStatus::Unknown | HostKeyMatchStatus::Mismatch => {
+            Err(ResourceMonitorUnsupportedReason::HostKeyUntrusted)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_unsupported_resource_snapshot;
+    use engine::{ResourceMonitorStatus, ResourceMonitorUnsupportedReason};
+
+    #[test]
+    fn build_unsupported_snapshot_marks_status_reason_and_clears_metrics() {
+        let snapshot = build_unsupported_resource_snapshot(
+            "session-1",
+            "ssh-linux",
+            ResourceMonitorUnsupportedReason::HostKeyUntrusted,
+        );
+        assert_eq!(snapshot.session_id, "session-1");
+        assert_eq!(snapshot.source, "ssh-linux");
+        assert!(matches!(
+            snapshot.status,
+            ResourceMonitorStatus::Unsupported
+        ));
+        assert!(matches!(
+            snapshot.unsupported_reason,
+            Some(ResourceMonitorUnsupportedReason::HostKeyUntrusted)
+        ));
+        assert!(snapshot.cpu.is_none());
+        assert!(snapshot.memory.is_none());
+    }
 }

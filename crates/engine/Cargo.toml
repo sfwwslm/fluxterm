@@ -7,7 +7,7 @@ authors.workspace = true
 [dependencies]
 anyhow = "1"
 serde = { workspace = true, features = ["derive"] }
-russh = { version = "0.56.0", default-features = false, features = ["flate2", "ring", "rsa"] }
+russh = { workspace = true }
 russh-sftp = "2.1.1"
 tokio = { workspace = true, features = ["fs", "rt-multi-thread", "time", "io-util", "sync", "macros"] }
 uuid = { workspace = true, features = ["v4"] }

@@ -1635,6 +1635,7 @@ dependencies = [
  "log",
  "portable-pty",
  "rand 0.9.2",
+ "russh",
  "serde",
  "serde_json",
  "sysinfo",

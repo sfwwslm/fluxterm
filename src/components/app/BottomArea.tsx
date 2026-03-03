@@ -15,6 +15,7 @@ import type {
   QuickCommandGroup,
   QuickCommandItem,
   ResourceMonitorStatus,
+  ResourceMonitorUnsupportedReason,
   SessionResourceSnapshot,
 } from "@/types";
 import { formatDateTime } from "@/utils/format";
@@ -88,6 +89,26 @@ function formatBytes(value: number) {
   }
   const precision = size >= 100 || index === 0 ? 0 : 1;
   return `${size.toFixed(precision)} ${units[index]}`;
+}
+
+function resolveResourceUnsupportedMessage(
+  t: Translate,
+  reason?: ResourceMonitorUnsupportedReason | null,
+) {
+  switch (reason) {
+    case "host_key_untrusted":
+      return t("status.resource.reason.hostKeyUntrusted");
+    case "probe_failed":
+      return t("status.resource.reason.probeFailed");
+    case "connect_failed":
+      return t("status.resource.reason.connectFailed");
+    case "unsupported_platform":
+      return t("status.resource.reason.unsupportedPlatform");
+    case "sample_failed":
+      return t("status.resource.reason.sampleFailed");
+    default:
+      return t("status.resource.unsupported");
+  }
 }
 
 function useMinuteClock() {
@@ -363,6 +384,10 @@ export default function BottomArea({
   const resourceStatus = resourceMonitorStatus;
   const resourceCpu = resourceSnapshot?.cpu ?? null;
   const resourceMemory = resourceSnapshot?.memory ?? null;
+  const resourceUnsupportedMessage = resolveResourceUnsupportedMessage(
+    t,
+    resourceSnapshot?.unsupportedReason,
+  );
 
   return (
     <>
@@ -502,9 +527,11 @@ export default function BottomArea({
                       </>
                     ) : (
                       <span className="statusbar-resource-chip muted">
-                        {resourceStatus === "unsupported"
-                          ? t("status.resource.unsupported")
-                          : t("status.resource.checking")}
+                        {resourceStatus === "disabled"
+                          ? t("status.resource.inactive")
+                          : resourceStatus === "unsupported"
+                            ? resourceUnsupportedMessage
+                            : t("status.resource.checking")}
                       </span>
                     )}
                     {resourcePopoverOpen && (
@@ -574,9 +601,11 @@ export default function BottomArea({
                           </>
                         ) : (
                           <div className="statusbar-resource-empty">
-                            {resourceStatus === "unsupported"
-                              ? t("status.resource.unsupported")
-                              : t("status.resource.checking")}
+                            {resourceStatus === "disabled"
+                              ? t("status.resource.inactive")
+                              : resourceStatus === "unsupported"
+                                ? resourceUnsupportedMessage
+                                : t("status.resource.checking")}
                           </div>
                         )}
                       </div>

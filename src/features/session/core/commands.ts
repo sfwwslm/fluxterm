@@ -10,6 +10,7 @@ import type {
   Session,
   SessionStateUi,
 } from "@/types";
+import { warn as logWarn } from "@tauri-apps/plugin-log";
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 
@@ -28,6 +29,9 @@ type ConnectProfileCommandParams = {
     title: string;
     message: string;
     confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
   }) => void;
 };
 
@@ -77,6 +81,18 @@ export async function connectProfileCommand({
       return next;
     });
   } catch (err: any) {
+    const code = err?.code ?? "";
+    if (code === "ssh_host_key_unknown" || code === "ssh_host_key_mismatch") {
+      logWarn(
+        JSON.stringify({
+          event: "ssh.connect.pending-host-key-confirmation",
+          profileId: profile.id,
+          host: profile.host,
+          error: err?.message ?? String(err),
+        }),
+      );
+      throw err;
+    }
     logError(
       JSON.stringify({
         event: "ssh.connect.failed",

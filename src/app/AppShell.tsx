@@ -170,6 +170,7 @@ export default function AppShell() {
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
     resourceMonitorIntervalSec,
+    hostKeyPolicy,
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
@@ -177,6 +178,7 @@ export default function AppShell() {
     setTerminalPathSyncEnabled,
     setResourceMonitorEnabled,
     setResourceMonitorIntervalSec,
+    setHostKeyPolicy,
   } = useSessionSettings();
   const {
     profiles,
@@ -238,6 +240,7 @@ export default function AppShell() {
     useState<FloatingHistorySnapshot | null>(null);
   const [floatingHistorySearchQuery, setFloatingHistorySearchQuery] =
     useState("");
+  const previousResourceSessionStateRef = useRef<string | null>(null);
   const [resourceSnapshotsBySession, setResourceSnapshotsBySession] = useState<
     Record<string, SessionResourceSnapshot>
   >({});
@@ -606,8 +609,8 @@ export default function AppShell() {
   >(() => {
     if (!resourceMonitorEnabled) return "disabled";
     const activeSessionId = sessionState.activeSessionId;
-    if (!activeSessionId) return "checking";
-    if (sessionState.activeSessionState !== "connected") return "checking";
+    if (!activeSessionId) return "disabled";
+    if (sessionState.activeSessionState !== "connected") return "disabled";
     const snapshot = resourceSnapshotsBySession[activeSessionId];
     if (!snapshot) return "checking";
     if (snapshot.status === "ready" && snapshot.cpu && snapshot.memory) {
@@ -620,6 +623,23 @@ export default function AppShell() {
     sessionState.activeSessionId,
     sessionState.activeSessionState,
   ]);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    const previousState = previousResourceSessionStateRef.current;
+    const currentState = sessionState.activeSessionState;
+    previousResourceSessionStateRef.current = currentState;
+    if (!activeSessionId) return;
+    if (currentState !== "connected" || previousState === "connected") return;
+    setResourceSnapshotsBySession((prev) => {
+      if (prev[activeSessionId]?.status !== "unsupported") {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[activeSessionId];
+      return next;
+    });
+  }, [sessionState.activeSessionId, sessionState.activeSessionState]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1698,6 +1718,7 @@ export default function AppShell() {
         terminalPathSyncEnabled={terminalPathSyncEnabled}
         resourceMonitorEnabled={resourceMonitorEnabled}
         resourceMonitorIntervalSec={resourceMonitorIntervalSec}
+        hostKeyPolicy={hostKeyPolicy}
         onSftpEnabledChange={setSftpEnabled}
         onFileDefaultEditorPathChange={setFileDefaultEditorPath}
         onWebLinksEnabledChange={setWebLinksEnabled}
@@ -1707,6 +1728,7 @@ export default function AppShell() {
         onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}
         onResourceMonitorEnabledChange={setResourceMonitorEnabled}
         onResourceMonitorIntervalSecChange={setResourceMonitorIntervalSec}
+        onHostKeyPolicyChange={setHostKeyPolicy}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}

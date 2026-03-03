@@ -105,6 +105,14 @@ export type ResourceMonitorStatus =
   | "ready"
   | "unsupported";
 
+/** 资源监控不可用原因。 */
+export type ResourceMonitorUnsupportedReason =
+  | "host_key_untrusted"
+  | "probe_failed"
+  | "connect_failed"
+  | "unsupported_platform"
+  | "sample_failed";
+
 /** CPU 资源快照。 */
 export type ResourceCpuSnapshot = {
   totalPercent: number;
@@ -129,6 +137,7 @@ export type SessionResourceSnapshot = {
   sampledAt: number;
   source: "local" | "ssh-linux";
   status: ResourceMonitorStatus;
+  unsupportedReason?: ResourceMonitorUnsupportedReason | null;
   cpu?: ResourceCpuSnapshot | null;
   memory?: ResourceMemorySnapshot | null;
 };

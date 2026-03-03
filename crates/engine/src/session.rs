@@ -5,9 +5,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex as StdMutex, MutexGuard};
 
 use russh::client;
-use russh::keys;
+use russh::keys::{self, PublicKeyBase64};
 use tokio::sync::{Mutex, mpsc};
 
 use crate::auth::authenticate;
@@ -24,6 +25,13 @@ use crate::types::{
 #[derive(Clone)]
 pub struct SessionHandle {
     pub tx: mpsc::UnboundedSender<SessionCommand>,
+}
+
+/// 正式 SSH 握手阶段要求匹配的 Host Key。
+#[derive(Debug, Clone)]
+pub struct ExpectedHostKey {
+    pub public_key_base64: String,
+    pub fingerprint_sha256: String,
 }
 
 /// 会话内部命令。
@@ -85,17 +93,70 @@ pub enum SessionCommand {
     Disconnect,
 }
 
+#[derive(Debug, Clone)]
+struct HostKeyCheckState {
+    error: Arc<StdMutex<Option<EngineError>>>,
+}
+
+impl HostKeyCheckState {
+    fn lock_error(&self) -> Result<MutexGuard<'_, Option<EngineError>>, anyhow::Error> {
+        self.error
+            .lock()
+            .map_err(|_| anyhow::anyhow!("host key check state lock poisoned"))
+    }
+}
+
 /// SSH 客户端回调处理器。
-pub struct ClientHandler;
+pub struct ClientHandler {
+    expected_host_key: Option<ExpectedHostKey>,
+    host_key_state: HostKeyCheckState,
+}
+
+impl ClientHandler {
+    /// 创建默认不校验 Host Key 的处理器。
+    pub fn unchecked() -> Self {
+        Self {
+            expected_host_key: None,
+            host_key_state: HostKeyCheckState {
+                error: Arc::new(StdMutex::new(None)),
+            },
+        }
+    }
+
+    /// 创建带有预期 Host Key 的处理器。
+    pub fn with_expected(expected_host_key: ExpectedHostKey) -> Self {
+        Self {
+            expected_host_key: Some(expected_host_key),
+            host_key_state: HostKeyCheckState {
+                error: Arc::new(StdMutex::new(None)),
+            },
+        }
+    }
+}
 
 impl client::Handler for ClientHandler {
     type Error = anyhow::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &keys::PublicKey,
+        server_public_key: &keys::PublicKey,
     ) -> Result<bool, Self::Error> {
-        Ok(true)
+        let Some(expected) = &self.expected_host_key else {
+            return Ok(true);
+        };
+        // 正式握手期间校验当前服务端公钥与预期公钥一致。
+        let actual = server_public_key.public_key_base64();
+        if actual == expected.public_key_base64 {
+            return Ok(true);
+        }
+        *self.host_key_state.lock_error()? = Some(EngineError::new(
+            "ssh_host_key_untrusted",
+            format!(
+                "SSH Host Key 校验失败：服务端指纹与预期不一致（预期 {}）",
+                expected.fingerprint_sha256
+            ),
+        ));
+        Ok(false)
     }
 }
 
@@ -103,17 +164,33 @@ impl client::Handler for ClientHandler {
 pub async fn run_session_loop(
     session_id: String,
     profile: HostProfile,
+    expected_host_key: Option<ExpectedHostKey>,
     size: TerminalSize,
     mut rx: mpsc::UnboundedReceiver<SessionCommand>,
     on_event: EventCallback,
 ) -> Result<(), EngineError> {
     let addr = format!("{}:{}", profile.host, profile.port);
     let config = Arc::new(client::Config::default());
-    let mut session = client::connect(config, addr, ClientHandler)
-        .await
-        .map_err(|err| {
-            EngineError::with_detail("ssh_connect_failed", "无法连接到目标主机", err.to_string())
-        })?;
+    let host_key_state = HostKeyCheckState {
+        error: Arc::new(StdMutex::new(None)),
+    };
+    let mut session = client::connect(
+        config,
+        addr,
+        ClientHandler {
+            expected_host_key,
+            host_key_state: host_key_state.clone(),
+        },
+    )
+    .await
+    .map_err(|err| {
+        if let Ok(mut guard) = host_key_state.error.lock()
+            && let Some(saved) = guard.take()
+        {
+            return saved;
+        }
+        EngineError::with_detail("ssh_connect_failed", "无法连接到目标主机", err.to_string())
+    })?;
 
     authenticate(&mut session, &profile).await?;
 
@@ -325,4 +402,73 @@ pub async fn run_session_loop(
         error: None,
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ClientHandler, ExpectedHostKey};
+    use crate::error::EngineError;
+    use russh::client::Handler;
+    use russh::keys::{self, HashAlg, PublicKeyBase64};
+
+    const KEY_A: &str = "AAAAC3NzaC1lZDI1NTE5AAAAILIG2T/B0l0gaqj3puu510tu9N1OkQ4znY3LYuEm5zCF";
+    const KEY_B: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIJdD7y3aLq454yWBdwLWbieU1ebz9/cu7/QEXn9OIeZJ";
+
+    #[tokio::test]
+    async fn client_handler_accepts_matching_expected_host_key() {
+        let public_key = keys::parse_public_key_base64(KEY_A).expect("public key");
+        let expected = ExpectedHostKey {
+            public_key_base64: public_key.public_key_base64(),
+            fingerprint_sha256: public_key.fingerprint(HashAlg::Sha256).to_string(),
+        };
+        let mut handler = ClientHandler::with_expected(expected);
+
+        let accepted = handler
+            .check_server_key(&public_key)
+            .await
+            .expect("check server key");
+
+        assert!(accepted);
+    }
+
+    #[tokio::test]
+    async fn client_handler_rejects_mismatched_expected_host_key() {
+        let expected_key = keys::parse_public_key_base64(KEY_A).expect("expected key");
+        let actual_key = keys::parse_public_key_base64(KEY_B).expect("actual key");
+        let expected = ExpectedHostKey {
+            public_key_base64: expected_key.public_key_base64(),
+            fingerprint_sha256: expected_key.fingerprint(HashAlg::Sha256).to_string(),
+        };
+        let mut handler = ClientHandler::with_expected(expected);
+
+        let accepted = handler
+            .check_server_key(&actual_key)
+            .await
+            .expect("check server key");
+
+        assert!(!accepted);
+        let saved = handler
+            .host_key_state
+            .error
+            .lock()
+            .expect("lock")
+            .clone()
+            .expect("saved error");
+        assert_eq!(saved.code, "ssh_host_key_untrusted");
+    }
+
+    #[tokio::test]
+    async fn client_handler_unchecked_accepts_any_host_key() {
+        let public_key = keys::parse_public_key_base64(KEY_A).expect("public key");
+        let mut handler = ClientHandler::unchecked();
+
+        let accepted = handler
+            .check_server_key(&public_key)
+            .await
+            .expect("check server key");
+
+        assert!(accepted);
+        let saved: Option<EngineError> = handler.host_key_state.error.lock().expect("lock").clone();
+        assert!(saved.is_none());
+    }
 }

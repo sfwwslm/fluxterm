@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::error::EngineError;
-use crate::session::{SessionCommand, SessionHandle, run_session_loop};
+use crate::session::{ExpectedHostKey, SessionCommand, SessionHandle, run_session_loop};
 use crate::types::{EventCallback, HostProfile, Session, SessionState, SftpEntry, TerminalSize};
 use crate::util::now_epoch;
 use log::info;
@@ -38,6 +38,7 @@ impl Engine {
     pub fn connect(
         &self,
         profile: HostProfile,
+        expected_host_key: Option<ExpectedHostKey>,
         size: TerminalSize,
         on_event: EventCallback,
     ) -> Result<Session, EngineError> {
@@ -64,6 +65,7 @@ impl Engine {
             let result = run_session_loop(
                 session_id_clone.clone(),
                 profile_clone,
+                expected_host_key,
                 size,
                 rx,
                 on_event_clone,
