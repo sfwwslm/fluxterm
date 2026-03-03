@@ -11,6 +11,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use engine::{EngineError, HostProfile, Session, SessionResourceSnapshot, SessionState};
 use openai::OpenAiClientConfig;
@@ -39,6 +40,7 @@ impl Default for AiRuntimeState {
 pub(crate) struct AiRuntimeStore {
     sessions: HashMap<String, SessionContextRecord>,
     active_streams: HashMap<String, Arc<AtomicBool>>,
+    request_cache: HashMap<String, CachedAiResponse>,
 }
 
 #[derive(Clone)]
@@ -54,6 +56,12 @@ pub(crate) struct SessionContextRecord {
     pub resource_monitor_status: Option<String>,
     pub host_key_status: Option<String>,
     pub recent_terminal_output: VecDeque<String>,
+}
+
+#[derive(Clone)]
+struct CachedAiResponse {
+    content: String,
+    expires_at: Instant,
 }
 
 impl SessionContextRecord {
@@ -283,6 +291,44 @@ pub fn finish_chat_stream(state: &AiRuntimeState, request_id: &str) -> Result<()
     Ok(())
 }
 
+/// 尝试读取尚未过期的 AI 响应缓存。
+pub fn get_cached_response(
+    state: &AiRuntimeState,
+    cache_key: &str,
+) -> Result<Option<String>, EngineError> {
+    let mut store = state
+        .inner
+        .lock()
+        .map_err(|_| EngineError::new("ai_state_lock_failed", "无法访问 AI 运行时状态"))?;
+    prune_expired_cache(&mut store.request_cache);
+    Ok(store
+        .request_cache
+        .get(cache_key)
+        .map(|entry| entry.content.clone()))
+}
+
+/// 写入短时间内可复用的 AI 响应缓存。
+pub fn store_cached_response(
+    state: &AiRuntimeState,
+    cache_key: String,
+    content: String,
+    ttl_ms: u64,
+) -> Result<(), EngineError> {
+    let mut store = state
+        .inner
+        .lock()
+        .map_err(|_| EngineError::new("ai_state_lock_failed", "无法访问 AI 运行时状态"))?;
+    prune_expired_cache(&mut store.request_cache);
+    store.request_cache.insert(
+        cache_key,
+        CachedAiResponse {
+            content,
+            expires_at: Instant::now() + Duration::from_millis(ttl_ms),
+        },
+    );
+    Ok(())
+}
+
 fn update_host_key_status(session: &mut SessionContextRecord, error_code: &str) {
     session.host_key_status =
         resolve_host_key_status(error_code).or_else(|| session.host_key_status.clone());
@@ -300,6 +346,11 @@ fn trim_output_budget(items: &mut VecDeque<String>, limit: usize) {
     while items.iter().map(|item| item.chars().count()).sum::<usize>() > limit {
         items.pop_front();
     }
+}
+
+fn prune_expired_cache(cache: &mut HashMap<String, CachedAiResponse>) {
+    let now = Instant::now();
+    cache.retain(|_, value| value.expires_at > now);
 }
 
 fn truncate_chars(input: &str, limit: usize) -> String {
@@ -332,6 +383,15 @@ fn current_platform() -> &'static str {
 }
 
 #[cfg(test)]
+pub fn record_terminal_output_for_test(state: &AiRuntimeState, session_id: &str, data: &str) {
+    if let Ok(mut store) = state.inner.lock()
+        && let Some(session) = store.sessions.get_mut(session_id)
+    {
+        session.recent_terminal_output.push_back(data.to_string());
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -339,5 +399,14 @@ mod tests {
     fn truncate_chars_keeps_limit() {
         let result = truncate_chars("abcdefgh", 4);
         assert_eq!(result, "abcd");
+    }
+
+    #[test]
+    fn cached_response_expires() {
+        let state = AiRuntimeState::default();
+        store_cached_response(&state, "k".to_string(), "v".to_string(), 1).unwrap();
+        std::thread::sleep(Duration::from_millis(5));
+        let cached = get_cached_response(&state, "k").unwrap();
+        assert!(cached.is_none());
     }
 }

@@ -1,13 +1,17 @@
 //! AI 能力命令。
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use engine::EngineError;
+use log::info;
 use openai::OpenAiSessionChatResponse;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::ai::{
-    AiRuntimeState, cancel_chat_stream, context, finish_chat_stream, read_openai_config,
-    register_chat_stream,
+    AiRuntimeState, cancel_chat_stream, context, finish_chat_stream, get_cached_response,
+    read_openai_config, register_chat_stream, store_cached_response,
 };
 use crate::ai_settings::read_ai_settings;
 
@@ -15,13 +19,32 @@ use crate::ai_settings::read_ai_settings;
 #[tauri::command]
 pub async fn ai_session_chat(
     state: State<'_, AiRuntimeState>,
+    app: AppHandle,
     request: context::AiSessionChatRequest,
 ) -> Result<OpenAiSessionChatResponse, EngineError> {
+    let settings = read_ai_settings(&app)?;
     let config = read_openai_config()?;
-    let input = context::build_session_chat_input(&state, request)?;
-    openai::chat_session(&config, input)
+    let input = context::build_session_chat_input(&state, request, &settings)?;
+    let cache_key = build_cache_key("session_chat", &input)?;
+    if let Some(content) = get_cached_response(&state, &cache_key)? {
+        info!("ai_cache_hit type=session_chat");
+        return Ok(OpenAiSessionChatResponse {
+            message: openai::ChatMessage {
+                role: "assistant".to_string(),
+                content,
+            },
+        });
+    }
+    let response = openai::chat_session(&config, input)
         .await
-        .map_err(map_openai_error)
+        .map_err(map_openai_error)?;
+    store_cached_response(
+        &state,
+        cache_key,
+        response.message.content.clone(),
+        settings.request_cache_ttl_ms,
+    )?;
+    Ok(response)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,9 +77,52 @@ pub async fn ai_session_chat_stream_start(
     state: State<'_, AiRuntimeState>,
     request: context::AiSessionChatStreamRequest,
 ) -> Result<(), EngineError> {
+    let settings = read_ai_settings(&app)?;
     let config = read_openai_config()?;
     let stream_request_id = request.request_id.clone();
-    let input = context::build_session_chat_stream_input(&state, request)?;
+    let input = context::build_session_chat_stream_input(&state, request, &settings)?;
+    let cache_key = build_cache_key(
+        "session_chat",
+        &openai::OpenAiSessionChatInput {
+            context: input.context.clone(),
+            response_language_strategy: input.response_language_strategy.clone(),
+            ui_language: input.ui_language.clone(),
+            messages: input.messages.clone(),
+        },
+    )?;
+    if let Some(content) = get_cached_response(&state, &cache_key)? {
+        info!("ai_cache_hit type=session_chat_stream");
+        app.emit(
+            "ai:chat-chunk",
+            AiChatChunkPayload {
+                request_id: input.request_id.clone(),
+                session_id: input.context.session_id.clone(),
+                content,
+            },
+        )
+        .map_err(|err| {
+            EngineError::with_detail(
+                "ai_event_emit_failed",
+                "无法发送 AI 流式事件",
+                err.to_string(),
+            )
+        })?;
+        app.emit(
+            "ai:chat-done",
+            AiChatDonePayload {
+                request_id: input.request_id,
+                session_id: input.context.session_id,
+            },
+        )
+        .map_err(|err| {
+            EngineError::with_detail(
+                "ai_event_emit_failed",
+                "无法发送 AI 流式事件",
+                err.to_string(),
+            )
+        })?;
+        return Ok(());
+    }
     let cancelled = register_chat_stream(&state, &stream_request_id)?;
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -64,10 +130,12 @@ pub async fn ai_session_chat_stream_start(
         let request_id = input.request_id.clone();
         let session_id = input.context.session_id.clone();
         let emit_handle = app_handle.clone();
+        let mut streamed_content = String::new();
         let result = openai::chat_session_stream(
             &config,
             input,
             |content: &str| {
+                streamed_content.push_str(content);
                 emit_handle
                     .emit(
                         "ai:chat-chunk",
@@ -88,6 +156,16 @@ pub async fn ai_session_chat_stream_start(
         let _ = finish_chat_stream(&state_handle, &request_id);
         match result {
             Ok(()) => {
+                if !cancelled.load(std::sync::atomic::Ordering::SeqCst)
+                    && !streamed_content.is_empty()
+                {
+                    let _ = store_cached_response(
+                        &state_handle,
+                        cache_key,
+                        streamed_content.clone(),
+                        settings.request_cache_ttl_ms,
+                    );
+                }
                 let _ = app_handle.emit(
                     "ai:chat-done",
                     AiChatDonePayload {
@@ -129,11 +207,41 @@ pub async fn ai_explain_selection(
 ) -> Result<OpenAiSessionChatResponse, EngineError> {
     let config = read_openai_config()?;
     let settings = read_ai_settings(&app)?;
-    let input =
-        context::build_selection_explain_input(&state, request, settings.selection_max_chars)?;
-    openai::explain_selection(&config, input)
+    let input = context::build_selection_explain_input(&state, request, &settings)?;
+    let cache_key = build_cache_key("selection_explain", &input)?;
+    if let Some(content) = get_cached_response(&state, &cache_key)? {
+        info!("ai_cache_hit type=selection_explain");
+        return Ok(OpenAiSessionChatResponse {
+            message: openai::ChatMessage {
+                role: "assistant".to_string(),
+                content,
+            },
+        });
+    }
+    let response = openai::explain_selection(&config, input)
         .await
-        .map_err(map_openai_error)
+        .map_err(map_openai_error)?;
+    store_cached_response(
+        &state,
+        cache_key,
+        response.message.content.clone(),
+        settings.request_cache_ttl_ms,
+    )?;
+    Ok(response)
+}
+
+fn build_cache_key(label: &str, value: &impl Serialize) -> Result<String, EngineError> {
+    let serialized = serde_json::to_string(value).map_err(|err| {
+        EngineError::with_detail(
+            "ai_cache_key_invalid",
+            "无法生成 AI 请求缓存键",
+            err.to_string(),
+        )
+    })?;
+    let mut hasher = DefaultHasher::new();
+    label.hash(&mut hasher);
+    serialized.hash(&mut hasher);
+    Ok(format!("{label}:{}", hasher.finish()))
 }
 
 fn map_openai_error(error: openai::OpenAiError) -> EngineError {

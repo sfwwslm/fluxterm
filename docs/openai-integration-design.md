@@ -199,7 +199,12 @@ type AiExplainSelectionResponse = {
 ```json
 {
   "version": 1,
-  "selectionMaxChars": 1500
+  "selectionMaxChars": 1500,
+  "sessionRecentOutputMaxChars": 1200,
+  "sessionRecentOutputMaxSnippets": 4,
+  "selectionRecentOutputMaxChars": 600,
+  "selectionRecentOutputMaxSnippets": 2,
+  "requestCacheTtlMs": 15000
 }
 ```
 
@@ -207,6 +212,8 @@ type AiExplainSelectionResponse = {
 
 - 该值由后端读取并应用
 - 前端不维护单独的长度限制副本
+- 会话问答与选中文本解释的最近输出预算分别独立控制
+- 短时间内相同请求由后端内存缓存复用，避免重复消耗 token
 - 未来如果开放用户设置，仍然写回这份配置文件
 
 ## 当前实现说明

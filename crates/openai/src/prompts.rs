@@ -14,30 +14,31 @@ pub fn build_session_chat_messages(input: &OpenAiSessionChatInput) -> Vec<ChatMe
     let shell_name = context.shell_name.as_deref().unwrap_or("-");
     let resource_status = context.resource_monitor_status.as_deref().unwrap_or("-");
     let host_key_status = context.host_key_status.as_deref().unwrap_or("-");
-    let recent_output = compact_recent_output(&context.recent_terminal_output, 4, 1_500);
+    let recent_output = compact_recent_output(&context.recent_terminal_output, 1_000);
     let response_language =
         response_language_instruction(&input.response_language_strategy, &input.ui_language);
+    let environment_override = environment_override_instruction(&input.messages);
 
     let system_prompt = format!(
-        "You are the terminal assistant inside FluxTerm. Answer only from the current terminal session context. Prefer short, actionable, verifiable answers. If context is missing, say so directly. {}.\n\
-Session label: {}\n\
-Session kind: {}\n\
-Host: {}\n\
-Username: {}\n\
-Platform: {}\n\
-Shell: {}\n\
-Session state: {}\n\
-Resource monitor: {}\n\
-Host identity: {}\n\
-Recent terminal output:\n{}",
+        "You are FluxTerm's terminal AI assistant. Use only the current session context. Keep answers short, direct, and actionable. Avoid long tutorials. Prefer the minimum valid command or next step. If context is missing, say so. {}.\n\
+Environment priority: {}.\n\
+Format:\n\
+- Answer: 1-3 short paragraphs or up to 4 bullets\n\
+- Commands: only when useful, keep them minimal\n\
+Session: {} | {} | state={}\n\
+Target: host={} user={}\n\
+Environment: platform={} shell={}\n\
+Resource={} host_identity={}\n\
+Recent output:\n{}",
         response_language,
         context.session_label,
         session_kind,
+        context.session_state,
         host,
         username,
         platform,
         shell_name,
-        context.session_state,
+        environment_override,
         resource_status,
         host_key_status,
         recent_output
@@ -62,7 +63,7 @@ pub fn build_selection_explain_messages(input: &OpenAiSelectionExplainInput) -> 
     let shell_name = context.shell_name.as_deref().unwrap_or("-");
     let resource_status = context.resource_monitor_status.as_deref().unwrap_or("-");
     let host_key_status = context.host_key_status.as_deref().unwrap_or("-");
-    let recent_output = compact_recent_output(&context.recent_terminal_output, 3, 900);
+    let recent_output = compact_recent_output(&context.recent_terminal_output, 500);
     let response_language =
         response_language_instruction(&input.response_language_strategy, &input.ui_language);
 
@@ -70,29 +71,24 @@ pub fn build_selection_explain_messages(input: &OpenAiSelectionExplainInput) -> 
         ChatMessage {
             role: "system".to_string(),
             content: format!(
-                "You are the terminal assistant inside FluxTerm. Explain the selected terminal text using the current session context. Keep the answer brief. Do not restate the full selected text. Prefer commands that are valid for the current platform and shell. {}.\n\
-Use this structure:\n\
+                "You are FluxTerm's terminal AI assistant. Explain the selected terminal text with the current session context. Keep it brief. Do not restate the full selection. Prefer commands valid for the current platform and shell. {}.\n\
+Format:\n\
 Conclusion: one sentence\n\
 Cause: one or two short points\n\
 Next step: one or two concrete commands or actions\n\
-Session label: {}\n\
-Session kind: {}\n\
-Host: {}\n\
-Username: {}\n\
-Platform: {}\n\
-Shell: {}\n\
-Session state: {}\n\
-Resource monitor: {}\n\
-Host identity: {}\n\
-Recent terminal output:\n{}",
+Session: {} | {} | state={}\n\
+Target: host={} user={}\n\
+Environment: platform={} shell={}\n\
+Resource={} host_identity={}\n\
+Recent output:\n{}",
                 response_language,
                 context.session_label,
                 session_kind,
+                context.session_state,
                 host,
                 username,
                 platform,
                 shell_name,
-                context.session_state,
                 resource_status,
                 host_key_status,
                 recent_output
@@ -119,6 +115,45 @@ fn response_language_instruction(strategy: &ResponseLanguageStrategy, ui_languag
     }
 }
 
+fn environment_override_instruction(messages: &[ChatMessage]) -> &'static str {
+    let latest_user_message = messages
+        .iter()
+        .rev()
+        .find(|message| message.role == "user")
+        .map(|message| message.content.as_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    if contains_explicit_environment(&latest_user_message) {
+        "If the latest user message explicitly names a target environment such as Linux, Windows, PowerShell, bash, Ubuntu, macOS, or cmd, follow that named environment first"
+    } else {
+        "Prefer the current session environment"
+    }
+}
+
+fn contains_explicit_environment(message: &str) -> bool {
+    const KEYWORDS: &[&str] = &[
+        "linux",
+        "ubuntu",
+        "debian",
+        "centos",
+        "redhat",
+        "rhel",
+        "alpine",
+        "macos",
+        "windows",
+        "powershell",
+        "pwsh",
+        "cmd",
+        "bash",
+        "zsh",
+        "fish",
+        "wsl",
+    ];
+
+    KEYWORDS.iter().any(|keyword| message.contains(keyword))
+}
+
 fn ui_language_name(value: &str) -> &'static str {
     match value {
         "zh" => "Simplified Chinese",
@@ -127,18 +162,12 @@ fn ui_language_name(value: &str) -> &'static str {
     }
 }
 
-fn compact_recent_output(items: &[String], max_items: usize, max_chars: usize) -> String {
+fn compact_recent_output(items: &[String], max_chars: usize) -> String {
     if items.is_empty() {
         return "-".to_string();
     }
 
-    let selected = items
-        .iter()
-        .rev()
-        .take(max_items)
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut ordered = selected.into_iter().rev().collect::<Vec<_>>().join("\n");
+    let mut ordered = items.join("\n");
     if ordered.chars().count() <= max_chars {
         return ordered;
     }
@@ -181,6 +210,11 @@ mod tests {
         assert!(messages[0].content.contains("uname -a"));
         assert!(messages[0].content.contains("latest user message"));
         assert!(messages[0].content.contains("Simplified Chinese"));
+        assert!(
+            messages[0]
+                .content
+                .contains("Prefer the current session environment")
+        );
     }
 
     #[test]
@@ -210,5 +244,38 @@ mod tests {
         assert!(messages[0].content.contains("powershell"));
         assert!(messages[0].content.contains("Respond in English"));
         assert!(messages[1].content.contains("permission denied"));
+    }
+
+    #[test]
+    fn session_chat_prompt_prefers_explicit_user_environment() {
+        let input = OpenAiSessionChatInput {
+            context: SessionContextSnapshot {
+                session_id: "s1".to_string(),
+                session_label: "local".to_string(),
+                session_kind: "local".to_string(),
+                host: None,
+                username: None,
+                platform: Some("windows".to_string()),
+                shell_name: Some("powershell".to_string()),
+                session_state: "connected".to_string(),
+                resource_monitor_status: Some("ready".to_string()),
+                host_key_status: None,
+                recent_terminal_output: vec!["PS C:\\>".to_string()],
+            },
+            response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
+            ui_language: "zh".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Linux 下怎么查看磁盘分区？".to_string(),
+            }],
+        };
+
+        let messages = build_session_chat_messages(&input);
+
+        assert!(
+            messages[0]
+                .content
+                .contains("follow that named environment first")
+        );
     }
 }
