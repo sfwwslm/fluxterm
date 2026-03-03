@@ -31,7 +31,6 @@ pub struct ProviderCiphertext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EncryptedPayload {
-    pub version: u32,
     pub provider: EncryptionProviderKind,
     pub algorithm: EncryptionAlgorithm,
     pub key_id: String,

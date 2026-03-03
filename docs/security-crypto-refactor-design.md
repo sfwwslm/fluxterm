@@ -6,8 +6,7 @@
 
 当前阶段为 Alpha：
 
-- 不兼容旧 `enc:v1:` 密文格式
-- 不执行迁移
+- 启用首版 `enc:v1` 密文 token 方案
 - `ProfileStore.version` 保持 `1`
 - 默认 Provider 仍为硬编码密钥
 
@@ -75,11 +74,22 @@ Provider 不知道：
 
 ## 数据格式
 
-敏感字段在写盘时保存为 JSON 字符串：
+敏感字段在写盘时保存为单字符串 token：
+
+```text
+enc:v1:<base64(payload-bytes)>
+```
+
+说明：
+
+- `enc:v1:` 是外层 token 封装协议版本
+- `payload-bytes` 当前为 JSON 序列化后的字节，再整体做 base64
+- 当前读取逻辑仅处理 `enc:v1:` 前缀的密文 token
+
+`v1` 下的内部 payload 结构为：
 
 ```json
 {
-  "version": 1,
   "provider": "hardcoded_key",
   "algorithm": "aes256_gcm",
   "keyId": "builtin-v1",
@@ -90,9 +100,9 @@ Provider 不知道：
 
 说明：
 
-- `version` 是 secret envelope 的格式版本
-- 不是旧 `enc:v1:` 的兼容版本
-- 当前阶段只支持 `version = 1`
+- 内层 payload 不再包含通用 `version` 字段，避免和外层 `enc:v1:` 语义冲突
+- `provider`、`algorithm`、`keyId` 属于密文元数据，仍由安全模块私有管理
+- 后续若要更换内部编码，可新增 `enc:v2:`，而不是复用 `v1`
 
 ## 当前 Provider
 
@@ -160,9 +170,8 @@ Provider 不知道：
 
 ## 当前边界
 
-- 不兼容旧密文
-- 不做迁移
 - 不新增前端加密逻辑
 - 不改变 `HostProfile` 前后端接口
+- 当前仅实现 `enc:v1` token 读写
 
 这符合当前 Alpha 阶段“允许破坏性重构、优先干净架构”的要求。

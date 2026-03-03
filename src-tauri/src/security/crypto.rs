@@ -19,6 +19,8 @@ pub struct CryptoService {
     provider: Arc<dyn EncryptionProvider>,
 }
 
+const SECRET_TOKEN_PREFIX: &str = "enc:v1:";
+
 impl CryptoService {
     /// 根据当前 secret 配置选择 Provider。
     pub fn new(config: Option<&SecretConfig>) -> Result<Self, EngineError> {
@@ -54,33 +56,50 @@ impl CryptoService {
     pub fn encrypt_string(&self, plaintext: &str) -> Result<String, EngineError> {
         let payload = self.provider.encrypt(plaintext.as_bytes())?;
         let serialized = EncryptedPayload {
-            version: 1,
             provider: self.provider.kind(),
             algorithm: payload.algorithm,
             key_id: self.provider.key_id().to_string(),
             nonce: BASE64.encode(payload.nonce),
             ciphertext: BASE64.encode(payload.ciphertext),
         };
-        serde_json::to_string(&serialized).map_err(|err| {
+        let payload_json = serde_json::to_vec(&serialized).map_err(|err| {
             EngineError::with_detail(
                 "secret_serialize_failed",
                 "无法序列化密文载荷",
                 err.to_string(),
             )
-        })
+        })?;
+        Ok(format!(
+            "{}{}",
+            SECRET_TOKEN_PREFIX,
+            BASE64.encode(payload_json)
+        ))
     }
 
     /// 对结构化密文字符串执行解密。
     pub fn decrypt_string(&self, serialized: &str) -> Result<String, EngineError> {
-        let payload: EncryptedPayload = serde_json::from_str(serialized).map_err(|err| {
-            EngineError::with_detail("secret_format_invalid", "凭据格式无效", err.to_string())
+        let payload_token = serialized
+            .strip_prefix(SECRET_TOKEN_PREFIX)
+            .ok_or_else(|| {
+                EngineError::new(
+                    "secret_format_unsupported",
+                    "凭据格式无效：当前仅支持 enc:v1 密文",
+                )
+            })?;
+        let payload_bytes = BASE64.decode(payload_token).map_err(|err| {
+            EngineError::with_detail(
+                "secret_format_invalid",
+                "凭据格式无效：enc:v1 载荷不是合法 Base64",
+                err.to_string(),
+            )
         })?;
-        if payload.version != 1 {
-            return Err(EngineError::new(
-                "secret_version_unsupported",
-                "不支持的凭据版本",
-            ));
-        }
+        let payload: EncryptedPayload = serde_json::from_slice(&payload_bytes).map_err(|err| {
+            EngineError::with_detail(
+                "secret_format_invalid",
+                "凭据格式无效：enc:v1 载荷不是合法 JSON",
+                err.to_string(),
+            )
+        })?;
         if payload.algorithm != EncryptionAlgorithm::Aes256Gcm {
             return Err(EngineError::new(
                 "secret_algorithm_unsupported",
@@ -133,7 +152,7 @@ impl CryptoService {
 mod tests {
     use crate::profile_store::SecretConfig;
 
-    use super::CryptoService;
+    use super::{CryptoService, SECRET_TOKEN_PREFIX};
 
     #[test]
     fn crypto_service_encrypts_and_decrypts_roundtrip() {
@@ -152,9 +171,16 @@ mod tests {
     }
 
     #[test]
+    fn crypto_service_emits_enc_v1_token() {
+        let crypto = CryptoService::new(None).expect("crypto service");
+        let encrypted = crypto.encrypt_string("secret-value").expect("encrypt");
+        assert!(encrypted.starts_with(SECRET_TOKEN_PREFIX));
+    }
+
+    #[test]
     fn crypto_service_rejects_invalid_payload() {
         let crypto = CryptoService::new(None).expect("crypto service");
-        let result = crypto.decrypt_string("enc:v1:legacy");
+        let result = crypto.decrypt_string("legacy");
         assert!(result.is_err());
     }
 }
