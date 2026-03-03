@@ -205,7 +205,8 @@ export type PanelKey =
   | "files"
   | "transfers"
   | "events"
-  | "history";
+  | "history"
+  | "ai";
 /** 功能面板区域。 */
 export type PanelArea = "left" | "right" | "bottom";
 

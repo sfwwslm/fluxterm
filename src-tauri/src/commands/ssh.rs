@@ -3,6 +3,7 @@ use engine::{EngineError, ExpectedHostKey, HostProfile, Session, TerminalSize, p
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
+use crate::ai::{AiRuntimeState, register_remote_session};
 use crate::events::build_event_bridge;
 use crate::resource_monitor::ResourceMonitorState;
 use crate::session_settings::{HostKeyPolicy, read_session_settings};
@@ -28,14 +29,17 @@ struct HostKeyVerificationRequiredPayload {
 pub fn ssh_connect(
     app: AppHandle,
     state: State<EngineState>,
+    ai_state: State<AiRuntimeState>,
     profile: HostProfile,
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
     let expected_host_key = enforce_host_key_policy(&app, &profile)?;
     let on_event = build_event_bridge(app.clone());
-    state
+    let session = state
         .engine
-        .connect(profile, expected_host_key, size, on_event)
+        .connect(profile.clone(), expected_host_key, size, on_event)?;
+    register_remote_session(&ai_state, &session, &profile)?;
+    Ok(session)
 }
 
 #[tauri::command]

@@ -8,6 +8,8 @@ import TransfersPanel from "@/components/terminal/transfers/TransfersPanel";
 import SftpPanel from "@/components/terminal/files/SftpPanel";
 import EventsPanel from "@/components/terminal/events/EventsPanel";
 import CommandHistoryPanel from "@/components/terminal/history/CommandHistoryPanel";
+import AiPanel from "@/components/terminal/ai/AiPanel";
+import type { AiChatMessage } from "@/features/ai/types";
 import type { Locale, Translate } from "@/i18n";
 import type {
   CommandHistoryItem,
@@ -42,6 +44,10 @@ type BuildPanelsProps = {
   historyLiveCapture: CommandHistoryLiveCapture | null;
   historyItems: CommandHistoryItem[];
   historySearchQuery: string;
+  aiMessages: AiChatMessage[];
+  aiDraft: string;
+  aiPending: boolean;
+  aiErrorMessage: string | null;
   currentPath: string;
   sftpAvailability: SftpAvailability;
   terminalPathSyncStatus:
@@ -61,6 +67,9 @@ type BuildPanelsProps = {
   onRemoveProfile: (profile: HostProfile) => void;
   onHistorySearchQueryChange: (value: string) => void;
   onExecuteHistoryItem: (command: string) => void;
+  onAiDraftChange: (value: string) => void;
+  onAiSend: () => Promise<void>;
+  onAiClear: () => void;
   onAddGroup: (groupName: string) => boolean;
   onRenameGroup: (from: string, to: string) => Promise<boolean>;
   onRemoveGroup: (groupName: string) => Promise<boolean>;
@@ -104,6 +113,10 @@ export function buildPanels(
     historyLiveCapture,
     historyItems,
     historySearchQuery,
+    aiMessages,
+    aiDraft,
+    aiPending,
+    aiErrorMessage,
     currentPath,
     sftpAvailability,
     terminalPathSyncStatus,
@@ -118,6 +131,9 @@ export function buildPanels(
     onRemoveProfile,
     onHistorySearchQueryChange,
     onExecuteHistoryItem,
+    onAiDraftChange,
+    onAiSend,
+    onAiClear,
     onAddGroup,
     onRenameGroup,
     onRemoveGroup,
@@ -209,6 +225,19 @@ export function buildPanels(
         onSearchQueryChange={onHistorySearchQueryChange}
         onExecute={onExecuteHistoryItem}
         locale={locale}
+        t={t}
+      />
+    ),
+    ai: (
+      <AiPanel
+        activeSessionId={activeSessionId}
+        messages={aiMessages}
+        draft={aiDraft}
+        pending={aiPending}
+        errorMessage={aiErrorMessage}
+        onDraftChange={onAiDraftChange}
+        onSend={onAiSend}
+        onClear={onAiClear}
         t={t}
       />
     ),

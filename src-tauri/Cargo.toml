@@ -19,6 +19,7 @@ tauri-build = { version = "2.5.5", features = [] }
 
 [dependencies]
 engine = { workspace = true }
+openai = { workspace = true }
 
 tauri = { version = "2.10.2", features = ["macos-private-api", "protocol-asset", "tray-icon"] }
 tauri-plugin-log = "2.8.0"

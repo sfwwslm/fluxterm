@@ -1,0 +1,111 @@
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--panel-bg) 84%, white 16%) 0%,
+    var(--panel-bg) 28%
+  );
+}
+
+.ai-panel-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ai-panel-status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ai-panel-messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-panel-empty {
+  margin: auto 0;
+  padding: 14px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--panel-bg) 90%, black 10%);
+}
+
+.ai-message {
+  max-width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.ai-message.user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent-color) 18%, var(--panel-bg));
+  border-color: color-mix(
+    in srgb,
+    var(--accent-color) 40%,
+    var(--border-color)
+  );
+}
+
+.ai-message.assistant {
+  align-self: stretch;
+  background: color-mix(in srgb, var(--panel-bg) 82%, black 18%);
+}
+
+.ai-panel-error {
+  margin: 0 14px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #d74b4b 44%, var(--border-color));
+  background: color-mix(in srgb, #d74b4b 12%, var(--panel-bg));
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.ai-panel-input {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ai-panel-textarea {
+  flex: 1;
+  min-height: 72px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--panel-bg) 88%, black 12%);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.ai-panel-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 60%, transparent);
+}
+
+.ai-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

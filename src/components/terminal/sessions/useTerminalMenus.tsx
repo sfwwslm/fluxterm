@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import {
+  FiCpu,
   FiClipboard,
   FiCopy,
   FiExternalLink,
@@ -22,8 +23,10 @@ type TerminalContextMenuProps = {
   activeLinkMenu: { x: number; y: number; uri: string } | null;
   hasFocusedLine: () => boolean;
   hasActiveSelection: () => boolean;
+  getActiveSelectionText: () => string;
   onCopyFocusedLine: () => Promise<boolean>;
   onCopySelection: () => Promise<boolean>;
+  onSendSelectionToAi: (selectionText: string) => Promise<void>;
   onPaste: () => Promise<boolean>;
   onClear: () => boolean;
   onOpenSearch: () => void;
@@ -61,8 +64,10 @@ export default function useTerminalMenus({
   activeLinkMenu,
   hasFocusedLine,
   hasActiveSelection,
+  getActiveSelectionText,
   onCopyFocusedLine,
   onCopySelection,
+  onSendSelectionToAi,
   onPaste,
   onClear,
   onOpenSearch,
@@ -115,6 +120,21 @@ export default function useTerminalMenus({
                   } else {
                     onCopyFocusedLine().catch(() => {});
                   }
+                  closeMenu();
+                },
+              },
+              {
+                id: "send-selection-to-ai",
+                label: t("terminal.menu.sendToAi"),
+                icon: <FiCpu />,
+                disabled: !activeSessionId || !hasActiveSelection(),
+                onClick: () => {
+                  const selectionText = getActiveSelectionText();
+                  if (!selectionText.trim()) {
+                    closeMenu();
+                    return;
+                  }
+                  onSendSelectionToAi(selectionText).catch(() => {});
                   closeMenu();
                 },
               },

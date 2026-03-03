@@ -1,0 +1,447 @@
+//! OpenAI HTTP 客户端。
+
+use std::time::Duration;
+
+use log::info;
+use reqwest::StatusCode;
+use serde::Serialize;
+use serde_json::Value;
+
+use crate::error::OpenAiError;
+use crate::prompts::{build_selection_explain_messages, build_session_chat_messages};
+use crate::types::{
+    ChatMessage, OpenAiClientConfig, OpenAiSelectionExplainInput, OpenAiSessionChatInput,
+    OpenAiSessionChatResponse, OpenAiSessionChatStreamInput,
+};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatCompletionsRequest {
+    model: String,
+    messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<ResponseFormat>,
+}
+
+#[derive(Debug, Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    kind: String,
+}
+
+/// 执行会话上下文问答。
+pub async fn chat_session(
+    config: &OpenAiClientConfig,
+    input: OpenAiSessionChatInput,
+) -> Result<OpenAiSessionChatResponse, OpenAiError> {
+    let messages = build_session_chat_messages(&input);
+    complete_chat(config, messages, "session_chat").await
+}
+
+/// 基于终端选中文本执行解释。
+pub async fn explain_selection(
+    config: &OpenAiClientConfig,
+    input: OpenAiSelectionExplainInput,
+) -> Result<OpenAiSessionChatResponse, OpenAiError> {
+    let messages = build_selection_explain_messages(&input);
+    complete_chat(config, messages, "selection_explain").await
+}
+
+/// 以流式方式执行会话上下文问答。
+pub async fn chat_session_stream(
+    config: &OpenAiClientConfig,
+    input: OpenAiSessionChatStreamInput,
+    on_chunk: impl FnMut(&str) -> Result<(), OpenAiError>,
+    is_cancelled: impl Fn() -> bool,
+) -> Result<(), OpenAiError> {
+    let messages = build_session_chat_messages(&OpenAiSessionChatInput {
+        context: input.context,
+        response_language_strategy: input.response_language_strategy,
+        ui_language: input.ui_language,
+        messages: input.messages,
+    });
+    stream_chat_completion(
+        config,
+        messages,
+        "session_chat_stream",
+        on_chunk,
+        is_cancelled,
+    )
+    .await
+}
+
+async fn request_chat_completion(
+    config: &OpenAiClientConfig,
+    messages: Vec<ChatMessage>,
+    json_mode: bool,
+) -> Result<ChatCompletionsResponse, OpenAiError> {
+    if config.api_key.trim().is_empty() {
+        return Err(OpenAiError::Config("OpenAI API Key 不能为空".to_string()));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(config.timeout_ms))
+        .build()
+        .map_err(|err| OpenAiError::Request(format!("无法创建 OpenAI 客户端: {err}")))?;
+
+    let base = config.base_url.trim_end_matches('/');
+    let request = ChatCompletionsRequest {
+        model: config.model.clone(),
+        messages,
+        response_format: json_mode.then(|| ResponseFormat {
+            kind: "json_object".to_string(),
+        }),
+    };
+
+    let response = client
+        .post(format!("{base}/v1/chat/completions"))
+        .bearer_auth(&config.api_key)
+        .json(&request)
+        .send()
+        .await
+        .map_err(map_transport_error)?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let message = extract_error_message(&body);
+        return match status {
+            StatusCode::TOO_MANY_REQUESTS => Err(OpenAiError::RateLimited(message)),
+            _ => Err(OpenAiError::Http(status.as_u16(), message)),
+        };
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpenAiError::ResponseInvalid(format!("无法读取 OpenAI 响应: {err}")))?;
+    let json = serde_json::from_str::<Value>(&body)
+        .map_err(|err| OpenAiError::ResponseInvalid(format!("无法解析 OpenAI 响应: {err}")))?;
+    extract_chat_completion_response(&json)
+}
+
+async fn complete_chat(
+    config: &OpenAiClientConfig,
+    messages: Vec<ChatMessage>,
+    request_type: &str,
+) -> Result<OpenAiSessionChatResponse, OpenAiError> {
+    // 这里记录最终出站 messages 与模型返回全文，便于直接核对实际请求和响应内容。
+    info!(
+        "openai_request type={} model={} messages={}",
+        request_type,
+        config.model,
+        serde_json::to_string(&messages).unwrap_or_else(|_| "[]".to_string())
+    );
+    match request_chat_completion(config, messages, false).await {
+        Ok(response) => {
+            let message = response
+                .choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| OpenAiError::ResponseInvalid("OpenAI 未返回候选消息".to_string()))?
+                .message;
+            info!(
+                "openai_response type={} message={}",
+                request_type,
+                serde_json::to_string(&message)
+                    .unwrap_or_else(|_| "\"<serialize_failed>\"".to_string())
+            );
+            Ok(OpenAiSessionChatResponse { message })
+        }
+        Err(error) => {
+            info!("openai_error type={} error={error}", request_type);
+            Err(error)
+        }
+    }
+}
+
+async fn stream_chat_completion(
+    config: &OpenAiClientConfig,
+    messages: Vec<ChatMessage>,
+    request_type: &str,
+    mut on_chunk: impl FnMut(&str) -> Result<(), OpenAiError>,
+    is_cancelled: impl Fn() -> bool,
+) -> Result<(), OpenAiError> {
+    if config.api_key.trim().is_empty() {
+        return Err(OpenAiError::Config("OpenAI API Key 不能为空".to_string()));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(config.timeout_ms))
+        .build()
+        .map_err(|err| OpenAiError::Request(format!("无法创建 OpenAI 客户端: {err}")))?;
+
+    let base = config.base_url.trim_end_matches('/');
+    let request = serde_json::json!({
+        "model": config.model,
+        "messages": messages,
+        "stream": true
+    });
+    let logged_messages = request
+        .get("messages")
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+
+    info!(
+        "openai_request type={} model={} messages={}",
+        request_type,
+        config.model,
+        serde_json::to_string(&logged_messages).unwrap_or_else(|_| "[]".to_string())
+    );
+
+    let mut response = client
+        .post(format!("{base}/v1/chat/completions"))
+        .bearer_auth(&config.api_key)
+        .json(&request)
+        .send()
+        .await
+        .map_err(map_transport_error)?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let message = extract_error_message(&body);
+        return match status {
+            StatusCode::TOO_MANY_REQUESTS => Err(OpenAiError::RateLimited(message)),
+            _ => Err(OpenAiError::Http(status.as_u16(), message)),
+        };
+    }
+
+    let mut buffer = String::new();
+    let mut final_content = String::new();
+    while let Some(chunk) = response.chunk().await.map_err(map_transport_error)? {
+        if is_cancelled() {
+            info!("openai_response type={} cancelled=true", request_type);
+            return Ok(());
+        }
+        let text = String::from_utf8_lossy(&chunk).replace("\r\n", "\n");
+        buffer.push_str(&text);
+        while let Some(delimiter) = buffer.find("\n\n") {
+            let event = buffer[..delimiter].to_string();
+            buffer.drain(..delimiter + 2);
+            if let Some(piece) = parse_stream_event(&event)? {
+                final_content.push_str(&piece);
+                on_chunk(&piece)?;
+            }
+        }
+    }
+
+    if !buffer.trim().is_empty()
+        && let Some(piece) = parse_stream_event(buffer.trim())?
+    {
+        final_content.push_str(&piece);
+        on_chunk(&piece)?;
+    }
+
+    info!(
+        "openai_response type={} message={}",
+        request_type,
+        serde_json::to_string(&ChatMessage {
+            role: "assistant".to_string(),
+            content: final_content,
+        })
+        .unwrap_or_else(|_| "\"<serialize_failed>\"".to_string())
+    );
+    Ok(())
+}
+
+fn map_transport_error(err: reqwest::Error) -> OpenAiError {
+    if err.is_timeout() {
+        return OpenAiError::Timeout("OpenAI 请求超时".to_string());
+    }
+    OpenAiError::Request(format!("OpenAI 请求失败: {err}"))
+}
+
+fn extract_error_message(body: &str) -> String {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("error")?
+                .get("message")?
+                .as_str()
+                .map(str::to_string)
+        })
+        .filter(|message| !message.trim().is_empty())
+        .unwrap_or_else(|| "OpenAI 请求失败".to_string())
+}
+
+#[derive(Debug)]
+struct ChatCompletionsResponse {
+    choices: Vec<Choice>,
+}
+
+#[derive(Debug)]
+struct Choice {
+    message: ChatMessage,
+}
+
+fn extract_chat_completion_response(json: &Value) -> Result<ChatCompletionsResponse, OpenAiError> {
+    let choices = json
+        .get("choices")
+        .and_then(Value::as_array)
+        .ok_or_else(|| OpenAiError::ResponseInvalid("OpenAI 响应缺少 choices".to_string()))?;
+
+    let parsed = choices
+        .iter()
+        .map(extract_choice)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if parsed.is_empty() {
+        return Err(OpenAiError::ResponseInvalid(
+            "OpenAI 未返回候选消息".to_string(),
+        ));
+    }
+
+    Ok(ChatCompletionsResponse { choices: parsed })
+}
+
+fn extract_choice(value: &Value) -> Result<Choice, OpenAiError> {
+    let message = value
+        .get("message")
+        .ok_or_else(|| OpenAiError::ResponseInvalid("OpenAI 响应缺少 message".to_string()))?;
+    let role = message
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("assistant")
+        .to_string();
+    let content = extract_message_content(message)?;
+    Ok(Choice {
+        message: ChatMessage { role, content },
+    })
+}
+
+fn extract_message_content(message: &Value) -> Result<String, OpenAiError> {
+    match message.get("content") {
+        Some(Value::String(text)) => Ok(text.clone()),
+        Some(Value::Array(items)) => {
+            let content = items
+                .iter()
+                .filter_map(|item| item.get("text").and_then(Value::as_str))
+                .collect::<String>();
+            if content.trim().is_empty() {
+                return Err(OpenAiError::ResponseInvalid(
+                    "OpenAI 响应缺少可读内容".to_string(),
+                ));
+            }
+            Ok(content)
+        }
+        Some(Value::Null) | None => Err(OpenAiError::ResponseInvalid(
+            "OpenAI 响应缺少 content".to_string(),
+        )),
+        Some(other) => Err(OpenAiError::ResponseInvalid(format!(
+            "OpenAI 响应 content 类型不受支持: {}",
+            other
+        ))),
+    }
+}
+
+fn parse_stream_event(event: &str) -> Result<Option<String>, OpenAiError> {
+    let mut content = String::new();
+    for line in event.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if !line.starts_with("data:") {
+            continue;
+        }
+        let payload = line.trim_start_matches("data:").trim();
+        if payload == "[DONE]" {
+            return Ok(None);
+        }
+        let json = serde_json::from_str::<Value>(payload)
+            .map_err(|err| OpenAiError::ResponseInvalid(format!("无法解析流式响应事件: {err}")))?;
+        if let Some(delta) = extract_stream_delta_content(&json)? {
+            content.push_str(&delta);
+        }
+    }
+    if content.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(content))
+}
+
+fn extract_stream_delta_content(json: &Value) -> Result<Option<String>, OpenAiError> {
+    let Some(choice) = json
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+    else {
+        return Ok(None);
+    };
+    let Some(delta) = choice.get("delta") else {
+        return Ok(None);
+    };
+    match delta.get("content") {
+        Some(Value::String(text)) => Ok(Some(text.clone())),
+        Some(Value::Array(items)) => {
+            let content = items
+                .iter()
+                .filter_map(|item| item.get("text").and_then(Value::as_str))
+                .collect::<String>();
+            if content.is_empty() {
+                return Ok(None);
+            }
+            Ok(Some(content))
+        }
+        Some(Value::Null) | None => Ok(None),
+        Some(other) => Err(OpenAiError::ResponseInvalid(format!(
+            "OpenAI 流式响应 content 类型不受支持: {}",
+            other
+        ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_string_content_from_openai_compatible_response() {
+        let json = serde_json::json!({
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "ok"
+                    }
+                }
+            ]
+        });
+
+        let response = extract_chat_completion_response(&json).expect("response should parse");
+
+        assert_eq!(response.choices[0].message.content, "ok");
+    }
+
+    #[test]
+    fn extracts_text_blocks_from_array_content() {
+        let json = serde_json::json!({
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            { "type": "text", "text": "hello " },
+                            { "type": "text", "text": "world" }
+                        ]
+                    }
+                }
+            ]
+        });
+
+        let response = extract_chat_completion_response(&json).expect("response should parse");
+
+        assert_eq!(response.choices[0].message.content, "hello world");
+    }
+
+    #[test]
+    fn parses_stream_event_content() {
+        let event = r#"data: {"choices":[{"delta":{"content":"hello "}}]}
+
+data: {"choices":[{"delta":{"content":"world"}}]}"#;
+
+        let content = parse_stream_event(event)
+            .expect("event should parse")
+            .expect("content should exist");
+
+        assert_eq!(content, "hello world");
+    }
+}

@@ -26,6 +26,7 @@ export default function useTerminalController(
       getActiveAutocompleteAnchor: raw.getActiveAutocompleteAnchor,
       hasFocusedLine: raw.hasFocusedLine,
       hasActiveSelection: raw.hasActiveSelection,
+      getActiveSelectionText: raw.getActiveSelectionText,
     },
     terminalActions: {
       registerTerminalContainer: raw.registerTerminalContainer,

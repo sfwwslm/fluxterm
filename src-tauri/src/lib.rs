@@ -1,4 +1,6 @@
 //! Tauri 应用入口与命令注册。
+pub mod ai;
+pub mod ai_settings;
 pub mod commands;
 pub mod config_paths;
 pub mod events;
@@ -19,6 +21,10 @@ use engine::Engine;
 use log::LevelFilter;
 use tauri_plugin_log::{Target, TargetKind};
 
+use crate::commands::ai::{
+    ai_explain_selection, ai_session_chat, ai_session_chat_stream_cancel,
+    ai_session_chat_stream_start,
+};
 use crate::commands::file::file_open;
 use crate::commands::local::{local_home, local_list, local_ssh_keys};
 use crate::commands::local_shell::{
@@ -81,6 +87,7 @@ pub fn run() {
         })
         .manage(LocalShellState::default())
         .manage(ResourceMonitorState::default())
+        .manage(ai::AiRuntimeState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -107,6 +114,10 @@ pub fn run() {
             profile_save,
             profile_remove,
             ssh_import_openssh_config,
+            ai_session_chat,
+            ai_session_chat_stream_start,
+            ai_session_chat_stream_cancel,
+            ai_explain_selection,
             security_status,
             ssh_connect,
             ssh_disconnect,

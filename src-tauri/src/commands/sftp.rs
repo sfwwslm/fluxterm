@@ -14,15 +14,19 @@ pub async fn sftp_list(
     path: String,
 ) -> Result<Vec<SftpEntry>, EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || engine.sftp_list(&session_id, &path))
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(
-                "session_command_failed",
-                "无法执行 SFTP 列表",
-                err.to_string(),
-            )
-        })?
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let path = path.clone();
+        move || engine.sftp_list(&session_id, &path)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 列表",
+            err.to_string(),
+        )
+    })?
 }
 
 #[tauri::command]
@@ -32,15 +36,18 @@ pub async fn sftp_home(
     session_id: String,
 ) -> Result<String, EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || engine.sftp_home(&session_id))
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(
-                "session_command_failed",
-                "无法执行 SFTP Home",
-                err.to_string(),
-            )
-        })?
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        move || engine.sftp_home(&session_id)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP Home",
+            err.to_string(),
+        )
+    })?
 }
 
 #[tauri::command]
@@ -51,15 +58,19 @@ pub async fn sftp_resolve_path(
     path: String,
 ) -> Result<String, EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || engine.sftp_resolve_path(&session_id, &path))
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(
-                "session_command_failed",
-                "无法执行 SFTP 路径解析",
-                err.to_string(),
-            )
-        })?
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let path = path.clone();
+        move || engine.sftp_resolve_path(&session_id, &path)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 路径解析",
+            err.to_string(),
+        )
+    })?
 }
 
 #[tauri::command]
@@ -71,8 +82,11 @@ pub async fn sftp_upload(
     remote_path: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || {
-        engine.sftp_upload(&session_id, &local_path, &remote_path)
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let local_path = local_path.clone();
+        let remote_path = remote_path.clone();
+        move || engine.sftp_upload(&session_id, &local_path, &remote_path)
     })
     .await
     .map_err(|err| {
@@ -93,8 +107,11 @@ pub async fn sftp_upload_batch(
     remote_dir: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || {
-        engine.sftp_upload_batch(&session_id, &local_paths, &remote_dir)
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let local_paths = local_paths.clone();
+        let remote_dir = remote_dir.clone();
+        move || engine.sftp_upload_batch(&session_id, &local_paths, &remote_dir)
     })
     .await
     .map_err(|err| {
@@ -115,8 +132,11 @@ pub async fn sftp_download(
     local_path: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || {
-        engine.sftp_download(&session_id, &remote_path, &local_path)
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let remote_path = remote_path.clone();
+        let local_path = local_path.clone();
+        move || engine.sftp_download(&session_id, &remote_path, &local_path)
     })
     .await
     .map_err(|err| {
@@ -137,8 +157,11 @@ pub async fn sftp_download_dir(
     local_dir: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || {
-        engine.sftp_download_dir(&session_id, &remote_path, &local_dir)
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let remote_path = remote_path.clone();
+        let local_dir = local_dir.clone();
+        move || engine.sftp_download_dir(&session_id, &remote_path, &local_dir)
     })
     .await
     .map_err(|err| {
@@ -158,8 +181,10 @@ pub async fn sftp_cancel_transfer(
     transfer_id: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || {
-        engine.sftp_cancel_transfer(&session_id, &transfer_id)
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let transfer_id = transfer_id.clone();
+        move || engine.sftp_cancel_transfer(&session_id, &transfer_id)
     })
     .await
     .map_err(|err| {
@@ -180,15 +205,20 @@ pub async fn sftp_rename(
     to: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || engine.sftp_rename(&session_id, &from, &to))
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(
-                "session_command_failed",
-                "无法执行 SFTP 重命名",
-                err.to_string(),
-            )
-        })?
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let from = from.clone();
+        let to = to.clone();
+        move || engine.sftp_rename(&session_id, &from, &to)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 重命名",
+            err.to_string(),
+        )
+    })?
 }
 
 #[tauri::command]
@@ -199,15 +229,19 @@ pub async fn sftp_remove(
     path: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || engine.sftp_remove(&session_id, &path))
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(
-                "session_command_failed",
-                "无法执行 SFTP 删除",
-                err.to_string(),
-            )
-        })?
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let path = path.clone();
+        move || engine.sftp_remove(&session_id, &path)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 删除",
+            err.to_string(),
+        )
+    })?
 }
 
 #[tauri::command]
@@ -218,13 +252,17 @@ pub async fn sftp_mkdir(
     path: String,
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
-    tauri::async_runtime::spawn_blocking(move || engine.sftp_mkdir(&session_id, &path))
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(
-                "session_command_failed",
-                "无法执行 SFTP 创建目录",
-                err.to_string(),
-            )
-        })?
+    tauri::async_runtime::spawn_blocking({
+        let session_id = session_id.clone();
+        let path = path.clone();
+        move || engine.sftp_mkdir(&session_id, &path)
+    })
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(
+            "session_command_failed",
+            "无法执行 SFTP 创建目录",
+            err.to_string(),
+        )
+    })?
 }

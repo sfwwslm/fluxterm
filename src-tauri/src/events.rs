@@ -5,6 +5,11 @@ use engine::{EngineError, EngineEvent, SessionState};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
+use crate::ai::{
+    record_resource_snapshot_from_app, record_session_status_from_app,
+    record_terminal_exit_from_app, record_terminal_output_from_app,
+};
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionStatusPayload {
@@ -30,18 +35,21 @@ struct TerminalExitPayload {
 pub fn build_event_bridge(app: AppHandle) -> Arc<dyn Fn(EngineEvent) + Send + Sync> {
     Arc::new(move |event| match event {
         EngineEvent::TerminalOutput { session_id, data } => {
+            record_terminal_output_from_app(&app, &session_id, &data);
             let _ = app.emit(
                 "terminal:output",
                 TerminalOutputPayload { session_id, data },
             );
         }
         EngineEvent::TerminalExit { session_id } => {
+            record_terminal_exit_from_app(&app, &session_id);
             let _ = app.emit("terminal:exit", TerminalExitPayload { session_id });
         }
         EngineEvent::SftpProgress(progress) => {
             let _ = app.emit("sftp:progress", progress);
         }
         EngineEvent::SessionResource(resource) => {
+            record_resource_snapshot_from_app(&app, &resource);
             let _ = app.emit("session:resource", resource);
         }
         EngineEvent::SessionStatus {
@@ -49,6 +57,7 @@ pub fn build_event_bridge(app: AppHandle) -> Arc<dyn Fn(EngineEvent) + Send + Sy
             state,
             error,
         } => {
+            record_session_status_from_app(&app, &session_id, state.clone(), error.clone());
             let _ = app.emit(
                 "session:status",
                 SessionStatusPayload {

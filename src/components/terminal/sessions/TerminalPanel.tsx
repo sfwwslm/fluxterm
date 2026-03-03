@@ -61,7 +61,9 @@ type TerminalPanelProps = {
   onFocusLineAtPoint: (sessionId: string, clientY: number) => boolean;
   onCopyFocusedLine: () => Promise<boolean>;
   hasActiveSelection: () => boolean;
+  getActiveSelectionText: () => string;
   onCopySelection: () => Promise<boolean>;
+  onSendSelectionToAi: (selectionText: string) => Promise<void>;
   onOpenLink: () => Promise<boolean>;
   onCopyLink: () => Promise<boolean>;
   onCloseLinkMenu: () => void;
@@ -126,7 +128,9 @@ export default function TerminalPanel({
   onFocusLineAtPoint,
   onCopyFocusedLine,
   hasActiveSelection,
+  getActiveSelectionText,
   onCopySelection,
+  onSendSelectionToAi,
   onOpenLink,
   onCopyLink,
   onCloseLinkMenu,
@@ -208,8 +212,10 @@ export default function TerminalPanel({
       activeLinkMenu,
       hasFocusedLine,
       hasActiveSelection,
+      getActiveSelectionText,
       onCopyFocusedLine,
       onCopySelection,
+      onSendSelectionToAi,
       onPaste,
       onClear,
       onOpenSearch: openSearch,

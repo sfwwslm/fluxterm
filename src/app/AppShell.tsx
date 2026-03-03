@@ -43,6 +43,7 @@ import useSessionController from "@/features/session/hooks/useSessionController"
 import useTerminalController from "@/features/terminal/hooks/useTerminalController";
 import useSftpController from "@/features/sftp/hooks/useSftpController";
 import useCommandHistoryState from "@/features/command-history/hooks/useCommandHistoryState";
+import useAiState from "@/features/ai/hooks/useAiState";
 import { createHistoryAutocompleteProvider } from "@/features/command-history/core/autocomplete";
 import { filterHistoryItems } from "@/features/command-history/core/query";
 import {
@@ -75,6 +76,7 @@ const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   transfers: "panel.transfers",
   events: "panel.events",
   history: "panel.history",
+  ai: "panel.ai",
 };
 
 function formatMessage(
@@ -275,6 +277,7 @@ export default function AppShell() {
     if (value === "transfers") return "transfers";
     if (value === "events") return "events";
     if (value === "history") return "history";
+    if (value === "ai") return "ai";
     if (value === "logs") return "events";
     return null;
   }, []);
@@ -381,6 +384,7 @@ export default function AppShell() {
       transfers: t(panelLabelKeys.transfers),
       events: t(panelLabelKeys.events),
       history: t(panelLabelKeys.history),
+      ai: t(panelLabelKeys.ai),
     }),
     [t],
   );
@@ -398,6 +402,11 @@ export default function AppShell() {
     activeSessionId: sessionState.activeSessionId,
     writeToSession: sessionActions.writeToSession,
     focusActiveTerminal: () => focusActiveTerminalRef.current(),
+  });
+
+  const aiState = useAiState({
+    activeSessionId: sessionState.activeSessionId,
+    locale,
   });
 
   const autocompleteProvider = useMemo(
@@ -1453,6 +1462,10 @@ export default function AppShell() {
         historyLiveCapture: historyPanelState.liveCapture,
         historyItems: historyPanelState.items,
         historySearchQuery: historyPanelState.searchQuery,
+        aiMessages: aiState.messages,
+        aiDraft: aiState.draft,
+        aiPending: aiState.pending,
+        aiErrorMessage: aiState.errorMessage,
         currentPath: filesPanelState.currentPath,
         sftpAvailability: filesPanelState.sftpAvailability,
         terminalPathSyncStatus: filesPanelState.terminalPathSyncStatus,
@@ -1481,6 +1494,9 @@ export default function AppShell() {
         onRemoveProfile: (profile) => removeProfile(profile.id),
         onHistorySearchQueryChange: historyPanelActions.setSearchQuery,
         onExecuteHistoryItem: historyPanelActions.execute,
+        onAiDraftChange: aiState.setDraft,
+        onAiSend: aiState.sendMessage,
+        onAiClear: aiState.clearMessages,
         onAddGroup: addGroup,
         onRenameGroup: renameGroup,
         onRemoveGroup: removeGroup,
@@ -1515,6 +1531,7 @@ export default function AppShell() {
       sessionState.logEntries,
       historyPanelActions,
       historyPanelState,
+      aiState,
       importOpenSshConfig,
       fileDefaultEditorPath,
       filesPanelState.currentPath,
@@ -1665,7 +1682,9 @@ export default function AppShell() {
                 onFocusLineAtPoint={terminalActions.focusTerminalLineAtPoint}
                 onCopyFocusedLine={terminalActions.copyActiveFocusedLine}
                 hasActiveSelection={terminalQuery.hasActiveSelection}
+                getActiveSelectionText={terminalQuery.getActiveSelectionText}
                 onCopySelection={terminalActions.copyActiveSelection}
+                onSendSelectionToAi={aiState.sendSelectionText}
                 onOpenLink={terminalActions.openActiveLink}
                 onCopyLink={terminalActions.copyActiveLink}
                 onCloseLinkMenu={terminalActions.closeActiveLinkMenu}

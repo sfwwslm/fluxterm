@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+use crate::ai::{record_terminal_exit_from_app, record_terminal_output_from_app};
+
 const LOCAL_PROFILE_ID: &str = "__local_shell__";
 
 /// 本地 Shell 配置。
@@ -241,6 +243,7 @@ pub fn start_local_shell(
                 Ok(0) => break,
                 Ok(size) => {
                     let data = String::from_utf8_lossy(&buffer[..size]).to_string();
+                    record_terminal_output_from_app(&app_clone, &session_id_clone, &data);
                     let _ = app_clone.emit(
                         "terminal:output",
                         TerminalOutputPayload {
@@ -259,6 +262,7 @@ pub fn start_local_shell(
     let app_wait = app.clone();
     let waiter_thread = thread::spawn(move || {
         let _ = child.wait();
+        record_terminal_exit_from_app(&app_wait, &session_id_wait);
         let _ = app_wait.emit(
             "terminal:exit",
             TerminalExitPayload {

@@ -96,6 +96,12 @@ pub fn resolve_session_settings_path(app: &AppHandle) -> Result<PathBuf, EngineE
     Ok(dir.join("session.json"))
 }
 
+/// 解析终端域 AI 配置文件路径。
+pub fn resolve_ai_settings_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_terminal_config_dir(app)?;
+    Ok(dir.join("ai.json"))
+}
+
 /// 解析应用私有 known_hosts 文件路径。
 pub fn resolve_known_hosts_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
     let dir = resolve_terminal_ssh_config_dir(app)?;

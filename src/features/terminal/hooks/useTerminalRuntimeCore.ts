@@ -126,6 +126,7 @@ type TerminalRuntime = {
   hasFocusedLine: () => boolean;
   copyActiveFocusedLine: () => Promise<boolean>;
   hasActiveSelection: () => boolean;
+  getActiveSelectionText: () => string;
   copyActiveSelection: () => Promise<boolean>;
   openActiveLink: () => Promise<boolean>;
   copyActiveLink: () => Promise<boolean>;
@@ -1421,6 +1422,10 @@ export default function useTerminalRuntime({
     return !!getActiveBundle()?.terminal.getSelection();
   }
 
+  function getActiveSelectionText() {
+    return getActiveBundle()?.terminal.getSelection() ?? "";
+  }
+
   function hasFocusedLine() {
     const sessionId = activeSessionIdRef.current;
     if (!sessionId) return false;
@@ -1719,6 +1724,7 @@ export default function useTerminalRuntime({
     hasFocusedLine,
     copyActiveFocusedLine,
     hasActiveSelection,
+    getActiveSelectionText,
     copyActiveSelection,
     openActiveLink,
     copyActiveLink,

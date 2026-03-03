@@ -2,6 +2,7 @@
 use engine::{EngineError, Session, TerminalSize};
 use tauri::{AppHandle, State};
 
+use crate::ai::{AiRuntimeState, register_local_session};
 use crate::local_shell::{
     LocalShellProfile, LocalShellState, list_local_shells, resize_local_shell, start_local_shell,
     stop_local_shell, write_local_shell,
@@ -19,10 +20,23 @@ pub fn local_shell_list() -> Vec<LocalShellProfile> {
 pub fn local_shell_connect(
     app: AppHandle,
     state: State<LocalShellState>,
+    ai_state: State<AiRuntimeState>,
     shell_id: Option<String>,
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
-    start_local_shell(app, &state, shell_id, size)
+    let session = start_local_shell(app, &state, shell_id.clone(), size)?;
+    let shells = list_local_shells();
+    let selected_shell = shell_id
+        .as_deref()
+        .and_then(|id| shells.iter().find(|shell| shell.id == id))
+        .or_else(|| shells.iter().find(|shell| shell.id == "powershell"))
+        .or_else(|| shells.first());
+    let label = selected_shell
+        .map(|shell| shell.label.clone())
+        .unwrap_or_else(|| "Local Shell".to_string());
+    let shell_name = selected_shell.map(|shell| shell.label.clone());
+    register_local_session(&ai_state, &session, &label, shell_name)?;
+    Ok(session)
 }
 
 #[tauri::command]
