@@ -1,6 +1,6 @@
 /**
  * 终端 AI 配置持久化模块。
- * 职责：读写 terminal/ai.json，并管理终端 AI 助手与多个 OpenAI 标准接入配置。
+ * 职责：读写 ai/ai.json，并管理终端 AI 助手与多个 OpenAI 标准接入配置。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { info, warn } from "@tauri-apps/plugin-log";

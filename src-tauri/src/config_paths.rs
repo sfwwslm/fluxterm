@@ -98,7 +98,8 @@ pub fn resolve_session_settings_path(app: &AppHandle) -> Result<PathBuf, EngineE
 
 /// 解析终端域 AI 配置文件路径。
 pub fn resolve_ai_settings_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_terminal_config_dir(app)?;
+    let dir = resolve_config_root_dir(app)?;
+    let dir = dir.join("ai");
     Ok(dir.join("ai.json"))
 }
 

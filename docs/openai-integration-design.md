@@ -211,7 +211,7 @@ type AiExplainSelectionResponse = {
 
 终端 AI 助手的本地配置文件路径为：
 
-- `<resolve_config_root_dir(app)>/terminal/ai.json`
+- `<resolve_config_root_dir(app)>/ai/ai.json`
 
 当前已使用的配置项：
 
