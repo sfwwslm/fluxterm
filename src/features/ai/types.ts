@@ -1,5 +1,18 @@
 export type AiResponseLanguageStrategy = "follow_ui" | "follow_user_input";
 
+/** 终端域 AI 配置。 */
+export type AiSettings = {
+  version: 1;
+  selectionMaxChars: number;
+  sessionRecentOutputMaxChars: number;
+  sessionRecentOutputMaxSnippets: number;
+  selectionRecentOutputMaxChars: number;
+  selectionRecentOutputMaxSnippets: number;
+  requestCacheTtlMs: number;
+  debugLoggingEnabled: boolean;
+  defaultModel: string;
+};
+
 /** AI 对话消息。 */
 export type AiChatMessage = {
   role: "system" | "user" | "assistant";

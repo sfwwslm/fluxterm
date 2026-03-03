@@ -125,13 +125,7 @@ async fn complete_chat(
     messages: Vec<ChatMessage>,
     request_type: &str,
 ) -> Result<OpenAiSessionChatResponse, OpenAiError> {
-    // 这里记录最终出站 messages 与模型返回全文，便于直接核对实际请求和响应内容。
-    info!(
-        "openai_request type={} model={} messages={}",
-        request_type,
-        config.model,
-        serde_json::to_string(&messages).unwrap_or_else(|_| "[]".to_string())
-    );
+    log_request(config, request_type, &messages);
     match request_chat_completion(config, messages, false).await {
         Ok(response) => {
             let message = response
@@ -140,16 +134,11 @@ async fn complete_chat(
                 .next()
                 .ok_or_else(|| OpenAiError::ResponseInvalid("OpenAI 未返回候选消息".to_string()))?
                 .message;
-            info!(
-                "openai_response type={} message={}",
-                request_type,
-                serde_json::to_string(&message)
-                    .unwrap_or_else(|_| "\"<serialize_failed>\"".to_string())
-            );
+            log_response(config, request_type, &message);
             Ok(OpenAiSessionChatResponse { message })
         }
         Err(error) => {
-            info!("openai_error type={} error={error}", request_type);
+            log_error(config, request_type, &error);
             Err(error)
         }
     }
@@ -182,12 +171,14 @@ async fn stream_chat_completion(
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
 
-    info!(
-        "openai_request type={} model={} messages={}",
-        request_type,
-        config.model,
-        serde_json::to_string(&logged_messages).unwrap_or_else(|_| "[]".to_string())
-    );
+    if config.debug_logging_enabled {
+        info!(
+            "openai_request type={} model={} messages={}",
+            request_type,
+            config.model,
+            serde_json::to_string(&logged_messages).unwrap_or_else(|_| "[]".to_string())
+        );
+    }
 
     let mut response = client
         .post(format!("{base}/v1/chat/completions"))
@@ -211,7 +202,9 @@ async fn stream_chat_completion(
     let mut final_content = String::new();
     while let Some(chunk) = response.chunk().await.map_err(map_transport_error)? {
         if is_cancelled() {
-            info!("openai_response type={} cancelled=true", request_type);
+            if config.debug_logging_enabled {
+                info!("openai_response type={} cancelled=true", request_type);
+            }
             return Ok(());
         }
         let text = String::from_utf8_lossy(&chunk).replace("\r\n", "\n");
@@ -233,16 +226,45 @@ async fn stream_chat_completion(
         on_chunk(&piece)?;
     }
 
+    log_response(
+        config,
+        request_type,
+        &ChatMessage {
+            role: "assistant".to_string(),
+            content: final_content,
+        },
+    );
+    Ok(())
+}
+
+fn log_request(config: &OpenAiClientConfig, request_type: &str, messages: &[ChatMessage]) {
+    if !config.debug_logging_enabled {
+        return;
+    }
+    info!(
+        "openai_request type={} model={} messages={}",
+        request_type,
+        config.model,
+        serde_json::to_string(messages).unwrap_or_else(|_| "[]".to_string())
+    );
+}
+
+fn log_response(config: &OpenAiClientConfig, request_type: &str, message: &ChatMessage) {
+    if !config.debug_logging_enabled {
+        return;
+    }
     info!(
         "openai_response type={} message={}",
         request_type,
-        serde_json::to_string(&ChatMessage {
-            role: "assistant".to_string(),
-            content: final_content,
-        })
-        .unwrap_or_else(|_| "\"<serialize_failed>\"".to_string())
+        serde_json::to_string(message).unwrap_or_else(|_| "\"<serialize_failed>\"".to_string())
     );
-    Ok(())
+}
+
+fn log_error(config: &OpenAiClientConfig, request_type: &str, error: &OpenAiError) {
+    if !config.debug_logging_enabled {
+        return;
+    }
+    info!("openai_error type={} error={error}", request_type);
 }
 
 fn map_transport_error(err: reqwest::Error) -> OpenAiError {

@@ -25,6 +25,7 @@ import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import useProfiles from "@/hooks/profile/useProfiles";
 import useAppSettings from "@/hooks/settings/useAppSettings";
+import useAiSettings from "@/hooks/settings/useAiSettings";
 import useSessionSettings from "@/hooks/settings/useSessionSettings";
 import useLayoutState from "@/hooks/useLayoutState";
 import useFloatingPanels from "@/hooks/useFloatingPanels";
@@ -210,6 +211,16 @@ export default function AppShell() {
     themeIds,
     defaultThemeId: "dark",
   });
+  const {
+    selectionMaxChars: aiSelectionMaxChars,
+    sessionRecentOutputMaxChars: aiSessionRecentOutputMaxChars,
+    debugLoggingEnabled: aiDebugLoggingEnabled,
+    defaultModel: aiDefaultModel,
+    setSelectionMaxChars: setAiSelectionMaxChars,
+    setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
+    setDebugLoggingEnabled: setAiDebugLoggingEnabled,
+    setDefaultModel: setAiDefaultModel,
+  } = useAiSettings();
   // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
   const {
     webLinksEnabled,
@@ -407,6 +418,7 @@ export default function AppShell() {
   const aiState = useAiState({
     activeSessionId: sessionState.activeSessionId,
     locale,
+    debugLoggingEnabled: aiDebugLoggingEnabled,
   });
 
   const autocompleteProvider = useMemo(
@@ -1798,6 +1810,10 @@ export default function AppShell() {
         sections={configModalSections}
         sftpEnabled={sftpEnabled}
         fileDefaultEditorPath={fileDefaultEditorPath}
+        aiSelectionMaxChars={aiSelectionMaxChars}
+        aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
+        aiDebugLoggingEnabled={aiDebugLoggingEnabled}
+        aiDefaultModel={aiDefaultModel}
         webLinksEnabled={webLinksEnabled}
         commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
@@ -1808,6 +1824,10 @@ export default function AppShell() {
         hostKeyPolicy={hostKeyPolicy}
         onSftpEnabledChange={setSftpEnabled}
         onFileDefaultEditorPathChange={setFileDefaultEditorPath}
+        onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
+        onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
+        onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
+        onAiDefaultModelChange={setAiDefaultModel}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}

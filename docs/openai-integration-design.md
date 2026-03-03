@@ -204,7 +204,9 @@ type AiExplainSelectionResponse = {
   "sessionRecentOutputMaxSnippets": 4,
   "selectionRecentOutputMaxChars": 600,
   "selectionRecentOutputMaxSnippets": 2,
-  "requestCacheTtlMs": 15000
+  "requestCacheTtlMs": 15000,
+  "debugLoggingEnabled": true,
+  "defaultModel": "gpt-4.1-mini"
 }
 ```
 
@@ -214,7 +216,9 @@ type AiExplainSelectionResponse = {
 - 前端不维护单独的长度限制副本
 - 会话问答与选中文本解释的最近输出预算分别独立控制
 - 短时间内相同请求由后端内存缓存复用，避免重复消耗 token
-- 未来如果开放用户设置，仍然写回这份配置文件
+- 前端设置页直接读写这份配置文件，不再额外维护一套 AI 设置副本
+- `defaultModel` 作为用户默认模型，优先级高于环境变量中的 `OPENAI_MODEL`
+- `debugLoggingEnabled` 控制是否记录最终发送给模型的 messages 和模型返回内容
 
 ## 当前实现说明
 
@@ -230,6 +234,7 @@ type AiExplainSelectionResponse = {
 - 会话问答流式输出
 - 选中文本按界面语言输出
 - 会话问答按用户输入语言输出
+- 前端设置页中的终端 AI 可控配置
 
 ## 验收标准
 

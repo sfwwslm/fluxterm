@@ -39,6 +39,21 @@ export const zh = {
   "config.app.fileDefaultEditorPathPlaceholder":
     "例如 C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.pickEditor": "选择程序",
+  "config.app.aiSettings": "终端 AI 助手",
+  "config.app.aiSettingsHint":
+    "调整终端 AI 助手的上下文预算、默认模型和调试日志开关。",
+  "config.app.aiDefaultModel": "默认模型",
+  "config.app.aiDefaultModelHint": "保存后将直接作为终端 AI 默认模型使用。",
+  "config.app.aiDefaultModelPlaceholder": "例如 deepseek-chat",
+  "config.app.aiSelectionMaxChars": "选中文本最大长度",
+  "config.app.aiSelectionMaxCharsHint":
+    "限制右键“发送给 AI”时允许发送的选中文本字符数。",
+  "config.app.aiSessionRecentOutputMaxChars": "会话问答上下文长度",
+  "config.app.aiSessionRecentOutputMaxCharsHint":
+    "限制会话问答附带的最近终端输出总字符数。",
+  "config.app.aiDebugLoggingEnabled": "启用 AI 调试日志",
+  "config.app.aiDebugLoggingEnabledHint":
+    "记录最终发送给模型的消息和返回内容，适合调试时开启。",
   "config.session.webLinksEnabled": "启用 Web Links",
   "config.session.webLinksEnabledHint":
     "关闭后，终端中的 URL 点击菜单将不再生效。",

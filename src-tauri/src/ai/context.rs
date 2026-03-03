@@ -209,6 +209,8 @@ mod tests {
                 selection_recent_output_max_chars: 600,
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
+                debug_logging_enabled: true,
+                default_model: "gpt-4.1-mini".to_string(),
             },
         )
         .expect_err("missing session should fail");
@@ -317,6 +319,8 @@ mod tests {
                 selection_recent_output_max_chars: 600,
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
+                debug_logging_enabled: true,
+                default_model: "gpt-4.1-mini".to_string(),
             },
         )
         .expect("selection input should build");
@@ -361,6 +365,8 @@ mod tests {
                 selection_recent_output_max_chars: 600,
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
+                debug_logging_enabled: true,
+                default_model: "gpt-4.1-mini".to_string(),
             },
         )
         .expect("session chat input should build");

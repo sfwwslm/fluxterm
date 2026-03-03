@@ -19,6 +19,7 @@ import type { Locale } from "@/i18n";
 type UseAiStateProps = {
   activeSessionId: string | null;
   locale: Locale;
+  debugLoggingEnabled: boolean;
 };
 
 type UseAiStateResult = {
@@ -51,6 +52,7 @@ function getErrorMessage(error: unknown) {
 export default function useAiState({
   activeSessionId,
   locale,
+  debugLoggingEnabled,
 }: UseAiStateProps): UseAiStateResult {
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -141,13 +143,15 @@ export default function useAiState({
       }
       return next;
     });
-    void logInfo(
-      JSON.stringify({
-        event: "ai.session-chat.error",
-        sessionId: payload.sessionId,
-        error: payload.error.message,
-      }),
-    );
+    if (debugLoggingEnabled) {
+      void logInfo(
+        JSON.stringify({
+          event: "ai.session-chat.error",
+          sessionId: payload.sessionId,
+          error: payload.error.message,
+        }),
+      );
+    }
   }
 
   function cancelPendingRequest() {
@@ -183,16 +187,18 @@ export default function useAiState({
     setErrorMessage(null);
 
     try {
-      void logInfo(
-        JSON.stringify({
-          event: "ai.session-chat.request",
-          sessionId: activeSessionId,
-          requestId: nextRequestId,
-          responseLanguageStrategy: "follow_user_input",
-          uiLanguage: locale,
-          content,
-        }),
-      );
+      if (debugLoggingEnabled) {
+        void logInfo(
+          JSON.stringify({
+            event: "ai.session-chat.request",
+            sessionId: activeSessionId,
+            requestId: nextRequestId,
+            responseLanguageStrategy: "follow_user_input",
+            uiLanguage: locale,
+            content,
+          }),
+        );
+      }
       await aiSessionChatStreamStart({
         requestId: nextRequestId,
         sessionId: activeSessionId,
@@ -201,14 +207,16 @@ export default function useAiState({
         messages: nextMessages,
       });
     } catch (error) {
-      void logInfo(
-        JSON.stringify({
-          event: "ai.session-chat.error",
-          sessionId: activeSessionId,
-          requestId: nextRequestId,
-          error: getErrorMessage(error),
-        }),
-      );
+      if (debugLoggingEnabled) {
+        void logInfo(
+          JSON.stringify({
+            event: "ai.session-chat.error",
+            sessionId: activeSessionId,
+            requestId: nextRequestId,
+            error: getErrorMessage(error),
+          }),
+        );
+      }
       pendingRequestIdRef.current = null;
       setMessages((prev) => {
         const next = prev.slice();
@@ -240,37 +248,43 @@ export default function useAiState({
     setErrorMessage(null);
 
     try {
-      void logInfo(
-        JSON.stringify({
-          event: "ai.selection.request",
-          sessionId: activeSessionId,
-          responseLanguageStrategy: "follow_ui",
-          uiLanguage: locale,
-          selectionText: content,
-        }),
-      );
+      if (debugLoggingEnabled) {
+        void logInfo(
+          JSON.stringify({
+            event: "ai.selection.request",
+            sessionId: activeSessionId,
+            responseLanguageStrategy: "follow_ui",
+            uiLanguage: locale,
+            selectionText: content,
+          }),
+        );
+      }
       const response = await aiExplainSelection({
         sessionId: activeSessionId,
         responseLanguageStrategy: "follow_ui",
         uiLanguage: locale,
         selectionText: content,
       });
-      void logInfo(
-        JSON.stringify({
-          event: "ai.selection.response",
-          sessionId: activeSessionId,
-          message: response.message,
-        }),
-      );
+      if (debugLoggingEnabled) {
+        void logInfo(
+          JSON.stringify({
+            event: "ai.selection.response",
+            sessionId: activeSessionId,
+            message: response.message,
+          }),
+        );
+      }
       setMessages((prev) => prev.concat(response.message));
     } catch (error) {
-      void logInfo(
-        JSON.stringify({
-          event: "ai.selection.error",
-          sessionId: activeSessionId,
-          error: getErrorMessage(error),
-        }),
-      );
+      if (debugLoggingEnabled) {
+        void logInfo(
+          JSON.stringify({
+            event: "ai.selection.error",
+            sessionId: activeSessionId,
+            error: getErrorMessage(error),
+          }),
+        );
+      }
       setMessages((prev) => prev.filter((item) => item !== nextUserMessage));
       setErrorMessage(getErrorMessage(error));
     } finally {

@@ -17,6 +17,8 @@ use engine::{EngineError, HostProfile, Session, SessionResourceSnapshot, Session
 use openai::OpenAiClientConfig;
 use tauri::{AppHandle, Manager};
 
+use crate::ai_settings::read_ai_settings;
+
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com";
 const DEFAULT_OPENAI_MODEL: &str = "gpt-4.1-mini";
 const DEFAULT_OPENAI_TIMEOUT_MS: u64 = 20_000;
@@ -99,7 +101,8 @@ impl SessionContextRecord {
 }
 
 /// 读取当前 OpenAI 配置。
-pub fn read_openai_config() -> Result<OpenAiClientConfig, EngineError> {
+pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineError> {
+    let ai_settings = read_ai_settings(app)?;
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
     if api_key.trim().is_empty() {
         return Err(EngineError::new(
@@ -113,11 +116,17 @@ pub fn read_openai_config() -> Result<OpenAiClientConfig, EngineError> {
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| DEFAULT_OPENAI_BASE_URL.to_string());
-    let model = std::env::var("OPENAI_MODEL")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| DEFAULT_OPENAI_MODEL.to_string());
+    let model = ai_settings
+        .default_model
+        .trim()
+        .to_string()
+        .if_empty_then(|| {
+            std::env::var("OPENAI_MODEL")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| DEFAULT_OPENAI_MODEL.to_string())
+        });
     let timeout_ms = std::env::var("OPENAI_TIMEOUT_MS")
         .ok()
         .map(|value| value.trim().parse::<u64>())
@@ -136,6 +145,7 @@ pub fn read_openai_config() -> Result<OpenAiClientConfig, EngineError> {
         base_url,
         model,
         timeout_ms,
+        debug_logging_enabled: ai_settings.debug_logging_enabled,
     })
 }
 
@@ -379,6 +389,19 @@ fn current_platform() -> &'static str {
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     {
         "unknown"
+    }
+}
+
+trait StringFallbackExt {
+    fn if_empty_then(self, fallback: impl FnOnce() -> String) -> String;
+}
+
+impl StringFallbackExt for String {
+    fn if_empty_then(self, fallback: impl FnOnce() -> String) -> String {
+        if self.trim().is_empty() {
+            return fallback();
+        }
+        self
     }
 }
 

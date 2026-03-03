@@ -39,6 +39,22 @@ export const en = {
   "config.app.fileDefaultEditorPathPlaceholder":
     "For example C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.pickEditor": "Choose App",
+  "config.app.aiSettings": "Terminal AI Assistant",
+  "config.app.aiSettingsHint":
+    "Adjust terminal AI context budget, default model, and debug logging.",
+  "config.app.aiDefaultModel": "Default Model",
+  "config.app.aiDefaultModelHint":
+    "Saved here and used directly as the default model for terminal AI.",
+  "config.app.aiDefaultModelPlaceholder": "For example deepseek-chat",
+  "config.app.aiSelectionMaxChars": "Selection Max Length",
+  "config.app.aiSelectionMaxCharsHint":
+    "Limits how many characters can be sent by Send to AI from the terminal selection menu.",
+  "config.app.aiSessionRecentOutputMaxChars": "Session Context Length",
+  "config.app.aiSessionRecentOutputMaxCharsHint":
+    "Limits the total recent terminal output characters attached to session chat.",
+  "config.app.aiDebugLoggingEnabled": "Enable AI Debug Logging",
+  "config.app.aiDebugLoggingEnabledHint":
+    "Log the final outbound model messages and returned content for debugging.",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
     "When disabled, the URL click menu in the terminal will no longer respond.",

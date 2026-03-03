@@ -32,6 +32,10 @@ type ConfigModalProps = {
   sections: ConfigSectionItem[];
   sftpEnabled?: boolean;
   fileDefaultEditorPath?: string;
+  aiSelectionMaxChars?: number;
+  aiSessionRecentOutputMaxChars?: number;
+  aiDebugLoggingEnabled?: boolean;
+  aiDefaultModel?: string;
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
@@ -42,6 +46,10 @@ type ConfigModalProps = {
   hostKeyPolicy?: HostKeyPolicy;
   onSftpEnabledChange?: (enabled: boolean) => void;
   onFileDefaultEditorPathChange?: (value: string) => void;
+  onAiSelectionMaxCharsChange?: (value: number) => void;
+  onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
+  onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
+  onAiDefaultModelChange?: (value: string) => void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
@@ -69,6 +77,10 @@ export default function ConfigModal({
   sections,
   sftpEnabled = true,
   fileDefaultEditorPath = "",
+  aiSelectionMaxChars = 1500,
+  aiSessionRecentOutputMaxChars = 1200,
+  aiDebugLoggingEnabled = true,
+  aiDefaultModel = "",
   webLinksEnabled = true,
   commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
@@ -79,6 +91,10 @@ export default function ConfigModal({
   hostKeyPolicy = "ask",
   onSftpEnabledChange,
   onFileDefaultEditorPathChange,
+  onAiSelectionMaxCharsChange,
+  onAiSessionRecentOutputMaxCharsChange,
+  onAiDebugLoggingEnabledChange,
+  onAiDefaultModelChange,
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
@@ -97,6 +113,15 @@ export default function ConfigModal({
   const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useState(
     fileDefaultEditorPath,
   );
+  const [aiDefaultModelDraft, setAiDefaultModelDraft] =
+    useState(aiDefaultModel);
+  const [aiSelectionMaxCharsDraft, setAiSelectionMaxCharsDraft] = useState(() =>
+    String(aiSelectionMaxChars),
+  );
+  const [
+    aiSessionRecentOutputMaxCharsDraft,
+    setAiSessionRecentOutputMaxCharsDraft,
+  ] = useState(() => String(aiSessionRecentOutputMaxChars));
   // 数字输入使用本地草稿字符串，避免受控 number 输入在清空/连续编辑时不断打断用户。
   const [scrollbackDraft, setScrollbackDraft] = useState(() =>
     String(scrollback),
@@ -125,6 +150,20 @@ export default function ConfigModal({
   useEffect(() => {
     setDefaultEditorPathDraft(fileDefaultEditorPath);
   }, [fileDefaultEditorPath]);
+
+  useEffect(() => {
+    setAiDefaultModelDraft(aiDefaultModel);
+  }, [aiDefaultModel]);
+
+  useEffect(() => {
+    setAiSelectionMaxCharsDraft(String(aiSelectionMaxChars));
+  }, [aiSelectionMaxChars]);
+
+  useEffect(() => {
+    setAiSessionRecentOutputMaxCharsDraft(
+      String(aiSessionRecentOutputMaxChars),
+    );
+  }, [aiSessionRecentOutputMaxChars]);
 
   useEffect(() => {
     setScrollbackDraft(String(scrollback));
@@ -167,9 +206,48 @@ export default function ConfigModal({
     onFileDefaultEditorPathChange?.(defaultEditorPathDraft.trim());
   }
 
+  function commitAiDefaultModelDraft() {
+    onAiDefaultModelChange?.(aiDefaultModelDraft.trim());
+  }
+
+  function commitAiSelectionMaxCharsDraft() {
+    const value = aiSelectionMaxCharsDraft.trim();
+    if (!value) {
+      setAiSelectionMaxCharsDraft(String(aiSelectionMaxChars));
+      return;
+    }
+    const next = Number(value);
+    if (!Number.isFinite(next)) {
+      setAiSelectionMaxCharsDraft(String(aiSelectionMaxChars));
+      return;
+    }
+    onAiSelectionMaxCharsChange?.(next);
+  }
+
+  function commitAiSessionRecentOutputMaxCharsDraft() {
+    const value = aiSessionRecentOutputMaxCharsDraft.trim();
+    if (!value) {
+      setAiSessionRecentOutputMaxCharsDraft(
+        String(aiSessionRecentOutputMaxChars),
+      );
+      return;
+    }
+    const next = Number(value);
+    if (!Number.isFinite(next)) {
+      setAiSessionRecentOutputMaxCharsDraft(
+        String(aiSessionRecentOutputMaxChars),
+      );
+      return;
+    }
+    onAiSessionRecentOutputMaxCharsChange?.(next);
+  }
+
   function handleClose() {
     // 遮罩关闭发生在 input blur 之前，这里先提交草稿，避免用户点到模态框外部时丢失修改。
     commitDefaultEditorPathDraft();
+    commitAiDefaultModelDraft();
+    commitAiSelectionMaxCharsDraft();
+    commitAiSessionRecentOutputMaxCharsDraft();
     commitScrollbackDraft();
     commitResourceMonitorIntervalDraft();
     onClose();
@@ -247,6 +325,106 @@ export default function ConfigModal({
                 </Button>
               </div>
             </div>
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.app.aiSettings")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.app.aiSettingsHint")}
+              </span>
+            </div>
+            <div className="config-subsetting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.aiDefaultModel")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.aiDefaultModelHint")}
+                </span>
+              </div>
+              <input
+                type="text"
+                className="config-text-input"
+                value={aiDefaultModelDraft}
+                placeholder={t("config.app.aiDefaultModelPlaceholder")}
+                onChange={(event) => setAiDefaultModelDraft(event.target.value)}
+                onBlur={commitAiDefaultModelDraft}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  commitAiDefaultModelDraft();
+                }}
+              />
+            </div>
+            <div className="config-subsetting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.aiSelectionMaxChars")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.aiSelectionMaxCharsHint")}
+                </span>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="config-number-input"
+                value={aiSelectionMaxCharsDraft}
+                onChange={(event) =>
+                  setAiSelectionMaxCharsDraft(event.target.value)
+                }
+                onBlur={commitAiSelectionMaxCharsDraft}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  commitAiSelectionMaxCharsDraft();
+                }}
+              />
+            </div>
+            <div className="config-subsetting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.aiSessionRecentOutputMaxChars")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.aiSessionRecentOutputMaxCharsHint")}
+                </span>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="config-number-input"
+                value={aiSessionRecentOutputMaxCharsDraft}
+                onChange={(event) =>
+                  setAiSessionRecentOutputMaxCharsDraft(event.target.value)
+                }
+                onBlur={commitAiSessionRecentOutputMaxCharsDraft}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  commitAiSessionRecentOutputMaxCharsDraft();
+                }}
+              />
+            </div>
+            <label className="config-subsetting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.aiDebugLoggingEnabled")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.aiDebugLoggingEnabledHint")}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={aiDebugLoggingEnabled}
+                onChange={(event) =>
+                  onAiDebugLoggingEnabledChange?.(event.target.checked)
+                }
+              />
+            </label>
           </div>
         </div>
       );

@@ -1,5 +1,6 @@
 import { callTauri } from "@/shared/tauri/commands";
 import type {
+  AiSettings,
   AiChatDonePayload,
   AiChatErrorPayload,
   AiChatChunkPayload,
@@ -9,6 +10,16 @@ import type {
   AiSessionChatStreamRequest,
 } from "@/features/ai/types";
 import { subscribeTauri } from "@/shared/tauri/events";
+
+/** 读取终端域 AI 配置。 */
+export function aiSettingsGet() {
+  return callTauri<AiSettings>("ai_settings_get");
+}
+
+/** 保存终端域 AI 配置。 */
+export function aiSettingsSave(settings: AiSettings) {
+  return callTauri<AiSettings>("ai_settings_save", { settings });
+}
 
 /** 发起会话上下文问答。 */
 export function aiSessionChat(request: AiSessionChatRequest) {

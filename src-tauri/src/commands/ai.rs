@@ -13,7 +13,19 @@ use crate::ai::{
     AiRuntimeState, cancel_chat_stream, context, finish_chat_stream, get_cached_response,
     read_openai_config, register_chat_stream, store_cached_response,
 };
-use crate::ai_settings::read_ai_settings;
+use crate::ai_settings::{AiSettings, read_ai_settings, write_ai_settings};
+
+/// 读取终端 AI 助手配置。
+#[tauri::command]
+pub fn ai_settings_get(app: AppHandle) -> Result<AiSettings, EngineError> {
+    read_ai_settings(&app)
+}
+
+/// 保存终端 AI 助手配置。
+#[tauri::command]
+pub fn ai_settings_save(app: AppHandle, settings: AiSettings) -> Result<AiSettings, EngineError> {
+    write_ai_settings(&app, settings)
+}
 
 /// 基于当前会话上下文执行问答。
 #[tauri::command]
@@ -23,7 +35,7 @@ pub async fn ai_session_chat(
     request: context::AiSessionChatRequest,
 ) -> Result<OpenAiSessionChatResponse, EngineError> {
     let settings = read_ai_settings(&app)?;
-    let config = read_openai_config()?;
+    let config = read_openai_config(&app)?;
     let input = context::build_session_chat_input(&state, request, &settings)?;
     let cache_key = build_cache_key("session_chat", &input)?;
     if let Some(content) = get_cached_response(&state, &cache_key)? {
@@ -78,7 +90,7 @@ pub async fn ai_session_chat_stream_start(
     request: context::AiSessionChatStreamRequest,
 ) -> Result<(), EngineError> {
     let settings = read_ai_settings(&app)?;
-    let config = read_openai_config()?;
+    let config = read_openai_config(&app)?;
     let stream_request_id = request.request_id.clone();
     let input = context::build_session_chat_stream_input(&state, request, &settings)?;
     let cache_key = build_cache_key(
@@ -205,7 +217,7 @@ pub async fn ai_explain_selection(
     state: State<'_, AiRuntimeState>,
     request: context::AiExplainSelectionRequest,
 ) -> Result<OpenAiSessionChatResponse, EngineError> {
-    let config = read_openai_config()?;
+    let config = read_openai_config(&app)?;
     let settings = read_ai_settings(&app)?;
     let input = context::build_selection_explain_input(&state, request, &settings)?;
     let cache_key = build_cache_key("selection_explain", &input)?;
