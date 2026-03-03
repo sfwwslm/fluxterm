@@ -283,10 +283,11 @@ function matchPromptUsername(line: string) {
 function looksLikeUnsupportedPrompt(line: string) {
   const trimmed = line.trimEnd();
   if (!trimmed) return false;
+  if (!/[#$%]$/.test(trimmed)) return false;
   return (
-    /(?:^|\s)(?:[^@\s]+@)?[^\s]+?\s+[^\s]+\s*%$/.test(trimmed) ||
-    /(?:^|\s)(?:[^@\s]+@)?[^\s]+:[^\s]+\s*%$/.test(trimmed) ||
-    /(?:^|\s)(?:[^@\s]+@)?[^\s]+\s*[$#]$/.test(trimmed)
+    /(?:^|\s)(?:[^@\s]+@)?[^:\s]+:[^\s]+\s*%$/.test(trimmed) ||
+    /(?:^|\s)(?:[^@\s]+@)?[^:\s]+:[^\s]+\s*[$#]$/.test(trimmed) ||
+    /(?:^|\s)(?:[^@\s]+@)?[^:\s]+\s*[$#]$/.test(trimmed)
   );
 }
 
