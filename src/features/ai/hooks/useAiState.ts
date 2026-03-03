@@ -16,12 +16,28 @@ import type {
 } from "@/features/ai/types";
 import type { Locale } from "@/i18n";
 
+const AI_SESSION_STORAGE_KEY = "fluxterm.ai.session-state";
+const AI_SESSION_SYNC_CHANNEL = "fluxterm-ai-sync";
+
+type PersistedAiSessionState = {
+  messages: AiChatMessage[];
+  draft: string;
+  errorMessage: string | null;
+};
+
+type AiSessionSyncPayload = {
+  instanceId: string;
+  sessionId: string;
+  state: PersistedAiSessionState;
+};
+
 type UseAiStateProps = {
   activeSessionId: string | null;
   locale: Locale;
   debugLoggingEnabled: boolean;
   aiAvailable: boolean;
   aiUnavailableMessage: string | null;
+  enabled?: boolean;
 };
 
 type UseAiStateResult = {
@@ -50,6 +66,43 @@ function getErrorMessage(error: unknown) {
   return String(error);
 }
 
+function readPersistedAiSessionStates() {
+  if (typeof window === "undefined")
+    return {} as Record<string, PersistedAiSessionState>;
+  try {
+    const raw = window.localStorage.getItem(AI_SESSION_STORAGE_KEY);
+    if (!raw) return {} as Record<string, PersistedAiSessionState>;
+    return JSON.parse(raw) as Record<string, PersistedAiSessionState>;
+  } catch {
+    return {} as Record<string, PersistedAiSessionState>;
+  }
+}
+
+function writePersistedAiSessionStates(
+  value: Record<string, PersistedAiSessionState>,
+) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(AI_SESSION_STORAGE_KEY, JSON.stringify(value));
+}
+
+function readSessionState(
+  sessionId: string | null,
+): PersistedAiSessionState | null {
+  if (!sessionId) return null;
+  const all = readPersistedAiSessionStates();
+  return all[sessionId] ?? null;
+}
+
+function writeSessionState(
+  sessionId: string | null,
+  value: PersistedAiSessionState,
+) {
+  if (!sessionId) return;
+  const all = readPersistedAiSessionStates();
+  all[sessionId] = value;
+  writePersistedAiSessionStates(all);
+}
+
 /** AI 面板状态管理。 */
 export default function useAiState({
   activeSessionId,
@@ -57,15 +110,19 @@ export default function useAiState({
   debugLoggingEnabled,
   aiAvailable,
   aiUnavailableMessage,
+  enabled = true,
 }: UseAiStateProps): UseAiStateResult {
+  const instanceIdRef = useRef(crypto.randomUUID());
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraftState] = useState("");
   const [pending, setPending] = useState(false);
   const [waitingFirstChunk, setWaitingFirstChunk] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pendingRequestIdRef = useRef<string | null>(null);
+  const syncChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let disposed = false;
     let unlistenChunk: (() => void) | null = null;
     let unlistenDone: (() => void) | null = null;
@@ -101,15 +158,66 @@ export default function useAiState({
       unlistenDone?.();
       unlistenError?.();
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(AI_SESSION_SYNC_CHANNEL);
+    syncChannelRef.current = channel;
+    channel.onmessage = (event: MessageEvent<AiSessionSyncPayload>) => {
+      const payload = event.data;
+      if (!payload || payload.instanceId === instanceIdRef.current) return;
+      if (!activeSessionId || payload.sessionId !== activeSessionId) return;
+      setMessages(payload.state.messages);
+      setDraftState(payload.state.draft);
+      setErrorMessage(payload.state.errorMessage);
+    };
+    if (activeSessionId) {
+      const currentState = readSessionState(activeSessionId) ?? {
+        messages,
+        draft,
+        errorMessage,
+      };
+      channel.postMessage({
+        instanceId: instanceIdRef.current,
+        sessionId: activeSessionId,
+        state: currentState,
+      } satisfies AiSessionSyncPayload);
+    }
+    return () => {
+      channel.close();
+      if (syncChannelRef.current === channel) {
+        syncChannelRef.current = null;
+      }
+    };
+  }, [activeSessionId, draft, enabled, errorMessage, messages]);
+
+  useEffect(() => {
+    if (!enabled) return;
     cancelPendingRequest();
-    setMessages([]);
-    setDraft("");
+    const persisted = readSessionState(activeSessionId);
+    setMessages(persisted?.messages ?? []);
+    setDraftState(persisted?.draft ?? "");
     setWaitingFirstChunk(false);
-    setErrorMessage(null);
-  }, [activeSessionId]);
+    setErrorMessage(persisted?.errorMessage ?? null);
+  }, [activeSessionId, enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (!activeSessionId) return;
+    const state = {
+      messages,
+      draft,
+      errorMessage,
+    };
+    writeSessionState(activeSessionId, state);
+    syncChannelRef.current?.postMessage({
+      instanceId: instanceIdRef.current,
+      sessionId: activeSessionId,
+      state,
+    } satisfies AiSessionSyncPayload);
+  }, [activeSessionId, draft, enabled, errorMessage, messages]);
 
   function handleChunk(payload: AiChatChunkPayload) {
     if (payload.requestId !== pendingRequestIdRef.current) return;
@@ -169,6 +277,7 @@ export default function useAiState({
   }
 
   async function sendMessage() {
+    if (!enabled) return;
     const content = draft.trim();
     if (!content || !activeSessionId || pending) return;
     if (!aiAvailable) {
@@ -189,7 +298,7 @@ export default function useAiState({
         content: "",
       }),
     );
-    setDraft("");
+    setDraftState("");
     setPending(true);
     setWaitingFirstChunk(true);
     setErrorMessage(null);
@@ -236,7 +345,7 @@ export default function useAiState({
         }
         return next;
       });
-      setDraft(content);
+      setDraftState(content);
       setErrorMessage(getErrorMessage(error));
       setPending(false);
       setWaitingFirstChunk(false);
@@ -244,6 +353,7 @@ export default function useAiState({
   }
 
   async function sendSelectionText(selectionText: string) {
+    if (!enabled) return;
     const content = selectionText.trim();
     if (!content || !activeSessionId || pending) return;
     if (!aiAvailable) {
@@ -305,9 +415,15 @@ export default function useAiState({
   }
 
   function clearMessages() {
+    if (!enabled) return;
     cancelPendingRequest();
     setMessages([]);
     setErrorMessage(null);
+  }
+
+  function setDraft(value: string) {
+    if (!enabled) return;
+    setDraftState(value);
   }
 
   return {

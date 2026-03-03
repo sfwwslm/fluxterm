@@ -45,6 +45,11 @@ import useTerminalController from "@/features/terminal/hooks/useTerminalControll
 import useSftpController from "@/features/sftp/hooks/useSftpController";
 import useCommandHistoryState from "@/features/command-history/hooks/useCommandHistoryState";
 import useAiState from "@/features/ai/hooks/useAiState";
+import {
+  FLOATING_AI_CHANNEL,
+  type FloatingAiMessage,
+  type FloatingAiSnapshot,
+} from "@/features/ai/core/floatingSync";
 import { createHistoryAutocompleteProvider } from "@/features/command-history/core/autocomplete";
 import { filterHistoryItems } from "@/features/command-history/core/query";
 import {
@@ -321,6 +326,8 @@ export default function AppShell() {
     useState<FloatingHistorySnapshot | null>(null);
   const [floatingHistorySearchQuery, setFloatingHistorySearchQuery] =
     useState("");
+  const [floatingAiSnapshot, setFloatingAiSnapshot] =
+    useState<FloatingAiSnapshot | null>(null);
   const previousResourceSessionStateRef = useRef<string | null>(null);
   const [resourceSnapshotsBySession, setResourceSnapshotsBySession] = useState<
     Record<string, SessionResourceSnapshot>
@@ -461,6 +468,7 @@ export default function AppShell() {
     debugLoggingEnabled: aiDebugLoggingEnabled,
     aiAvailable,
     aiUnavailableMessage,
+    enabled: floatingPanelKey !== "ai",
   });
 
   const autocompleteProvider = useMemo(
@@ -538,6 +546,7 @@ export default function AppShell() {
 
   const isFloatingFilesPanel = floatingPanelKey === "files";
   const isFloatingHistoryPanel = floatingPanelKey === "history";
+  const isFloatingAiPanel = floatingPanelKey === "ai";
 
   const {
     showGroupTitle,
@@ -1185,6 +1194,88 @@ export default function AppShell() {
     sessionState.activeSessionId,
   ]);
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(FLOATING_AI_CHANNEL);
+
+    if (!floatingPanelKey) {
+      const broadcastSnapshot = () => {
+        const payload: FloatingAiSnapshot = {
+          activeSessionId: sessionState.activeSessionId,
+          messages: aiState.messages,
+          draft: aiState.draft,
+          pending: aiState.pending,
+          waitingFirstChunk: aiState.waitingFirstChunk,
+          errorMessage: aiState.errorMessage,
+          aiAvailable,
+          aiUnavailableMessage,
+        };
+        channel.postMessage({
+          type: "ai:snapshot",
+          payload,
+        } satisfies FloatingAiMessage);
+      };
+
+      broadcastSnapshot();
+
+      channel.onmessage = (event) => {
+        const message = event.data as FloatingAiMessage | undefined;
+        if (!message) return;
+        switch (message.type) {
+          case "ai:request-snapshot":
+            broadcastSnapshot();
+            break;
+          case "ai:set-draft":
+            aiState.setDraft(message.draft);
+            break;
+          case "ai:send":
+            aiState.sendMessage().catch(() => {});
+            break;
+          case "ai:cancel":
+            aiState.cancelMessage();
+            break;
+          case "ai:clear":
+            aiState.clearMessages();
+            break;
+          case "ai:snapshot":
+            break;
+        }
+      };
+      return () => {
+        channel.close();
+      };
+    }
+
+    if (isFloatingAiPanel) {
+      channel.onmessage = (event) => {
+        const message = event.data as FloatingAiMessage | undefined;
+        if (message?.type === "ai:snapshot") {
+          setFloatingAiSnapshot(message.payload);
+        }
+      };
+      channel.postMessage({
+        type: "ai:request-snapshot",
+      } satisfies FloatingAiMessage);
+      return () => {
+        channel.close();
+      };
+    }
+
+    channel.close();
+    return undefined;
+  }, [
+    aiAvailable,
+    aiState.draft,
+    aiState.errorMessage,
+    aiState.messages,
+    aiState.pending,
+    aiState.waitingFirstChunk,
+    aiUnavailableMessage,
+    floatingPanelKey,
+    isFloatingAiPanel,
+    sessionState.activeSessionId,
+  ]);
+
   useMacAppMenu({
     locale,
     themeId,
@@ -1283,6 +1374,7 @@ export default function AppShell() {
 
   const floatingFilesChannelRef = useRef<BroadcastChannel | null>(null);
   const floatingHistoryChannelRef = useRef<BroadcastChannel | null>(null);
+  const floatingAiChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined" || !isFloatingFilesPanel) {
@@ -1316,12 +1408,32 @@ export default function AppShell() {
     };
   }, [isFloatingHistoryPanel]);
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined" || !isFloatingAiPanel) {
+      floatingAiChannelRef.current?.close();
+      floatingAiChannelRef.current = null;
+      return;
+    }
+    const channel = new BroadcastChannel(FLOATING_AI_CHANNEL);
+    floatingAiChannelRef.current = channel;
+    return () => {
+      if (floatingAiChannelRef.current === channel) {
+        floatingAiChannelRef.current = null;
+      }
+      channel.close();
+    };
+  }, [isFloatingAiPanel]);
+
   function postFloatingFilesMessage(message: FloatingFilesMessage) {
     floatingFilesChannelRef.current?.postMessage(message);
   }
 
   function postFloatingHistoryMessage(message: FloatingHistoryMessage) {
     floatingHistoryChannelRef.current?.postMessage(message);
+  }
+
+  function postFloatingAiMessage(message: FloatingAiMessage) {
+    floatingAiChannelRef.current?.postMessage(message);
   }
 
   // 主窗口直接读取本地 SFTP 状态；浮动文件面板则消费主窗口同步过来的只读快照。
@@ -1495,6 +1607,76 @@ export default function AppShell() {
     ],
   );
 
+  const aiPanelState = useMemo(
+    () =>
+      isFloatingAiPanel
+        ? {
+            activeSessionId: floatingAiSnapshot?.activeSessionId ?? null,
+            messages: floatingAiSnapshot?.messages ?? [],
+            draft: floatingAiSnapshot?.draft ?? "",
+            pending: floatingAiSnapshot?.pending ?? false,
+            waitingFirstChunk: floatingAiSnapshot?.waitingFirstChunk ?? false,
+            errorMessage: floatingAiSnapshot?.errorMessage ?? null,
+            aiAvailable: floatingAiSnapshot?.aiAvailable ?? false,
+            aiUnavailableMessage:
+              floatingAiSnapshot?.aiUnavailableMessage ?? null,
+          }
+        : {
+            activeSessionId: sessionState.activeSessionId,
+            messages: aiState.messages,
+            draft: aiState.draft,
+            pending: aiState.pending,
+            waitingFirstChunk: aiState.waitingFirstChunk,
+            errorMessage: aiState.errorMessage,
+            aiAvailable,
+            aiUnavailableMessage,
+          },
+    [
+      aiAvailable,
+      aiState.draft,
+      aiState.errorMessage,
+      aiState.messages,
+      aiState.pending,
+      aiState.waitingFirstChunk,
+      aiUnavailableMessage,
+      floatingAiSnapshot,
+      isFloatingAiPanel,
+      sessionState.activeSessionId,
+    ],
+  );
+
+  const aiPanelActions = useMemo(
+    () =>
+      isFloatingAiPanel
+        ? {
+            setDraft: (value: string) => {
+              postFloatingAiMessage({ type: "ai:set-draft", draft: value });
+            },
+            send: async () => {
+              postFloatingAiMessage({ type: "ai:send" });
+            },
+            cancel: () => {
+              postFloatingAiMessage({ type: "ai:cancel" });
+            },
+            clear: () => {
+              postFloatingAiMessage({ type: "ai:clear" });
+            },
+          }
+        : {
+            setDraft: aiState.setDraft,
+            send: aiState.sendMessage,
+            cancel: aiState.cancelMessage,
+            clear: aiState.clearMessages,
+          },
+    [
+      aiState.cancelMessage,
+      aiState.clearMessages,
+      aiState.sendMessage,
+      aiState.setDraft,
+      isFloatingAiPanel,
+    ],
+  );
+
   const panels = useMemo(
     () =>
       buildPanels({
@@ -1502,7 +1684,7 @@ export default function AppShell() {
         sshGroups,
         activeProfileId,
         availableShells,
-        activeSessionId: sessionState.activeSessionId,
+        activeSessionId: aiPanelState.activeSessionId,
         activeSessionState: sessionState.activeSessionState,
         activeSessionReason: sessionState.activeSessionReason,
         activeReconnectInfo: sessionState.activeReconnectInfo,
@@ -1516,13 +1698,13 @@ export default function AppShell() {
         historyLiveCapture: historyPanelState.liveCapture,
         historyItems: historyPanelState.items,
         historySearchQuery: historyPanelState.searchQuery,
-        aiMessages: aiState.messages,
-        aiDraft: aiState.draft,
-        aiAvailable,
-        aiUnavailableMessage,
-        aiPending: aiState.pending,
-        aiWaitingFirstChunk: aiState.waitingFirstChunk,
-        aiErrorMessage: aiState.errorMessage,
+        aiMessages: aiPanelState.messages,
+        aiDraft: aiPanelState.draft,
+        aiAvailable: aiPanelState.aiAvailable,
+        aiUnavailableMessage: aiPanelState.aiUnavailableMessage,
+        aiPending: aiPanelState.pending,
+        aiWaitingFirstChunk: aiPanelState.waitingFirstChunk,
+        aiErrorMessage: aiPanelState.errorMessage,
         currentPath: filesPanelState.currentPath,
         sftpAvailability: filesPanelState.sftpAvailability,
         terminalPathSyncStatus: filesPanelState.terminalPathSyncStatus,
@@ -1551,10 +1733,10 @@ export default function AppShell() {
         onRemoveProfile: (profile) => removeProfile(profile.id),
         onHistorySearchQueryChange: historyPanelActions.setSearchQuery,
         onExecuteHistoryItem: historyPanelActions.execute,
-        onAiDraftChange: aiState.setDraft,
-        onAiSend: aiState.sendMessage,
-        onAiCancel: aiState.cancelMessage,
-        onAiClear: aiState.clearMessages,
+        onAiDraftChange: aiPanelActions.setDraft,
+        onAiSend: aiPanelActions.send,
+        onAiCancel: aiPanelActions.cancel,
+        onAiClear: aiPanelActions.clear,
         onAddGroup: addGroup,
         onRenameGroup: renameGroup,
         onRemoveGroup: removeGroup,
@@ -1578,7 +1760,8 @@ export default function AppShell() {
       sshGroups,
       activeProfileId,
       availableShells,
-      sessionState.activeSessionId,
+      aiPanelActions,
+      aiPanelState,
       sessionState.activeSessionState,
       sessionState.activeSessionReason,
       sessionState.activeReconnectInfo,
@@ -1589,16 +1772,13 @@ export default function AppShell() {
       sessionState.logEntries,
       historyPanelActions,
       historyPanelState,
-      aiState,
       importOpenSshConfig,
-      fileDefaultEditorPath,
       filesPanelState.currentPath,
       filesPanelState.terminalPathSyncStatus,
       filesPanelState.sftpAvailability,
       filesPanelState.entries,
       locale,
       pushToast,
-      sessionState.canReconnect,
       t,
       pickProfile,
       addGroup,
@@ -1606,7 +1786,6 @@ export default function AppShell() {
       removeGroup,
       moveProfileToGroup,
       filesPanelActions,
-      handleExecuteHistoryItem,
     ],
   );
 
