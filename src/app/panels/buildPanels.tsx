@@ -47,6 +47,7 @@ type BuildPanelsProps = {
   aiMessages: AiChatMessage[];
   aiDraft: string;
   aiPending: boolean;
+  aiWaitingFirstChunk: boolean;
   aiErrorMessage: string | null;
   currentPath: string;
   sftpAvailability: SftpAvailability;
@@ -69,6 +70,7 @@ type BuildPanelsProps = {
   onExecuteHistoryItem: (command: string) => void;
   onAiDraftChange: (value: string) => void;
   onAiSend: () => Promise<void>;
+  onAiCancel: () => void;
   onAiClear: () => void;
   onAddGroup: (groupName: string) => boolean;
   onRenameGroup: (from: string, to: string) => Promise<boolean>;
@@ -116,6 +118,7 @@ export function buildPanels(
     aiMessages,
     aiDraft,
     aiPending,
+    aiWaitingFirstChunk,
     aiErrorMessage,
     currentPath,
     sftpAvailability,
@@ -133,6 +136,7 @@ export function buildPanels(
     onExecuteHistoryItem,
     onAiDraftChange,
     onAiSend,
+    onAiCancel,
     onAiClear,
     onAddGroup,
     onRenameGroup,
@@ -234,9 +238,11 @@ export function buildPanels(
         messages={aiMessages}
         draft={aiDraft}
         pending={aiPending}
+        waitingFirstChunk={aiWaitingFirstChunk}
         errorMessage={aiErrorMessage}
         onDraftChange={onAiDraftChange}
         onSend={onAiSend}
+        onCancel={onAiCancel}
         onClear={onAiClear}
         t={t}
       />

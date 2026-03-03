@@ -25,10 +25,12 @@ type UseAiStateResult = {
   messages: AiChatMessage[];
   draft: string;
   pending: boolean;
+  waitingFirstChunk: boolean;
   errorMessage: string | null;
   setDraft: (value: string) => void;
   sendMessage: () => Promise<void>;
   sendSelectionText: (selectionText: string) => Promise<void>;
+  cancelMessage: () => void;
   clearMessages: () => void;
 };
 
@@ -53,6 +55,7 @@ export default function useAiState({
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
+  const [waitingFirstChunk, setWaitingFirstChunk] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pendingRequestIdRef = useRef<string | null>(null);
 
@@ -98,11 +101,13 @@ export default function useAiState({
     cancelPendingRequest();
     setMessages([]);
     setDraft("");
+    setWaitingFirstChunk(false);
     setErrorMessage(null);
   }, [activeSessionId]);
 
   function handleChunk(payload: AiChatChunkPayload) {
     if (payload.requestId !== pendingRequestIdRef.current) return;
+    setWaitingFirstChunk(false);
     setMessages((prev) => {
       if (!prev.length) return prev;
       const next = prev.slice();
@@ -120,12 +125,14 @@ export default function useAiState({
     if (payload.requestId !== pendingRequestIdRef.current) return;
     pendingRequestIdRef.current = null;
     setPending(false);
+    setWaitingFirstChunk(false);
   }
 
   function handleError(payload: AiChatErrorPayload) {
     if (payload.requestId !== pendingRequestIdRef.current) return;
     pendingRequestIdRef.current = null;
     setPending(false);
+    setWaitingFirstChunk(false);
     setErrorMessage(payload.error.message);
     setMessages((prev) => {
       const next = prev.slice();
@@ -148,6 +155,7 @@ export default function useAiState({
     if (!requestId) return;
     pendingRequestIdRef.current = null;
     setPending(false);
+    setWaitingFirstChunk(false);
     // 流式请求仍由后端继续读取时，显式取消可以停止继续消费 token。
     void aiSessionChatStreamCancel(requestId);
   }
@@ -171,6 +179,7 @@ export default function useAiState({
     );
     setDraft("");
     setPending(true);
+    setWaitingFirstChunk(true);
     setErrorMessage(null);
 
     try {
@@ -214,6 +223,7 @@ export default function useAiState({
       setDraft(content);
       setErrorMessage(getErrorMessage(error));
       setPending(false);
+      setWaitingFirstChunk(false);
     }
   }
 
@@ -278,10 +288,12 @@ export default function useAiState({
     messages,
     draft,
     pending,
+    waitingFirstChunk,
     errorMessage,
     setDraft,
     sendMessage,
     sendSelectionText,
+    cancelMessage: cancelPendingRequest,
     clearMessages,
   };
 }

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import Button from "@/components/ui/button";
 import type { Translate } from "@/i18n";
 import type { AiChatMessage } from "@/features/ai/types";
@@ -8,9 +10,11 @@ type AiPanelProps = {
   messages: AiChatMessage[];
   draft: string;
   pending: boolean;
+  waitingFirstChunk: boolean;
   errorMessage: string | null;
   onDraftChange: (value: string) => void;
   onSend: () => Promise<void>;
+  onCancel: () => void;
   onClear: () => void;
   t: Translate;
 };
@@ -21,13 +25,33 @@ export default function AiPanel({
   messages,
   draft,
   pending,
+  waitingFirstChunk,
   errorMessage,
   onDraftChange,
   onSend,
+  onCancel,
   onClear,
   t,
 }: AiPanelProps) {
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const canChat = !!activeSessionId && !pending;
+
+  useEffect(() => {
+    if (!autoScroll) return;
+    const container = messagesRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [autoScroll, messages, waitingFirstChunk, errorMessage]);
+
+  async function copyMessage(content: string, key: string) {
+    await writeText(content);
+    setCopiedKey(key);
+    window.setTimeout(() => {
+      setCopiedKey((current) => (current === key ? null : current));
+    }, 1500);
+  }
 
   return (
     <div className="ai-panel">
@@ -40,12 +64,32 @@ export default function AiPanel({
         >
           {t("ai.clear")}
         </Button>
+        {pending && (
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            {t("ai.stop")}
+          </Button>
+        )}
         <span className="ai-panel-status">
-          {activeSessionId ? t("ai.sessionReady") : t("ai.sessionMissing")}
+          {!activeSessionId
+            ? t("ai.sessionMissing")
+            : waitingFirstChunk
+              ? t("ai.generating")
+              : pending
+                ? t("ai.streaming")
+                : t("ai.sessionReady")}
         </span>
       </div>
 
-      <div className="ai-panel-messages">
+      <div
+        ref={messagesRef}
+        className="ai-panel-messages"
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          const nearBottom =
+            element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+          setAutoScroll(nearBottom);
+        }}
+      >
         {!messages.length && !errorMessage && (
           <div className="ai-panel-empty">
             {activeSessionId
@@ -58,7 +102,28 @@ export default function AiPanel({
             key={`${message.role}-${index}-${message.content.slice(0, 20)}`}
             className={`ai-message ${message.role === "user" ? "user" : "assistant"}`}
           >
-            {message.content}
+            <div className="ai-message-toolbar">
+              <span className="ai-message-role">
+                {message.role === "user" ? t("ai.message.user") : t("ai.message.assistant")}
+              </span>
+              <button
+                type="button"
+                className="ai-message-copy"
+                onClick={() => {
+                  copyMessage(
+                    message.content,
+                    `${message.role}-${index}-${message.content.length}`,
+                  ).catch(() => {});
+                }}
+              >
+                {copiedKey === `${message.role}-${index}-${message.content.length}`
+                  ? t("actions.copied")
+                  : t("actions.copy")}
+              </button>
+            </div>
+            <div className="ai-message-body">
+              {message.content || (pending && message.role === "assistant" ? "…" : "")}
+            </div>
           </div>
         ))}
       </div>
