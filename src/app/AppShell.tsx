@@ -29,6 +29,10 @@ import useAiSettings from "@/hooks/settings/useAiSettings";
 import useSessionSettings from "@/hooks/settings/useSessionSettings";
 import useLayoutState from "@/hooks/useLayoutState";
 import useFloatingPanels from "@/hooks/useFloatingPanels";
+import {
+  useFloatingPanelMessagePoster,
+  useFloatingPanelSnapshotSync,
+} from "@/hooks/useFloatingPanelSync";
 import useMacAppMenu from "@/hooks/useMacAppMenu";
 import useQuickBarState from "@/hooks/useQuickBarState";
 import { moveWidgetToSlot, panelKeys } from "@/layout/model";
@@ -1014,267 +1018,248 @@ export default function AppShell() {
     terminalWorkingDirs,
   ]);
 
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(FLOATING_FILES_CHANNEL);
-
-    if (!floatingPanelKey) {
-      // 主窗口维护真实文件状态，并向浮动文件面板广播当前快照；
-      // 同时消费浮动窗口发回的文件操作请求。
-      const broadcastSnapshot = () => {
-        const payload: FloatingFilesSnapshot = {
-          activeSessionId: sessionState.activeSessionId,
-          isRemoteSession: sessionState.isRemoteSession,
-          isRemoteConnected: sessionState.isRemoteConnected,
-          sftpAvailability: activeSftpAvailability,
-          terminalPathSyncStatus: activeTerminalPathSyncStatus,
-          currentPath: sftpState.currentPath,
-          entries: sftpState.entries,
-        };
-        channel.postMessage({
-          type: "files:snapshot",
-          payload,
-        } satisfies FloatingFilesMessage);
+  useFloatingPanelSnapshotSync<FloatingFilesMessage>({
+    channelName: FLOATING_FILES_CHANNEL,
+    floatingPanelKey,
+    isFloatingPanel: isFloatingFilesPanel,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingFilesSnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        isRemoteSession: sessionState.isRemoteSession,
+        isRemoteConnected: sessionState.isRemoteConnected,
+        sftpAvailability: activeSftpAvailability,
+        terminalPathSyncStatus: activeTerminalPathSyncStatus,
+        currentPath: sftpState.currentPath,
+        entries: sftpState.entries,
       };
-
-      broadcastSnapshot();
-
-      channel.onmessage = (event) => {
-        const message = event.data as FloatingFilesMessage | undefined;
-        if (!message) return;
-        switch (message.type) {
-          case "files:request-snapshot":
-            broadcastSnapshot();
-            break;
-          case "files:refresh":
-            refreshList(message.path).catch(() => {});
-            break;
-          case "files:open":
-            openRemoteDir(message.path).catch(() => {});
-            break;
-          case "files:open-file":
-            if (!sessionState.activeSessionId) break;
-            if (filesPanelState.isRemoteConnected) {
-              openRemoteFileViaCache(
-                sessionState.activeSessionId,
-                message.entry,
-                fileDefaultEditorPath,
-              ).catch(() => {});
-            } else {
-              openLocalFile(message.entry.path, fileDefaultEditorPath).catch(
-                () => {},
-              );
-            }
-            break;
-          case "files:upload":
-            uploadFile().catch(() => {});
-            break;
-          case "files:upload-paths":
-            uploadDroppedPaths(message.paths).catch(() => {});
-            break;
-          case "files:download":
-            downloadFile(message.entry).catch(() => {});
-            break;
-          case "files:mkdir":
-            createFolder(message.name).catch(() => {});
-            break;
-          case "files:rename":
-            renameEntry(message.entry, message.name).catch(() => {});
-            break;
-          case "files:remove":
-            removeEntry(message.entry).catch(() => {});
-            break;
-          case "files:snapshot":
-            break;
+      channel.postMessage({
+        type: "files:snapshot",
+        payload,
+      } satisfies FloatingFilesMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "files:request-snapshot": {
+          const payload: FloatingFilesSnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            isRemoteSession: sessionState.isRemoteSession,
+            isRemoteConnected: sessionState.isRemoteConnected,
+            sftpAvailability: activeSftpAvailability,
+            terminalPathSyncStatus: activeTerminalPathSyncStatus,
+            currentPath: sftpState.currentPath,
+            entries: sftpState.entries,
+          };
+          channel.postMessage({
+            type: "files:snapshot",
+            payload,
+          } satisfies FloatingFilesMessage);
+          break;
         }
-      };
-      return () => {
-        channel.close();
-      };
-    }
-
-    if (isFloatingFilesPanel) {
-      // 浮动文件面板不直接维护会话级 SFTP 状态，而是请求主窗口发送当前快照。
-      channel.onmessage = (event) => {
-        const message = event.data as FloatingFilesMessage | undefined;
-        if (message?.type === "files:snapshot") {
-          setFloatingFilesSnapshot(message.payload);
-        }
-      };
+        case "files:refresh":
+          refreshList(message.path).catch(() => {});
+          break;
+        case "files:open":
+          openRemoteDir(message.path).catch(() => {});
+          break;
+        case "files:open-file":
+          if (!sessionState.activeSessionId) break;
+          if (sessionState.isRemoteConnected) {
+            openRemoteFileViaCache(
+              sessionState.activeSessionId,
+              message.entry,
+              fileDefaultEditorPath,
+            ).catch(() => {});
+          } else {
+            openLocalFile(message.entry.path, fileDefaultEditorPath).catch(
+              () => {},
+            );
+          }
+          break;
+        case "files:upload":
+          uploadFile().catch(() => {});
+          break;
+        case "files:upload-paths":
+          uploadDroppedPaths(message.paths).catch(() => {});
+          break;
+        case "files:download":
+          downloadFile(message.entry).catch(() => {});
+          break;
+        case "files:mkdir":
+          createFolder(message.name).catch(() => {});
+          break;
+        case "files:rename":
+          renameEntry(message.entry, message.name).catch(() => {});
+          break;
+        case "files:remove":
+          removeEntry(message.entry).catch(() => {});
+          break;
+        case "files:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "files:snapshot") {
+        setFloatingFilesSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
       channel.postMessage({
         type: "files:request-snapshot",
       } satisfies FloatingFilesMessage);
-      return () => {
-        channel.close();
-      };
-    }
+    },
+    deps: [
+      sessionState.activeSessionId,
+      sessionState.isRemoteConnected,
+      sessionState.isRemoteSession,
+      createFolder,
+      downloadFile,
+      activeSftpAvailability,
+      activeTerminalPathSyncStatus,
+      sftpState.currentPath,
+      sftpState.entries,
+      openRemoteDir,
+      refreshList,
+      removeEntry,
+      renameEntry,
+      uploadFile,
+      uploadDroppedPaths,
+      sessionState.isRemoteConnected,
+      fileDefaultEditorPath,
+    ],
+  });
 
-    channel.close();
-    return undefined;
-  }, [
+  useFloatingPanelSnapshotSync<FloatingHistoryMessage>({
+    channelName: FLOATING_HISTORY_CHANNEL,
     floatingPanelKey,
-    isFloatingFilesPanel,
-    sessionState.activeSessionId,
-    sessionState.isRemoteConnected,
-    sessionState.isRemoteSession,
-    createFolder,
-    downloadFile,
-    activeSftpAvailability,
-    sftpState.currentPath,
-    sftpState.entries,
-    openRemoteDir,
-    refreshList,
-    removeEntry,
-    renameEntry,
-    uploadFile,
-    uploadDroppedPaths,
-  ]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(FLOATING_HISTORY_CHANNEL);
-
-    if (!floatingPanelKey) {
-      const broadcastSnapshot = () => {
-        const payload: FloatingHistorySnapshot = {
-          activeSessionId: sessionState.activeSessionId,
-          hasActiveSession: !!sessionState.activeSessionId,
-          liveCapture: historyState.activeLiveCapture,
-          items: historyState.activeSessionItems,
-        };
-        channel.postMessage({
-          type: "history:snapshot",
-          payload,
-        } satisfies FloatingHistoryMessage);
+    isFloatingPanel: isFloatingHistoryPanel,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingHistorySnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        hasActiveSession: !!sessionState.activeSessionId,
+        liveCapture: historyState.activeLiveCapture,
+        items: historyState.activeSessionItems,
       };
-
-      broadcastSnapshot();
-
-      channel.onmessage = (event) => {
-        const message = event.data as FloatingHistoryMessage | undefined;
-        if (!message) return;
-        switch (message.type) {
-          case "history:request-snapshot":
-            broadcastSnapshot();
-            break;
-          case "history:execute":
-            handleExecuteHistoryItem(message.command);
-            break;
-          case "history:snapshot":
-            break;
+      channel.postMessage({
+        type: "history:snapshot",
+        payload,
+      } satisfies FloatingHistoryMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "history:request-snapshot": {
+          const payload: FloatingHistorySnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            hasActiveSession: !!sessionState.activeSessionId,
+            liveCapture: historyState.activeLiveCapture,
+            items: historyState.activeSessionItems,
+          };
+          channel.postMessage({
+            type: "history:snapshot",
+            payload,
+          } satisfies FloatingHistoryMessage);
+          break;
         }
-      };
-      return () => {
-        channel.close();
-      };
-    }
-
-    if (isFloatingHistoryPanel) {
-      channel.onmessage = (event) => {
-        const message = event.data as FloatingHistoryMessage | undefined;
-        if (message?.type === "history:snapshot") {
-          setFloatingHistorySnapshot(message.payload);
-        }
-      };
+        case "history:execute":
+          handleExecuteHistoryItem(message.command);
+          break;
+        case "history:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "history:snapshot") {
+        setFloatingHistorySnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
       channel.postMessage({
         type: "history:request-snapshot",
       } satisfies FloatingHistoryMessage);
-      return () => {
-        channel.close();
-      };
-    }
+    },
+    deps: [
+      historyState.activeLiveCapture,
+      historyState.activeSessionItems,
+      sessionState.activeSessionId,
+      handleExecuteHistoryItem,
+    ],
+  });
 
-    channel.close();
-    return undefined;
-  }, [
+  useFloatingPanelSnapshotSync<FloatingAiMessage>({
+    channelName: FLOATING_AI_CHANNEL,
     floatingPanelKey,
-    historyState.activeLiveCapture,
-    historyState.activeSessionItems,
-    isFloatingHistoryPanel,
-    sessionState.activeSessionId,
-  ]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(FLOATING_AI_CHANNEL);
-
-    if (!floatingPanelKey) {
-      const broadcastSnapshot = () => {
-        const payload: FloatingAiSnapshot = {
-          activeSessionId: sessionState.activeSessionId,
-          messages: aiState.messages,
-          draft: aiState.draft,
-          pending: aiState.pending,
-          waitingFirstChunk: aiState.waitingFirstChunk,
-          errorMessage: aiState.errorMessage,
-          aiAvailable,
-          aiUnavailableMessage,
-        };
-        channel.postMessage({
-          type: "ai:snapshot",
-          payload,
-        } satisfies FloatingAiMessage);
+    isFloatingPanel: isFloatingAiPanel,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingAiSnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        messages: aiState.messages,
+        draft: aiState.draft,
+        pending: aiState.pending,
+        waitingFirstChunk: aiState.waitingFirstChunk,
+        errorMessage: aiState.errorMessage,
+        aiAvailable,
+        aiUnavailableMessage,
       };
-
-      broadcastSnapshot();
-
-      channel.onmessage = (event) => {
-        const message = event.data as FloatingAiMessage | undefined;
-        if (!message) return;
-        switch (message.type) {
-          case "ai:request-snapshot":
-            broadcastSnapshot();
-            break;
-          case "ai:set-draft":
-            aiState.setDraft(message.draft);
-            break;
-          case "ai:send":
-            aiState.sendMessage().catch(() => {});
-            break;
-          case "ai:cancel":
-            aiState.cancelMessage();
-            break;
-          case "ai:clear":
-            aiState.clearMessages();
-            break;
-          case "ai:snapshot":
-            break;
+      channel.postMessage({
+        type: "ai:snapshot",
+        payload,
+      } satisfies FloatingAiMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "ai:request-snapshot": {
+          const payload: FloatingAiSnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            messages: aiState.messages,
+            draft: aiState.draft,
+            pending: aiState.pending,
+            waitingFirstChunk: aiState.waitingFirstChunk,
+            errorMessage: aiState.errorMessage,
+            aiAvailable,
+            aiUnavailableMessage,
+          };
+          channel.postMessage({
+            type: "ai:snapshot",
+            payload,
+          } satisfies FloatingAiMessage);
+          break;
         }
-      };
-      return () => {
-        channel.close();
-      };
-    }
-
-    if (isFloatingAiPanel) {
-      channel.onmessage = (event) => {
-        const message = event.data as FloatingAiMessage | undefined;
-        if (message?.type === "ai:snapshot") {
-          setFloatingAiSnapshot(message.payload);
-        }
-      };
+        case "ai:set-draft":
+          aiState.setDraft(message.draft);
+          break;
+        case "ai:send":
+          aiState.sendMessage().catch(() => {});
+          break;
+        case "ai:cancel":
+          aiState.cancelMessage();
+          break;
+        case "ai:clear":
+          aiState.clearMessages();
+          break;
+        case "ai:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "ai:snapshot") {
+        setFloatingAiSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
       channel.postMessage({
         type: "ai:request-snapshot",
       } satisfies FloatingAiMessage);
-      return () => {
-        channel.close();
-      };
-    }
-
-    channel.close();
-    return undefined;
-  }, [
-    aiAvailable,
-    aiState.draft,
-    aiState.errorMessage,
-    aiState.messages,
-    aiState.pending,
-    aiState.waitingFirstChunk,
-    aiUnavailableMessage,
-    floatingPanelKey,
-    isFloatingAiPanel,
-    sessionState.activeSessionId,
-  ]);
+    },
+    deps: [
+      aiAvailable,
+      aiState.draft,
+      aiState.errorMessage,
+      aiState.messages,
+      aiState.pending,
+      aiState.waitingFirstChunk,
+      aiUnavailableMessage,
+      sessionState.activeSessionId,
+    ],
+  });
 
   useMacAppMenu({
     locale,
@@ -1372,69 +1357,21 @@ export default function AppShell() {
     await writeTextFile(target, text);
   }
 
-  const floatingFilesChannelRef = useRef<BroadcastChannel | null>(null);
-  const floatingHistoryChannelRef = useRef<BroadcastChannel | null>(null);
-  const floatingAiChannelRef = useRef<BroadcastChannel | null>(null);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined" || !isFloatingFilesPanel) {
-      floatingFilesChannelRef.current?.close();
-      floatingFilesChannelRef.current = null;
-      return;
-    }
-    const channel = new BroadcastChannel(FLOATING_FILES_CHANNEL);
-    floatingFilesChannelRef.current = channel;
-    return () => {
-      if (floatingFilesChannelRef.current === channel) {
-        floatingFilesChannelRef.current = null;
-      }
-      channel.close();
-    };
-  }, [isFloatingFilesPanel]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined" || !isFloatingHistoryPanel) {
-      floatingHistoryChannelRef.current?.close();
-      floatingHistoryChannelRef.current = null;
-      return;
-    }
-    const channel = new BroadcastChannel(FLOATING_HISTORY_CHANNEL);
-    floatingHistoryChannelRef.current = channel;
-    return () => {
-      if (floatingHistoryChannelRef.current === channel) {
-        floatingHistoryChannelRef.current = null;
-      }
-      channel.close();
-    };
-  }, [isFloatingHistoryPanel]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined" || !isFloatingAiPanel) {
-      floatingAiChannelRef.current?.close();
-      floatingAiChannelRef.current = null;
-      return;
-    }
-    const channel = new BroadcastChannel(FLOATING_AI_CHANNEL);
-    floatingAiChannelRef.current = channel;
-    return () => {
-      if (floatingAiChannelRef.current === channel) {
-        floatingAiChannelRef.current = null;
-      }
-      channel.close();
-    };
-  }, [isFloatingAiPanel]);
-
-  function postFloatingFilesMessage(message: FloatingFilesMessage) {
-    floatingFilesChannelRef.current?.postMessage(message);
-  }
-
-  function postFloatingHistoryMessage(message: FloatingHistoryMessage) {
-    floatingHistoryChannelRef.current?.postMessage(message);
-  }
-
-  function postFloatingAiMessage(message: FloatingAiMessage) {
-    floatingAiChannelRef.current?.postMessage(message);
-  }
+  const postFloatingFilesMessage =
+    useFloatingPanelMessagePoster<FloatingFilesMessage>(
+      FLOATING_FILES_CHANNEL,
+      isFloatingFilesPanel,
+    );
+  const postFloatingHistoryMessage =
+    useFloatingPanelMessagePoster<FloatingHistoryMessage>(
+      FLOATING_HISTORY_CHANNEL,
+      isFloatingHistoryPanel,
+    );
+  const postFloatingAiMessage =
+    useFloatingPanelMessagePoster<FloatingAiMessage>(
+      FLOATING_AI_CHANNEL,
+      isFloatingAiPanel,
+    );
 
   // 主窗口直接读取本地 SFTP 状态；浮动文件面板则消费主窗口同步过来的只读快照。
   const filesPanelState = useMemo(
