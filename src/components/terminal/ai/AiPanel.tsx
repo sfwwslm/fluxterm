@@ -34,6 +34,7 @@ export default function AiPanel({
   t,
 }: AiPanelProps) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const canChat = !!activeSessionId && !pending;
@@ -44,6 +45,15 @@ export default function AiPanel({
     if (!container) return;
     container.scrollTop = container.scrollHeight;
   }, [autoScroll, messages, waitingFirstChunk, errorMessage]);
+
+  useEffect(() => {
+    // 输入区默认按单行起步，内容增多后再向上扩展，避免空状态占用过高。
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 40), 144);
+    textarea.style.height = `${nextHeight}px`;
+  }, [draft]);
 
   async function copyMessage(content: string, key: string) {
     await writeText(content);
@@ -64,11 +74,6 @@ export default function AiPanel({
         >
           {t("ai.clear")}
         </Button>
-        {pending && (
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            {t("ai.stop")}
-          </Button>
-        )}
         <span className="ai-panel-status">
           {!activeSessionId
             ? t("ai.sessionMissing")
@@ -86,7 +91,8 @@ export default function AiPanel({
         onScroll={(event) => {
           const element = event.currentTarget;
           const nearBottom =
-            element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+            element.scrollHeight - element.scrollTop - element.clientHeight <
+            24;
           setAutoScroll(nearBottom);
         }}
       >
@@ -104,7 +110,9 @@ export default function AiPanel({
           >
             <div className="ai-message-toolbar">
               <span className="ai-message-role">
-                {message.role === "user" ? t("ai.message.user") : t("ai.message.assistant")}
+                {message.role === "user"
+                  ? t("ai.message.user")
+                  : t("ai.message.assistant")}
               </span>
               <button
                 type="button"
@@ -116,13 +124,15 @@ export default function AiPanel({
                   ).catch(() => {});
                 }}
               >
-                {copiedKey === `${message.role}-${index}-${message.content.length}`
+                {copiedKey ===
+                `${message.role}-${index}-${message.content.length}`
                   ? t("actions.copied")
                   : t("actions.copy")}
               </button>
             </div>
             <div className="ai-message-body">
-              {message.content || (pending && message.role === "assistant" ? "…" : "")}
+              {message.content ||
+                (pending && message.role === "assistant" ? "…" : "")}
             </div>
           </div>
         ))}
@@ -131,29 +141,38 @@ export default function AiPanel({
       {errorMessage && <div className="ai-panel-error">{errorMessage}</div>}
 
       <div className="ai-panel-input">
-        <textarea
-          className="ai-panel-textarea"
-          value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
-          placeholder={t("ai.inputPlaceholder")}
-          disabled={!activeSessionId || pending}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey) return;
-            event.preventDefault();
-            onSend().catch(() => {});
-          }}
-        />
-        <div className="ai-panel-actions">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
+        <div className="ai-panel-input-shell">
+          <textarea
+            ref={textareaRef}
+            className="ai-panel-textarea"
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            placeholder={t("ai.inputPlaceholder")}
+            disabled={!activeSessionId || pending}
+            rows={1}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey) return;
+              event.preventDefault();
               onSend().catch(() => {});
             }}
-            disabled={!canChat || !draft.trim()}
-          >
-            {pending ? t("ai.sending") : t("ai.send")}
-          </Button>
+          />
+          <div className="ai-panel-input-actions">
+            <Button
+              variant={pending ? "ghost" : "primary"}
+              size="sm"
+              className={`ai-panel-send ${pending ? "secondary" : ""}`}
+              onClick={() => {
+                if (pending) {
+                  onCancel();
+                  return;
+                }
+                onSend().catch(() => {});
+              }}
+              disabled={pending ? false : !canChat || !draft.trim()}
+            >
+              {pending ? t("ai.stop") : t("ai.send")}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

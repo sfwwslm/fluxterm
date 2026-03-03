@@ -306,10 +306,8 @@ export const en = {
   "ai.emptyWithSession": "Ask about the current session directly.",
   "ai.emptyWithoutSession":
     "There is no active session, so session-aware AI chat is unavailable.",
-  "ai.inputPlaceholder":
-    "Ask about the current session, for example: which logs are in the current directory?",
+  "ai.inputPlaceholder": "Ask about the current session",
   "ai.send": "Send",
-  "ai.sending": "Sending",
   "ai.stop": "Stop",
   "ai.generating": "Waiting for response",
   "ai.streaming": "Generating",
