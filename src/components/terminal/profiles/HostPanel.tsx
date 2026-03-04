@@ -8,6 +8,7 @@ import {
   FiEye,
   FiFolder,
   FiFolderPlus,
+  FiLoader,
   FiPlus,
   FiServer,
   FiTerminal,
@@ -35,6 +36,7 @@ type HostPanelProps = {
   profiles: HostProfile[];
   sshGroups: string[];
   activeProfileId: string | null;
+  connectingProfileId: string | null;
   onPick: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
   onOpenNewProfile: () => void;
@@ -58,6 +60,7 @@ export default function HostPanel({
   profiles,
   sshGroups,
   activeProfileId,
+  connectingProfileId,
   onPick,
   onConnectProfile,
   onOpenNewProfile,
@@ -602,11 +605,20 @@ export default function HostPanel({
                         openMenu(event, buildGroupedProfileMenuItems(profile))
                       }
                       onClick={() => onPick(profile.id)}
-                      onDoubleClick={() => onConnectProfile(profile)}
+                      onDoubleClick={() => {
+                        if (connectingProfileId === profile.id) return;
+                        onConnectProfile(profile);
+                      }}
                     >
                       <span className="host-row-label">
                         <FiServer className="host-row-icon" />
                         <span>{profile.name || profile.host}</span>
+                        {connectingProfileId === profile.id && (
+                          <span className="host-connecting-chip">
+                            <FiLoader className="host-connecting-icon" />
+                            <span>{t("session.connecting")}</span>
+                          </span>
+                        )}
                       </span>
                     </Button>
                   ))}
@@ -626,12 +638,21 @@ export default function HostPanel({
                 openMenu(event, buildRootProfileMenuItems(profile))
               }
               onClick={() => onPick(profile.id)}
-              onDoubleClick={() => onConnectProfile(profile)}
+              onDoubleClick={() => {
+                if (connectingProfileId === profile.id) return;
+                onConnectProfile(profile);
+              }}
             >
               {/* 根级会话固定排在所有分组之后。 */}
               <span className="host-row-label">
                 <FiServer className="host-row-icon" />
                 <span>{profile.name || profile.host}</span>
+                {connectingProfileId === profile.id && (
+                  <span className="host-connecting-chip">
+                    <FiLoader className="host-connecting-icon" />
+                    <span>{t("session.connecting")}</span>
+                  </span>
+                )}
               </span>
             </Button>
           ))}

@@ -26,14 +26,14 @@ struct HostKeyVerificationRequiredPayload {
 
 #[tauri::command]
 /// 建立 SSH 会话连接。
-pub fn ssh_connect(
+pub async fn ssh_connect(
     app: AppHandle,
-    state: State<EngineState>,
-    ai_state: State<AiRuntimeState>,
+    state: State<'_, EngineState>,
+    ai_state: State<'_, AiRuntimeState>,
     profile: HostProfile,
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
-    let expected_host_key = enforce_host_key_policy(&app, &profile)?;
+    let expected_host_key = enforce_host_key_policy(&app, &profile).await?;
     let on_event = build_event_bridge(app.clone());
     let session = state
         .engine
@@ -86,7 +86,7 @@ pub fn ssh_host_key_confirm(
     trust_host_key(&app, &host, port, &key_algorithm, &public_key_base64)
 }
 
-fn enforce_host_key_policy(
+async fn enforce_host_key_policy(
     app: &AppHandle,
     profile: &HostProfile,
 ) -> Result<Option<ExpectedHostKey>, EngineError> {
@@ -98,7 +98,7 @@ fn enforce_host_key_policy(
     // 连接建立前先做一次 Host Key 预检。
     // ask / strict 的分流都在这里完成，正式握手阶段只负责校验“当前连接拿到的公钥”
     // 是否与本次预检允许通过的公钥一致。
-    let probe = tauri::async_runtime::block_on(probe_host_key(profile))?;
+    let probe = probe_host_key(profile).await?;
     let matched = match_host_key(
         app,
         &profile.host,

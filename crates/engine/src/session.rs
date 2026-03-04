@@ -6,10 +6,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex as StdMutex, MutexGuard};
+use std::time::Duration;
 
 use russh::client;
 use russh::keys::{self, PublicKeyBase64};
 use tokio::sync::{Mutex, mpsc};
+use tokio::time::timeout;
 
 use crate::auth::authenticate;
 use crate::error::EngineError;
@@ -169,20 +171,35 @@ pub async fn run_session_loop(
     mut rx: mpsc::UnboundedReceiver<SessionCommand>,
     on_event: EventCallback,
 ) -> Result<(), EngineError> {
+    // 正式 SSH 握手同样需要超时保护，覆盖 HostKeyPolicy::Off 等不走预检的路径。
+    const SSH_CONNECT_TIMEOUT_SECS: u64 = 8;
     let addr = format!("{}:{}", profile.host, profile.port);
     let config = Arc::new(client::Config::default());
     let host_key_state = HostKeyCheckState {
         error: Arc::new(StdMutex::new(None)),
     };
-    let mut session = client::connect(
-        config,
-        addr,
-        ClientHandler {
-            expected_host_key,
-            host_key_state: host_key_state.clone(),
-        },
+    let mut session = timeout(
+        Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS),
+        client::connect(
+            config,
+            addr,
+            ClientHandler {
+                expected_host_key,
+                host_key_state: host_key_state.clone(),
+            },
+        ),
     )
     .await
+    .map_err(|_| {
+        EngineError::with_detail(
+            "ssh_connect_failed",
+            "无法连接到目标主机（连接超时）",
+            format!(
+                "host={} port={} timeout={}s",
+                profile.host, profile.port, SSH_CONNECT_TIMEOUT_SECS
+            ),
+        )
+    })?
     .map_err(|err| {
         if let Ok(mut guard) = host_key_state.error.lock()
             && let Some(saved) = guard.take()

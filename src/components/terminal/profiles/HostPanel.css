@@ -122,6 +122,31 @@
   min-width: 0;
 }
 
+.host-connecting-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.host-connecting-icon {
+  animation: host-connecting-spin 0.9s linear infinite;
+}
+
+@keyframes host-connecting-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .host-row-icon {
   flex: 0 0 auto;
   font-size: 14px;

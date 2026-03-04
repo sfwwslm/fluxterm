@@ -29,6 +29,7 @@ type BuildPanelsProps = {
   profiles: HostProfile[];
   sshGroups: string[];
   activeProfileId: string | null;
+  connectingProfileId: string | null;
   availableShells: LocalShellProfile[];
   activeSessionId: string | null;
   activeSessionState: SessionStateUi | null;
@@ -103,6 +104,7 @@ export function buildPanels(
     profiles,
     sshGroups,
     activeProfileId,
+    connectingProfileId,
     availableShells,
     activeSessionId,
     activeSessionState,
@@ -167,6 +169,7 @@ export function buildPanels(
         profiles={profiles}
         sshGroups={sshGroups}
         activeProfileId={activeProfileId}
+        connectingProfileId={connectingProfileId}
         onPick={pickProfile}
         onConnectProfile={onConnectProfile}
         onOpenNewProfile={onOpenNewProfile}

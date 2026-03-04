@@ -328,6 +328,10 @@ export default function AppShell() {
     "new",
   );
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
+  const [connectingProfileId, setConnectingProfileId] = useState<string | null>(
+    null,
+  );
+  const latestConnectRequestIdRef = useRef(0);
   const isMac = useMemo(() => isMacOS(), []);
 
   const t: Translate = useMemo(
@@ -1453,24 +1457,33 @@ export default function AppShell() {
   }
 
   async function handleConnectProfile(profileInput: HostProfile) {
+    // 连接流程允许并发触发；用递增 requestId 防止旧请求回写覆盖新状态。
+    const requestId = latestConnectRequestIdRef.current + 1;
+    latestConnectRequestIdRef.current = requestId;
     if (!profileInput.host || !profileInput.username) {
       sessionActions.setBusyMessage(t("messages.missingHostUser"));
       return;
     }
     if (profileInput.id) {
       pickProfile(profileInput.id);
+      setConnectingProfileId(profileInput.id);
     }
     sessionActions.setBusyMessage(t("messages.connecting"));
     try {
       const profile = profileInput.id
         ? profileInput
         : await saveProfile(profileInput);
+      setConnectingProfileId(profile.id);
       await sessionActions.connectProfile(profile);
       sessionActions.setBusyMessage(null);
     } catch (error: any) {
       sessionActions.setBusyMessage(
         error?.message ?? t("messages.connectFailed"),
       );
+    } finally {
+      if (requestId === latestConnectRequestIdRef.current) {
+        setConnectingProfileId(null);
+      }
     }
   }
 
@@ -1757,6 +1770,7 @@ export default function AppShell() {
         profiles,
         sshGroups,
         activeProfileId,
+        connectingProfileId,
         availableShells,
         activeSessionId: aiPanelState.activeSessionId,
         activeSessionState: sessionState.activeSessionState,
@@ -1834,6 +1848,7 @@ export default function AppShell() {
       profiles,
       sshGroups,
       activeProfileId,
+      connectingProfileId,
       availableShells,
       aiPanelActions,
       aiPanelState,
