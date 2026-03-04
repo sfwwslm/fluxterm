@@ -166,7 +166,10 @@ fn resolve_openai_config<'a>(
     config_id: Option<&str>,
 ) -> Result<&'a OpenAiConfigSettings, EngineError> {
     let selected = if let Some(config_id) = config_id.map(str::trim).filter(|id| !id.is_empty()) {
-        settings.openai_configs.iter().find(|config| config.id == config_id)
+        settings
+            .openai_configs
+            .iter()
+            .find(|config| config.id == config_id)
     } else {
         settings.active_openai_config()
     };
@@ -219,16 +222,32 @@ pub fn record_terminal_output_from_app(app: &AppHandle, session_id: &str, data: 
     if let Ok(mut store) = state.inner.lock()
         && let Some(session) = store.sessions.get_mut(session_id)
     {
-        let normalized = data.trim();
+        // 先清洗 ANSI 与控制字符，再进入去重流程，避免把终端重绘噪音写入上下文。
+        let normalized = normalize_terminal_output_snippet(data);
         if normalized.is_empty() {
+            return;
+        }
+        let dedup_key = normalize_output_for_dedup(&normalized);
+        if dedup_key.is_empty() {
+            return;
+        }
+        // 采集层仅做“连续重复”去重：只比较队尾，保留真实时间序列。
+        if session
+            .recent_terminal_output
+            .back()
+            .map(|last| normalize_output_for_dedup(last))
+            .as_deref()
+            == Some(dedup_key.as_str())
+        {
             return;
         }
         session
             .recent_terminal_output
-            .push_back(truncate_chars(normalized, 512));
+            .push_back(truncate_chars(&normalized, 512));
         while session.recent_terminal_output.len() > MAX_OUTPUT_SNIPPETS {
             session.recent_terminal_output.pop_front();
         }
+        // 片段数量和总字符预算双重限制，避免 prompt 体积失控。
         trim_output_budget(&mut session.recent_terminal_output, MAX_OUTPUT_CHARS);
     }
 }
@@ -387,6 +406,95 @@ fn trim_output_budget(items: &mut VecDeque<String>, limit: usize) {
     }
 }
 
+/// 清洗终端片段，移除 ANSI 控制序列和不可见控制字符，保留可读文本。
+fn normalize_terminal_output_snippet(input: &str) -> String {
+    let without_ansi = strip_ansi_escape_sequences(input);
+    let normalized_newline = without_ansi.replace("\r\n", "\n").replace('\r', "\n");
+    let mut visible = String::with_capacity(normalized_newline.len());
+    for ch in normalized_newline.chars() {
+        if ch == '\n' || ch == '\t' || !ch.is_control() {
+            visible.push(ch);
+        }
+    }
+    visible
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
+/// 生成用于去重的归一化键，避免重复屏幕重绘污染上下文。
+fn normalize_output_for_dedup(input: &str) -> String {
+    input
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .lines()
+        .map(|line| normalize_whitespace_runs(line.trim()))
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn normalize_whitespace_runs(input: &str) -> String {
+    // 去重键使用统一空白语义：连续空白折叠成单空格。
+    input.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn strip_ansi_escape_sequences(input: &str) -> String {
+    // 覆盖常见终端控制序列：
+    // - CSI: ESC [ ... final-byte
+    // - OSC: ESC ] ... BEL / ST(ESC \)
+    let bytes = input.as_bytes();
+    let mut i = 0usize;
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    while i < bytes.len() {
+        if bytes[i] == 0x1B {
+            if i + 1 < bytes.len() {
+                match bytes[i + 1] {
+                    b'[' => {
+                        i += 2;
+                        while i < bytes.len() {
+                            let b = bytes[i];
+                            if (0x40..=0x7E).contains(&b) {
+                                i += 1;
+                                break;
+                            }
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    b']' => {
+                        i += 2;
+                        while i < bytes.len() {
+                            if bytes[i] == 0x07 {
+                                i += 1;
+                                break;
+                            }
+                            if bytes[i] == 0x1B && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                                i += 2;
+                                break;
+                            }
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    _ => {
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+            i += 1;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
 fn prune_expired_cache(cache: &mut HashMap<String, CachedAiResponse>) {
     let now = Instant::now();
     cache.retain(|_, value| value.expires_at > now);
@@ -447,5 +555,32 @@ mod tests {
         std::thread::sleep(Duration::from_millis(5));
         let cached = get_cached_response(&state, "k").unwrap();
         assert!(cached.is_none());
+    }
+
+    #[test]
+    fn normalize_terminal_output_strips_ansi_and_controls() {
+        let input = "\u{1b}[2J\u{1b}[Hhello\r\nworld\u{1b}[?25h\u{0008}";
+        let normalized = normalize_terminal_output_snippet(input);
+        assert_eq!(normalized, "hello\nworld");
+    }
+
+    #[test]
+    fn normalize_output_for_dedup_ignores_whitespace_lines() {
+        let first = "  PS C:\\>   \r\n";
+        let second = "\nPS C:\\>\n\n";
+        assert_eq!(
+            normalize_output_for_dedup(first),
+            normalize_output_for_dedup(second)
+        );
+    }
+
+    #[test]
+    fn normalize_output_for_dedup_collapses_internal_whitespace_runs() {
+        let first = "PS   C:\\Users\\aw4>\tGet-ChildItem";
+        let second = "PS C:\\Users\\aw4> Get-ChildItem";
+        assert_eq!(
+            normalize_output_for_dedup(first),
+            normalize_output_for_dedup(second)
+        );
     }
 }

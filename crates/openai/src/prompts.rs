@@ -22,7 +22,7 @@ pub fn build_session_chat_messages(input: &OpenAiSessionChatInput) -> Vec<ChatMe
     let system_prompt = format!(
         "You are FluxTerm's terminal AI assistant and a terminal command expert. You are skilled at shell commands, debugging command failures, reading terminal output, and choosing the minimum correct command for the user's goal. Use only the current session context as reference data. Keep answers short, direct, and actionable. Avoid long tutorials. Prefer the minimum valid command or next step. If context is missing, say so. {}.\n\
 Current session environment is reference context only. It does not decide the target environment by itself.\n\
-Environment rule: {}.\n\
+Environment rule: {}\n\
 Format:\n\
 - Output in Markdown by default\n\
 - Answer: 1-3 short paragraphs or up to 4 bullets\n\
@@ -336,6 +336,39 @@ mod tests {
             messages[0]
                 .content
                 .contains("Do not give substitute commands for the current session platform")
+        );
+    }
+
+    #[test]
+    fn session_chat_prompt_does_not_repeat_environment_rule_period() {
+        let input = OpenAiSessionChatInput {
+            context: SessionContextSnapshot {
+                session_id: "s1".to_string(),
+                session_label: "alpha".to_string(),
+                session_kind: "local".to_string(),
+                host: None,
+                username: None,
+                platform: Some("windows".to_string()),
+                shell_name: Some("powershell".to_string()),
+                session_state: "connected".to_string(),
+                resource_monitor_status: Some("ready".to_string()),
+                host_key_status: None,
+                recent_terminal_output: vec!["PS C:\\>".to_string()],
+            },
+            response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
+            ui_language: "zh".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "帮我看下当前环境".to_string(),
+            }],
+        };
+
+        let messages = build_session_chat_messages(&input);
+        assert!(!messages[0].content.contains("environment.."));
+        assert!(
+            messages[0]
+                .content
+                .contains("Environment rule: No explicit target environment is named")
         );
     }
 }

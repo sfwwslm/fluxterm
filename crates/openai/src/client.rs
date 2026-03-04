@@ -169,6 +169,10 @@ async fn stream_chat_completion(
         .build()
         .map_err(|err| OpenAiError::Request(format!("无法创建 OpenAI 客户端: {err}")))?;
 
+    if config.debug_logging_enabled {
+        log_system_prompt_summary(request_type, &messages);
+    }
+
     let base = config.base_url.trim_end_matches('/');
     let request = serde_json::json!({
         "model": config.model,
@@ -250,12 +254,72 @@ fn log_request(config: &OpenAiClientConfig, request_type: &str, messages: &[Chat
     if !config.debug_logging_enabled {
         return;
     }
+    log_system_prompt_summary(request_type, messages);
     info!(
         "openai_request type={} model={} messages={}",
         request_type,
         config.model,
         serde_json::to_string(messages).unwrap_or_else(|_| "[]".to_string())
     );
+}
+
+fn log_system_prompt_summary(request_type: &str, messages: &[ChatMessage]) {
+    let Some(summary) = build_system_prompt_summary(messages) else {
+        return;
+    };
+    info!(
+        "openai_request_summary type={} system_prompt=\n{}",
+        request_type, summary
+    );
+}
+
+fn build_system_prompt_summary(messages: &[ChatMessage]) -> Option<String> {
+    const MAX_HEAD_LINES: usize = 18;
+    const MAX_RECENT_PREVIEW_CHARS: usize = 240;
+
+    let system_prompt = messages
+        .iter()
+        .find(|message| message.role == "system")
+        .map(|message| message.content.as_str())?;
+    let normalized = system_prompt.replace("\r\n", "\n").replace('\r', "\n");
+    // 仅摘要化 `Recent output`，保留规则主体的可读性并压缩日志体积。
+    let (head, recent_output) = normalized
+        .split_once("\nRecent output:\n")
+        .unwrap_or((normalized.as_str(), ""));
+
+    let head_lines = head.lines().collect::<Vec<_>>();
+    let preview = head_lines
+        .iter()
+        .take(MAX_HEAD_LINES)
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let hidden_line_count = head_lines.len().saturating_sub(MAX_HEAD_LINES);
+    let recent_preview = truncate_chars(recent_output.trim(), MAX_RECENT_PREVIEW_CHARS);
+    let mut summary = format!(
+        "head_lines={} total_chars={} recent_output_chars={}\n{}",
+        head_lines.len(),
+        normalized.chars().count(),
+        recent_output.chars().count(),
+        preview
+    );
+    if hidden_line_count > 0 {
+        summary.push_str(&format!("\n...(+{} lines)", hidden_line_count));
+    }
+    if !recent_preview.is_empty() {
+        summary.push_str(&format!("\nRecent output preview:\n{}", recent_preview));
+    }
+    Some(summary)
+}
+
+fn truncate_chars(input: &str, max_chars: usize) -> String {
+    // 日志摘要截断函数：防止超长会话输出污染调试日志。
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+    let mut value = input.chars().take(max_chars).collect::<String>();
+    value.push_str("...");
+    value
 }
 
 fn log_response(config: &OpenAiClientConfig, request_type: &str, message: &ChatMessage) {
@@ -481,5 +545,25 @@ data: {"choices":[{"delta":{"content":"world"}}]}"#;
             .expect("content should exist");
 
         assert_eq!(content, "hello world");
+    }
+
+    #[test]
+    fn builds_readable_system_prompt_summary_with_recent_output_stats() {
+        let messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: "line1\nline2\nRecent output:\na\nb\nc".to_string(),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: "hello".to_string(),
+            },
+        ];
+
+        let summary = build_system_prompt_summary(&messages).expect("summary should exist");
+        assert!(summary.contains("head_lines=2"));
+        assert!(summary.contains("recent_output_chars=5"));
+        assert!(summary.contains("line1\nline2"));
+        assert!(summary.contains("Recent output preview:\na\nb\nc"));
     }
 }

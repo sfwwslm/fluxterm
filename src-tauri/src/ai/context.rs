@@ -1,5 +1,7 @@
 //! AI 会话上下文构建模块。
 
+use std::collections::HashSet;
+
 use engine::EngineError;
 use openai::{
     ChatMessage, OpenAiSelectionExplainInput, OpenAiSessionChatInput, OpenAiSessionChatStreamInput,
@@ -153,6 +155,8 @@ fn compact_recent_output(
         .cloned()
         .collect::<Vec<_>>();
     selected.reverse();
+    // 组装层再做一次去重，兜底采集层之前的历史脏数据或非连续重复片段。
+    selected = dedup_recent_output(selected);
 
     while selected
         .iter()
@@ -175,6 +179,35 @@ fn compact_recent_output(
     }
 
     selected
+}
+
+fn dedup_recent_output(items: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::with_capacity(items.len());
+    for item in items {
+        let key = normalize_recent_output_for_dedup(&item);
+        if key.is_empty() || !seen.insert(key) {
+            continue;
+        }
+        deduped.push(item);
+    }
+    deduped
+}
+
+fn normalize_recent_output_for_dedup(input: &str) -> String {
+    input
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .lines()
+        .map(|line| normalize_whitespace_runs(line.trim()))
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn normalize_whitespace_runs(input: &str) -> String {
+    // 与采集层保持一致，避免“采集去重命中但组装去重失效”的规则漂移。
+    input.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn truncate_chars(input: &str, limit: usize) -> String {
@@ -377,6 +410,56 @@ mod tests {
         assert_eq!(
             input.context.recent_terminal_output,
             vec!["67890".to_string(), "abcde".to_string()]
+        );
+    }
+
+    #[test]
+    fn build_session_chat_input_dedups_recent_output() {
+        let state = AiRuntimeState::default();
+        register_local_session(
+            &state,
+            &Session {
+                session_id: "local-5".to_string(),
+                profile_id: "__local_shell__".to_string(),
+                state: SessionState::Connected,
+                created_at: 0,
+                last_error: None,
+            },
+            "PowerShell",
+            Some("PowerShell".to_string()),
+        )
+        .unwrap();
+
+        crate::ai::record_terminal_output_for_test(&state, "local-5", "PS C:\\>");
+        crate::ai::record_terminal_output_for_test(&state, "local-5", " PS   C:\\> \r\n");
+        crate::ai::record_terminal_output_for_test(&state, "local-5", "dir");
+
+        let input = build_session_chat_input(
+            &state,
+            AiSessionChatRequest {
+                session_id: "local-5".to_string(),
+                response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
+                ui_language: "zh".to_string(),
+                messages: vec![],
+            },
+            &crate::ai_settings::AiSettings {
+                version: 1,
+                selection_max_chars: 1_500,
+                session_recent_output_max_chars: 1_200,
+                session_recent_output_max_snippets: 4,
+                selection_recent_output_max_chars: 600,
+                selection_recent_output_max_snippets: 2,
+                request_cache_ttl_ms: 15_000,
+                debug_logging_enabled: true,
+                active_openai_config_id: String::new(),
+                openai_configs: Vec::new(),
+            },
+        )
+        .expect("session chat input should build");
+
+        assert_eq!(
+            input.context.recent_terminal_output,
+            vec!["PS C:\\>".to_string(), "dir".to_string()]
         );
     }
 }
