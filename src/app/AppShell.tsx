@@ -228,6 +228,7 @@ export default function AppShell() {
     debugLoggingEnabled: aiDebugLoggingEnabled,
     activeOpenaiConfigId: aiActiveOpenaiConfigId,
     openaiConfigs: aiOpenaiConfigs,
+    activeOpenaiConfig,
     setSelectionMaxChars: setAiSelectionMaxChars,
     setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
     setDebugLoggingEnabled: setAiDebugLoggingEnabled,
@@ -1968,6 +1969,7 @@ export default function AppShell() {
             resourceMonitorEnabled={resourceMonitorEnabled}
             resourceMonitorStatus={activeResourceMonitorStatus}
             resourceSnapshot={activeResourceSnapshot}
+            activeAiConfigName={activeOpenaiConfig?.name?.trim() || null}
             locale={locale}
             t={t}
           />

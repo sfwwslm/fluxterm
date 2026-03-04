@@ -70,6 +70,7 @@ type BottomAreaProps = {
   resourceMonitorEnabled: boolean;
   resourceMonitorStatus: ResourceMonitorStatus;
   resourceSnapshot: SessionResourceSnapshot | null;
+  activeAiConfigName: string | null;
   locale: Locale;
   t: Translate;
 };
@@ -159,6 +160,7 @@ export default function BottomArea({
   resourceMonitorEnabled,
   resourceMonitorStatus,
   resourceSnapshot,
+  activeAiConfigName,
   locale,
   t,
 }: BottomAreaProps) {
@@ -614,6 +616,10 @@ export default function BottomArea({
                 )}
               </div>
               <div className="statusbar-right">
+                <span>
+                  [ {t("status.ai")}{" "}
+                  {activeAiConfigName || t("status.ai.unset")} ]
+                </span>
                 <span>
                   [ {t("status.window")} {stats.windowRows}x{stats.windowCols} ]
                 </span>

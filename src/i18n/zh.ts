@@ -255,6 +255,8 @@ export const zh = {
   "actions.rename": "重命名",
   "actions.remove": "删除",
   "actions.reconnect": "重新连接",
+  "status.ai": "AI",
+  "status.ai.unset": "未接入",
   "status.window": "窗口",
   "status.buffer": "历史",
   "status.resource.checking": "资源检测中",

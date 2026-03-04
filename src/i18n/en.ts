@@ -267,6 +267,8 @@ export const en = {
   "actions.rename": "Rename",
   "actions.remove": "Delete",
   "actions.reconnect": "Reconnect",
+  "status.ai": "AI",
+  "status.ai.unset": "Not set",
   "status.window": "Window",
   "status.buffer": "Buffer",
   "status.resource.checking": "Checking resources",
