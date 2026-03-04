@@ -11,6 +11,7 @@ import type { Locale, Translate } from "@/i18n";
 import type { ThemeId } from "@/types";
 import { isMacOS } from "@/utils/platform";
 import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 type UseMacAppMenuOptions = {
   locale: Locale;
@@ -348,7 +349,7 @@ export default function useMacAppMenu({
         void logError(
           JSON.stringify({
             event: "mac-app-menu:apply-failed",
-            message: error instanceof Error ? error.message : String(error),
+            message: extractErrorMessage(error),
           }),
         );
       }

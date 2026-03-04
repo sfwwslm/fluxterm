@@ -15,6 +15,7 @@ import type {
   SessionStateUi,
 } from "@/types";
 import { normalizeLocalPath } from "@/features/sftp/core/path";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import {
   localHome,
   localList,
@@ -180,16 +181,19 @@ export default function useSftpState({
                     "code" in error && typeof error.code === "string"
                       ? error.code
                       : null,
-                  message:
-                    "message" in error && typeof error.message === "string"
-                      ? error.message
-                      : String(error),
+                  message: extractErrorMessage(error),
                   detail:
-                    "detail" in error && typeof error.detail === "string"
-                      ? error.detail
-                      : null,
+                    "details" in error && typeof error.details === "string"
+                      ? error.details
+                      : "detail" in error && typeof error.detail === "string"
+                        ? error.detail
+                        : null,
                 }
-              : { code: null, message: String(error), detail: null },
+              : {
+                  code: null,
+                  message: extractErrorMessage(error),
+                  detail: null,
+                },
         }),
       ).catch(() => {});
     }

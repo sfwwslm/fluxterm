@@ -11,6 +11,7 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { warn } from "@tauri-apps/plugin-log";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import type {
   CommandHistoryBucket,
   CommandHistoryItem,
@@ -103,7 +104,7 @@ export async function loadCommandHistoryStore() {
     warn(
       JSON.stringify({
         event: "history:load-failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: extractErrorMessage(error),
       }),
     );
     return {
@@ -124,7 +125,7 @@ export async function saveCommandHistoryStore(store: CommandHistoryStore) {
     warn(
       JSON.stringify({
         event: "history:save-failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: extractErrorMessage(error),
       }),
     );
   }

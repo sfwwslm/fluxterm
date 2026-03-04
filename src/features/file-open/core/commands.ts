@@ -20,6 +20,7 @@ import {
 } from "@/shared/config/paths";
 import type { SftpEntry } from "@/types";
 import { sftpDownload } from "@/features/sftp/core/commands";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 const REMOTE_FILE_CACHE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const REMOTE_FILE_CACHE_CLEANUP_MARKER = ".cleanup-meta.json";
@@ -115,7 +116,7 @@ async function ensureRemoteFileCacheCleanup() {
       JSON.stringify({
         event: "remote-file-cache:cleanup-marker-read-failed",
         markerPath,
-        message: error instanceof Error ? error.message : String(error),
+        message: extractErrorMessage(error),
       }),
     );
   }
@@ -151,7 +152,7 @@ async function ensureRemoteFileCacheCleanup() {
       JSON.stringify({
         event: "remote-file-cache:cleanup-failed",
         rootDir,
-        message: error instanceof Error ? error.message : String(error),
+        message: extractErrorMessage(error),
       }),
     );
   }

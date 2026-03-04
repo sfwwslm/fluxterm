@@ -10,6 +10,7 @@ import { warn, debug } from "@tauri-apps/plugin-log";
 import type { Locale } from "@/i18n";
 import type { LocalShellProfile, ThemeId } from "@/types";
 import { getGlobalConfigDir, getSettingsPath } from "@/shared/config/paths";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 type AppSettings = {
   version: 1;
@@ -144,7 +145,7 @@ export default function useAppSettings({
       warn(
         JSON.stringify({
           event: "settings:load-failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
     } finally {
@@ -232,7 +233,7 @@ export default function useAppSettings({
         warn(
           JSON.stringify({
             event: "settings:save-failed",
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error),
           }),
         );
       });

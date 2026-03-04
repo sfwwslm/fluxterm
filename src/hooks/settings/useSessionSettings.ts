@@ -10,6 +10,7 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { info, warn } from "@tauri-apps/plugin-log";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import {
   getTerminalConfigDir,
   getSessionSettingsPath,
@@ -192,7 +193,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       warn(
         JSON.stringify({
           event: "session-settings:load-failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
     } finally {
@@ -240,7 +241,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
           warn(
             JSON.stringify({
               event: "session-settings:rewrite-failed",
-              error: error instanceof Error ? error.message : String(error),
+              error: extractErrorMessage(error),
             }),
           );
         });
@@ -320,7 +321,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       warn(
         JSON.stringify({
           event: "session-settings:save-failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
     });

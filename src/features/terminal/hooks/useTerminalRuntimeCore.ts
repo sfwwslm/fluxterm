@@ -39,6 +39,7 @@ import {
   TERMINAL_MOUNT_RETRY_LIMIT,
 } from "@/features/terminal/core/constants";
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 type TerminalTheme = {
   background: string;
@@ -1212,7 +1213,7 @@ export default function useTerminalRuntime({
                 event: "terminal:selection-auto-copy-failed",
                 sessionId,
                 textLength: text.length,
-                error: error instanceof Error ? error.message : String(error),
+                error: extractErrorMessage(error),
               }),
             );
           });
@@ -1487,7 +1488,7 @@ export default function useTerminalRuntime({
           event: "terminal:focused-line-copy-failed",
           sessionId,
           textLength: text.length,
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
       return false;
@@ -1626,7 +1627,7 @@ export default function useTerminalRuntime({
           sessionId,
           direction,
           keywordLength: value.length,
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
       return false;

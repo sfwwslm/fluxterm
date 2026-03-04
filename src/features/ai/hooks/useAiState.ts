@@ -15,6 +15,7 @@ import type {
   AiChatChunkPayload,
 } from "@/features/ai/types";
 import type { Locale } from "@/i18n";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 /**
  * AI 面板状态管理 Hook。
@@ -59,16 +60,7 @@ type UseAiStateResult = {
 };
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as { message?: unknown }).message === "string"
-  ) {
-    return (error as { message: string }).message;
-  }
-  return String(error);
+  return extractErrorMessage(error);
 }
 
 function readPersistedAiSessionStates() {

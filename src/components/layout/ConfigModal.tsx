@@ -27,6 +27,7 @@ import {
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/settings/useAppSettings";
 import "@/components/layout/ConfigModal.css";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 export type ConfigSectionKey =
   | "app-settings"
@@ -42,16 +43,7 @@ export type ConfigSectionItem = {
 };
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as { message?: unknown }).message === "string"
-  ) {
-    return (error as { message: string }).message;
-  }
-  return String(error);
+  return extractErrorMessage(error);
 }
 
 type ConfigModalProps = {
@@ -1200,8 +1192,7 @@ export default function ConfigModal({
                   JSON.stringify({
                     event: "config-directory:open-failed",
                     path: configDir,
-                    message:
-                      error instanceof Error ? error.message : String(error),
+                    message: extractErrorMessage(error),
                   }),
                 );
               }
@@ -1236,8 +1227,7 @@ export default function ConfigModal({
                   JSON.stringify({
                     event: "data-directory:open-failed",
                     path: dataDir,
-                    message:
-                      error instanceof Error ? error.message : String(error),
+                    message: extractErrorMessage(error),
                   }),
                 );
               }

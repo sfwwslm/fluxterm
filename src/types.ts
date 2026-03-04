@@ -22,7 +22,12 @@ export type Session = {
   profileId: string;
   state: "connecting" | "connected" | "disconnected" | "error";
   createdAt: number;
-  lastError?: { code: string; message: string; detail?: string | null } | null;
+  lastError?: {
+    code: string;
+    message: string;
+    detail?: string | null;
+    details?: string | null;
+  } | null;
 };
 
 /** 会话窗格标识。 */

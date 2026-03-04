@@ -12,6 +12,7 @@ import useSftpDropUpload from "@/features/sftp/hooks/useSftpDropUpload";
 import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
 import { useNotices } from "@/hooks/useNotices";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import ContextMenu from "@/components/terminal/menu/ContextMenu";
 import Tooltip from "@/components/terminal/menu/Tooltip";
 import {
@@ -338,15 +339,7 @@ export default function SftpPanel({
     try {
       await onOpenFile(entry);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : typeof error === "object" &&
-              error !== null &&
-              "message" in error &&
-              typeof error.message === "string"
-            ? error.message
-            : String(error);
+      const message = extractErrorMessage(error);
       pushToast({
         level: "error",
         message: isRemote
@@ -603,15 +596,7 @@ export default function SftpPanel({
                 try {
                   await openPath(currentPath);
                 } catch (error) {
-                  const errorMessage =
-                    error instanceof Error
-                      ? error.message
-                      : typeof error === "object" &&
-                          error !== null &&
-                          "message" in error &&
-                          typeof error.message === "string"
-                        ? error.message
-                        : String(error);
+                  const errorMessage = extractErrorMessage(error);
                   const message = errorMessage.includes(
                     "Not allowed to open path",
                   )

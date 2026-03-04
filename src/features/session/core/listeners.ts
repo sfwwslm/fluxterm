@@ -8,7 +8,12 @@ import { subscribeTauri } from "@/shared/tauri/events";
 type SessionStatusPayload = {
   sessionId: string;
   state: SessionStateUi;
-  error?: { code: string; message: string; detail?: string | null };
+  error?: {
+    code: string;
+    message: string;
+    detail?: string | null;
+    details?: string | null;
+  };
 };
 
 export type HostKeyVerificationRequiredPayload = {

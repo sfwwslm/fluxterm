@@ -21,6 +21,7 @@ import type {
 } from "@/layout/types";
 import type { PanelKey } from "@/types";
 import { getLayoutPath, getTerminalConfigDir } from "@/shared/config/paths";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 type LayoutState = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
@@ -129,7 +130,7 @@ export default function useLayoutState({
       warn(
         JSON.stringify({
           event: "layout:load-failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
     } finally {
@@ -344,7 +345,7 @@ export default function useLayoutState({
         warn(
           JSON.stringify({
             event: "layout:save-failed",
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error),
           }),
         );
       });

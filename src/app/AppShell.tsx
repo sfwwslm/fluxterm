@@ -87,6 +87,7 @@ import {
 } from "@/features/file-open/core/commands";
 import { subscribeTauri } from "@/shared/tauri/events";
 import { getBackgroundImageAssetPath } from "@/shared/config/paths";
+import { extractErrorMessage } from "@/shared/errors/appError";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   profiles: "panel.profiles",
@@ -118,16 +119,7 @@ function formatMessage(
 }
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as { message?: unknown }).message === "string"
-  ) {
-    return (error as { message: string }).message;
-  }
-  return String(error);
+  return extractErrorMessage(error);
 }
 
 function formatOpenSshImportToast(
@@ -454,7 +446,7 @@ export default function AppShell() {
           JSON.stringify({
             event: "settings:background-image-load-failed",
             asset: backgroundImageAsset,
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error),
           }),
         );
       }
@@ -1126,7 +1118,7 @@ export default function AppShell() {
           sessionId: activeSessionId,
           path: resolvedPath,
           rawPath: trackedPath,
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
     });

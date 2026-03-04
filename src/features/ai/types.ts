@@ -106,5 +106,6 @@ export type AiChatErrorPayload = {
     code: string;
     message: string;
     detail?: string | null;
+    details?: string | null;
   };
 };

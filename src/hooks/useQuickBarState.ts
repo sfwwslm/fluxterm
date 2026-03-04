@@ -13,6 +13,7 @@ import type {
   QuickCommandItem,
 } from "@/types";
 import { getGlobalConfigDir, getQuickbarPath } from "@/shared/config/paths";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import {
   DEFAULT_QUICKBAR_GROUP_ID,
   LEGACY_DEFAULT_QUICKBAR_GROUP_ID,
@@ -228,7 +229,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
       warn(
         JSON.stringify({
           event: "quickbar:load-failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         }),
       );
     } finally {
@@ -273,7 +274,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
         warn(
           JSON.stringify({
             event: "quickbar:save-failed",
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error),
           }),
         );
       });

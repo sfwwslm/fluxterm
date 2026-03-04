@@ -196,7 +196,12 @@ export default function useSessionState({
     handleSessionStatus: (payload: {
       sessionId: string;
       state: SessionStateUi;
-      error?: { code: string; message: string; detail?: string | null };
+      error?: {
+        code: string;
+        message: string;
+        detail?: string | null;
+        details?: string | null;
+      };
     }) => void;
     handleHostKeyVerificationRequired: (
       payload: HostKeyVerificationRequiredPayload,

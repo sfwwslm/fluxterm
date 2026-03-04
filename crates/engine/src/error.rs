@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct EngineError {
     pub code: String,
     pub message: String,
+    #[serde(rename = "details", alias = "detail")]
     pub detail: Option<String>,
 }
 

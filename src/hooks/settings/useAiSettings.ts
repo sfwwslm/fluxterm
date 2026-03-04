@@ -9,6 +9,7 @@ import {
   aiSettingsGet,
   aiSettingsSave,
 } from "@/features/ai/core/commands";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import type {
   AiSettingsSaveInput,
   AiSettingsView,
@@ -161,7 +162,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         warn(
           JSON.stringify({
             event: "ai-settings:load-failed",
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error),
           }),
         ).catch(() => {});
       })
@@ -203,7 +204,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         warn(
           JSON.stringify({
             event: "ai-settings:save-failed",
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error),
           }),
         ).catch(() => {});
       });
