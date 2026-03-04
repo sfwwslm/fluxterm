@@ -103,6 +103,98 @@
   word-break: break-word;
 }
 
+.ai-message.assistant .ai-message-body {
+  white-space: normal;
+}
+
+.ai-message-body > :first-child {
+  margin-top: 0;
+}
+
+.ai-message-body > :last-child {
+  margin-bottom: 0;
+}
+
+.ai-message-body p,
+.ai-message-body ul,
+.ai-message-body ol,
+.ai-message-body pre,
+.ai-message-body blockquote,
+.ai-message-body table,
+.ai-message-body h1,
+.ai-message-body h2,
+.ai-message-body h3,
+.ai-message-body h4,
+.ai-message-body h5,
+.ai-message-body h6 {
+  margin: 0 0 10px;
+}
+
+.ai-message-body ul,
+.ai-message-body ol {
+  padding-left: 20px;
+}
+
+.ai-message-body li + li {
+  margin-top: 4px;
+}
+
+.ai-message-body a {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ai-message-body code {
+  font-family:
+    "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.95em;
+}
+
+.ai-message-body :not(pre) > code {
+  padding: 0.12em 0.36em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel-bg) 70%, black 30%);
+}
+
+.ai-message-body pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--panel-bg) 72%, black 28%);
+}
+
+.ai-message-body pre code {
+  display: block;
+  white-space: pre;
+}
+
+.ai-message-body blockquote {
+  padding-left: 12px;
+  border-left: 3px solid
+    color-mix(in srgb, var(--accent-color) 55%, var(--border-color));
+  color: var(--text-secondary);
+}
+
+.ai-message-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ai-message-body th,
+.ai-message-body td {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ai-message-body th {
+  background: color-mix(in srgb, var(--panel-bg) 76%, white 24%);
+}
+
 .ai-panel-error {
   margin: 0 14px 12px;
   padding: 10px 12px;

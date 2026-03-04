@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Button from "@/components/ui/button";
 import type { Translate } from "@/i18n";
 import type { AiChatMessage } from "@/features/ai/types";
@@ -77,6 +79,29 @@ export default function AiPanel({
     }, 1500);
   }
 
+  function renderMessageBody(message: AiChatMessage) {
+    if (!message.content && pending && message.role === "assistant") {
+      return "…";
+    }
+
+    if (message.role === "assistant") {
+      return (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ ...props }) => (
+              <a {...props} target="_blank" rel="noreferrer noopener" />
+            ),
+          }}
+        >
+          {message.content}
+        </ReactMarkdown>
+      );
+    }
+
+    return message.content;
+  }
+
   return (
     <div className="ai-panel">
       <div className="ai-panel-toolbar">
@@ -146,10 +171,7 @@ export default function AiPanel({
                   : t("actions.copy")}
               </button>
             </div>
-            <div className="ai-message-body">
-              {message.content ||
-                (pending && message.role === "assistant" ? "…" : "")}
-            </div>
+            <div className="ai-message-body">{renderMessageBody(message)}</div>
           </div>
         ))}
       </div>
