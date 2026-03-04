@@ -17,7 +17,7 @@ use engine::{EngineError, HostProfile, Session, SessionResourceSnapshot, Session
 use openai::OpenAiClientConfig;
 use tauri::{AppHandle, Manager};
 
-use crate::ai_settings::read_ai_settings;
+use crate::ai_settings::{AiSettings, OpenAiConfigSettings, read_ai_settings};
 use crate::profile_store::{ProfileStore, read_profiles};
 use crate::security::CryptoService;
 
@@ -100,8 +100,16 @@ impl SessionContextRecord {
     }
 }
 
-/// 读取当前 OpenAI 配置。
+/// 读取当前激活的 OpenAI 配置。
 pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineError> {
+    read_openai_config_by_id(app, None)
+}
+
+/// 按 id 读取指定 OpenAI 配置；未传入时读取当前激活配置。
+pub fn read_openai_config_by_id(
+    app: &AppHandle,
+    config_id: Option<&str>,
+) -> Result<OpenAiClientConfig, EngineError> {
     let ai_settings = read_ai_settings(app)?;
     let timeout_ms = std::env::var("OPENAI_TIMEOUT_MS")
         .ok()
@@ -115,21 +123,16 @@ pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineE
             )
         })?
         .unwrap_or(DEFAULT_OPENAI_TIMEOUT_MS);
-    let Some(active_config) = ai_settings.active_openai_config() else {
-        return Err(EngineError::new(
-            "ai_provider_config_invalid",
-            "当前 OpenAI 配置未完成，请先完成配置。",
-        ));
-    };
-    let base_url = active_config.base_url.trim().to_string();
-    let model = active_config.model.trim().to_string();
+    let selected_config = resolve_openai_config(&ai_settings, config_id)?;
+    let base_url = selected_config.base_url.trim().to_string();
+    let model = selected_config.model.trim().to_string();
     if base_url.is_empty() || model.is_empty() {
         return Err(EngineError::new(
             "ai_provider_config_invalid",
             "当前 OpenAI 配置未完成，请先完成配置。",
         ));
     }
-    let api_key = resolve_openai_api_key(app, &ai_settings)?;
+    let api_key = resolve_openai_api_key(app, &ai_settings, selected_config.id.as_str())?;
 
     Ok(OpenAiClientConfig {
         api_key,
@@ -143,9 +146,12 @@ pub fn read_openai_config(app: &AppHandle) -> Result<OpenAiClientConfig, EngineE
 fn resolve_openai_api_key(
     app: &AppHandle,
     settings: &crate::ai_settings::AiSettings,
+    config_id: &str,
 ) -> Result<String, EngineError> {
     if let Some(token) = settings
-        .active_openai_config()
+        .openai_configs
+        .iter()
+        .find(|config| config.id == config_id)
         .and_then(|config| config.api_key_ref.as_ref())
     {
         let store = read_profiles(app).unwrap_or_else(|_| ProfileStore::default());
@@ -153,6 +159,23 @@ fn resolve_openai_api_key(
         return crypto.decrypt_string(token);
     }
     Ok(String::new())
+}
+
+fn resolve_openai_config<'a>(
+    settings: &'a AiSettings,
+    config_id: Option<&str>,
+) -> Result<&'a OpenAiConfigSettings, EngineError> {
+    let selected = if let Some(config_id) = config_id.map(str::trim).filter(|id| !id.is_empty()) {
+        settings.openai_configs.iter().find(|config| config.id == config_id)
+    } else {
+        settings.active_openai_config()
+    };
+    selected.ok_or_else(|| {
+        EngineError::new(
+            "ai_provider_config_invalid",
+            "当前 OpenAI 配置未完成，请先完成配置。",
+        )
+    })
 }
 
 /// 记录 SSH 会话元数据，供后续 AI 上下文消费。

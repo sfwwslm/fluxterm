@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::ai::{
     AiRuntimeState, cancel_chat_stream, context, finish_chat_stream, get_cached_response,
-    read_openai_config, register_chat_stream, store_cached_response,
+    read_openai_config, read_openai_config_by_id, register_chat_stream, store_cached_response,
 };
 use crate::ai_settings::{
     AiSettingsSaveInput, AiSettingsView, read_ai_settings, read_ai_settings_view,
@@ -35,8 +35,11 @@ pub fn ai_settings_save(
 
 /// 测试当前 OpenAI-compatible 接入是否可用。
 #[tauri::command]
-pub async fn ai_openai_test(app: AppHandle) -> Result<(), EngineError> {
-    let config = read_openai_config(&app)?;
+pub async fn ai_openai_test(
+    app: AppHandle,
+    config_id: Option<String>,
+) -> Result<(), EngineError> {
+    let config = read_openai_config_by_id(&app, config_id.as_deref())?;
     openai::test_connection(&config)
         .await
         .map_err(map_openai_error)

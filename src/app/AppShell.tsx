@@ -232,11 +232,11 @@ export default function AppShell() {
     setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
     setDebugLoggingEnabled: setAiDebugLoggingEnabled,
     setActiveOpenaiConfigId: setAiActiveOpenaiConfigId,
-    updateActiveOpenaiConfigName,
-    updateActiveOpenaiConfigBaseUrl,
-    updateActiveOpenaiConfigModel,
+    updateOpenaiConfigName,
+    updateOpenaiConfigBaseUrl,
+    updateOpenaiConfigModel,
     addOpenaiConfig,
-    removeActiveOpenaiConfig,
+    removeOpenaiConfig,
     testOpenAiConnection,
     replaceOpenaiApiKey,
     clearOpenaiApiKey,
@@ -384,6 +384,7 @@ export default function AppShell() {
     () => ({
       "app-settings": t("config.section.appSettings"),
       "ai-settings": t("config.section.aiSettings"),
+      "openai-manage": t("config.section.openaiManage"),
       "openai-settings": t("config.section.openaiSettings"),
       "session-settings": t("config.section.sessionSettings"),
       "config-directory": t("config.section.configDirectory"),
@@ -407,6 +408,24 @@ export default function AppShell() {
           label: configSectionLabels["ai-settings"],
         },
         {
+          key: "openai-manage",
+          label: configSectionLabels["openai-manage"],
+        },
+        {
+          key: "openai-settings",
+          label: configSectionLabels["openai-settings"],
+        },
+      ],
+      "openai-manage": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-manage",
+          label: configSectionLabels["openai-manage"],
+        },
+        {
           key: "openai-settings",
           label: configSectionLabels["openai-settings"],
         },
@@ -415,6 +434,10 @@ export default function AppShell() {
         {
           key: "ai-settings",
           label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-manage",
+          label: configSectionLabels["openai-manage"],
         },
         {
           key: "openai-settings",
@@ -1992,10 +2015,10 @@ export default function AppShell() {
         onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
         onAiActiveOpenaiConfigIdChange={setAiActiveOpenaiConfigId}
         onAiOpenaiConfigAdd={addOpenaiConfig}
-        onAiOpenaiConfigRemove={removeActiveOpenaiConfig}
-        onAiOpenaiConfigNameChange={updateActiveOpenaiConfigName}
-        onAiOpenaiBaseUrlChange={updateActiveOpenaiConfigBaseUrl}
-        onAiOpenaiModelChange={updateActiveOpenaiConfigModel}
+        onAiOpenaiConfigRemove={removeOpenaiConfig}
+        onAiOpenaiConfigNameChange={updateOpenaiConfigName}
+        onAiOpenaiBaseUrlChange={updateOpenaiConfigBaseUrl}
+        onAiOpenaiModelChange={updateOpenaiConfigModel}
         onAiOpenAiTest={testOpenAiConnection}
         onAiOpenaiApiKeyReplace={replaceOpenaiApiKey}
         onAiOpenaiApiKeyClear={clearOpenaiApiKey}

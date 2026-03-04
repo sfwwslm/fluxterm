@@ -162,6 +162,56 @@
   text-align: right;
 }
 
+.config-select-input {
+  width: 220px;
+  max-width: 100%;
+  padding: 10px 42px 10px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--input-bg);
+  background-image:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-header) 32%, transparent),
+      color-mix(in srgb, var(--surface-menu) 18%, transparent)
+    ),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.25 4.5L6 8.25L9.75 4.5' stroke='%2398A2B3' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position:
+    0 0,
+    right 14px center;
+  background-repeat: no-repeat;
+  background-size:
+    100% 100%,
+    12px 12px;
+  color: var(--input-text);
+  font: inherit;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: padding-box;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent),
+    0 0 0 0 transparent;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.config-select-input:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-input));
+}
+
+.config-select-input option {
+  background: var(--surface-panel, var(--surface-menu));
+  color: var(--text-primary);
+}
+
+.config-select-input::-ms-expand {
+  display: none;
+}
+
 .config-text-input {
   width: 280px;
   max-width: 100%;
@@ -203,6 +253,82 @@
   gap: 8px;
 }
 
+.config-empty-state {
+  padding: 18px 16px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-menu) 62%, transparent);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.config-openai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-openai-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-input);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-header) 78%, transparent);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.config-openai-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border-input));
+  transform: translateY(-1px);
+}
+
+.config-openai-item.active {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border-input));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.config-openai-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.config-openai-item-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.config-openai-item-meta {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.config-openai-badge {
+  flex: none;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .config-file-picker-actions button:hover {
   background: inherit;
   border-color: inherit;
@@ -217,6 +343,12 @@
 .config-number-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.config-select-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 @media (max-width: 720px) {

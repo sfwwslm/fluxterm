@@ -22,9 +22,9 @@ export function aiSettingsSave(settings: AiSettingsSaveInput) {
   return callTauri<AiSettingsView>("ai_settings_save", { settings });
 }
 
-/** 测试当前 OpenAI-compatible 接入。 */
-export function aiOpenAiTest() {
-  return callTauri<void>("ai_openai_test");
+/** 测试指定 OpenAI-compatible 接入；未传入时测试当前接入。 */
+export function aiOpenAiTest(configId?: string) {
+  return callTauri<void>("ai_openai_test", { configId });
 }
 
 /** 发起会话上下文问答。 */

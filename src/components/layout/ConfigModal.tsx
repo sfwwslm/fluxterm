@@ -20,6 +20,7 @@ import "@/components/layout/ConfigModal.css";
 export type ConfigSectionKey =
   | "app-settings"
   | "ai-settings"
+  | "openai-manage"
   | "openai-settings"
   | "session-settings"
   | "config-directory";
@@ -67,14 +68,17 @@ type ConfigModalProps = {
   onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
   onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
   onAiActiveOpenaiConfigIdChange?: (value: string) => void;
-  onAiOpenaiConfigAdd?: () => void;
-  onAiOpenaiConfigRemove?: () => void;
-  onAiOpenaiConfigNameChange?: (value: string) => void;
-  onAiOpenaiBaseUrlChange?: (value: string) => void;
-  onAiOpenaiModelChange?: (value: string) => void;
-  onAiOpenAiTest?: () => Promise<void> | void;
-  onAiOpenaiApiKeyReplace?: (value: string) => Promise<void> | void;
-  onAiOpenaiApiKeyClear?: () => Promise<void> | void;
+  onAiOpenaiConfigAdd?: () => string | void;
+  onAiOpenaiConfigRemove?: (configId: string) => void;
+  onAiOpenaiConfigNameChange?: (configId: string, value: string) => void;
+  onAiOpenaiBaseUrlChange?: (configId: string, value: string) => void;
+  onAiOpenaiModelChange?: (configId: string, value: string) => void;
+  onAiOpenAiTest?: (configId: string) => Promise<void> | void;
+  onAiOpenaiApiKeyReplace?: (
+    configId: string,
+    value: string,
+  ) => Promise<void> | void;
+  onAiOpenaiApiKeyClear?: (configId: string) => Promise<void> | void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
@@ -160,19 +164,23 @@ export default function ConfigModal({
   );
   const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
     useState(() => String(resourceMonitorIntervalSec));
-  const activeOpenAiConfig =
-    aiOpenaiConfigs.find((config) => config.id === aiActiveOpenaiConfigId) ??
+  const [selectedOpenAiConfigId, setSelectedOpenAiConfigId] = useState(
+    aiActiveOpenaiConfigId || aiOpenaiConfigs[0]?.id || "",
+  );
+  const selectedOpenAiConfig =
+    aiOpenaiConfigs.find((config) => config.id === selectedOpenAiConfigId) ??
     null;
   const [aiOpenAiNameDraft, setAiOpenAiNameDraft] = useState(
-    activeOpenAiConfig?.name ?? "",
+    selectedOpenAiConfig?.name ?? "",
   );
   const [aiOpenAiBaseUrlDraft, setAiOpenAiBaseUrlDraft] = useState(
-    activeOpenAiConfig?.baseUrl ?? "",
+    selectedOpenAiConfig?.baseUrl ?? "",
   );
   const [aiOpenAiModelDraft, setAiOpenAiModelDraft] = useState(
-    activeOpenAiConfig?.model ?? "",
+    selectedOpenAiConfig?.model ?? "",
   );
   const [aiOpenAiApiKeyDraft, setAiOpenAiApiKeyDraft] = useState("");
+  const [testingOpenAiConfigId, setTestingOpenAiConfigId] = useState("");
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -215,12 +223,24 @@ export default function ConfigModal({
   }, [resourceMonitorIntervalSec]);
 
   useEffect(() => {
+    if (
+      selectedOpenAiConfigId &&
+      aiOpenaiConfigs.some((config) => config.id === selectedOpenAiConfigId)
+    ) {
+      return;
+    }
+    setSelectedOpenAiConfigId(
+      aiActiveOpenaiConfigId || aiOpenaiConfigs[0]?.id || "",
+    );
+  }, [aiActiveOpenaiConfigId, aiOpenaiConfigs, selectedOpenAiConfigId]);
+
+  useEffect(() => {
     // OpenAI 接入字段在当前分区内允许连续编辑，不应被自动保存后的同 id 回写覆盖。
-    // 这里只在真正切换当前接入 id 时重置草稿，避免 baseUrl/model 输入过程中被打断。
-    setAiOpenAiNameDraft(activeOpenAiConfig?.name ?? "");
-    setAiOpenAiBaseUrlDraft(activeOpenAiConfig?.baseUrl ?? "");
-    setAiOpenAiModelDraft(activeOpenAiConfig?.model ?? "");
-  }, [aiActiveOpenaiConfigId]);
+    // 这里只在真正切换管理中的接入 id 时重置草稿，避免 baseUrl/model 输入过程中被打断。
+    setAiOpenAiNameDraft(selectedOpenAiConfig?.name ?? "");
+    setAiOpenAiBaseUrlDraft(selectedOpenAiConfig?.baseUrl ?? "");
+    setAiOpenAiModelDraft(selectedOpenAiConfig?.model ?? "");
+  }, [selectedOpenAiConfigId]);
 
   // 数值草稿在失焦、回车或关闭模态框时统一提交；非法输入回退到当前生效值。
   function commitScrollbackDraft() {
@@ -288,21 +308,30 @@ export default function ConfigModal({
   }
 
   function commitAiOpenAiNameDraft() {
-    onAiOpenaiConfigNameChange?.(aiOpenAiNameDraft.trim());
+    if (!selectedOpenAiConfigId) return;
+    onAiOpenaiConfigNameChange?.(
+      selectedOpenAiConfigId,
+      aiOpenAiNameDraft.trim(),
+    );
   }
 
   function commitAiOpenAiBaseUrlDraft() {
-    onAiOpenaiBaseUrlChange?.(aiOpenAiBaseUrlDraft.trim());
+    if (!selectedOpenAiConfigId) return;
+    onAiOpenaiBaseUrlChange?.(
+      selectedOpenAiConfigId,
+      aiOpenAiBaseUrlDraft.trim(),
+    );
   }
 
   function commitAiOpenAiModelDraft() {
-    onAiOpenaiModelChange?.(aiOpenAiModelDraft.trim());
+    if (!selectedOpenAiConfigId) return;
+    onAiOpenaiModelChange?.(selectedOpenAiConfigId, aiOpenAiModelDraft.trim());
   }
 
   async function commitAiOpenAiApiKeyDraft() {
     const value = aiOpenAiApiKeyDraft.trim();
-    if (!value) return;
-    await onAiOpenaiApiKeyReplace?.(value);
+    if (!value || !selectedOpenAiConfigId) return;
+    await onAiOpenaiApiKeyReplace?.(selectedOpenAiConfigId, value);
     setAiOpenAiApiKeyDraft("");
   }
 
@@ -399,6 +428,30 @@ export default function ConfigModal({
       return (
         <div className="config-modal-panel config-modal-panel-scrollable">
           <h3>{t("config.section.aiSettings")}</h3>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.activeOpenAiConfig")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.ai.activeOpenAiConfigHint")}
+              </span>
+            </div>
+            <select
+              className="config-select-input"
+              value={aiActiveOpenaiConfigId}
+              onChange={(event) =>
+                onAiActiveOpenaiConfigIdChange?.(event.target.value)
+              }
+            >
+              <option value="">{t("config.ai.openaiConfigEmpty")}</option>
+              {aiOpenaiConfigs.map((config) => (
+                <option key={config.id} value={config.id}>
+                  {config.name || t("config.openai.unnamed")}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
@@ -452,40 +505,6 @@ export default function ConfigModal({
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
-                {t("config.ai.activeOpenAiConfig")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.ai.activeOpenAiConfigHint")}
-              </span>
-            </div>
-            <select
-              className="config-number-input"
-              value={aiActiveOpenaiConfigId}
-              onChange={(event) =>
-                onAiActiveOpenaiConfigIdChange?.(event.target.value)
-              }
-            >
-              <option value="">{t("config.ai.openaiConfigEmpty")}</option>
-              {aiOpenaiConfigs.map((config) => (
-                <option key={config.id} value={config.id}>
-                  {config.name || t("config.openai.unnamed")}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="config-file-picker-actions">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!activeOpenAiConfig}
-              onClick={() => onAiOpenaiConfigRemove?.()}
-            >
-              {t("config.ai.removeActiveOpenAiConfig")}
-            </Button>
-          </div>
-          <label className="config-toggle-card">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
                 {t("config.ai.debugLoggingEnabled")}
               </span>
               <span className="config-toggle-desc">
@@ -503,10 +522,92 @@ export default function ConfigModal({
         </div>
       );
     }
+    if (activeSection === "openai-manage") {
+      return (
+        <div className="config-modal-panel config-modal-panel-scrollable">
+          <h3>{t("config.section.openaiManage")}</h3>
+          <p>{t("config.openai.manageHint")}</p>
+          <div className="config-file-picker-actions">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                const nextId = onAiOpenaiConfigAdd?.();
+                if (nextId) {
+                  setSelectedOpenAiConfigId(nextId);
+                }
+              }}
+            >
+              {t("config.openai.addConfig")}
+            </Button>
+          </div>
+          {!aiOpenaiConfigs.length ? (
+            <div className="config-empty-state">
+              {t("config.openai.manageEmpty")}
+            </div>
+          ) : (
+            <div className="config-openai-list">
+              {aiOpenaiConfigs.map((config) => {
+                const isSelected = config.id === selectedOpenAiConfigId;
+                const isActive = config.id === aiActiveOpenaiConfigId;
+                return (
+                  <button
+                    key={config.id}
+                    type="button"
+                    className={`config-openai-item ${isSelected ? "active" : ""}`.trim()}
+                    onClick={() => setSelectedOpenAiConfigId(config.id)}
+                  >
+                    <span className="config-openai-item-main">
+                      <span className="config-openai-item-title">
+                        {config.name || t("config.openai.unnamed")}
+                      </span>
+                      <span className="config-openai-item-meta">
+                        {config.baseUrl || t("config.openai.baseUrlEmpty")}
+                      </span>
+                    </span>
+                    {isActive ? (
+                      <span className="config-openai-badge">
+                        {t("config.openai.currentBadge")}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="config-file-picker-actions">
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={!selectedOpenAiConfig}
+              onClick={() => {
+                if (!selectedOpenAiConfig) return;
+                const currentIndex = aiOpenaiConfigs.findIndex(
+                  (config) => config.id === selectedOpenAiConfig.id,
+                );
+                const fallbackId =
+                  aiOpenaiConfigs[currentIndex + 1]?.id ??
+                  aiOpenaiConfigs[currentIndex - 1]?.id ??
+                  "";
+                onAiOpenaiConfigRemove?.(selectedOpenAiConfig.id);
+                setSelectedOpenAiConfigId(fallbackId);
+              }}
+            >
+              {t("config.openai.removeConfig")}
+            </Button>
+          </div>
+        </div>
+      );
+    }
     if (activeSection === "openai-settings") {
       return (
         <div className="config-modal-panel config-modal-panel-scrollable">
           <h3>{t("config.section.openaiSettings")}</h3>
+          {!selectedOpenAiConfig && (
+            <div className="config-empty-state">
+              {t("config.openai.manageEmpty")}
+            </div>
+          )}
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
@@ -527,7 +628,7 @@ export default function ConfigModal({
                 event.preventDefault();
                 commitAiOpenAiNameDraft();
               }}
-              disabled={!activeOpenAiConfig}
+              disabled={!selectedOpenAiConfig}
             />
           </div>
           <div className="config-toggle-card config-feature-group">
@@ -550,7 +651,7 @@ export default function ConfigModal({
                 event.preventDefault();
                 commitAiOpenAiBaseUrlDraft();
               }}
-              disabled={!activeOpenAiConfig}
+              disabled={!selectedOpenAiConfig}
             />
           </div>
           <div className="config-toggle-card config-feature-group">
@@ -574,7 +675,7 @@ export default function ConfigModal({
                 event.preventDefault();
                 commitAiOpenAiModelDraft();
               }}
-              disabled={!activeOpenAiConfig}
+              disabled={!selectedOpenAiConfig}
             />
           </div>
           <div className="config-toggle-card config-feature-group">
@@ -583,7 +684,7 @@ export default function ConfigModal({
                 {t("config.openai.apiKey")}
               </span>
               <span className="config-toggle-desc">
-                {activeOpenAiConfig?.apiKeyConfigured
+                {selectedOpenAiConfig?.apiKeyConfigured
                   ? t("config.openai.apiKeyConfigured")
                   : t("config.openai.apiKeyEmpty")}
               </span>
@@ -612,12 +713,12 @@ export default function ConfigModal({
                       });
                     });
                 }}
-                disabled={!activeOpenAiConfig}
+                disabled={!selectedOpenAiConfig}
               />
               <Button
                 variant="primary"
                 size="sm"
-                disabled={!activeOpenAiConfig || !aiOpenAiApiKeyDraft.trim()}
+                disabled={!selectedOpenAiConfig || !aiOpenAiApiKeyDraft.trim()}
                 onClick={() => {
                   commitAiOpenAiApiKeyDraft()
                     .then(() => {
@@ -639,10 +740,14 @@ export default function ConfigModal({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={!activeOpenAiConfig?.apiKeyConfigured}
+                disabled={!selectedOpenAiConfig?.apiKeyConfigured}
                 onClick={() => {
                   setAiOpenAiApiKeyDraft("");
-                  Promise.resolve(onAiOpenaiApiKeyClear?.())
+                  Promise.resolve(
+                    selectedOpenAiConfig
+                      ? onAiOpenaiApiKeyClear?.(selectedOpenAiConfig.id)
+                      : undefined,
+                  )
                     .then(() => {
                       pushToast({
                         level: "success",
@@ -663,19 +768,17 @@ export default function ConfigModal({
           </div>
           <div className="config-file-picker-actions">
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onAiOpenaiConfigAdd?.()}
-            >
-              {t("config.openai.addConfig")}
-            </Button>
-            <Button
               variant="primary"
               size="sm"
-              disabled={!activeOpenAiConfig}
+              disabled={
+                !selectedOpenAiConfig ||
+                testingOpenAiConfigId === selectedOpenAiConfig.id
+              }
               onClick={async () => {
                 try {
-                  await onAiOpenAiTest?.();
+                  if (!selectedOpenAiConfig) return;
+                  setTestingOpenAiConfigId(selectedOpenAiConfig.id);
+                  await onAiOpenAiTest?.(selectedOpenAiConfig.id);
                   pushToast({
                     level: "success",
                     message: t("config.openai.testSuccess"),
@@ -685,10 +788,15 @@ export default function ConfigModal({
                     level: "error",
                     message: getErrorMessage(error),
                   });
+                } finally {
+                  setTestingOpenAiConfigId("");
                 }
               }}
             >
-              {t("config.openai.test")}
+              {selectedOpenAiConfig &&
+              testingOpenAiConfigId === selectedOpenAiConfig.id
+                ? t("config.openai.testing")
+                : t("config.openai.test")}
             </Button>
           </div>
         </div>
@@ -850,7 +958,7 @@ export default function ConfigModal({
               </span>
             </div>
             <select
-              className="config-number-input"
+              className="config-select-input"
               value={hostKeyPolicy}
               onChange={(event) =>
                 onHostKeyPolicyChange?.(event.target.value as HostKeyPolicy)

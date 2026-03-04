@@ -29,6 +29,7 @@ export const en = {
   "menu.help.about": "About FluxTerm",
   "config.section.appSettings": "Settings",
   "config.section.aiSettings": "AI Assistant",
+  "config.section.openaiManage": "Access Manager",
   "config.section.openaiSettings": "OpenAI",
   "config.section.sessionSettings": "Session Settings",
   "config.section.configDirectory": "Config Directory",
@@ -50,16 +51,22 @@ export const en = {
   "config.ai.activeOpenAiConfig": "Current OpenAI Access",
   "config.ai.activeOpenAiConfigHint":
     "Choose which OpenAI access the AI assistant uses.",
-  "config.ai.openaiConfigEmpty": "No OpenAI access yet",
+  "config.ai.openaiConfigEmpty": "Not set",
   "config.ai.removeActiveOpenAiConfig": "Delete Current Access",
   "config.ai.debugLoggingEnabled": "Enable AI Debug Logging",
   "config.ai.debugLoggingEnabledHint":
     "Log the final outbound model messages and returned content for debugging.",
   "config.openai.name": "Access Name",
+  "config.openai.manageHint":
+    "Browse, switch, and remove saved OpenAI access entries.",
+  "config.openai.manageEmpty": "No saved access entries yet",
+  "config.openai.currentBadge": "In Use",
+  "config.openai.removeConfig": "Delete Access",
   "config.openai.nameHint":
     "Use a short name to distinguish different OpenAI access configs.",
   "config.openai.unnamed": "Unnamed Access",
   "config.openai.baseUrl": "Base URL",
+  "config.openai.baseUrlEmpty": "Base URL not set",
   "config.openai.baseUrlHint": "Set the OpenAI-compatible endpoint.",
   "config.openai.model": "Model",
   "config.openai.modelHint":
@@ -77,6 +84,7 @@ export const en = {
   "config.openai.clearApiKey": "Clear Key",
   "config.openai.addConfig": "Add Access",
   "config.openai.test": "Test Connection",
+  "config.openai.testing": "Testing...",
   "config.openai.testSuccess": "OpenAI connection test succeeded",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":

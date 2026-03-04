@@ -31,14 +31,14 @@ type UseAiSettingsResult = {
   setSessionRecentOutputMaxChars: React.Dispatch<React.SetStateAction<number>>;
   setDebugLoggingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setActiveOpenaiConfigId: React.Dispatch<React.SetStateAction<string>>;
-  updateActiveOpenaiConfigName: (value: string) => void;
-  updateActiveOpenaiConfigBaseUrl: (value: string) => void;
-  updateActiveOpenaiConfigModel: (value: string) => void;
-  addOpenaiConfig: () => void;
-  removeActiveOpenaiConfig: () => void;
-  testOpenAiConnection: () => Promise<void>;
-  replaceOpenaiApiKey: (value: string) => Promise<void>;
-  clearOpenaiApiKey: () => Promise<void>;
+  updateOpenaiConfigName: (configId: string, value: string) => void;
+  updateOpenaiConfigBaseUrl: (configId: string, value: string) => void;
+  updateOpenaiConfigModel: (configId: string, value: string) => void;
+  addOpenaiConfig: () => string;
+  removeOpenaiConfig: (configId: string) => void;
+  testOpenAiConnection: (configId?: string) => Promise<void>;
+  replaceOpenaiApiKey: (configId: string, value: string) => Promise<void>;
+  clearOpenaiApiKey: (configId: string) => Promise<void>;
 };
 
 const MIN_AI_TEXT_LIMIT = 100;
@@ -257,12 +257,13 @@ export default function useAiSettings(): UseAiSettingsResult {
     ).catch(() => {});
   }, [activeOpenaiConfigId]);
 
-  function updateActiveOpenaiConfig(
+  function updateOpenaiConfig(
+    configId: string,
     updater: (config: OpenAiConfigView) => OpenAiConfigView,
   ) {
     setOpenaiConfigs((current) =>
       current.map((config) =>
-        config.id === activeOpenaiConfigId ? updater(config) : config,
+        config.id === configId ? updater(config) : config,
       ),
     );
   }
@@ -306,65 +307,72 @@ export default function useAiSettings(): UseAiSettingsResult {
       apiKeyConfigured: false,
     };
     setOpenaiConfigs((current) => [...current, nextConfig]);
-    setActiveOpenaiConfigId(nextConfig.id);
+    setActiveOpenaiConfigId((current) => current || nextConfig.id);
     info(
       JSON.stringify({
         event: "ai-settings:openai-config-added",
         id: nextConfig.id,
       }),
     ).catch(() => {});
+    return nextConfig.id;
   }
 
-  function removeActiveOpenaiConfig() {
-    if (!activeOpenaiConfigId) return;
+  function removeOpenaiConfig(configId: string) {
+    const targetId = configId.trim();
+    if (!targetId) return;
     setOpenaiConfigs((current) => {
-      const nextConfigs = current.filter(
-        (config) => config.id !== activeOpenaiConfigId,
+      const nextConfigs = current.filter((config) => config.id !== targetId);
+      setActiveOpenaiConfigId((currentActiveId) =>
+        currentActiveId === targetId
+          ? (nextConfigs[0]?.id ?? "")
+          : currentActiveId,
       );
-      setActiveOpenaiConfigId(nextConfigs[0]?.id ?? "");
       return nextConfigs;
     });
     info(
       JSON.stringify({
         event: "ai-settings:openai-config-removed",
-        id: activeOpenaiConfigId,
+        id: targetId,
       }),
     ).catch(() => {});
   }
 
-  async function replaceOpenaiApiKey(value: string) {
+  async function replaceOpenaiApiKey(configId: string, value: string) {
     const trimmed = value.trim();
-    if (!trimmed || !activeOpenaiConfigId) return;
+    const targetId = configId.trim();
+    if (!trimmed || !targetId) return;
     await saveWithSecretUpdate({
-      [activeOpenaiConfigId]: { mode: "replace", value: trimmed },
+      [targetId]: { mode: "replace", value: trimmed },
     });
     info(
       JSON.stringify({
         event: "ai-settings:openai-api-key-replaced",
-        id: activeOpenaiConfigId,
+        id: targetId,
       }),
     ).catch(() => {});
   }
 
-  async function clearOpenaiApiKey() {
-    if (!activeOpenaiConfigId) return;
+  async function clearOpenaiApiKey(configId: string) {
+    const targetId = configId.trim();
+    if (!targetId) return;
     await saveWithSecretUpdate({
-      [activeOpenaiConfigId]: { mode: "clear" },
+      [targetId]: { mode: "clear" },
     });
     info(
       JSON.stringify({
         event: "ai-settings:openai-api-key-cleared",
-        id: activeOpenaiConfigId,
+        id: targetId,
       }),
     ).catch(() => {});
   }
 
-  async function testOpenAiConnection() {
-    await aiOpenAiTest();
+  async function testOpenAiConnection(configId?: string) {
+    const targetId = configId?.trim();
+    await aiOpenAiTest(targetId || undefined);
     info(
       JSON.stringify({
         event: "ai-settings:openai-connection-tested",
-        id: activeOpenaiConfigId,
+        id: targetId ?? activeOpenaiConfigId,
       }),
     ).catch(() => {});
   }
@@ -385,17 +393,17 @@ export default function useAiSettings(): UseAiSettingsResult {
     setSessionRecentOutputMaxChars,
     setDebugLoggingEnabled,
     setActiveOpenaiConfigId,
-    updateActiveOpenaiConfigName: (value) => {
-      updateActiveOpenaiConfig((config) => ({ ...config, name: value }));
+    updateOpenaiConfigName: (configId, value) => {
+      updateOpenaiConfig(configId, (config) => ({ ...config, name: value }));
     },
-    updateActiveOpenaiConfigBaseUrl: (value) => {
-      updateActiveOpenaiConfig((config) => ({ ...config, baseUrl: value }));
+    updateOpenaiConfigBaseUrl: (configId, value) => {
+      updateOpenaiConfig(configId, (config) => ({ ...config, baseUrl: value }));
     },
-    updateActiveOpenaiConfigModel: (value) => {
-      updateActiveOpenaiConfig((config) => ({ ...config, model: value }));
+    updateOpenaiConfigModel: (configId, value) => {
+      updateOpenaiConfig(configId, (config) => ({ ...config, model: value }));
     },
     addOpenaiConfig,
-    removeActiveOpenaiConfig,
+    removeOpenaiConfig,
     testOpenAiConnection,
     replaceOpenaiApiKey,
     clearOpenaiApiKey,
