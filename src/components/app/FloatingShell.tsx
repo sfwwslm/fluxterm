@@ -17,6 +17,7 @@ type FloatingShellProps = {
   aboutOpen: boolean;
   onOpenAbout: () => void;
   onCloseAbout: () => void;
+  onOpenDevtools: () => void;
   onOpenConfigSection: (section: ConfigSectionKey) => void;
   locale: Locale;
   themeId: ThemeId;
@@ -40,6 +41,7 @@ export default function FloatingShell({
   aboutOpen,
   onOpenAbout,
   onCloseAbout,
+  onOpenDevtools,
   onOpenConfigSection,
   locale,
   themeId,
@@ -82,7 +84,12 @@ export default function FloatingShell({
           <div className="panel-body">{panelBody}</div>
         </section>
       </div>
-      <AboutModal open={aboutOpen} onClose={onCloseAbout} t={t} />
+      <AboutModal
+        open={aboutOpen}
+        onClose={onCloseAbout}
+        onOpenDevtools={onOpenDevtools}
+        t={t}
+      />
     </div>
   );
 }

@@ -144,6 +144,7 @@ export const en = {
   "about.version": "Version",
   "about.commit": "Commit",
   "about.toolchain": "Toolchain",
+  "about.openConsole": "Console",
   "theme.dark": "Dark",
   "theme.light": "Light",
   "panel.profiles": "Sessions",

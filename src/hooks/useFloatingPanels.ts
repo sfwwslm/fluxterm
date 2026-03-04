@@ -31,12 +31,14 @@ type UseFloatingPanelsProps = {
   themeId: ThemeId;
   setLocale: (locale: Locale) => void;
   setThemeId: (themeId: ThemeId) => void;
+  onOpenCurrentDevtools?: () => void;
 };
 
 type FloatingPanelsState = {
   floatingPanels: Partial<Record<PanelKey, boolean>>;
   handleFloat: (slot: LayoutWidgetSlot) => Promise<void>;
   restoreFloating: (panel: PanelKey) => void;
+  openAllDevtools: () => void;
 };
 
 function normalizePanelKey(value: unknown): PanelKey | null {
@@ -70,6 +72,7 @@ export default function useFloatingPanels({
   themeId,
   setLocale,
   setThemeId,
+  onOpenCurrentDevtools,
 }: UseFloatingPanelsProps): FloatingPanelsState {
   const floatingPanelKey = useMemo<PanelKey | null>(() => {
     if (typeof floatingPanelKeyProp !== "undefined") {
@@ -187,6 +190,9 @@ export default function useFloatingPanels({
           setThemeId(normalizedThemeId);
         }
       }
+      if (payload.type === "devtools:open") {
+        onOpenCurrentDevtools?.();
+      }
     };
     return () => {
       channel.close();
@@ -198,6 +204,7 @@ export default function useFloatingPanels({
     cleanupFloatingRuntime,
     dismissFloatingPanel,
     floatingPanelKey,
+    onOpenCurrentDevtools,
     setLocale,
     setThemeId,
   ]);
@@ -429,9 +436,15 @@ export default function useFloatingPanels({
     [openFloatingWindow, setFloatingOrigins, setSlotGroups, slotGroups],
   );
 
+  /** 通知所有窗口打开开发者工具。 */
+  const openAllDevtools = useCallback(() => {
+    floatSyncChannelRef.current?.postMessage({ type: "devtools:open" });
+  }, []);
+
   return {
     floatingPanels,
     handleFloat,
     restoreFloating,
+    openAllDevtools,
   };
 }

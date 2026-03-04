@@ -46,7 +46,7 @@ use crate::commands::sftp::{
 use crate::commands::ssh::{
     ssh_connect, ssh_disconnect, ssh_host_key_confirm, ssh_resize, ssh_write,
 };
-use crate::commands::system::{app_config_dir, app_data_dir};
+use crate::commands::system::{app_config_dir, app_data_dir, open_devtools};
 use crate::local_shell::LocalShellState;
 use crate::resource_monitor::ResourceMonitorState;
 use crate::state::EngineState;
@@ -152,6 +152,7 @@ pub fn run() {
             resource_monitor_stop,
             app_config_dir,
             app_data_dir,
+            open_devtools,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

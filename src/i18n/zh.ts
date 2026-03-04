@@ -136,6 +136,7 @@ export const zh = {
   "about.version": "版本",
   "about.commit": "提交",
   "about.toolchain": "工具链",
+  "about.openConsole": "控制台",
   "theme.dark": "深色",
   "theme.light": "浅色",
   "panel.profiles": "会话管理",

@@ -86,6 +86,7 @@ import {
   openRemoteFileViaCache,
 } from "@/features/file-open/core/commands";
 import { subscribeTauri } from "@/shared/tauri/events";
+import { callTauri } from "@/shared/tauri/commands";
 import { getBackgroundImageAssetPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
 
@@ -310,9 +311,7 @@ export default function AppShell() {
   } = useProfiles();
   const { pushToast } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
-  useDisableBrowserShortcuts({
-    allowDevRefreshAndDevtools: aboutOpen,
-  });
+  useDisableBrowserShortcuts();
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeConfigSection, setActiveConfigSection] =
@@ -711,7 +710,14 @@ export default function AppShell() {
   } = useLayoutState({
     floatingPanelKey,
   });
-  const { floatingPanels, handleFloat } = useFloatingPanels({
+  const openCurrentDevtools = useMemo(
+    () => () => {
+      callTauri("open_devtools").catch(() => {});
+    },
+    [],
+  );
+
+  const { floatingPanels, handleFloat, openAllDevtools } = useFloatingPanels({
     floatingPanelKey,
     floatingOrigins,
     setFloatingOrigins,
@@ -723,7 +729,13 @@ export default function AppShell() {
     themeId,
     setLocale,
     setThemeId,
+    onOpenCurrentDevtools: openCurrentDevtools,
   });
+
+  function handleOpenDevtools() {
+    openCurrentDevtools();
+    openAllDevtools();
+  }
 
   function isMainSlotVisible(slot: LayoutWidgetSlot) {
     if (slot === "bottom") return !layoutCollapsed.bottom;
@@ -1917,6 +1929,7 @@ export default function AppShell() {
           aboutOpen={aboutOpen}
           onOpenAbout={() => setAboutOpen(true)}
           onCloseAbout={() => setAboutOpen(false)}
+          onOpenDevtools={handleOpenDevtools}
           onOpenConfigSection={openConfigSection}
           locale={locale}
           themeId={themeId}
@@ -2079,6 +2092,7 @@ export default function AppShell() {
           <AboutModal
             open={aboutOpen}
             onClose={() => setAboutOpen(false)}
+            onOpenDevtools={handleOpenDevtools}
             t={t}
           />
         </div>

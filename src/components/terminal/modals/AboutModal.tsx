@@ -2,17 +2,25 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Translate } from "@/i18n";
 import Modal from "@/components/terminal/modals/Modal";
+import Button from "@/components/ui/button";
 import { APP_VERSION, COMMIT_HASH, TOOLCHAIN_INFO } from "@/appInfo";
 
 type AboutModalProps = {
   open: boolean;
   onClose: () => void;
+  onOpenDevtools?: () => void;
   t: Translate;
 };
 
 /** 关于弹窗。 */
-export default function AboutModal({ open, onClose, t }: AboutModalProps) {
+export default function AboutModal({
+  open,
+  onClose,
+  onOpenDevtools,
+  t,
+}: AboutModalProps) {
   const [version, setVersion] = useState(APP_VERSION);
+  const canOpenDevtools = import.meta.env.DEV && !!onOpenDevtools;
 
   useEffect(() => {
     const hasTauriRuntime =
@@ -28,6 +36,13 @@ export default function AboutModal({ open, onClose, t }: AboutModalProps) {
       open={open}
       title={t("about.title")}
       closeLabel={t("actions.close")}
+      actions={
+        canOpenDevtools ? (
+          <Button variant="ghost" onClick={onOpenDevtools}>
+            {t("about.openConsole")}
+          </Button>
+        ) : undefined
+      }
       onClose={onClose}
     >
       <div className="about-list">

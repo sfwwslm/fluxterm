@@ -2,7 +2,6 @@ import { useEffect } from "react";
 
 type Options = {
   enabled?: boolean;
-  allowDevRefreshAndDevtools?: boolean;
 };
 
 function isTerminalFocused(target: EventTarget | null) {
@@ -12,22 +11,16 @@ function isTerminalFocused(target: EventTarget | null) {
   );
 }
 
-const isBlockedShortcut = (
-  event: KeyboardEvent,
-  allowDevRefreshAndDevtools: boolean,
-) => {
+const isBlockedShortcut = (event: KeyboardEvent) => {
   const key = event.key.toLowerCase();
   const ctrlOrMeta = event.ctrlKey || event.metaKey;
-  const isDev = import.meta.env.DEV;
   const terminalFocused = isTerminalFocused(event.target);
 
   if (key === "f3" || key === "f7" || key === "f1") return true;
 
   if (key === "f5") return true;
 
-  if (key === "f12" && !(isDev && allowDevRefreshAndDevtools)) {
-    return true;
-  }
+  if (key === "f12") return true;
 
   if (ctrlOrMeta) {
     // 终端获得焦点时，应优先把大部分 Ctrl/Cmd 组合键交给 shell；
@@ -85,13 +78,12 @@ const isBlockedShortcut = (
 /** 禁用浏览器级快捷键，避免刷新/关闭/开发者工具等打断应用。 */
 export const useDisableBrowserShortcuts = ({
   enabled = true,
-  allowDevRefreshAndDevtools = false,
 }: Options = {}) => {
   useEffect(() => {
     if (!enabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isBlockedShortcut(event, allowDevRefreshAndDevtools)) {
+      if (isBlockedShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -108,5 +100,5 @@ export const useDisableBrowserShortcuts = ({
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("contextmenu", handleContextMenu, true);
     };
-  }, [enabled, allowDevRefreshAndDevtools]);
+  }, [enabled]);
 };
