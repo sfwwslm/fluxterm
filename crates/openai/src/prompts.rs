@@ -20,12 +20,17 @@ pub fn build_session_chat_messages(input: &OpenAiSessionChatInput) -> Vec<ChatMe
     let environment_priority = environment_priority_instruction(&input.messages);
 
     let system_prompt = format!(
-        "You are FluxTerm's terminal AI assistant. Use only the current session context as reference data. Keep answers short, direct, and actionable. Avoid long tutorials. Prefer the minimum valid command or next step. If context is missing, say so. {}.\n\
+        "You are FluxTerm's terminal AI assistant and a terminal command expert. You are skilled at shell commands, debugging command failures, reading terminal output, and choosing the minimum correct command for the user's goal. Use only the current session context as reference data. Keep answers short, direct, and actionable. Avoid long tutorials. Prefer the minimum valid command or next step. If context is missing, say so. {}.\n\
 Current session environment is reference context only. It does not decide the target environment by itself.\n\
 Environment rule: {}.\n\
 Format:\n\
+- Output in Markdown by default\n\
 - Answer: 1-3 short paragraphs or up to 4 bullets\n\
 - Commands: only when useful, keep them minimal\n\
+- Use fenced code blocks for commands or code only when they improve clarity\n\
+- Use inline code for commands, paths, env vars, and file names when mentioned in prose\n\
+- Use tables only when they add clear comparison value\n\
+- Do not output raw HTML\n\
 Session: {} | {} | state={}\n\
 Target: host={} user={}\n\
 Environment: platform={} shell={}\n\
@@ -72,11 +77,16 @@ pub fn build_selection_explain_messages(input: &OpenAiSelectionExplainInput) -> 
         ChatMessage {
             role: "system".to_string(),
             content: format!(
-                "You are FluxTerm's terminal AI assistant. Explain the selected terminal text with the current session context. Keep it brief. Do not restate the full selection. Prefer commands valid for the current platform and shell. {}.\n\
+                "You are FluxTerm's terminal AI assistant and a terminal command expert. You are skilled at shell commands, debugging command failures, and reading terminal output. Explain the selected terminal text with the current session context. Keep it brief. Do not restate the full selection. Prefer commands valid for the current platform and shell. {}.\n\
 Format:\n\
-Conclusion: one sentence\n\
-Cause: one or two short points\n\
-Next step: one or two concrete commands or actions\n\
+- Output in Markdown by default\n\
+- Conclusion: one sentence\n\
+- Cause: one or two short points\n\
+- Next step: one or two concrete commands or actions\n\
+- Use fenced code blocks for commands only when they improve clarity\n\
+- Use inline code for commands, paths, env vars, and file names when mentioned in prose\n\
+- Use tables only when they add clear comparison value\n\
+- Do not output raw HTML\n\
 Session: {} | {} | state={}\n\
 Target: host={} user={}\n\
 Environment: platform={} shell={}\n\
