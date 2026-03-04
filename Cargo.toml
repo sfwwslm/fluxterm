@@ -32,3 +32,10 @@ lto = true
 codegen-units = 1
 opt-level = "s"
 panic = "abort"
+
+[profile.fast-release]
+inherits = "release"
+lto = false
+strip = false
+codegen-units = 256
+opt-level = 3

@@ -8,6 +8,7 @@
     "web:dev": "vite",
     "build": "tauri build",
     "web:build": "tsc && vite build",
+    "build:fast": "tauri build -- --profile fast-release",
     "preview": "vite preview",
     "prune": "ts-prune",
     "tauri": "tauri",
