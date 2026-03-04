@@ -33,12 +33,21 @@ type TerminalSearchBarProps = {
   t: Translate;
 };
 
-const searchDecorations: SearchDecorations = {
-  matchBackground: "#314154",
-  matchOverviewRuler: "#4b5563",
-  activeMatchBackground: "#f2c94c",
-  activeMatchColorOverviewRuler: "#f59e0b",
-};
+function resolveSearchDecorations(): SearchDecorations {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const readVar = (key: string, fallback: string) =>
+    rootStyle.getPropertyValue(key).trim() || fallback;
+  const borderWeak = readVar("--border-weak", readVar("--border-soft", ""));
+  const textMuted = readVar("--text-muted", readVar("--text-secondary", ""));
+  const accentSoft = readVar("--accent-soft", readVar("--accent-subtle", ""));
+  const accent = readVar("--accent", readVar("--text-primary", ""));
+  return {
+    matchBackground: borderWeak,
+    matchOverviewRuler: textMuted,
+    activeMatchBackground: accentSoft,
+    activeMatchColorOverviewRuler: accent,
+  };
+}
 
 /** 终端搜索栏局部状态 Hook。 */
 export default function useTerminalSearchBar({
@@ -85,7 +94,7 @@ export default function useTerminalSearchBar({
       caseSensitive: searchCaseSensitive,
       regex: searchRegex,
       wholeWord: searchWholeWord,
-      decorations: searchHighlightAll ? searchDecorations : undefined,
+      decorations: searchHighlightAll ? resolveSearchDecorations() : undefined,
     };
     const found =
       direction === "next"

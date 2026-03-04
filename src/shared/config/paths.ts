@@ -54,6 +54,24 @@ export async function getQuickbarPath() {
   return join(dir, "quickbar.json");
 }
 
+/** 获取背景图资源目录。 */
+export async function getBackgroundImagesDir() {
+  const dir = await getGlobalConfigDir();
+  return join(dir, "backgrounds");
+}
+
+/** 构建背景图资源相对路径（写入 settings）。 */
+export function toBackgroundImageAsset(fileName: string) {
+  return `backgrounds/${fileName}`;
+}
+
+/** 获取背景图资源绝对路径（读取文件）。 */
+export async function getBackgroundImageAssetPath(asset: string) {
+  const dir = await getGlobalConfigDir();
+  const normalizedAsset = asset.replace(/\\/g, "/").replace(/^\/+/, "");
+  return join(dir, normalizedAsset);
+}
+
 /** 获取 session.json 路径。 */
 export async function getSessionSettingsPath() {
   const dir = await getTerminalConfigDir();

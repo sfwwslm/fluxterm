@@ -6,7 +6,7 @@
 
 .context-menu {
   position: fixed;
-  background: var(--surface-menu);
+  background: var(--chrome-flyout-menu-bg);
   border: 1px solid var(--border-input);
   border-radius: 12px;
   display: flex;

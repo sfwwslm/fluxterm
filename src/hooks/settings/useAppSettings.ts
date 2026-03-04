@@ -18,7 +18,15 @@ type AppSettings = {
   themeId?: ThemeId;
   sftpEnabled?: boolean;
   fileDefaultEditorPath?: string | null;
+  backgroundImageEnabled?: boolean;
+  backgroundImageAsset?: string | null;
+  backgroundImageSurfaceAlpha?: number;
 };
+
+export const MIN_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.2;
+export const MAX_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.9;
+export const DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.52;
+const SAVE_SETTINGS_DEBOUNCE_MS = 200;
 
 type UseAppSettingsProps = {
   themeIds: ThemeId[];
@@ -36,9 +44,23 @@ type UseAppSettingsResult = {
   setSftpEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   fileDefaultEditorPath: string;
   setFileDefaultEditorPath: React.Dispatch<React.SetStateAction<string>>;
+  backgroundImageEnabled: boolean;
+  setBackgroundImageEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  backgroundImageAsset: string;
+  setBackgroundImageAsset: React.Dispatch<React.SetStateAction<string>>;
+  backgroundImageSurfaceAlpha: number;
+  setBackgroundImageSurfaceAlpha: React.Dispatch<React.SetStateAction<number>>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
 };
+
+function clampBackgroundImageSurfaceAlpha(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA;
+  return Math.min(
+    MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+    Math.max(MIN_BACKGROUND_IMAGE_SURFACE_ALPHA, value),
+  );
+}
 
 function normalizeThemeId(value: unknown): ThemeId | null {
   if (value === "dark" || value === "light") return value;
@@ -68,6 +90,10 @@ export default function useAppSettings({
   const [shellId, setShellId] = useState<string | null>(null);
   const [sftpEnabled, setSftpEnabled] = useState(true);
   const [fileDefaultEditorPath, setFileDefaultEditorPath] = useState("");
+  const [backgroundImageEnabled, setBackgroundImageEnabled] = useState(false);
+  const [backgroundImageAsset, setBackgroundImageAsset] = useState("");
+  const [backgroundImageSurfaceAlpha, setBackgroundImageSurfaceAlpha] =
+    useState(DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const pendingShellIdRef = useRef<string | null>(null);
@@ -98,6 +124,17 @@ export default function useAppSettings({
       }
       if (typeof parsed?.fileDefaultEditorPath === "string") {
         setFileDefaultEditorPath(parsed.fileDefaultEditorPath);
+      }
+      if (typeof parsed?.backgroundImageEnabled === "boolean") {
+        setBackgroundImageEnabled(parsed.backgroundImageEnabled);
+      }
+      if (typeof parsed?.backgroundImageAsset === "string") {
+        setBackgroundImageAsset(parsed.backgroundImageAsset);
+      }
+      if (typeof parsed?.backgroundImageSurfaceAlpha === "number") {
+        setBackgroundImageSurfaceAlpha(
+          clampBackgroundImageSurfaceAlpha(parsed.backgroundImageSurfaceAlpha),
+        );
       }
       const normalizedThemeId = normalizeThemeId(parsed?.themeId);
       if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
@@ -178,27 +215,40 @@ export default function useAppSettings({
 
   useEffect(() => {
     if (!settingsLoaded) return;
-    saveSettings({
-      version: 1,
-      shellId,
-      locale,
-      themeId,
-      sftpEnabled,
-      fileDefaultEditorPath: fileDefaultEditorPath.trim() || null,
-    }).catch((error) => {
-      warn(
-        JSON.stringify({
-          event: "settings:save-failed",
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    });
+    const timer = window.setTimeout(() => {
+      saveSettings({
+        version: 1,
+        shellId,
+        locale,
+        themeId,
+        sftpEnabled,
+        fileDefaultEditorPath: fileDefaultEditorPath.trim() || null,
+        backgroundImageEnabled,
+        backgroundImageAsset: backgroundImageAsset.trim() || null,
+        backgroundImageSurfaceAlpha: clampBackgroundImageSurfaceAlpha(
+          backgroundImageSurfaceAlpha,
+        ),
+      }).catch((error) => {
+        warn(
+          JSON.stringify({
+            event: "settings:save-failed",
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      });
+    }, SAVE_SETTINGS_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [
     shellId,
     locale,
     themeId,
     sftpEnabled,
     fileDefaultEditorPath,
+    backgroundImageEnabled,
+    backgroundImageAsset,
+    backgroundImageSurfaceAlpha,
     settingsLoaded,
   ]);
 
@@ -213,6 +263,12 @@ export default function useAppSettings({
     setSftpEnabled,
     fileDefaultEditorPath,
     setFileDefaultEditorPath,
+    backgroundImageEnabled,
+    setBackgroundImageEnabled,
+    backgroundImageAsset,
+    setBackgroundImageAsset,
+    backgroundImageSurfaceAlpha,
+    setBackgroundImageSurfaceAlpha,
     availableShells,
     settingsLoaded,
   };

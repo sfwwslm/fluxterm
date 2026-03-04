@@ -42,6 +42,18 @@ export const zh = {
   "config.app.fileDefaultEditorPathPlaceholder":
     "例如 C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.pickEditor": "选择程序",
+  "config.app.backgroundImage": "自定义背景图",
+  "config.app.backgroundImageHint":
+    "选择本地图片后会复制到配置目录（$HOME）并按内容去重；清空只解绑当前配置，不删除文件。",
+  "config.app.backgroundImagePlaceholder": "未设置背景图",
+  "config.app.pickBackgroundImage": "选择图片",
+  "config.app.backgroundImageUnsupported":
+    "仅支持 png/jpg/jpeg/webp 格式的图片",
+  "config.app.backgroundImagePermissionDenied":
+    "读取或复制图片被系统权限拦截，请检查 Tauri fs scope 配置和图片路径权限。",
+  "config.app.backgroundImageSurfaceAlpha": "背景覆盖层透明度",
+  "config.app.backgroundImageSurfaceAlphaHint":
+    "控制标题栏、组件区、终端区和底栏的统一透明度，范围 20% 到 90%。",
   "config.ai.selectionMaxChars": "选中文本最大长度",
   "config.ai.selectionMaxCharsHint":
     "限制右键“发送给 AI”时允许发送的选中文本字符数。",

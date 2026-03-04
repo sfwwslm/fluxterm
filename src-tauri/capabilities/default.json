@@ -97,6 +97,58 @@
       ]
     },
     {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$PICTURE/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-copy-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$PICTURE/**"
+        }
+      ]
+    },
+    {
       "identifier": "fs:allow-home-read",
       "allow": [
         {

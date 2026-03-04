@@ -2,7 +2,7 @@
   margin: 0 var(--workspace-pad, 16px) var(--workspace-pad, 16px);
   border: 1px solid var(--border-weak);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-header-strong) 72%, transparent);
+  background: var(--chrome-bottom-bg);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -54,13 +54,14 @@
   max-width: 240px;
   max-height: 320px;
   overflow: auto;
-  border: 1px solid color-mix(in srgb, #ffffff 20%, var(--border-input));
+  border: 1px solid
+    color-mix(in srgb, var(--text-primary) 20%, var(--border-input));
   border-radius: 12px;
   padding: 8px;
   background:
     linear-gradient(
       140deg,
-      color-mix(in srgb, #ffffff 12%, transparent) 0%,
+      color-mix(in srgb, var(--text-primary) 12%, transparent) 0%,
       transparent 55%
     ),
     linear-gradient(
@@ -68,11 +69,11 @@
       color-mix(in srgb, var(--accent) 12%, transparent) 0%,
       transparent 60%
     ),
-    color-mix(in srgb, var(--surface-menu) 86%, transparent);
+    var(--chrome-flyout-menu-bg);
   box-shadow:
-    0 18px 36px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 30%, transparent),
-    inset 0 -18px 28px color-mix(in srgb, #000 18%, transparent);
+    0 18px 36px color-mix(in srgb, var(--app-bg-base) 32%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 30%, transparent),
+    inset 0 -18px 28px color-mix(in srgb, var(--app-bg-base) 18%, transparent);
 }
 
 .quickbar-menu-section-title {
@@ -176,7 +177,7 @@
   border: 1px solid var(--border-soft);
   border-radius: 999px;
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--surface-header) 56%, transparent);
+  background: var(--chrome-status-chip-bg);
 }
 
 .statusbar-resource-chip.muted {
@@ -192,18 +193,19 @@
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, #ffffff 18%, var(--border-input));
+  border: 1px solid
+    color-mix(in srgb, var(--text-primary) 18%, var(--border-input));
   border-radius: 12px;
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, #ffffff 10%, transparent) 0%,
+      color-mix(in srgb, var(--text-primary) 10%, transparent) 0%,
       transparent 58%
     ),
     color-mix(in srgb, var(--surface-menu) 92%, transparent);
   box-shadow:
-    0 18px 36px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 24%, transparent);
+    0 18px 36px color-mix(in srgb, var(--app-bg-base) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 24%, transparent);
 }
 
 .statusbar-resource-block {
@@ -264,7 +266,7 @@
 .qm-right {
   border: 1px solid var(--border-soft);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  background: var(--chrome-quick-command-panel-bg);
   padding: 10px;
   min-height: 0;
 }
@@ -300,7 +302,7 @@
 
 .qm-command-item {
   border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface-header) 54%, transparent);
+  background: var(--chrome-quick-command-item-bg);
   border-radius: 8px;
   color: var(--text-primary);
   text-align: left;

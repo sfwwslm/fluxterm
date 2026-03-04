@@ -7,6 +7,7 @@
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   min-height: 480px;
+  --config-modal-surface-alpha: 76%;
 }
 
 .config-modal-nav {
@@ -17,8 +18,16 @@
   border-right: 1px solid var(--border-soft);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--surface-header) 82%, transparent),
-    color-mix(in srgb, var(--surface-menu) 92%, transparent)
+    color-mix(
+      in srgb,
+      var(--surface-header) var(--config-modal-surface-alpha),
+      transparent
+    ),
+    color-mix(
+      in srgb,
+      var(--surface-menu) var(--config-modal-surface-alpha),
+      transparent
+    )
   );
 }
 
@@ -88,7 +97,11 @@
   padding: 16px;
   border: 1px solid var(--border-input);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-header) 76%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-header) var(--config-modal-surface-alpha),
+    transparent
+  );
 }
 
 .config-dir-path {
@@ -109,7 +122,11 @@
   padding: 16px;
   border: 1px solid var(--border-input);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-header) 76%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-header) var(--config-modal-surface-alpha),
+    transparent
+  );
 }
 
 .config-feature-group {
@@ -134,6 +151,30 @@
   border-top: 1px solid var(--border-soft);
 }
 
+.config-range-setting {
+  align-items: center;
+}
+
+.config-range-control {
+  width: 260px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-range-control input[type="range"] {
+  flex: 1;
+  margin: 0;
+}
+
+.config-range-value {
+  width: 48px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .config-toggle-copy {
   display: flex;
   flex-direction: column;
@@ -156,7 +197,7 @@
   padding: 10px 12px;
   border: 1px solid var(--border-input);
   border-radius: 12px;
-  background: var(--input-bg);
+  background: var(--chrome-input-bg);
   color: var(--input-text);
   font: inherit;
   text-align: right;
@@ -169,7 +210,7 @@
   border: 1px solid var(--border-input);
   border-radius: 12px;
   overflow: hidden;
-  background-color: var(--input-bg);
+  background-color: var(--chrome-input-bg);
   background-image:
     linear-gradient(
       180deg,
@@ -218,7 +259,7 @@
   padding: 10px 12px;
   border: 1px solid var(--border-input);
   border-radius: 12px;
-  background: var(--input-bg);
+  background: var(--chrome-input-bg);
   color: var(--input-text);
   font: inherit;
 }
@@ -235,7 +276,7 @@
   padding: 10px 12px;
   border: 1px solid var(--border-input);
   border-radius: 12px;
-  background: var(--input-bg);
+  background: var(--chrome-input-bg);
   color: var(--input-text);
   font: inherit;
   line-height: 1.5;

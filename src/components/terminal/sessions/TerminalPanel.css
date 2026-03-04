@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   border-radius: 10px;
-  background: var(--surface-strong);
+  background: var(--chrome-terminal-bg);
   border: 1px solid var(--border-weak);
   overflow: hidden;
   min-height: 0;
@@ -14,7 +14,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 5px 10px;
-  background: var(--surface-header-strong);
+  background: var(--chrome-terminal-header-bg);
   border-bottom: 1px solid var(--border-weak);
   gap: 12px;
 }
@@ -50,7 +50,7 @@
   gap: 6px;
   padding: 4px 8px;
   border-radius: 12px;
-  background: var(--tab-bg);
+  background: var(--chrome-session-tab-bg);
   border: 1px solid var(--tab-border);
   color: var(--text-secondary);
 }
@@ -193,7 +193,7 @@ button.session-tab {
   flex-direction: column;
   border-radius: 12px;
   border: 1px solid transparent;
-  background: color-mix(in srgb, var(--surface-base) 82%, transparent);
+  background: var(--chrome-terminal-pane-bg);
   overflow: hidden;
 }
 
@@ -269,7 +269,8 @@ button.session-tab {
 
 .terminal-xterm-host .xterm .xterm-viewport {
   scrollbar-width: thin;
-  scrollbar-color: rgba(34, 47, 66, 0.9) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 68%, transparent)
+    transparent;
   background-color: transparent !important;
 }
 
@@ -284,8 +285,8 @@ button.session-tab {
 .terminal-xterm-host .xterm .xterm-viewport::-webkit-scrollbar-thumb {
   background: linear-gradient(
     180deg,
-    rgba(34, 47, 66, 0.92),
-    rgba(22, 31, 44, 0.72)
+    color-mix(in srgb, var(--text-muted) 78%, transparent),
+    color-mix(in srgb, var(--surface-header-strong) 78%, transparent)
   );
   border-radius: 999px;
   border: 2px solid transparent;
@@ -295,8 +296,8 @@ button.session-tab {
 .terminal-xterm-host .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
     180deg,
-    rgba(46, 64, 90, 0.96),
-    rgba(32, 45, 63, 0.8)
+    color-mix(in srgb, var(--text-primary) 58%, transparent),
+    color-mix(in srgb, var(--text-muted) 72%, transparent)
   );
 }
 
@@ -359,7 +360,7 @@ button.session-tab {
   height: 28px;
   border-radius: 8px;
   border: 1px solid var(--border-input);
-  background: var(--input-bg);
+  background: var(--chrome-input-bg);
   color: var(--input-text);
   padding: 0 10px;
   font-size: 12px;

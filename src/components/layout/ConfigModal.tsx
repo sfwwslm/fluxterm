@@ -1,12 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { error as logError } from "@tauri-apps/plugin-log";
 import { open as openDialogFile } from "@tauri-apps/plugin-dialog";
+import { copyFile, exists, mkdir, readFile } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Translate } from "@/i18n";
 import Modal from "@/components/terminal/modals/Modal";
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
-import { getAppConfigDir, getAppDataDir } from "@/shared/config/paths";
+import {
+  getAppConfigDir,
+  getAppDataDir,
+  getBackgroundImageAssetPath,
+  getBackgroundImagesDir,
+  toBackgroundImageAsset,
+} from "@/shared/config/paths";
 import type { OpenAiConfigView } from "@/features/ai/types";
 import {
   DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
@@ -15,6 +22,10 @@ import {
   MIN_RESOURCE_MONITOR_INTERVAL_SEC,
   MIN_SCROLLBACK,
 } from "@/hooks/settings/useSessionSettings";
+import {
+  MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+  MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
+} from "@/hooks/settings/useAppSettings";
 import "@/components/layout/ConfigModal.css";
 
 export type ConfigSectionKey =
@@ -49,6 +60,9 @@ type ConfigModalProps = {
   sections: ConfigSectionItem[];
   sftpEnabled?: boolean;
   fileDefaultEditorPath?: string;
+  backgroundImageEnabled?: boolean;
+  backgroundImageAsset?: string;
+  backgroundImageSurfaceAlpha?: number;
   aiSelectionMaxChars?: number;
   aiSessionRecentOutputMaxChars?: number;
   aiDebugLoggingEnabled?: boolean;
@@ -64,6 +78,9 @@ type ConfigModalProps = {
   hostKeyPolicy?: HostKeyPolicy;
   onSftpEnabledChange?: (enabled: boolean) => void;
   onFileDefaultEditorPathChange?: (value: string) => void;
+  onBackgroundImageEnabledChange?: (enabled: boolean) => void;
+  onBackgroundImageAssetChange?: (value: string) => void;
+  onBackgroundImageSurfaceAlphaChange?: (value: number) => void;
   onAiSelectionMaxCharsChange?: (value: number) => void;
   onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
   onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
@@ -99,6 +116,23 @@ function normalizeConfigDirectoryPath(path: string) {
   return path;
 }
 
+function clampBackgroundImageSurfaceAlpha(value: number) {
+  if (!Number.isFinite(value)) return MIN_BACKGROUND_IMAGE_SURFACE_ALPHA;
+  return Math.min(
+    MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+    Math.max(MIN_BACKGROUND_IMAGE_SURFACE_ALPHA, value),
+  );
+}
+
+async function sha256Hex(bytes: Uint8Array) {
+  const normalized = new Uint8Array(bytes.byteLength);
+  normalized.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", normalized);
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /** 配置模态框：承载顶部“配置”菜单的统一内容容器。 */
 export default function ConfigModal({
   open,
@@ -106,6 +140,9 @@ export default function ConfigModal({
   sections,
   sftpEnabled = true,
   fileDefaultEditorPath = "",
+  backgroundImageEnabled = false,
+  backgroundImageAsset = "",
+  backgroundImageSurfaceAlpha = 0.52,
   aiSelectionMaxChars = 1500,
   aiSessionRecentOutputMaxChars = 1200,
   aiDebugLoggingEnabled = true,
@@ -121,6 +158,9 @@ export default function ConfigModal({
   hostKeyPolicy = "ask",
   onSftpEnabledChange,
   onFileDefaultEditorPathChange,
+  onBackgroundImageEnabledChange,
+  onBackgroundImageAssetChange,
+  onBackgroundImageSurfaceAlphaChange,
   onAiSelectionMaxCharsChange,
   onAiSessionRecentOutputMaxCharsChange,
   onAiDebugLoggingEnabledChange,
@@ -181,6 +221,11 @@ export default function ConfigModal({
   );
   const [aiOpenAiApiKeyDraft, setAiOpenAiApiKeyDraft] = useState("");
   const [testingOpenAiConfigId, setTestingOpenAiConfigId] = useState("");
+  const isBackgroundImageModeActive =
+    backgroundImageEnabled && !!backgroundImageAsset;
+  const effectiveModalSurfaceAlpha = isBackgroundImageModeActive
+    ? backgroundImageSurfaceAlpha
+    : 0.76;
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -241,6 +286,67 @@ export default function ConfigModal({
     setAiOpenAiBaseUrlDraft(selectedOpenAiConfig?.baseUrl ?? "");
     setAiOpenAiModelDraft(selectedOpenAiConfig?.model ?? "");
   }, [selectedOpenAiConfigId]);
+
+  async function pickBackgroundImage() {
+    try {
+      const selected = await openDialogFile({
+        multiple: false,
+        directory: false,
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "webp"],
+          },
+        ],
+      });
+      if (!selected || Array.isArray(selected)) return;
+      const extMatch = selected.match(/\.([A-Za-z0-9]+)$/);
+      const ext = extMatch?.[1]?.toLowerCase();
+      if (!ext || !["png", "jpg", "jpeg", "webp"].includes(ext)) {
+        pushToast({
+          level: "error",
+          message: t("config.app.backgroundImageUnsupported"),
+        });
+        return;
+      }
+
+      const sourceBytes = await readFile(selected);
+      const hash = await sha256Hex(sourceBytes);
+      const backgroundsDir = await getBackgroundImagesDir();
+      await mkdir(backgroundsDir, { recursive: true });
+      const fileName = `bg-${hash}.${ext}`;
+      const targetPath = await getBackgroundImageAssetPath(
+        toBackgroundImageAsset(fileName),
+      );
+      if (!(await exists(targetPath))) {
+        await copyFile(selected, targetPath);
+      }
+
+      onBackgroundImageAssetChange?.(toBackgroundImageAsset(fileName));
+      onBackgroundImageEnabledChange?.(true);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      const normalized = message.toLowerCase();
+      const likelyPermissionDenied =
+        normalized.includes("forbidden") ||
+        normalized.includes("denied") ||
+        normalized.includes("not allowed") ||
+        normalized.includes("scope");
+      pushToast({
+        level: "error",
+        durationMs: 9000,
+        message: likelyPermissionDenied
+          ? `${t("config.app.backgroundImagePermissionDenied")}\n${message}`
+          : message,
+      });
+    }
+  }
+
+  function handleBackgroundImageSurfaceAlphaInput(rawValue: string) {
+    onBackgroundImageSurfaceAlphaChange?.(
+      clampBackgroundImageSurfaceAlpha(Number(rawValue)),
+    );
+  }
 
   // 数值草稿在失焦、回车或关闭模态框时统一提交；非法输入回退到当前生效值。
   function commitScrollbackDraft() {
@@ -418,6 +524,92 @@ export default function ConfigModal({
                 >
                   {t("actions.clear")}
                 </Button>
+              </div>
+            </div>
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <label className="config-toggle-head">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.backgroundImage")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.backgroundImageHint")}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={backgroundImageEnabled}
+                onChange={(event) =>
+                  onBackgroundImageEnabledChange?.(event.target.checked)
+                }
+              />
+            </label>
+            <div className="config-file-picker">
+              <div
+                className={`config-file-picker-path ${
+                  backgroundImageAsset ? "" : "empty"
+                }`.trim()}
+                title={
+                  backgroundImageAsset ||
+                  t("config.app.backgroundImagePlaceholder")
+                }
+              >
+                {backgroundImageAsset ||
+                  t("config.app.backgroundImagePlaceholder")}
+              </div>
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={pickBackgroundImage}
+                >
+                  {t("config.app.pickBackgroundImage")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!backgroundImageAsset}
+                  onClick={() => {
+                    // 清空仅解绑配置，不删除文件，避免误删被复用的去重资源。
+                    onBackgroundImageAssetChange?.("");
+                    onBackgroundImageEnabledChange?.(false);
+                  }}
+                >
+                  {t("actions.clear")}
+                </Button>
+              </div>
+            </div>
+            <div className="config-subsetting config-range-setting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.backgroundImageSurfaceAlpha")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.backgroundImageSurfaceAlphaHint")}
+                </span>
+              </div>
+              <div className="config-range-control">
+                <input
+                  type="range"
+                  min={MIN_BACKGROUND_IMAGE_SURFACE_ALPHA}
+                  max={MAX_BACKGROUND_IMAGE_SURFACE_ALPHA}
+                  step={0.01}
+                  value={backgroundImageSurfaceAlpha}
+                  onInput={(event) =>
+                    handleBackgroundImageSurfaceAlphaInput(
+                      event.currentTarget.value,
+                    )
+                  }
+                  onChange={(event) =>
+                    handleBackgroundImageSurfaceAlphaInput(
+                      event.currentTarget.value,
+                    )
+                  }
+                />
+                <span className="config-range-value">
+                  {Math.round(backgroundImageSurfaceAlpha * 100)}%
+                </span>
               </div>
             </div>
           </div>
@@ -1066,7 +1258,17 @@ export default function ConfigModal({
       onClose={handleClose}
       bodyClassName="config-modal-body"
     >
-      <div className="config-modal-layout">
+      <div
+        className="config-modal-layout"
+        style={
+          {
+            "--config-modal-surface-alpha": `${Math.round(
+              clampBackgroundImageSurfaceAlpha(effectiveModalSurfaceAlpha) *
+                100,
+            )}%`,
+          } as CSSProperties
+        }
+      >
         <aside className="config-modal-nav" aria-label={t("menu.config")}>
           {sections.map((section) => (
             <button

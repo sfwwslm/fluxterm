@@ -249,6 +249,20 @@ function stripAnsiForPromptParsing(text: string) {
 }
 
 /**
+ * 检测颜色是否包含小于 1 的 alpha。
+ * 目前只解析 rgb/rgba 字符串，已满足终端主题背景的当前产出格式。
+ */
+function hasTranslucentAlpha(color: string) {
+  const normalized = color.trim();
+  const rgbaPattern =
+    /^rgba\(\s*[0-9]{1,3}\s*,\s*[0-9]{1,3}\s*,\s*[0-9]{1,3}\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/i;
+  const match = rgbaPattern.exec(normalized);
+  if (!match) return false;
+  const alpha = Number(match[1]);
+  return Number.isFinite(alpha) && alpha < 1;
+}
+
+/**
  * 当前只支持 bash 常见提示符形态：
  * 1. user@host:/abs/path$
  * 2. user@host:~/path$
@@ -1002,6 +1016,8 @@ export default function useTerminalRuntime({
     const { host } = buildTerminalLayout(container);
     const term = new modules.Terminal({
       allowProposedApi: true,
+      // 启用终端画布透明通道，使半透明主题背景可透出到底层应用背景图。
+      allowTransparency: true,
       convertEol: true,
       fontFamily: '"JetBrains Mono", "Cascadia Mono", monospace',
       fontSize: 13,
@@ -1013,8 +1029,10 @@ export default function useTerminalRuntime({
     term.loadAddon(fit);
     term.open(host);
     let webglAddon: WebglAddon | null = null;
+    // 半透明背景下禁用 WebGL，避免终端画布实色化导致与其它区域透明度不一致。
+    const shouldUseWebgl = !hasTranslucentAlpha(themeRef.current.background);
     // 优先启用 WebGL 渲染；不可用时保持默认渲染路径，确保兼容性。
-    if (modules.WebglAddon) {
+    if (modules.WebglAddon && shouldUseWebgl) {
       try {
         webglAddon = new modules.WebglAddon();
         term.loadAddon(webglAddon);
@@ -1316,6 +1334,13 @@ export default function useTerminalRuntime({
   useEffect(() => {
     Object.values(terminalsRef.current).forEach((bundle) => {
       bundle.terminal.options.theme = theme;
+    });
+    if (!hasTranslucentAlpha(theme.background)) return;
+    // 切换到半透明主题时释放 WebGL，回退默认渲染器以确保透明背景生效。
+    Object.values(terminalsRef.current).forEach((bundle) => {
+      if (!bundle.webglAddon) return;
+      bundle.webglAddon.dispose();
+      bundle.webglAddon = null;
     });
   }, [theme]);
 

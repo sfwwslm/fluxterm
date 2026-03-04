@@ -81,7 +81,11 @@
   gap: 4px;
   border-radius: 12px;
   border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface-alt) 72%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--chrome-session-group-bg) 72%,
+    transparent
+  );
 }
 
 .host-group-title {
@@ -143,7 +147,11 @@
   gap: 2px;
   padding: 5px 12px;
   border-radius: 12px;
-  background: var(--surface-alt);
+  background: color-mix(
+    in srgb,
+    var(--chrome-session-group-item-bg) 68%,
+    transparent
+  );
   border: 1px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -154,7 +162,11 @@
   align-items: center;
   padding: 8px 10px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-header) 70%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--chrome-session-group-title-bg) 74%,
+    transparent
+  );
   border: 1px solid var(--border-weak);
 }
 

@@ -42,6 +42,18 @@ export const en = {
   "config.app.fileDefaultEditorPathPlaceholder":
     "For example C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.pickEditor": "Choose App",
+  "config.app.backgroundImage": "Custom Background Image",
+  "config.app.backgroundImageHint":
+    "Selected images are copied into config storage under $HOME with content dedupe; clear only unbinds current setting and keeps files.",
+  "config.app.backgroundImagePlaceholder": "No background image selected",
+  "config.app.pickBackgroundImage": "Choose Image",
+  "config.app.backgroundImageUnsupported":
+    "Only png/jpg/jpeg/webp image formats are supported",
+  "config.app.backgroundImagePermissionDenied":
+    "Image read/copy was blocked by system permissions. Check Tauri fs scope and source path access.",
+  "config.app.backgroundImageSurfaceAlpha": "Background Surface Opacity",
+  "config.app.backgroundImageSurfaceAlphaHint":
+    "Controls unified opacity for title bar, widgets, terminal, and footer surfaces, from 20% to 90%.",
   "config.ai.selectionMaxChars": "Selection Max Length",
   "config.ai.selectionMaxCharsHint":
     "Limits how many characters can be sent by Send to AI from the terminal selection menu.",

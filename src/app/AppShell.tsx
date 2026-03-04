@@ -7,7 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import { info, warn } from "@tauri-apps/plugin-log";
 import { save } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
 import ConfigModal, {
   type ConfigSectionItem,
@@ -25,6 +25,11 @@ import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import useProfiles from "@/hooks/profile/useProfiles";
 import useAppSettings from "@/hooks/settings/useAppSettings";
+import {
+  DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA,
+  MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+  MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
+} from "@/hooks/settings/useAppSettings";
 import useAiSettings from "@/hooks/settings/useAiSettings";
 import useSessionSettings from "@/hooks/settings/useSessionSettings";
 import useLayoutState from "@/hooks/useLayoutState";
@@ -68,6 +73,8 @@ import {
   stopResourceMonitor,
 } from "@/features/resource/core/commands";
 import { themePresets } from "@/app/theme/themePresets";
+import { buildThemeCssVars } from "@/app/theme/buildThemeCssVars";
+import { buildTerminalTheme } from "@/app/theme/buildTerminalTheme";
 import { buildPanels } from "@/app/panels/buildPanels";
 import {
   FLOATING_FILES_CHANNEL,
@@ -79,6 +86,7 @@ import {
   openRemoteFileViaCache,
 } from "@/features/file-open/core/commands";
 import { subscribeTauri } from "@/shared/tauri/events";
+import { getBackgroundImageAssetPath } from "@/shared/config/paths";
 
 const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   profiles: "panel.profiles",
@@ -88,6 +96,15 @@ const panelLabelKeys: Record<PanelKey, TranslationKey> = {
   history: "panel.history",
   ai: "panel.ai",
 };
+const BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA = 0;
+
+function clampBackgroundImageSurfaceAlpha(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA;
+  return Math.min(
+    MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+    Math.max(MIN_BACKGROUND_IMAGE_SURFACE_ALPHA, value),
+  );
+}
 
 function formatMessage(
   message: string,
@@ -214,6 +231,12 @@ export default function AppShell() {
     setSftpEnabled,
     fileDefaultEditorPath,
     setFileDefaultEditorPath,
+    backgroundImageEnabled,
+    setBackgroundImageEnabled,
+    backgroundImageAsset,
+    setBackgroundImageAsset,
+    backgroundImageSurfaceAlpha,
+    setBackgroundImageSurfaceAlpha,
     availableShells,
     settingsLoaded,
   } = useAppSettings({
@@ -261,6 +284,24 @@ export default function AppShell() {
     setResourceMonitorIntervalSec,
     setHostKeyPolicy,
   } = useSessionSettings();
+  const activeThemePreset = themePresets[themeId];
+  const isBackgroundImageRequested =
+    backgroundImageEnabled && !!backgroundImageAsset;
+  const normalizedBackgroundImageSurfaceAlpha = useMemo(
+    () => clampBackgroundImageSurfaceAlpha(backgroundImageSurfaceAlpha),
+    [backgroundImageSurfaceAlpha],
+  );
+  const activeTerminalTheme = useMemo(
+    () =>
+      buildTerminalTheme(activeThemePreset, {
+        translucentBackground: isBackgroundImageRequested,
+        // 终端外层 pane 已承担主要半透明层，xterm 画布只保留极轻底色避免双层叠深。
+        translucentBackgroundAlpha: BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA,
+        // 终端会话区在背景图模式下改用语义 surface 基色，避免与其它面板出现色相割裂。
+        translucentBackgroundBase: activeThemePreset.semantic.surface.strong,
+      }),
+    [activeThemePreset, isBackgroundImageRequested],
+  );
   const {
     profiles,
     sshGroups,
@@ -351,13 +392,80 @@ export default function AppShell() {
   const focusActiveTerminalRef = useRef<() => boolean>(() => false);
 
   useEffect(() => {
-    const theme = themePresets[themeId];
+    const theme = activeThemePreset;
+    const cssVars = buildThemeCssVars(theme);
     const root = document.documentElement;
     root.dataset.theme = themeId;
-    Object.entries(theme.vars).forEach(([key, value]) => {
+    Object.entries(cssVars).forEach(([key, value]) => {
       root.style.setProperty(key, value);
     });
-  }, [themeId]);
+  }, [themeId, activeThemePreset]);
+
+  useEffect(() => {
+    // 透明度单独走独立链路，确保滑杆拖动时可即时生效，不受主题变量批量更新影响。
+    const root = document.documentElement;
+    root.style.setProperty(
+      "--chrome-surface-alpha",
+      `${Math.round(normalizedBackgroundImageSurfaceAlpha * 100)}%`,
+    );
+  }, [normalizedBackgroundImageSurfaceAlpha]);
+
+  useEffect(() => {
+    let disposed = false;
+    let blobUrl: string | null = null;
+    const root = document.documentElement;
+    const applyBackgroundImageMode = (enabled: boolean) => {
+      root.dataset.backgroundImageMode = enabled ? "on" : "off";
+    };
+    const applyDefaultBackground = () => {
+      root.style.setProperty("--app-bg-image", "none");
+      root.style.setProperty("--app-bg-overlay", "none");
+      applyBackgroundImageMode(false);
+    };
+
+    if (!backgroundImageEnabled || !backgroundImageAsset) {
+      applyDefaultBackground();
+      return;
+    }
+
+    const overlay =
+      themeId === "light"
+        ? "linear-gradient(0deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.36))"
+        : "linear-gradient(0deg, rgba(7, 10, 14, 0.42), rgba(7, 10, 14, 0.42))";
+    root.style.setProperty("--app-bg-overlay", overlay);
+
+    (async () => {
+      try {
+        const filePath =
+          await getBackgroundImageAssetPath(backgroundImageAsset);
+        const bytes = await readFile(filePath);
+        blobUrl = URL.createObjectURL(new Blob([bytes]));
+        if (disposed) {
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
+        // 仅在背景图真正可读后启用语义层半透明模式，避免加载失败时界面过透。
+        applyBackgroundImageMode(true);
+      } catch (error) {
+        if (disposed) return;
+        applyDefaultBackground();
+        warn(
+          JSON.stringify({
+            event: "settings:background-image-load-failed",
+            asset: backgroundImageAsset,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      if (!blobUrl) return;
+      URL.revokeObjectURL(blobUrl);
+    };
+  }, [backgroundImageEnabled, backgroundImageAsset, themeId]);
 
   function openNewProfile() {
     setProfileModalMode("new");
@@ -508,7 +616,7 @@ export default function AppShell() {
   );
 
   const { terminalQuery, terminalActions } = useTerminalController({
-    theme: themePresets[themeId].terminal,
+    theme: activeTerminalTheme,
     webLinksEnabled,
     selectionAutoCopyEnabled,
     scrollback,
@@ -1997,6 +2105,9 @@ export default function AppShell() {
         sections={configModalSections}
         sftpEnabled={sftpEnabled}
         fileDefaultEditorPath={fileDefaultEditorPath}
+        backgroundImageEnabled={backgroundImageEnabled}
+        backgroundImageAsset={backgroundImageAsset}
+        backgroundImageSurfaceAlpha={normalizedBackgroundImageSurfaceAlpha}
         aiSelectionMaxChars={aiSelectionMaxChars}
         aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
         aiDebugLoggingEnabled={aiDebugLoggingEnabled}
@@ -2012,6 +2123,9 @@ export default function AppShell() {
         hostKeyPolicy={hostKeyPolicy}
         onSftpEnabledChange={setSftpEnabled}
         onFileDefaultEditorPathChange={setFileDefaultEditorPath}
+        onBackgroundImageEnabledChange={setBackgroundImageEnabled}
+        onBackgroundImageAssetChange={setBackgroundImageAsset}
+        onBackgroundImageSurfaceAlphaChange={setBackgroundImageSurfaceAlpha}
         onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
         onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
         onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
