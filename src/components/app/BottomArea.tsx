@@ -17,6 +17,7 @@ import type {
   ResourceMonitorStatus,
   ResourceMonitorUnsupportedReason,
   SessionResourceSnapshot,
+  SftpProgress,
 } from "@/types";
 import { formatDateTime } from "@/utils/format";
 import Modal from "@/components/terminal/modals/Modal";
@@ -70,6 +71,8 @@ type BottomAreaProps = {
   resourceMonitorEnabled: boolean;
   resourceMonitorStatus: ResourceMonitorStatus;
   resourceSnapshot: SessionResourceSnapshot | null;
+  sftpProgressBySession: Record<string, SftpProgress>;
+  onOpenTransfersPanel: () => void;
   activeAiConfigName: string | null;
   locale: Locale;
   t: Translate;
@@ -160,6 +163,8 @@ export default function BottomArea({
   resourceMonitorEnabled,
   resourceMonitorStatus,
   resourceSnapshot,
+  sftpProgressBySession,
+  onOpenTransfersPanel,
   activeAiConfigName,
   locale,
   t,
@@ -390,6 +395,21 @@ export default function BottomArea({
     t,
     resourceSnapshot?.unsupportedReason,
   );
+  const transferHint = useMemo(() => {
+    // 仅统计运行中的上传/下载任务，用于状态栏常驻指示器与点击行为控制。
+    const progresses = Object.values(sftpProgressBySession);
+    const runningUploads = progresses.filter(
+      (item) => item.status === "running" && item.op === "upload",
+    ).length;
+    const runningDownloads = progresses.filter(
+      (item) => item.status === "running" && item.op === "download",
+    ).length;
+    return {
+      runningUploads,
+      runningDownloads,
+      hasTransfer: runningUploads > 0 || runningDownloads > 0,
+    };
+  }, [sftpProgressBySession]);
 
   return (
     <>
@@ -616,10 +636,53 @@ export default function BottomArea({
                 )}
               </div>
               <div className="statusbar-right">
-                <span>
+                {/* 约定：右侧状态区中，AI 与传输指示必须固定在最左侧，后续新增状态信息不得插入其前方。 */}
+                <span className="statusbar-ai-chip">
                   [ {t("status.ai")}{" "}
                   {activeAiConfigName || t("status.ai.unset")} ]
                 </span>
+                <div className="statusbar-transfer" aria-live="polite">
+                  <button
+                    type="button"
+                    className={`statusbar-transfer-token ${transferHint.runningUploads > 0 ? "active" : "idle"}`.trim()}
+                    title={
+                      transferHint.runningUploads > 0
+                        ? `${t("actions.upload")} (${transferHint.runningUploads})`
+                        : t("actions.upload")
+                    }
+                    aria-label={t("actions.upload")}
+                    onClick={() => {
+                      // 无运行任务时保持只读指示，不触发面板切换。
+                      if (transferHint.hasTransfer) onOpenTransfersPanel();
+                    }}
+                  >
+                    [
+                    {transferHint.runningUploads > 0
+                      ? ` ↑${transferHint.runningUploads} `
+                      : " ↑ "}
+                    ]
+                  </button>
+                  <button
+                    type="button"
+                    className={`statusbar-transfer-token ${transferHint.runningDownloads > 0 ? "active" : "idle"}`.trim()}
+                    title={
+                      transferHint.runningDownloads > 0
+                        ? `${t("actions.download")} (${transferHint.runningDownloads})`
+                        : t("actions.download")
+                    }
+                    aria-label={t("actions.download")}
+                    onClick={() => {
+                      // 无运行任务时保持只读指示，不触发面板切换。
+                      if (transferHint.hasTransfer) onOpenTransfersPanel();
+                    }}
+                  >
+                    [
+                    {transferHint.runningDownloads > 0
+                      ? ` ↓${transferHint.runningDownloads} `
+                      : " ↓ "}
+                    ]
+                  </button>
+                </div>
                 <span>
                   [ {t("status.window")} {stats.windowRows}x{stats.windowCols} ]
                 </span>

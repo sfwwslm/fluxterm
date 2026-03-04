@@ -356,7 +356,6 @@ export default function AppShell() {
   }, []);
   const layoutMenuDisabled = Boolean(floatingPanelKey);
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
-  const lastSftpTransferIdRef = useRef<Record<string, string>>({});
   const activeResourceMonitorSessionIdRef = useRef<string | null>(null);
   const activeResourceMonitorKeyRef = useRef("");
   const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
@@ -1866,29 +1865,15 @@ export default function AppShell() {
     ],
   );
 
-  // 当检测到新的 SFTP 上传/下载开始时，主动把底部区域展开并切到传输面板，
-  // 避免用户在底部收起或停留在其他面板时感知不到传输开始。
-  // 这里仅在“新传输”开始时触发一次，不会在每次进度刷新时重复切换，也不会在传输结束后自动恢复原状态。
-  useEffect(() => {
-    if (floatingPanelKey) return;
+  function handleSlotReplace(slot: LayoutWidgetSlot, key: PanelKey) {
+    // UI 候选列表已经做过过滤，这里再做一次防守式保护，
+    // 避免未来新增入口时把“已存在或已浮动”的组件重新塞回主窗口。
+    if (!availableWidgets.includes(key)) return;
+    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
+  }
 
-    let shouldRevealTransfers = false;
-    Object.values(sftpState.progressBySession).forEach((progress) => {
-      const previousTransferId =
-        lastSftpTransferIdRef.current[progress.sessionId];
-      const isNewTransfer =
-        previousTransferId === undefined ||
-        previousTransferId !== progress.transferId;
-
-      if (isNewTransfer) {
-        shouldRevealTransfers = true;
-      }
-
-      lastSftpTransferIdRef.current[progress.sessionId] = progress.transferId;
-    });
-
-    if (!shouldRevealTransfers) return;
-
+  function handleOpenTransfersPanel() {
+    // 仅在用户主动点击状态栏传输指示器时展开并切换，不在传输开始时自动打断当前布局。
     setPanelCollapsed("bottom", false);
     setSlotGroups((prev) => {
       const bottomGroup = prev.bottom;
@@ -1902,18 +1887,6 @@ export default function AppShell() {
         },
       };
     });
-  }, [
-    floatingPanelKey,
-    sftpState.progressBySession,
-    setPanelCollapsed,
-    setSlotGroups,
-  ]);
-
-  function handleSlotReplace(slot: LayoutWidgetSlot, key: PanelKey) {
-    // UI 候选列表已经做过过滤，这里再做一次防守式保护，
-    // 避免未来新增入口时把“已存在或已浮动”的组件重新塞回主窗口。
-    if (!availableWidgets.includes(key)) return;
-    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
   }
 
   return (
@@ -2084,6 +2057,8 @@ export default function AppShell() {
             resourceMonitorEnabled={resourceMonitorEnabled}
             resourceMonitorStatus={activeResourceMonitorStatus}
             resourceSnapshot={activeResourceSnapshot}
+            sftpProgressBySession={sftpState.progressBySession}
+            onOpenTransfersPanel={handleOpenTransfersPanel}
             activeAiConfigName={activeOpenaiConfig?.name?.trim() || null}
             locale={locale}
             t={t}

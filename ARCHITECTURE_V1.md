@@ -35,6 +35,15 @@ frontend (React/Vite)  --->  tauri (Rust)  --->  engine (Rust)
 - SFTP 客户端：列出/上传/下载/重命名/删除。
 - 会话生命周期、重试与超时抽象。
 
+#### SFTP 传输执行模型（2026-03 重构）
+
+- 批量上传/下载改为流水线执行：`Scanner -> TaskQueue -> WorkerPool -> ProgressAggregator`。
+- 扫描器采用流式投递任务，扫描与传输并行，不再依赖全量预扫描。
+- 批量任务启用文件级并发（默认 8 个 worker），目录与文件任务统一由调度队列分发。
+- 下载路径使用窗口化并发读取（pipelining），通过多 `read(offset)` 请求降低高延迟链路下的等待时间。
+- 远端目录创建改为按需创建 + 缓存去重，减少重复 `mkdir` 往返。
+- 传输链路提供统一性能埋点日志（`sftp_perf` 与文件级 pipeline 指标），用于跨版本对比吞吐、耗时、并发窗口利用率。
+
 ### `src-tauri`
 
 桌面 GUI 外壳。

@@ -169,6 +169,44 @@
   flex-shrink: 0;
 }
 
+.statusbar-transfer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.statusbar-ai-chip {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.statusbar-transfer-token {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.statusbar-transfer-token.active {
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.statusbar-transfer-token.active:hover {
+  color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+}
+
+.statusbar-transfer-token.idle {
+  color: var(--text-muted);
+}
+
 .statusbar-resource-chip {
   display: inline-flex;
   align-items: center;
