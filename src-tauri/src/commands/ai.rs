@@ -35,10 +35,7 @@ pub fn ai_settings_save(
 
 /// 测试当前 OpenAI-compatible 接入是否可用。
 #[tauri::command]
-pub async fn ai_openai_test(
-    app: AppHandle,
-    config_id: Option<String>,
-) -> Result<(), EngineError> {
+pub async fn ai_openai_test(app: AppHandle, config_id: Option<String>) -> Result<(), EngineError> {
     let config = read_openai_config_by_id(&app, config_id.as_deref())?;
     openai::test_connection(&config)
         .await
