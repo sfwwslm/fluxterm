@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 type Options = {
   enabled?: boolean;
+  allowDevRefreshAndDevtools?: boolean;
 };
 
 function isTerminalFocused(target: EventTarget | null) {
@@ -11,7 +12,10 @@ function isTerminalFocused(target: EventTarget | null) {
   );
 }
 
-const isBlockedShortcut = (event: KeyboardEvent) => {
+const isBlockedShortcut = (
+  event: KeyboardEvent,
+  allowDevRefreshAndDevtools: boolean,
+) => {
   const key = event.key.toLowerCase();
   const ctrlOrMeta = event.ctrlKey || event.metaKey;
   const isDev = import.meta.env.DEV;
@@ -19,7 +23,9 @@ const isBlockedShortcut = (event: KeyboardEvent) => {
 
   if (key === "f3" || key === "f7" || key === "f1") return true;
 
-  if (!isDev && (key === "f5" || key === "f12")) {
+  if (key === "f5") return true;
+
+  if (key === "f12" && !(isDev && allowDevRefreshAndDevtools)) {
     return true;
   }
 
@@ -79,12 +85,13 @@ const isBlockedShortcut = (event: KeyboardEvent) => {
 /** 禁用浏览器级快捷键，避免刷新/关闭/开发者工具等打断应用。 */
 export const useDisableBrowserShortcuts = ({
   enabled = true,
+  allowDevRefreshAndDevtools = false,
 }: Options = {}) => {
   useEffect(() => {
     if (!enabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isBlockedShortcut(event)) {
+      if (isBlockedShortcut(event, allowDevRefreshAndDevtools)) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -101,5 +108,5 @@ export const useDisableBrowserShortcuts = ({
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("contextmenu", handleContextMenu, true);
     };
-  }, [enabled]);
+  }, [enabled, allowDevRefreshAndDevtools]);
 };

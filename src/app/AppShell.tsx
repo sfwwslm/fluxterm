@@ -210,7 +210,6 @@ function resolvePromptWorkingDirectory(
 
 /** 应用主界面编排层。 */
 export default function AppShell() {
-  useDisableBrowserShortcuts();
   const themeIds = useMemo(() => Object.keys(themePresets) as ThemeId[], []);
   const {
     locale,
@@ -311,6 +310,9 @@ export default function AppShell() {
   } = useProfiles();
   const { pushToast } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
+  useDisableBrowserShortcuts({
+    allowDevRefreshAndDevtools: aboutOpen,
+  });
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeConfigSection, setActiveConfigSection] =
