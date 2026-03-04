@@ -162,7 +162,7 @@ export const en = {
   "panel.group.actions": "Actions",
   "panel.group.components": "Components",
   "panel.emptyHint":
-    "No widget in this slot. Add one from the dropdown or drag one here.",
+    "No widget in this slot. Add a widget from the Settings menu.",
   "terminal.empty": "No active session",
   "terminal.exitHint": "Session disconnected. Press Enter to reconnect",
   "terminal.menu.copy": "Copy",

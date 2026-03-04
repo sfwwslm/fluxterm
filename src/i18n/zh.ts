@@ -151,7 +151,7 @@ export const zh = {
   "panel.float": "浮动",
   "panel.group.actions": "操作",
   "panel.group.components": "组件",
-  "panel.emptyHint": "当前槽位没有组件，请从下拉框添加或拖拽组件到此处",
+  "panel.emptyHint": "当前槽位没有组件，请从设置菜单添加组件",
   "terminal.empty": "尚未连接主机",
   "terminal.exitHint": "会话已断开连接，按回车重新连接",
   "terminal.menu.copy": "复制",
