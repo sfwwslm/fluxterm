@@ -54,4 +54,16 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**", "**/crates/**"],
     },
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom"],
+          "vendor-markdown": ["react-markdown", "remark-gfm"],
+          "vendor-tauri": ["@tauri-apps/api", "@tauri-apps/plugin-log", "@tauri-apps/plugin-window-state"],
+        },
+      },
+    },
+  },
 }));
