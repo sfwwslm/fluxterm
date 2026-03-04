@@ -16,6 +16,11 @@ import type {
 } from "@/features/ai/types";
 import type { Locale } from "@/i18n";
 
+/**
+ * AI 面板状态管理 Hook。
+ * 负责会话内消息状态、流式问答生命周期、跨窗口同步与本地持久化。
+ * 约定：assistant 空消息表示“占位中”，用于在首包到达前展示 loading。
+ */
 const AI_SESSION_STORAGE_KEY = "fluxterm.ai.session-state";
 const AI_SESSION_SYNC_CHANNEL = "fluxterm-ai-sync";
 
@@ -128,6 +133,7 @@ export default function useAiState({
     let unlistenDone: (() => void) | null = null;
     let unlistenError: (() => void) | null = null;
 
+    // 流式事件订阅入口：chunk/done/error 三类事件共同驱动 pending 状态机。
     // Tauri 事件订阅是异步返回 unlisten 的，组件快速卸载时要立即回收晚到的订阅句柄。
     onAiChatChunk(handleChunk).then((unlisten) => {
       if (disposed) {
@@ -163,6 +169,7 @@ export default function useAiState({
   useEffect(() => {
     if (!enabled) return;
     if (typeof BroadcastChannel === "undefined") return;
+    // 多窗口同步：当前窗口写入后广播，其他窗口按 sessionId 精确接收并覆盖本地状态。
     const channel = new BroadcastChannel(AI_SESSION_SYNC_CHANNEL);
     syncChannelRef.current = channel;
     channel.onmessage = (event: MessageEvent<AiSessionSyncPayload>) => {
@@ -195,6 +202,7 @@ export default function useAiState({
 
   useEffect(() => {
     if (!enabled) return;
+    // 会话切换时先取消旧请求，再加载该会话的持久化快照，避免串流写入错误会话。
     cancelPendingRequest();
     const persisted = readSessionState(activeSessionId);
     setMessages(persisted?.messages ?? []);
@@ -221,6 +229,7 @@ export default function useAiState({
 
   function handleChunk(payload: AiChatChunkPayload) {
     if (payload.requestId !== pendingRequestIdRef.current) return;
+    // 首包到达后退出“等待首包”态，并把增量文本追加到最后一个 assistant 消息。
     setWaitingFirstChunk(false);
     setMessages((prev) => {
       if (!prev.length) return prev;
@@ -237,6 +246,7 @@ export default function useAiState({
 
   function handleDone(payload: AiChatDonePayload) {
     if (payload.requestId !== pendingRequestIdRef.current) return;
+    // done 事件是流式请求的唯一正常收口点：清理 requestId 并复位 pending 状态。
     pendingRequestIdRef.current = null;
     setPending(false);
     setWaitingFirstChunk(false);
@@ -249,6 +259,7 @@ export default function useAiState({
     setWaitingFirstChunk(false);
     setErrorMessage(payload.error.message);
     setMessages((prev) => {
+      // 错误场景移除末尾 assistant 占位，避免空消息残留。
       const next = prev.slice();
       if (next[next.length - 1]?.role === "assistant") {
         next.pop();
@@ -292,6 +303,7 @@ export default function useAiState({
     const nextMessages = messages.concat(nextUserMessage);
     const nextRequestId = crypto.randomUUID();
     pendingRequestIdRef.current = nextRequestId;
+    // 聊天发送路径：先插入空 assistant 占位，首包前由 UI 渲染 loading。
     setMessages(
       nextMessages.concat({
         role: "assistant",
@@ -336,6 +348,7 @@ export default function useAiState({
       }
       pendingRequestIdRef.current = null;
       setMessages((prev) => {
+        // 请求启动失败时同时回滚 user 与 assistant 占位，恢复发送前状态。
         const next = prev.slice();
         if (next[next.length - 1]?.role === "assistant") {
           next.pop();
@@ -365,8 +378,16 @@ export default function useAiState({
       role: "user",
       content,
     };
-    setMessages((prev) => prev.concat(nextUserMessage));
+    // 与聊天提问路径保持一致：先插入空 assistant 占位，复用同一套 loading UI。
+    const nextAssistantPlaceholder: AiChatMessage = {
+      role: "assistant",
+      content: "",
+    };
+    setMessages((prev) =>
+      prev.concat(nextUserMessage, nextAssistantPlaceholder),
+    );
     setPending(true);
+    setWaitingFirstChunk(true);
     setErrorMessage(null);
 
     try {
@@ -396,7 +417,17 @@ export default function useAiState({
           }),
         );
       }
-      setMessages((prev) => prev.concat(response.message));
+      setMessages((prev) => {
+        // 优先替换最近一个空 assistant 占位，避免右键发送阶段出现重复 assistant 气泡。
+        const next = prev.slice();
+        for (let index = next.length - 1; index >= 0; index -= 1) {
+          if (next[index]?.role === "assistant" && !next[index]?.content) {
+            next[index] = response.message;
+            return next;
+          }
+        }
+        return next.concat(response.message);
+      });
     } catch (error) {
       if (debugLoggingEnabled) {
         void logInfo(
@@ -407,10 +438,23 @@ export default function useAiState({
           }),
         );
       }
-      setMessages((prev) => prev.filter((item) => item !== nextUserMessage));
+      setMessages((prev) => {
+        // 失败时回滚本次右键发送注入的空 assistant 占位，防止遗留空消息。
+        const withoutUser = prev.filter((item) => item !== nextUserMessage);
+        let placeholderRemoved = false;
+        return withoutUser.filter((item) => {
+          if (placeholderRemoved) return true;
+          if (item.role === "assistant" && !item.content) {
+            placeholderRemoved = true;
+            return false;
+          }
+          return true;
+        });
+      });
       setErrorMessage(getErrorMessage(error));
     } finally {
       setPending(false);
+      setWaitingFirstChunk(false);
     }
   }
 

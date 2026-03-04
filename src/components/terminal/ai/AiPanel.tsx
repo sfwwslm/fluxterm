@@ -7,6 +7,11 @@ import type { Translate } from "@/i18n";
 import type { AiChatMessage } from "@/features/ai/types";
 import "./AiPanel.css";
 
+/**
+ * AI 会话面板视图组件。
+ * 负责消息渲染（assistant Markdown + loading 占位）、输入交互与滚动行为。
+ * 不持有业务状态，所有会话状态由 useAiState 管理并通过 props 注入。
+ */
 type AiPanelProps = {
   activeSessionId: string | null;
   aiAvailable: boolean;
@@ -52,6 +57,7 @@ export default function AiPanel({
 
   useEffect(() => {
     if (!autoScroll) return;
+    // 自动跟随滚动：仅在用户位于底部附近时追踪最新消息。
     const container = messagesRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
@@ -59,6 +65,7 @@ export default function AiPanel({
 
   useEffect(() => {
     if (keepLocalDraftBuffer && isComposing) return;
+    // 外部草稿变化回灌到本地输入缓存；中文输入法组合态期间避免覆盖用户输入。
     setLocalDraft(draft);
   }, [draft, isComposing, keepLocalDraftBuffer]);
 
@@ -81,10 +88,25 @@ export default function AiPanel({
 
   function renderMessageBody(message: AiChatMessage) {
     if (!message.content && pending && message.role === "assistant") {
-      return "…";
+      // assistant 空内容 + pending 表示“占位消息”，统一渲染成 loading 状态。
+      return (
+        <div
+          className={`ai-message-loading ${waitingFirstChunk ? "pending" : ""}`}
+          aria-live="polite"
+          aria-label={t("ai.generating")}
+        >
+          <span className="ai-message-loading-label">{t("ai.generating")}</span>
+          <span className="ai-message-loading-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        </div>
+      );
     }
 
     if (message.role === "assistant") {
+      // assistant 默认按 Markdown 渲染，支持 GFM；链接统一新窗口打开。
       return (
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -129,6 +151,7 @@ export default function AiPanel({
         className="ai-panel-messages"
         onScroll={(event) => {
           const element = event.currentTarget;
+          // 用户离开底部后暂停自动滚动，避免阅读历史消息时被新消息打断。
           const nearBottom =
             element.scrollHeight - element.scrollTop - element.clientHeight <
             24;
