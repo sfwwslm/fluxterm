@@ -14,6 +14,7 @@ type AiPanelProps = {
   pending: boolean;
   waitingFirstChunk: boolean;
   errorMessage: string | null;
+  keepLocalDraftBuffer?: boolean;
   onDraftChange: (value: string) => void;
   onSend: () => Promise<void>;
   onCancel: () => void;
@@ -31,6 +32,7 @@ export default function AiPanel({
   pending,
   waitingFirstChunk,
   errorMessage,
+  keepLocalDraftBuffer = false,
   onDraftChange,
   onSend,
   onCancel,
@@ -41,7 +43,10 @@ export default function AiPanel({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [localDraft, setLocalDraft] = useState(draft);
+  const [isComposing, setIsComposing] = useState(false);
   const canChat = !!activeSessionId && !pending && aiAvailable;
+  const textareaValue = keepLocalDraftBuffer ? localDraft : draft;
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -51,13 +56,18 @@ export default function AiPanel({
   }, [autoScroll, messages, waitingFirstChunk, errorMessage]);
 
   useEffect(() => {
+    if (keepLocalDraftBuffer && isComposing) return;
+    setLocalDraft(draft);
+  }, [draft, isComposing, keepLocalDraftBuffer]);
+
+  useEffect(() => {
     // 输入区默认按单行起步，内容增多后再向上扩展，避免空状态占用过高。
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "0px";
     const nextHeight = Math.min(Math.max(textarea.scrollHeight, 40), 144);
     textarea.style.height = `${nextHeight}px`;
-  }, [draft]);
+  }, [textareaValue]);
 
   async function copyMessage(content: string, key: string) {
     await writeText(content);
@@ -151,12 +161,38 @@ export default function AiPanel({
           <textarea
             ref={textareaRef}
             className="ai-panel-textarea"
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
+            value={textareaValue}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              if (keepLocalDraftBuffer) {
+                setLocalDraft(nextValue);
+              }
+              if (!keepLocalDraftBuffer || !isComposing) {
+                onDraftChange(nextValue);
+              }
+            }}
+            onCompositionStart={() => {
+              if (!keepLocalDraftBuffer) return;
+              setIsComposing(true);
+            }}
+            onCompositionEnd={(event) => {
+              if (!keepLocalDraftBuffer) return;
+              const nextValue = event.currentTarget.value;
+              setIsComposing(false);
+              setLocalDraft(nextValue);
+              onDraftChange(nextValue);
+            }}
+            onBlur={(event) => {
+              if (!keepLocalDraftBuffer) return;
+              const nextValue = event.currentTarget.value;
+              setLocalDraft(nextValue);
+              onDraftChange(nextValue);
+            }}
             placeholder={t("ai.inputPlaceholder")}
             disabled={!activeSessionId || pending || !aiAvailable}
             rows={1}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               if (event.key !== "Enter" || event.shiftKey) return;
               event.preventDefault();
               onSend().catch(() => {});
@@ -174,7 +210,7 @@ export default function AiPanel({
                 }
                 onSend().catch(() => {});
               }}
-              disabled={pending ? false : !canChat || !draft.trim()}
+              disabled={pending ? false : !canChat || !textareaValue.trim()}
             >
               {pending ? t("ai.stop") : t("ai.send")}
             </Button>

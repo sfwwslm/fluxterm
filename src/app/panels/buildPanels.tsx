@@ -51,6 +51,7 @@ type BuildPanelsProps = {
   aiPending: boolean;
   aiWaitingFirstChunk: boolean;
   aiErrorMessage: string | null;
+  isFloatingAiPanel: boolean;
   currentPath: string;
   sftpAvailability: SftpAvailability;
   terminalPathSyncStatus:
@@ -124,6 +125,7 @@ export function buildPanels(
     aiPending,
     aiWaitingFirstChunk,
     aiErrorMessage,
+    isFloatingAiPanel,
     currentPath,
     sftpAvailability,
     terminalPathSyncStatus,
@@ -246,6 +248,7 @@ export function buildPanels(
         pending={aiPending}
         waitingFirstChunk={aiWaitingFirstChunk}
         errorMessage={aiErrorMessage}
+        keepLocalDraftBuffer={isFloatingAiPanel}
         onDraftChange={onAiDraftChange}
         onSend={onAiSend}
         onCancel={onAiCancel}
