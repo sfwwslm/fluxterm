@@ -68,6 +68,11 @@ import {
   type FloatingHistoryMessage,
   type FloatingHistorySnapshot,
 } from "@/features/command-history/core/floatingSync";
+import {
+  FLOATING_EVENTS_CHANNEL,
+  type FloatingEventsMessage,
+  type FloatingEventsSnapshot,
+} from "@/features/session/core/floatingEventsSync";
 import { MIN_RESOURCE_MONITOR_INTERVAL_SEC } from "@/hooks/settings/useSessionSettings";
 import {
   startLocalResourceMonitor,
@@ -374,6 +379,8 @@ export default function AppShell() {
     useState<FloatingFilesSnapshot | null>(null);
   const [floatingTransfersSnapshot, setFloatingTransfersSnapshot] =
     useState<FloatingTransfersSnapshot | null>(null);
+  const [floatingEventsSnapshot, setFloatingEventsSnapshot] =
+    useState<FloatingEventsSnapshot | null>(null);
   const [floatingHistorySnapshot, setFloatingHistorySnapshot] =
     useState<FloatingHistorySnapshot | null>(null);
   const [floatingHistorySearchQuery, setFloatingHistorySearchQuery] =
@@ -688,6 +695,7 @@ export default function AppShell() {
 
   const isFloatingFilesPanel = floatingPanelKey === "files";
   const isFloatingTransfersPanel = floatingPanelKey === "transfers";
+  const isFloatingEventsPanel = floatingPanelKey === "events";
   const isFloatingHistoryPanel = floatingPanelKey === "history";
   const isFloatingAiPanel = floatingPanelKey === "ai";
 
@@ -1343,6 +1351,59 @@ export default function AppShell() {
     ],
   });
 
+  useFloatingPanelSnapshotSync<FloatingEventsMessage>({
+    channelName: FLOATING_EVENTS_CHANNEL,
+    floatingPanelKey,
+    isFloatingPanel: isFloatingEventsPanel,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingEventsSnapshot = {
+        sessionState: sessionState.activeSessionState ?? "disconnected",
+        sessionReason: sessionState.activeSessionReason,
+        reconnectInfo: sessionState.activeReconnectInfo,
+        entries: sessionState.logEntries,
+      };
+      channel.postMessage({
+        type: "events:snapshot",
+        payload,
+      } satisfies FloatingEventsMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "events:request-snapshot": {
+          const payload: FloatingEventsSnapshot = {
+            sessionState: sessionState.activeSessionState ?? "disconnected",
+            sessionReason: sessionState.activeSessionReason,
+            reconnectInfo: sessionState.activeReconnectInfo,
+            entries: sessionState.logEntries,
+          };
+          channel.postMessage({
+            type: "events:snapshot",
+            payload,
+          } satisfies FloatingEventsMessage);
+          break;
+        }
+        case "events:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "events:snapshot") {
+        setFloatingEventsSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "events:request-snapshot",
+      } satisfies FloatingEventsMessage);
+    },
+    deps: [
+      sessionState.activeSessionState,
+      sessionState.activeSessionReason,
+      sessionState.activeReconnectInfo,
+      sessionState.logEntries,
+    ],
+  });
+
   useFloatingPanelSnapshotSync<FloatingHistoryMessage>({
     channelName: FLOATING_HISTORY_CHANNEL,
     floatingPanelKey,
@@ -1761,6 +1822,32 @@ export default function AppShell() {
     [cancelTransfer, isFloatingTransfersPanel, postFloatingTransfersMessage],
   );
 
+  const eventsPanelState = useMemo(
+    () =>
+      isFloatingEventsPanel
+        ? {
+            sessionState:
+              floatingEventsSnapshot?.sessionState ?? "disconnected",
+            sessionReason: floatingEventsSnapshot?.sessionReason ?? null,
+            reconnectInfo: floatingEventsSnapshot?.reconnectInfo ?? null,
+            entries: floatingEventsSnapshot?.entries ?? [],
+          }
+        : {
+            sessionState: sessionState.activeSessionState ?? "disconnected",
+            sessionReason: sessionState.activeSessionReason,
+            reconnectInfo: sessionState.activeReconnectInfo,
+            entries: sessionState.logEntries,
+          },
+    [
+      floatingEventsSnapshot,
+      isFloatingEventsPanel,
+      sessionState.activeReconnectInfo,
+      sessionState.activeSessionReason,
+      sessionState.activeSessionState,
+      sessionState.logEntries,
+    ],
+  );
+
   const historyPanelState = useMemo(
     () =>
       isFloatingHistoryPanel
@@ -1893,14 +1980,14 @@ export default function AppShell() {
         connectingProfileId,
         availableShells,
         activeSessionId: aiPanelState.activeSessionId,
-        activeSessionState: sessionState.activeSessionState,
-        activeSessionReason: sessionState.activeSessionReason,
-        activeReconnectInfo: sessionState.activeReconnectInfo,
+        activeSessionState: eventsPanelState.sessionState,
+        activeSessionReason: eventsPanelState.sessionReason,
+        activeReconnectInfo: eventsPanelState.reconnectInfo,
         isRemoteSession: filesPanelState.isRemoteSession,
         isRemoteConnected: filesPanelState.isRemoteConnected,
         transferProgress: transfersPanelState.progress,
         busyMessage: transfersPanelState.busyMessage,
-        logEntries: transfersPanelState.entries,
+        logEntries: eventsPanelState.entries,
         historyLoaded: historyPanelState.loaded,
         hasActiveSession: historyPanelState.hasActiveSession,
         historyLiveCapture: historyPanelState.liveCapture,
@@ -1973,9 +2060,7 @@ export default function AppShell() {
       aiPanelActions,
       aiPanelState,
       isFloatingAiPanel,
-      sessionState.activeSessionState,
-      sessionState.activeSessionReason,
-      sessionState.activeReconnectInfo,
+      eventsPanelState,
       filesPanelState.isRemoteSession,
       filesPanelState.isRemoteConnected,
       transfersPanelActions,
