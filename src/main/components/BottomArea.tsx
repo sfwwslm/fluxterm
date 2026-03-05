@@ -7,6 +7,7 @@ import {
   FiActivity,
   FiDatabase,
   FiEdit2,
+  FiRepeat,
   FiSettings,
   FiTrash2,
 } from "react-icons/fi";
@@ -638,58 +639,39 @@ export default function BottomArea({
               <div className="statusbar-right">
                 {/* 约定：右侧状态区中，AI 与传输指示必须固定在最左侧，后续新增状态信息不得插入其前方。 */}
                 <span className="statusbar-ai-chip">
-                  [ {t("status.ai")}{" "}
-                  {activeAiConfigName || t("status.ai.unset")} ]
+                  {t("status.ai")} {activeAiConfigName || t("status.ai.unset")}
                 </span>
                 <div className="statusbar-transfer" aria-live="polite">
                   <button
                     type="button"
-                    className={`statusbar-transfer-token ${transferHint.runningUploads > 0 ? "active" : "idle"}`.trim()}
+                    className={`statusbar-transfer-token ${transferHint.hasTransfer ? "active" : "idle"}`.trim()}
                     title={
-                      transferHint.runningUploads > 0
-                        ? `${t("actions.upload")} (${transferHint.runningUploads})`
-                        : t("actions.upload")
+                      transferHint.hasTransfer
+                        ? `${t("actions.upload")} ${transferHint.runningUploads} / ${t("actions.download")} ${transferHint.runningDownloads}`
+                        : `${t("actions.upload")} / ${t("actions.download")}`
                     }
-                    aria-label={t("actions.upload")}
+                    aria-label={
+                      transferHint.hasTransfer
+                        ? `${t("actions.upload")} ${transferHint.runningUploads} / ${t("actions.download")} ${transferHint.runningDownloads}`
+                        : `${t("actions.upload")} / ${t("actions.download")}`
+                    }
                     onClick={() => {
-                      // 无运行任务时保持只读指示，不触发面板切换。
+                      // 仅在存在运行任务时允许打开传输组件。
                       if (transferHint.hasTransfer) onOpenTransfersWidget();
                     }}
                   >
-                    [
-                    {transferHint.runningUploads > 0
-                      ? ` ↑${transferHint.runningUploads} `
-                      : " ↑ "}
-                    ]
-                  </button>
-                  <button
-                    type="button"
-                    className={`statusbar-transfer-token ${transferHint.runningDownloads > 0 ? "active" : "idle"}`.trim()}
-                    title={
-                      transferHint.runningDownloads > 0
-                        ? `${t("actions.download")} (${transferHint.runningDownloads})`
-                        : t("actions.download")
-                    }
-                    aria-label={t("actions.download")}
-                    onClick={() => {
-                      // 无运行任务时保持只读指示，不触发面板切换。
-                      if (transferHint.hasTransfer) onOpenTransfersWidget();
-                    }}
-                  >
-                    [
-                    {transferHint.runningDownloads > 0
-                      ? ` ↓${transferHint.runningDownloads} `
-                      : " ↓ "}
-                    ]
+                    <FiRepeat />
                   </button>
                 </div>
-                <span>
-                  [ {t("status.window")} {stats.windowRows}x{stats.windowCols} ]
+                <span className="statusbar-info-chip">
+                  {t("status.window")} {stats.windowRows}x{stats.windowCols}
                 </span>
-                <span>
-                  [ {t("status.buffer")} {stats.bufferLines} ]
+                <span className="statusbar-info-chip">
+                  {t("status.buffer")} {stats.bufferLines}
                 </span>
-                <span>[ {formatDateTime(now, locale)} ]</span>
+                <span className="statusbar-info-chip">
+                  {formatDateTime(now, locale)}
+                </span>
               </div>
             </div>
           </div>

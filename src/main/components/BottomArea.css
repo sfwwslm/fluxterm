@@ -172,39 +172,63 @@
 .statusbar-transfer {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   flex-shrink: 0;
 }
 
-.statusbar-ai-chip {
+.statusbar-ai-chip,
+.statusbar-info-chip,
+.statusbar-transfer-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--chrome-status-chip-bg);
   color: var(--text-secondary);
   flex-shrink: 0;
 }
 
 .statusbar-transfer-token {
-  border: none;
-  padding: 0;
+  border: 1px solid var(--border-soft);
+  padding: 2px 8px;
   margin: 0;
-  background: transparent;
+  background: var(--chrome-status-chip-bg);
   font: inherit;
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-secondary);
-  flex-shrink: 0;
   cursor: default;
+  line-height: 1;
 }
 
 .statusbar-transfer-token.active {
-  color: var(--text-primary);
+  color: color-mix(in srgb, var(--accent) 82%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--accent-soft) 62%, var(--border-soft));
   cursor: pointer;
+  animation: statusbar-transfer-blink 1s ease-in-out infinite;
 }
 
 .statusbar-transfer-token.active:hover {
-  color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+  color: var(--accent);
 }
 
 .statusbar-transfer-token.idle {
-  color: var(--text-muted);
+  color: var(--text-secondary);
+}
+
+.statusbar-transfer-token svg {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes statusbar-transfer-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .statusbar-resource-chip {
