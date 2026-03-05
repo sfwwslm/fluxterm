@@ -139,6 +139,36 @@ struct DownloadPipelinePerf {
     max_pending_chunks: usize,
 }
 
+/// 远端扫描下载任务的上下文。
+struct DownloadScanContext<'a> {
+    sftp: &'a SftpSession,
+    remote_root: &'a str,
+    local_root: &'a Path,
+    tx: &'a mpsc::UnboundedSender<DownloadPipelineTask>,
+    state: &'a Arc<Mutex<PipelineProgressState>>,
+    emit_context: &'a PipelineEmitContext,
+    cancel_flag: &'a AtomicBool,
+}
+
+/// SFTP 性能埋点统计维度。
+struct SftpPerfStats<'a> {
+    stage: &'a str,
+    session_id: &'a str,
+    op: SftpProgressOp,
+    kind: SftpTransferKind,
+    mode: &'a str,
+    elapsed_ms: u128,
+    transferred_bytes: u64,
+    total_bytes: Option<u64>,
+    completed_items: u64,
+    failed_items: u64,
+    total_items: Option<u64>,
+    worker_count: Option<usize>,
+    scan_elapsed_ms: Option<u128>,
+    write_window: Option<usize>,
+    read_window: Option<usize>,
+}
+
 /// 生成 SFTP 传输任务标识。
 ///
 /// 该标识会跨 session 主循环与具体传输任务共享，用于进度归集和取消定位。
@@ -491,23 +521,23 @@ pub async fn sftp_upload(
             total_bytes: total,
         },
     );
-    log_sftp_perf(
-        "final",
+    log_sftp_perf(SftpPerfStats {
+        stage: "final",
         session_id,
-        SftpProgressOp::Upload,
-        SftpTransferKind::File,
-        "single_file",
-        started.elapsed().as_millis(),
-        transferred,
-        total,
-        1,
-        0,
-        Some(1),
-        None,
-        None,
-        Some(UPLOAD_WRITE_WINDOW),
-        None,
-    );
+        op: SftpProgressOp::Upload,
+        kind: SftpTransferKind::File,
+        mode: "single_file",
+        elapsed_ms: started.elapsed().as_millis(),
+        transferred_bytes: transferred,
+        total_bytes: total,
+        completed_items: 1,
+        failed_items: 0,
+        total_items: Some(1),
+        worker_count: None,
+        scan_elapsed_ms: None,
+        write_window: Some(UPLOAD_WRITE_WINDOW),
+        read_window: None,
+    });
     Ok(())
 }
 
@@ -642,23 +672,23 @@ pub async fn sftp_upload_batch(
                 total_bytes: snapshot.total_bytes,
             },
         );
-        log_sftp_perf(
-            "final",
+        log_sftp_perf(SftpPerfStats {
+            stage: "final",
             session_id,
-            SftpProgressOp::Upload,
-            SftpTransferKind::Batch,
-            "pipeline",
-            started.elapsed().as_millis(),
-            snapshot.transferred,
-            snapshot.total_bytes,
-            snapshot.completed_items,
-            snapshot.failed_items,
-            Some(snapshot.total_items),
-            Some(BATCH_WORKER_COUNT),
-            Some(scan_elapsed_ms),
-            Some(UPLOAD_WRITE_WINDOW),
-            None,
-        );
+            op: SftpProgressOp::Upload,
+            kind: SftpTransferKind::Batch,
+            mode: "pipeline",
+            elapsed_ms: started.elapsed().as_millis(),
+            transferred_bytes: snapshot.transferred,
+            total_bytes: snapshot.total_bytes,
+            completed_items: snapshot.completed_items,
+            failed_items: snapshot.failed_items,
+            total_items: Some(snapshot.total_items),
+            worker_count: Some(BATCH_WORKER_COUNT),
+            scan_elapsed_ms: Some(scan_elapsed_ms),
+            write_window: Some(UPLOAD_WRITE_WINDOW),
+            read_window: None,
+        });
         return Ok(());
     }
 
@@ -695,23 +725,23 @@ pub async fn sftp_upload_batch(
                     total_bytes: snapshot.total_bytes,
                 },
             );
-            log_sftp_perf(
-                "final",
+            log_sftp_perf(SftpPerfStats {
+                stage: "final",
                 session_id,
-                SftpProgressOp::Upload,
-                SftpTransferKind::Batch,
-                "pipeline",
-                started.elapsed().as_millis(),
-                snapshot.transferred,
-                snapshot.total_bytes,
-                snapshot.completed_items,
-                snapshot.failed_items,
-                Some(snapshot.total_items),
-                Some(BATCH_WORKER_COUNT),
-                Some(scan_elapsed_ms),
-                Some(UPLOAD_WRITE_WINDOW),
-                None,
-            );
+                op: SftpProgressOp::Upload,
+                kind: SftpTransferKind::Batch,
+                mode: "pipeline",
+                elapsed_ms: started.elapsed().as_millis(),
+                transferred_bytes: snapshot.transferred,
+                total_bytes: snapshot.total_bytes,
+                completed_items: snapshot.completed_items,
+                failed_items: snapshot.failed_items,
+                total_items: Some(snapshot.total_items),
+                worker_count: Some(BATCH_WORKER_COUNT),
+                scan_elapsed_ms: Some(scan_elapsed_ms),
+                write_window: Some(UPLOAD_WRITE_WINDOW),
+                read_window: None,
+            });
             Ok(())
         }
         _ => {
@@ -729,23 +759,23 @@ pub async fn sftp_upload_batch(
                 },
                 &err,
             );
-            log_sftp_perf(
-                "final",
+            log_sftp_perf(SftpPerfStats {
+                stage: "final",
                 session_id,
-                SftpProgressOp::Upload,
-                SftpTransferKind::Batch,
-                "pipeline",
-                started.elapsed().as_millis(),
-                snapshot.transferred,
-                snapshot.total_bytes,
-                snapshot.completed_items,
-                snapshot.failed_items,
-                Some(snapshot.total_items),
-                Some(BATCH_WORKER_COUNT),
-                Some(scan_elapsed_ms),
-                Some(UPLOAD_WRITE_WINDOW),
-                None,
-            );
+                op: SftpProgressOp::Upload,
+                kind: SftpTransferKind::Batch,
+                mode: "pipeline",
+                elapsed_ms: started.elapsed().as_millis(),
+                transferred_bytes: snapshot.transferred,
+                total_bytes: snapshot.total_bytes,
+                completed_items: snapshot.completed_items,
+                failed_items: snapshot.failed_items,
+                total_items: Some(snapshot.total_items),
+                worker_count: Some(BATCH_WORKER_COUNT),
+                scan_elapsed_ms: Some(scan_elapsed_ms),
+                write_window: Some(UPLOAD_WRITE_WINDOW),
+                read_window: None,
+            });
             Err(err)
         }
     }
@@ -1091,28 +1121,26 @@ fn stream_local_upload_tasks(
 
 /// 递归扫描远端目录并流式推送下载任务。
 async fn stream_remote_download_tasks(
-    sftp: &SftpSession,
-    remote_root: &str,
-    local_root: &Path,
+    ctx: &DownloadScanContext<'_>,
     relative_dir: &str,
-    tx: &mpsc::UnboundedSender<DownloadPipelineTask>,
-    state: &Arc<Mutex<PipelineProgressState>>,
-    emit_context: &PipelineEmitContext,
-    cancel_flag: &AtomicBool,
 ) -> Result<(), EngineError> {
-    if is_transfer_cancelled(cancel_flag) {
+    if is_transfer_cancelled(ctx.cancel_flag) {
         return Ok(());
     }
     let current_remote = if relative_dir.is_empty() {
-        remote_root.to_string()
+        ctx.remote_root.to_string()
     } else {
-        format!("{remote_root}/{relative_dir}")
+        format!("{}/{}", ctx.remote_root, relative_dir)
     };
-    let entries = sftp.read_dir(current_remote.clone()).await.map_err(|err| {
-        EngineError::with_detail("sftp_list_failed", "无法读取目录", err.to_string())
-    })?;
+    let entries = ctx
+        .sftp
+        .read_dir(current_remote.clone())
+        .await
+        .map_err(|err| {
+            EngineError::with_detail("sftp_list_failed", "无法读取目录", err.to_string())
+        })?;
     for entry in entries {
-        if is_transfer_cancelled(cancel_flag) {
+        if is_transfer_cancelled(ctx.cancel_flag) {
             return Ok(());
         }
         let name = entry.file_name();
@@ -1122,47 +1150,41 @@ async fn stream_remote_download_tasks(
             format!("{relative_dir}/{name}")
         };
         let next_remote = format!("{}/{}", current_remote.trim_end_matches('/'), name);
-        let next_local = local_root.join(relative_path_to_local_path(&next_relative));
+        let next_local = ctx
+            .local_root
+            .join(relative_path_to_local_path(&next_relative));
         match entry.file_type() {
             russh_sftp::protocol::FileType::Dir => {
-                pipeline_discover_item(state, emit_context, Some(0));
-                tx.send(DownloadPipelineTask::CreateLocalDir {
-                    local_path: next_local,
-                    display_name: next_relative.clone(),
-                })
-                .map_err(|err| {
-                    EngineError::with_detail(
-                        "sftp_download_failed",
-                        "无法调度目录创建任务",
-                        err.to_string(),
-                    )
-                })?;
-                Box::pin(stream_remote_download_tasks(
-                    sftp,
-                    remote_root,
-                    local_root,
-                    &next_relative,
-                    tx,
-                    state,
-                    emit_context,
-                    cancel_flag,
-                ))
-                .await?;
+                pipeline_discover_item(ctx.state, ctx.emit_context, Some(0));
+                ctx.tx
+                    .send(DownloadPipelineTask::CreateLocalDir {
+                        local_path: next_local,
+                        display_name: next_relative.clone(),
+                    })
+                    .map_err(|err| {
+                        EngineError::with_detail(
+                            "sftp_download_failed",
+                            "无法调度目录创建任务",
+                            err.to_string(),
+                        )
+                    })?;
+                Box::pin(stream_remote_download_tasks(ctx, &next_relative)).await?;
             }
             _ => {
-                pipeline_discover_item(state, emit_context, entry.metadata().size);
-                tx.send(DownloadPipelineTask::DownloadFile {
-                    remote_path: next_remote,
-                    local_path: next_local,
-                    display_name: next_relative,
-                })
-                .map_err(|err| {
-                    EngineError::with_detail(
-                        "sftp_download_failed",
-                        "无法调度下载任务",
-                        err.to_string(),
-                    )
-                })?;
+                pipeline_discover_item(ctx.state, ctx.emit_context, entry.metadata().size);
+                ctx.tx
+                    .send(DownloadPipelineTask::DownloadFile {
+                        remote_path: next_remote,
+                        local_path: next_local,
+                        display_name: next_relative,
+                    })
+                    .map_err(|err| {
+                        EngineError::with_detail(
+                            "sftp_download_failed",
+                            "无法调度下载任务",
+                            err.to_string(),
+                        )
+                    })?;
             }
         }
     }
@@ -1491,23 +1513,23 @@ pub async fn sftp_download(
                     total_bytes: total,
                 },
             );
-            log_sftp_perf(
-                "final",
+            log_sftp_perf(SftpPerfStats {
+                stage: "final",
                 session_id,
-                SftpProgressOp::Download,
-                SftpTransferKind::File,
-                "single_file",
-                started.elapsed().as_millis(),
-                transferred,
-                total,
-                1,
-                0,
-                Some(1),
-                None,
-                None,
-                None,
-                None,
-            );
+                op: SftpProgressOp::Download,
+                kind: SftpTransferKind::File,
+                mode: "single_file",
+                elapsed_ms: started.elapsed().as_millis(),
+                transferred_bytes: transferred,
+                total_bytes: total,
+                completed_items: 1,
+                failed_items: 0,
+                total_items: Some(1),
+                worker_count: None,
+                scan_elapsed_ms: None,
+                write_window: None,
+                read_window: None,
+            });
             Ok(())
         }
         Err(err) => {
@@ -1631,18 +1653,16 @@ pub async fn sftp_download_dir(
     }
 
     let scan_started = Instant::now();
-    if let Err(err) = stream_remote_download_tasks(
-        &sftp,
-        remote_path.trim_end_matches('/'),
-        &root_path,
-        "",
-        &task_tx,
-        &state,
-        &emit_context,
+    let scan_ctx = DownloadScanContext {
+        sftp: &sftp,
+        remote_root: remote_path.trim_end_matches('/'),
+        local_root: &root_path,
+        tx: &task_tx,
+        state: &state,
+        emit_context: &emit_context,
         cancel_flag,
-    )
-    .await
-    {
+    };
+    if let Err(err) = stream_remote_download_tasks(&scan_ctx, "").await {
         warn!(
             "sftp_download_scan_failed path={} error_code={} error_message={} error_detail={}",
             remote_path,
@@ -1674,23 +1694,23 @@ pub async fn sftp_download_dir(
     if is_transfer_cancelled(cancel_flag) {
         let snapshot =
             finalize_pipeline_state(&state, &emit_context, SftpTransferStatus::Cancelled);
-        log_sftp_perf(
-            "final",
+        log_sftp_perf(SftpPerfStats {
+            stage: "final",
             session_id,
-            SftpProgressOp::Download,
-            SftpTransferKind::Directory,
-            "pipeline",
-            started.elapsed().as_millis(),
-            snapshot.transferred,
-            snapshot.total_bytes,
-            snapshot.completed_items,
-            snapshot.failed_items,
-            Some(snapshot.total_items),
-            Some(BATCH_WORKER_COUNT),
-            Some(scan_elapsed_ms),
-            None,
-            Some(DOWNLOAD_READ_WINDOW),
-        );
+            op: SftpProgressOp::Download,
+            kind: SftpTransferKind::Directory,
+            mode: "pipeline",
+            elapsed_ms: started.elapsed().as_millis(),
+            transferred_bytes: snapshot.transferred,
+            total_bytes: snapshot.total_bytes,
+            completed_items: snapshot.completed_items,
+            failed_items: snapshot.failed_items,
+            total_items: Some(snapshot.total_items),
+            worker_count: Some(BATCH_WORKER_COUNT),
+            scan_elapsed_ms: Some(scan_elapsed_ms),
+            write_window: None,
+            read_window: Some(DOWNLOAD_READ_WINDOW),
+        });
         return Ok(());
     }
 
@@ -1726,23 +1746,23 @@ pub async fn sftp_download_dir(
                     total_bytes: snapshot.total_bytes,
                 },
             );
-            log_sftp_perf(
-                "final",
+            log_sftp_perf(SftpPerfStats {
+                stage: "final",
                 session_id,
-                SftpProgressOp::Download,
-                SftpTransferKind::Directory,
-                "pipeline",
-                started.elapsed().as_millis(),
-                snapshot.transferred,
-                snapshot.total_bytes,
-                snapshot.completed_items,
-                snapshot.failed_items,
-                Some(snapshot.total_items),
-                Some(BATCH_WORKER_COUNT),
-                Some(scan_elapsed_ms),
-                None,
-                Some(DOWNLOAD_READ_WINDOW),
-            );
+                op: SftpProgressOp::Download,
+                kind: SftpTransferKind::Directory,
+                mode: "pipeline",
+                elapsed_ms: started.elapsed().as_millis(),
+                transferred_bytes: snapshot.transferred,
+                total_bytes: snapshot.total_bytes,
+                completed_items: snapshot.completed_items,
+                failed_items: snapshot.failed_items,
+                total_items: Some(snapshot.total_items),
+                worker_count: Some(BATCH_WORKER_COUNT),
+                scan_elapsed_ms: Some(scan_elapsed_ms),
+                write_window: None,
+                read_window: Some(DOWNLOAD_READ_WINDOW),
+            });
             Ok(())
         }
         _ => {
@@ -1760,23 +1780,23 @@ pub async fn sftp_download_dir(
                 },
                 &err,
             );
-            log_sftp_perf(
-                "final",
+            log_sftp_perf(SftpPerfStats {
+                stage: "final",
                 session_id,
-                SftpProgressOp::Download,
-                SftpTransferKind::Directory,
-                "pipeline",
-                started.elapsed().as_millis(),
-                snapshot.transferred,
-                snapshot.total_bytes,
-                snapshot.completed_items,
-                snapshot.failed_items,
-                Some(snapshot.total_items),
-                Some(BATCH_WORKER_COUNT),
-                Some(scan_elapsed_ms),
-                None,
-                Some(DOWNLOAD_READ_WINDOW),
-            );
+                op: SftpProgressOp::Download,
+                kind: SftpTransferKind::Directory,
+                mode: "pipeline",
+                elapsed_ms: started.elapsed().as_millis(),
+                transferred_bytes: snapshot.transferred,
+                total_bytes: snapshot.total_bytes,
+                completed_items: snapshot.completed_items,
+                failed_items: snapshot.failed_items,
+                total_items: Some(snapshot.total_items),
+                worker_count: Some(BATCH_WORKER_COUNT),
+                scan_elapsed_ms: Some(scan_elapsed_ms),
+                write_window: None,
+                read_window: Some(DOWNLOAD_READ_WINDOW),
+            });
             Err(err)
         }
     }
@@ -2385,46 +2405,30 @@ fn now_epoch_millis() -> u128 {
 }
 
 /// 记录 SFTP 传输性能埋点日志，便于横向对比不同实现版本的吞吐表现。
-fn log_sftp_perf(
-    stage: &str,
-    session_id: &str,
-    op: SftpProgressOp,
-    kind: SftpTransferKind,
-    mode: &str,
-    elapsed_ms: u128,
-    transferred_bytes: u64,
-    total_bytes: Option<u64>,
-    completed_items: u64,
-    failed_items: u64,
-    total_items: Option<u64>,
-    worker_count: Option<usize>,
-    scan_elapsed_ms: Option<u128>,
-    write_window: Option<usize>,
-    read_window: Option<usize>,
-) {
-    let throughput_bps = if elapsed_ms == 0 {
-        transferred_bytes
+fn log_sftp_perf(stats: SftpPerfStats) {
+    let throughput_bps = if stats.elapsed_ms == 0 {
+        stats.transferred_bytes
     } else {
-        ((transferred_bytes as u128 * 1000) / elapsed_ms) as u64
+        ((stats.transferred_bytes as u128 * 1000) / stats.elapsed_ms) as u64
     };
     info!(
         "sftp_perf stage={} session_id={} op={:?} kind={:?} mode={} elapsed_ms={} scan_elapsed_ms={} transferred_bytes={} total_bytes={} throughput_bps={} completed_items={} failed_items={} total_items={} worker_count={} write_window={} read_window={}",
-        stage,
-        session_id,
-        op,
-        kind,
-        mode,
-        elapsed_ms,
-        scan_elapsed_ms.unwrap_or(0),
-        transferred_bytes,
-        total_bytes.unwrap_or(0),
+        stats.stage,
+        stats.session_id,
+        stats.op,
+        stats.kind,
+        stats.mode,
+        stats.elapsed_ms,
+        stats.scan_elapsed_ms.unwrap_or(0),
+        stats.transferred_bytes,
+        stats.total_bytes.unwrap_or(0),
         throughput_bps,
-        completed_items,
-        failed_items,
-        total_items.unwrap_or(0),
-        worker_count.unwrap_or(0),
-        write_window.unwrap_or(0),
-        read_window.unwrap_or(0)
+        stats.completed_items,
+        stats.failed_items,
+        stats.total_items.unwrap_or(0),
+        stats.worker_count.unwrap_or(0),
+        stats.write_window.unwrap_or(0),
+        stats.read_window.unwrap_or(0)
     );
 }
 
