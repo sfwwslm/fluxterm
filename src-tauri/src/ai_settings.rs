@@ -4,12 +4,14 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 
 use engine::EngineError;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::config_paths::resolve_ai_settings_path;
 use crate::profile_store::{ProfileStore, read_profiles};
 use crate::security::{CryptoService, SecretStore};
+use crate::utils::write_atomic;
 
 const DEFAULT_SELECTION_MAX_CHARS: usize = 1_500;
 const DEFAULT_SESSION_RECENT_OUTPUT_MAX_CHARS: usize = 1_200;
@@ -142,10 +144,16 @@ pub enum SecretFieldUpdate {
     Clear,
 }
 
-/// 读取终端 AI 助手设置。
+/// 读取终端 AI 助手配置。
+///
+/// 职责：
+/// 1. 解析 ai.json 文件路径。
+/// 2. 处理文件不存在时的默认值回退。
+/// 3. 执行版本匹配与反序列化校验。
 pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
     let path = resolve_ai_settings_path(app)?;
     if !path.exists() {
+        debug!("read_ai_settings skip reason=not_found");
         return Ok(default_ai_settings());
     }
     let content = fs::read_to_string(&path).map_err(|err| {
@@ -155,6 +163,11 @@ pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
             err.to_string(),
         )
     })?;
+    debug!(
+        "read_ai_settings loaded path={} size={}",
+        path.display(),
+        content.len()
+    );
     let raw_value: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
         EngineError::with_detail(
             "ai_settings_parse_failed",
@@ -188,15 +201,6 @@ pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
 pub fn write_ai_settings(app: &AppHandle, settings: AiSettings) -> Result<AiSettings, EngineError> {
     let validated = validate_ai_settings(settings)?;
     let path = resolve_ai_settings_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            EngineError::with_detail(
-                "ai_settings_write_failed",
-                "无法创建终端 AI 配置目录",
-                err.to_string(),
-            )
-        })?;
-    }
     let content = serde_json::to_string_pretty(&validated).map_err(|err| {
         EngineError::with_detail(
             "ai_settings_serialize_failed",
@@ -204,13 +208,8 @@ pub fn write_ai_settings(app: &AppHandle, settings: AiSettings) -> Result<AiSett
             err.to_string(),
         )
     })?;
-    fs::write(path, content).map_err(|err| {
-        EngineError::with_detail(
-            "ai_settings_write_failed",
-            "无法写入终端 AI 配置文件",
-            err.to_string(),
-        )
-    })?;
+    debug!("write_ai_settings starting path={}", path.display());
+    write_atomic(path, &content)?;
     Ok(validated)
 }
 

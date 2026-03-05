@@ -1,3 +1,10 @@
+/**
+ * 界面布局状态管理模块。
+ * 职责：
+ * 1. 读写 layout.json 配置文件。
+ * 2. 管理侧边栏/底部面板的折叠状态、槽位数量、组件挂载情况以及浮窗初始位置。
+ * 3. 响应窗口调整（Resize）并持久化面板尺寸。
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   exists,
@@ -5,7 +12,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { warn } from "@tauri-apps/plugin-log";
+import { debug, warn } from "@tauri-apps/plugin-log";
 import {
   defaultWidgetLayout,
   increaseSideSlots,
@@ -22,7 +29,9 @@ import type {
 import type { PanelKey } from "@/types";
 import { getLayoutPath, getTerminalConfigDir } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
 
+/** useLayoutState 返回的布局控制接口。 */
 type LayoutState = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   sideSlotCounts: Record<WidgetSide, number>;
@@ -48,10 +57,11 @@ type LayoutState = {
 };
 
 type UseLayoutStateProps = {
+  /** 当前正处于浮动模式的面板 Key，若存在则暂停布局持久化以避免冲突。 */
   floatingPanelKey: PanelKey | null;
 };
 
-/** 布局状态管理（读取/保存/拖拽调整）。 */
+/** 快捷栏分组与命令状态管理（含本地配置持久化）。 */
 export default function useLayoutState({
   floatingPanelKey,
 }: UseLayoutStateProps): LayoutState {
@@ -67,6 +77,7 @@ export default function useLayoutState({
   );
   const [panelSizes, setPanelSizes] = useState(defaultWidgetLayout.sizes);
 
+  // 交互与持久化辅助。
   const dragState = useRef<{
     mode: "left" | "right" | "bottom";
     startX: number;
@@ -76,8 +87,10 @@ export default function useLayoutState({
     startBottom: number;
   } | null>(null);
   const layoutLoadedRef = useRef(false);
-  const layoutSaveTimerRef = useRef<number | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const lastSavedConfigRef = useRef<string>("");
 
+  /** 转换内存槽位结构为持久化格式。 */
   function buildPersistentSlots(
     slots: Record<string, WidgetGroup>,
   ): Record<string, WidgetGroup> {
@@ -88,6 +101,7 @@ export default function useLayoutState({
     return next;
   }
 
+  /** 从磁盘加载布局配置。 */
   async function loadLayoutConfig() {
     try {
       const path = await getLayoutPath();
@@ -98,10 +112,15 @@ export default function useLayoutState({
       }
       if (!raw) {
         layoutLoadedRef.current = true;
+        debug(
+          JSON.stringify({
+            event: "layout:load-skip",
+            reason: "empty-or-not-found",
+          }),
+        );
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
-      // layout.json 版本不匹配时视为无效并回退默认布局。
       const normalized = normalizeWidgetLayout(parsed);
       if (!normalized) {
         layoutLoadedRef.current = true;
@@ -126,6 +145,7 @@ export default function useLayoutState({
       setSlotGroups(normalized.slots);
       setFloatingOrigins(normalized.floating);
       setPanelSizes(normalized.sizes);
+      debug(JSON.stringify({ event: "layout:loaded", payload: normalized }));
     } catch (error) {
       warn(
         JSON.stringify({
@@ -138,6 +158,7 @@ export default function useLayoutState({
     }
   }
 
+  /** 将当前布局状态写入磁盘。 */
   async function saveLayoutConfig(payload: WidgetLayout) {
     const dir = await getTerminalConfigDir();
     await mkdir(dir, { recursive: true });
@@ -145,6 +166,7 @@ export default function useLayoutState({
     await writeTextFile(path, JSON.stringify(payload, null, 2));
   }
 
+  /** 在侧边栏开启/合并分屏。 */
   function handleToggleSplit(side: WidgetSide) {
     setSideSlotCounts((prev) => {
       const currentCount = prev[side];
@@ -154,15 +176,13 @@ export default function useLayoutState({
     });
   }
 
+  /** 关闭指定槽位的组件。 */
   function handleCloseSlot(slot: WidgetSlot) {
     if (slot === "bottom") {
       setSlotGroups((prev) => {
         const group = prev.bottom;
         if (!group?.active) return prev;
-        return {
-          ...prev,
-          bottom: { ...group, active: null },
-        };
+        return { ...prev, bottom: { ...group, active: null } };
       });
       return;
     }
@@ -180,10 +200,7 @@ export default function useLayoutState({
       setSlotGroups((prev) => {
         const group = prev[slot];
         if (!group?.active) return prev;
-        return {
-          ...prev,
-          [slot]: { ...group, active: null },
-        };
+        return { ...prev, [slot]: { ...group, active: null } };
       });
       return;
     }
@@ -226,6 +243,7 @@ export default function useLayoutState({
     });
   }
 
+  /** 开始调整面板尺寸。 */
   function startResize(
     mode: "left" | "right" | "bottom",
     event: React.MouseEvent<HTMLDivElement>,
@@ -289,6 +307,7 @@ export default function useLayoutState({
   const rightVisible = !layoutCollapsed.right;
   const bottomVisible = !layoutCollapsed.bottom;
 
+  /** 将当前尺寸状态映射为 CSS 变量，供样式层实时响应。 */
   const layoutVars = useMemo(() => {
     const hasSidePanels = leftVisible || rightVisible;
     const hasAnyPanels = hasSidePanels || bottomVisible;
@@ -303,58 +322,68 @@ export default function useLayoutState({
     } as React.CSSProperties;
   }, [leftVisible, rightVisible, bottomVisible, panelSizes]);
 
+  // 初始化加载布局。
   useEffect(() => {
     loadLayoutConfig().catch(() => {});
   }, []);
 
+  // 防抖异步落盘逻辑。
   useEffect(() => {
-    if (!layoutLoadedRef.current) return;
-    if (floatingPanelKey) return;
-    if (layoutSaveTimerRef.current) {
-      window.clearTimeout(layoutSaveTimerRef.current);
+    if (!layoutLoadedRef.current || floatingPanelKey) return;
+
+    const persistedSlots = buildPersistentSlots(slotGroups);
+    const normalizedCounts = {
+      left: Math.max(1, sideSlotCounts.left),
+      right: Math.max(1, sideSlotCounts.right),
+    };
+    for (let i = 0; i < normalizedCounts.left; i += 1) {
+      const key = sideSlotKey("left", i);
+      if (!persistedSlots[key]) persistedSlots[key] = { active: null };
     }
-    layoutSaveTimerRef.current = window.setTimeout(() => {
-      const persistedSlots = buildPersistentSlots(slotGroups);
-      const normalizedCounts = {
-        left: Math.max(1, sideSlotCounts.left),
-        right: Math.max(1, sideSlotCounts.right),
-      };
-      for (let i = 0; i < normalizedCounts.left; i += 1) {
-        const key = sideSlotKey("left", i);
-        if (!persistedSlots[key]) {
-          persistedSlots[key] = { active: null };
-        }
-      }
-      for (let i = 0; i < normalizedCounts.right; i += 1) {
-        const key = sideSlotKey("right", i);
-        if (!persistedSlots[key]) {
-          persistedSlots[key] = { active: null };
-        }
-      }
-      if (!persistedSlots.bottom) {
-        persistedSlots.bottom = { active: null };
-      }
-      saveLayoutConfig({
-        version: 1,
-        collapsed: layoutCollapsed,
-        sideSlotCounts: normalizedCounts,
-        slots: persistedSlots,
-        floating: floatingOrigins,
-        sizes: panelSizes,
-      }).catch((error) => {
+    for (let i = 0; i < normalizedCounts.right; i += 1) {
+      const key = sideSlotKey("right", i);
+      if (!persistedSlots[key]) persistedSlots[key] = { active: null };
+    }
+    if (!persistedSlots.bottom) persistedSlots.bottom = { active: null };
+
+    const currentLayout: WidgetLayout = {
+      version: 1,
+      collapsed: layoutCollapsed,
+      sideSlotCounts: normalizedCounts,
+      slots: persistedSlots,
+      floating: floatingOrigins,
+      sizes: panelSizes,
+    };
+
+    const layoutStr = JSON.stringify(currentLayout);
+    if (layoutStr === lastSavedConfigRef.current) return;
+
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+
+    debug(
+      JSON.stringify({
+        event: "layout:save-scheduled",
+        debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
+      }),
+    );
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        await saveLayoutConfig(currentLayout);
+        lastSavedConfigRef.current = layoutStr;
+        debug(JSON.stringify({ event: "layout:persisted" }));
+      } catch (error) {
         warn(
           JSON.stringify({
             event: "layout:save-failed",
             error: extractErrorMessage(error),
           }),
         );
-      });
-    }, 300);
-    return () => {
-      if (layoutSaveTimerRef.current) {
-        window.clearTimeout(layoutSaveTimerRef.current);
-        layoutSaveTimerRef.current = null;
       }
+    }, PERSISTENCE_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
   }, [
     floatingPanelKey,

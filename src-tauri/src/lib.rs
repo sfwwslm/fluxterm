@@ -14,6 +14,7 @@ pub mod session_settings;
 pub mod ssh_config_import;
 pub mod ssh_host_keys;
 pub mod state;
+pub mod utils;
 
 use std::sync::Arc;
 

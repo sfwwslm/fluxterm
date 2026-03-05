@@ -1,3 +1,11 @@
+/**
+ * 应用基础设置持久化模块。
+ * 职责：
+ * 1. 读写 settings.json 配置文件。
+ * 2. 管理全局界面偏好（语言、主题、背景图、默认编辑器等）。
+ * 3. 负责本地 Shell 列表的初始拉取。
+ * 4. 采用“内存态缓存 + 防抖异步落盘”模式。
+ */
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -6,12 +14,14 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { warn, debug } from "@tauri-apps/plugin-log";
+import { debug, warn } from "@tauri-apps/plugin-log";
 import type { Locale } from "@/i18n";
 import type { LocalShellProfile, ThemeId } from "@/types";
 import { getGlobalConfigDir, getSettingsPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
 
+/** 应用全局配置结构。 */
 type AppSettings = {
   version: 1;
   shellId?: string | null;
@@ -24,16 +34,12 @@ type AppSettings = {
   backgroundImageSurfaceAlpha?: number;
 };
 
+/** 背景图表面透明度阈值。 */
 export const MIN_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.2;
 export const MAX_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.9;
 export const DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.52;
-const SAVE_SETTINGS_DEBOUNCE_MS = 200;
 
-type UseAppSettingsProps = {
-  themeIds: ThemeId[];
-  defaultThemeId: ThemeId;
-};
-
+/** useAppSettings 返回的操作接口。 */
 type UseAppSettingsResult = {
   locale: Locale;
   setLocale: React.Dispatch<React.SetStateAction<Locale>>;
@@ -55,6 +61,7 @@ type UseAppSettingsResult = {
   settingsLoaded: boolean;
 };
 
+/** 限制背景图透明度范围。 */
 function clampBackgroundImageSurfaceAlpha(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA;
   return Math.min(
@@ -63,6 +70,7 @@ function clampBackgroundImageSurfaceAlpha(value: number) {
   );
 }
 
+/** 规范化并回退不支持的主题 ID。 */
 function normalizeThemeId(value: unknown): ThemeId | null {
   if (value === "dark" || value === "light") return value;
   if (value === "aurora" || value === "sahara") return "dark";
@@ -70,23 +78,23 @@ function normalizeThemeId(value: unknown): ThemeId | null {
   return null;
 }
 
-/** 应用设置持久化与系统 shell 列表加载。 */
+/**
+ * 应用设置持久化 Hook。
+ * 初始值优先尝试跟随系统（语言），随后通过异步 I/O 从 settings.json 加载覆盖。
+ */
 export default function useAppSettings({
   themeIds,
   defaultThemeId,
-}: UseAppSettingsProps): UseAppSettingsResult {
+}: {
+  themeIds: ThemeId[];
+  defaultThemeId: ThemeId;
+}): UseAppSettingsResult {
   const [locale, setLocale] = useState<Locale>(() => {
-    const saved = localStorage.getItem("fluxterm.locale") as Locale;
-    if (saved === "zh-CN" || saved === "en-US") return saved;
-
+    // 初始状态尝试从系统语言获取。
     const sysLang = navigator.language.toLowerCase();
     return sysLang.startsWith("zh") ? "zh-CN" : "en-US";
   });
-  const [themeId, setThemeId] = useState<ThemeId>(() => {
-    const saved = normalizeThemeId(localStorage.getItem("fluxterm.theme"));
-    if (saved && themeIds.includes(saved)) return saved;
-    return defaultThemeId;
-  });
+  const [themeId, setThemeId] = useState<ThemeId>(defaultThemeId);
   const [availableShells, setAvailableShells] = useState<LocalShellProfile[]>(
     [],
   );
@@ -99,8 +107,13 @@ export default function useAppSettings({
     useState(DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
+  // 持久化辅助引用。
+  const loadedRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
+  const lastSavedConfigRef = useRef<string>("");
   const pendingShellIdRef = useRef<string | null>(null);
 
+  /** 根据系统安装的 shell 列表解析最优默认项。 */
   function resolveDefaultShellId(shells: LocalShellProfile[]) {
     if (!shells.length) return null;
     const preferred = shells.find((shell) => shell.id === "powershell");
@@ -108,10 +121,17 @@ export default function useAppSettings({
     return shells[0].id;
   }
 
+  /** 从磁盘读取全量设置并反填内存状态。 */
   async function loadSettings() {
     try {
       const path = await getSettingsPath();
       if (!(await exists(path))) {
+        debug(
+          JSON.stringify({
+            event: "settings:load-skip",
+            reason: "file-not-exists",
+          }),
+        );
         return;
       }
       const raw = await readTextFile(path);
@@ -143,6 +163,7 @@ export default function useAppSettings({
       if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
         setThemeId(normalizedThemeId);
       }
+      debug(JSON.stringify({ event: "settings:loaded", payload: parsed }));
     } catch (error) {
       warn(
         JSON.stringify({
@@ -150,11 +171,10 @@ export default function useAppSettings({
           error: extractErrorMessage(error),
         }),
       );
-    } finally {
-      // 由初始化流程统一设置 settingsLoaded，避免竞态覆盖。
     }
   }
 
+  /** 将最新设置写入磁盘。 */
   async function saveSettings(payload: AppSettings) {
     const dir = await getGlobalConfigDir();
     await mkdir(dir, { recursive: true });
@@ -162,20 +182,16 @@ export default function useAppSettings({
     await writeTextFile(path, JSON.stringify(payload, null, 2));
   }
 
+  // 同步 HTML 语言标记。
   useEffect(() => {
     document.documentElement.lang = locale;
-    localStorage.setItem("fluxterm.locale", locale);
   }, [locale]);
 
-  useEffect(() => {
-    localStorage.setItem("fluxterm.theme", themeId);
-  }, [themeId]);
-
+  // 启动流水线：加载设置 -> 拉取 Shell 列表 -> 完成就绪标记。
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        // 先加载本地设置，再拉取 shell 列表，避免竞态导致默认值覆盖。
         await loadSettings();
         const shells = await invoke<LocalShellProfile[]>("local_shell_list");
         if (!active) return;
@@ -186,7 +202,7 @@ export default function useAppSettings({
           !!preferred && shells.some((shell) => shell.id === preferred);
         const selected = (preferredAvailable ? preferred : fallbackId) ?? null;
         setShellId(selected);
-        // 记录初始化结果，便于验证持久化与回退是否生效。
+
         debug(
           JSON.stringify({
             event: "settings:init-shell",
@@ -200,14 +216,10 @@ export default function useAppSettings({
         if (!active) return;
         setAvailableShells([]);
         setShellId(null);
-        // 初始化失败时记录日志，便于排查。
-        warn(
-          JSON.stringify({
-            event: "settings:init-shell-failed",
-          }),
-        );
+        warn(JSON.stringify({ event: "settings:init-shell-failed" }));
       } finally {
         if (!active) return;
+        loadedRef.current = true;
         setSettingsLoaded(true);
       }
     })();
@@ -216,32 +228,60 @@ export default function useAppSettings({
     };
   }, []);
 
+  // 自动防抖异步保存。
   useEffect(() => {
-    if (!settingsLoaded) return;
-    const timer = window.setTimeout(() => {
-      saveSettings({
-        version: 1,
-        shellId,
-        locale,
-        themeId,
-        sftpEnabled,
-        fileDefaultEditorPath: fileDefaultEditorPath.trim() || null,
-        backgroundImageEnabled,
-        backgroundImageAsset: backgroundImageAsset.trim() || null,
-        backgroundImageSurfaceAlpha: clampBackgroundImageSurfaceAlpha(
-          backgroundImageSurfaceAlpha,
-        ),
-      }).catch((error) => {
+    if (!loadedRef.current) return;
+
+    const currentSettings: AppSettings = {
+      version: 1,
+      shellId,
+      locale,
+      themeId,
+      sftpEnabled,
+      fileDefaultEditorPath: fileDefaultEditorPath.trim() || null,
+      backgroundImageEnabled,
+      backgroundImageAsset: backgroundImageAsset.trim() || null,
+      backgroundImageSurfaceAlpha: clampBackgroundImageSurfaceAlpha(
+        backgroundImageSurfaceAlpha,
+      ),
+    };
+
+    const settingsStr = JSON.stringify(currentSettings);
+    // 脏检查打破循环。
+    if (settingsStr === lastSavedConfigRef.current) {
+      return;
+    }
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    debug(
+      JSON.stringify({
+        event: "settings:save-scheduled",
+        debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
+      }),
+    );
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        await saveSettings(currentSettings);
+        lastSavedConfigRef.current = settingsStr;
+        debug(JSON.stringify({ event: "settings:persisted" }));
+      } catch (error) {
         warn(
           JSON.stringify({
             event: "settings:save-failed",
             error: extractErrorMessage(error),
           }),
         );
-      });
-    }, SAVE_SETTINGS_DEBOUNCE_MS);
+      }
+    }, PERSISTENCE_SAVE_DEBOUNCE_MS);
+
     return () => {
-      window.clearTimeout(timer);
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
     };
   }, [
     shellId,

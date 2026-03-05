@@ -1,9 +1,12 @@
 /**
  * 终端 AI 配置持久化模块。
- * 职责：读写 ai/ai.json，并管理终端 AI 助手与多个 OpenAI 标准接入配置。
+ * 职责：
+ * 1. 读写 ai/ai.json 配置文件。
+ * 2. 管理终端 AI 助手偏好与多个 OpenAI 标准接入配置。
+ * 3. 采用“内存态缓存 + 防抖异步落盘”模式，打破因后端返回新对象引用导致的死循环。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { info, warn } from "@tauri-apps/plugin-log";
+import { debug, info, warn } from "@tauri-apps/plugin-log";
 import {
   aiOpenAiTest,
   aiSettingsGet,
@@ -17,7 +20,9 @@ import type {
   OpenAiConfigView,
   SecretFieldUpdate,
 } from "@/features/ai/types";
+import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
 
+/** useAiSettings 返回的操作接口。 */
 type UseAiSettingsResult = {
   aiAvailable: boolean;
   aiUnavailableReason: string | null;
@@ -42,8 +47,11 @@ type UseAiSettingsResult = {
   clearOpenaiApiKey: (configId: string) => Promise<void>;
 };
 
+/** AI 文本上下文阈值限制。 */
 const MIN_AI_TEXT_LIMIT = 100;
 const MAX_AI_TEXT_LIMIT = 20_000;
+
+/** AI 设置默认值。 */
 const DEFAULT_AI_SETTINGS: AiSettingsView = {
   version: 1,
   selectionMaxChars: 1500,
@@ -57,6 +65,7 @@ const DEFAULT_AI_SETTINGS: AiSettingsView = {
   openaiConfigs: [],
 };
 
+/** 归一化 AI 上下文长度。 */
 function normalizeTextLimit(value: number) {
   return Math.max(
     MIN_AI_TEXT_LIMIT,
@@ -64,6 +73,7 @@ function normalizeTextLimit(value: number) {
   );
 }
 
+/** 计算 AI 功能是否就绪。 */
 function computeAiAvailability(config: OpenAiConfigView | null) {
   if (!config?.baseUrl.trim() || !config.model.trim()) {
     return {
@@ -74,10 +84,12 @@ function computeAiAvailability(config: OpenAiConfigView | null) {
   return { aiAvailable: true, aiUnavailableReason: null };
 }
 
+/** 生成新的 OpenAI 配置名称。 */
 function createOpenAiConfigName(configs: OpenAiConfigView[]) {
   return `OpenAI ${configs.length + 1}`;
 }
 
+/** 构建向后端提交的保存负载。 */
 function buildSaveInput(
   source: {
     selectionMaxChars: number;
@@ -111,7 +123,9 @@ function buildSaveInput(
   };
 }
 
-/** 终端域 AI 配置持久化：统一读写 ai.json 并向设置页暴露可调整能力。 */
+/**
+ * 终端 AI 配置持久化 Hook。
+ */
 export default function useAiSettings(): UseAiSettingsResult {
   const [selectionMaxChars, setSelectionMaxChars] = useState(
     DEFAULT_AI_SETTINGS.selectionMaxChars,
@@ -128,10 +142,13 @@ export default function useAiSettings(): UseAiSettingsResult {
     DEFAULT_AI_SETTINGS.openaiConfigs,
   );
   const [aiSettingsLoaded, setAiSettingsLoaded] = useState(false);
+
+  // 持久化与状态追踪。
   const loadedRef = useRef(false);
   const savingSecretRef = useRef(false);
-  const latestSaveRequestIdRef = useRef(0);
-  const lastLoadedRef = useRef<AiSettingsView>(DEFAULT_AI_SETTINGS);
+  const saveTimerRef = useRef<number | null>(null);
+  const lastSavedConfigRef = useRef<string>("");
+  const lastLoadedViewRef = useRef<AiSettingsView>(DEFAULT_AI_SETTINGS);
   const lastLoggedActiveConfigIdRef = useRef("");
 
   const activeOpenaiConfig = useMemo(
@@ -145,17 +162,33 @@ export default function useAiSettings(): UseAiSettingsResult {
     [activeOpenaiConfig],
   );
 
+  // 初始化加载。
   useEffect(() => {
     let active = true;
     aiSettingsGet()
       .then((settings) => {
         if (!active) return;
-        lastLoadedRef.current = settings;
+        lastLoadedViewRef.current = settings;
         setSelectionMaxChars(settings.selectionMaxChars);
         setSessionRecentOutputMaxChars(settings.sessionRecentOutputMaxChars);
         setDebugLoggingEnabled(settings.debugLoggingEnabled);
         setActiveOpenaiConfigId(settings.activeOpenaiConfigId);
         setOpenaiConfigs(settings.openaiConfigs);
+        lastSavedConfigRef.current = JSON.stringify(
+          buildSaveInput(
+            {
+              selectionMaxChars: settings.selectionMaxChars,
+              sessionRecentOutputMaxChars: settings.sessionRecentOutputMaxChars,
+              debugLoggingEnabled: settings.debugLoggingEnabled,
+              activeOpenaiConfigId: settings.activeOpenaiConfigId,
+              openaiConfigs: settings.openaiConfigs,
+            },
+            settings,
+          ),
+        );
+        debug(
+          JSON.stringify({ event: "ai-settings:loaded", payload: settings }),
+        );
       })
       .catch((error) => {
         if (!active) return;
@@ -177,6 +210,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     };
   }, []);
 
+  // 防抖异步保存逻辑。
   useEffect(() => {
     if (!loadedRef.current || savingSecretRef.current) return;
 
@@ -188,54 +222,47 @@ export default function useAiSettings(): UseAiSettingsResult {
         activeOpenaiConfigId,
         openaiConfigs,
       },
-      lastLoadedRef.current,
+      lastLoadedViewRef.current,
     );
 
-    // 只有在配置内容真正发生变化时才触发保存，避免因后端返回新对象引用导致的死循环。
-    const currentSaveInput = buildSaveInput(
-      {
-        selectionMaxChars: lastLoadedRef.current.selectionMaxChars,
-        sessionRecentOutputMaxChars:
-          lastLoadedRef.current.sessionRecentOutputMaxChars,
-        debugLoggingEnabled: lastLoadedRef.current.debugLoggingEnabled,
-        activeOpenaiConfigId: lastLoadedRef.current.activeOpenaiConfigId,
-        openaiConfigs: lastLoadedRef.current.openaiConfigs,
-      },
-      lastLoadedRef.current,
-    );
-
-    if (JSON.stringify(nextSaveInput) === JSON.stringify(currentSaveInput)) {
+    const configStr = JSON.stringify(nextSaveInput);
+    // 深度对比打破保存循环。
+    if (configStr === lastSavedConfigRef.current) {
       return;
     }
 
-    // 设置页字段采用自动保存，旧请求返回时不应覆盖用户刚刚编辑的新状态。
-    const requestId = latestSaveRequestIdRef.current + 1;
-    latestSaveRequestIdRef.current = requestId;
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
 
-    aiSettingsSave(nextSaveInput)
-      .then((saved) => {
-        if (requestId !== latestSaveRequestIdRef.current) return;
-        lastLoadedRef.current = saved;
-        setOpenaiConfigs((current) => {
-          if (JSON.stringify(current) === JSON.stringify(saved.openaiConfigs)) {
-            return current;
-          }
-          return saved.openaiConfigs;
-        });
-        setActiveOpenaiConfigId((current) =>
-          current === saved.activeOpenaiConfigId
-            ? current
-            : saved.activeOpenaiConfigId,
-        );
-      })
-      .catch((error) => {
+    debug(
+      JSON.stringify({
+        event: "ai-settings:save-scheduled",
+        debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
+      }),
+    );
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        const saved = await aiSettingsSave(nextSaveInput);
+        lastLoadedViewRef.current = saved;
+        lastSavedConfigRef.current = configStr;
+        debug(JSON.stringify({ event: "ai-settings:persisted" }));
+      } catch (error) {
         warn(
           JSON.stringify({
             event: "ai-settings:save-failed",
             error: extractErrorMessage(error),
           }),
         ).catch(() => {});
-      });
+      }
+    }, PERSISTENCE_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
   }, [
     selectionMaxChars,
     sessionRecentOutputMaxChars,
@@ -244,6 +271,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     openaiConfigs,
   ]);
 
+  // 日志记录。
   useEffect(() => {
     if (!loadedRef.current) return;
     info(
@@ -286,6 +314,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     ).catch(() => {});
   }, [activeOpenaiConfigId]);
 
+  /** 更新指定 OpenAI 配置项。 */
   function updateOpenaiConfig(
     configId: string,
     updater: (config: OpenAiConfigView) => OpenAiConfigView,
@@ -297,36 +326,44 @@ export default function useAiSettings(): UseAiSettingsResult {
     );
   }
 
+  /** 手动触发一次包含密钥更新的强制保存。 */
   async function saveWithSecretUpdate(
     overrides: Record<string, SecretFieldUpdate>,
   ) {
-    // API Key 保存走独立命令链路，避免自动保存把 keep/replace/clear 意图混在一起。
     savingSecretRef.current = true;
     try {
-      const requestId = latestSaveRequestIdRef.current + 1;
-      latestSaveRequestIdRef.current = requestId;
-      const saved = await aiSettingsSave(
-        buildSaveInput(
-          {
-            selectionMaxChars,
-            sessionRecentOutputMaxChars,
-            debugLoggingEnabled,
-            activeOpenaiConfigId,
-            openaiConfigs,
-          },
-          lastLoadedRef.current,
-          overrides,
-        ),
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+
+      const nextSaveInput = buildSaveInput(
+        {
+          selectionMaxChars,
+          sessionRecentOutputMaxChars,
+          debugLoggingEnabled,
+          activeOpenaiConfigId,
+          openaiConfigs,
+        },
+        lastLoadedViewRef.current,
+        overrides,
       );
-      if (requestId !== latestSaveRequestIdRef.current) return;
-      lastLoadedRef.current = saved;
+
+      debug(
+        JSON.stringify({
+          event: "ai-settings:forced-save-start",
+          overrides: Object.keys(overrides),
+        }),
+      );
+      const saved = await aiSettingsSave(nextSaveInput);
+      lastLoadedViewRef.current = saved;
+      lastSavedConfigRef.current = JSON.stringify(nextSaveInput);
       setOpenaiConfigs(saved.openaiConfigs);
       setActiveOpenaiConfigId(saved.activeOpenaiConfigId);
+      debug(JSON.stringify({ event: "ai-settings:forced-save-ok" }));
     } finally {
       savingSecretRef.current = false;
     }
   }
 
+  /** 新增 OpenAI 配置。 */
   function addOpenaiConfig() {
     const nextConfig: OpenAiConfigView = {
       id: crypto.randomUUID(),
@@ -346,6 +383,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     return nextConfig.id;
   }
 
+  /** 删除 OpenAI 配置。 */
   function removeOpenaiConfig(configId: string) {
     const targetId = configId.trim();
     if (!targetId) return;
@@ -366,6 +404,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     ).catch(() => {});
   }
 
+  /** 替换 API Key。 */
   async function replaceOpenaiApiKey(configId: string, value: string) {
     const trimmed = value.trim();
     const targetId = configId.trim();
@@ -381,12 +420,11 @@ export default function useAiSettings(): UseAiSettingsResult {
     ).catch(() => {});
   }
 
+  /** 清空 API Key。 */
   async function clearOpenaiApiKey(configId: string) {
     const targetId = configId.trim();
     if (!targetId) return;
-    await saveWithSecretUpdate({
-      [targetId]: { mode: "clear" },
-    });
+    await saveWithSecretUpdate({ [targetId]: { mode: "clear" } });
     info(
       JSON.stringify({
         event: "ai-settings:openai-api-key-cleared",
@@ -395,6 +433,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     ).catch(() => {});
   }
 
+  /** 测试连接。 */
   async function testOpenAiConnection(configId?: string) {
     const targetId = configId?.trim();
     await aiOpenAiTest(targetId || undefined);

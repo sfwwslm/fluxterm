@@ -1,3 +1,11 @@
+/**
+ * 快捷命令栏状态管理模块。
+ * 职责：
+ * 1. 读写 quickbar.json 配置文件。
+ * 2. 管理快捷命令的分组（新增、重命名、删除、可见性切换）。
+ * 3. 管理具体的命令项（新增、更新、删除）。
+ * 4. 提供当前活动会话可见的命令视图。
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   exists,
@@ -5,7 +13,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { warn } from "@tauri-apps/plugin-log";
+import { debug, warn } from "@tauri-apps/plugin-log";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
   QuickBarConfig,
@@ -18,13 +26,16 @@ import {
   DEFAULT_QUICKBAR_GROUP_ID,
   LEGACY_DEFAULT_QUICKBAR_GROUP_ID,
 } from "@/constants/quickbar";
+import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
 
 const defaultGroupId = DEFAULT_QUICKBAR_GROUP_ID;
 
+/** 命令操作的原子返回结构。 */
 type GroupMutationResult =
   | { ok: true; id?: string }
   | { ok: false; errorKey: TranslationKey };
 
+/** useQuickBarState 返回的命令管理接口。 */
 type UseQuickBarStateResult = {
   showGroupTitle: boolean;
   setShowGroupTitle: React.Dispatch<React.SetStateAction<boolean>>;
@@ -48,11 +59,12 @@ type UseQuickBarStateResult = {
   visibleCommands: Array<QuickCommandItem & { groupName: string }>;
 };
 
+/** 获取默认分组名。 */
 function getDefaultGroupName(t: Translate) {
   return t("quickbar.group.default");
 }
 
-/** 快捷栏默认配置。 */
+/** 快捷栏默认配置生产工厂。 */
 function createDefaultQuickBarConfig(t: Translate): QuickBarConfig {
   return {
     version: 1,
@@ -69,7 +81,7 @@ function createDefaultQuickBarConfig(t: Translate): QuickBarConfig {
   };
 }
 
-/** 生成分组/命令 id：优先使用浏览器原生 UUID。 */
+/** 生成分组/命令唯一 ID。 */
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -108,7 +120,7 @@ function normalizeGroupName(name: string) {
   return name.trim().toLocaleLowerCase();
 }
 
-/** 判断分组名是否与现有分组重复；默认忽略当前正在重命名的分组。 */
+/** 判断分组名是否与现有分组重复。 */
 function isDuplicateGroupName(
   groups: QuickCommandGroup[],
   name: string,
@@ -121,7 +133,12 @@ function isDuplicateGroupName(
   });
 }
 
-/** 配置规范化：兼容历史默认分组 id，并修正无效字段。 */
+/**
+ * 快捷栏配置规范化。
+ * 职责：
+ * 1. 移除重复 ID 分组与命令。
+ * 2. 确保默认分组始终存在。
+ */
 function normalizeConfig(value: unknown, t: Translate): QuickBarConfig {
   const defaultQuickBarConfig = createDefaultQuickBarConfig(t);
   if (!value || typeof value !== "object") {
@@ -189,7 +206,7 @@ function normalizeConfig(value: unknown, t: Translate): QuickBarConfig {
   };
 }
 
-/** 快捷栏分组与命令状态管理（含本地配置持久化）。 */
+/** 快捷栏分组与命令状态管理。 */
 export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
   const defaultQuickBarConfig = useMemo(
     () => createDefaultQuickBarConfig(t),
@@ -204,15 +221,25 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
   const [commands, setCommands] = useState<QuickCommandItem[]>(
     defaultQuickBarConfig.commands,
   );
+
+  // 持久化辅助。
   const loadedRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
+  const lastSavedConfigRef = useRef<string>("");
 
+  /** 执行配置文件加载。 */
   async function loadConfig() {
     try {
       const path = await getQuickbarPath();
       const existsFile = await exists(path);
       if (!existsFile) {
         loadedRef.current = true;
+        debug(
+          JSON.stringify({
+            event: "quickbar:load-skip",
+            reason: "file-not-exists",
+          }),
+        );
         return;
       }
       const raw = await readTextFile(path);
@@ -225,6 +252,13 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
       setShowGroupTitle(normalized.showGroupTitle ?? true);
       setGroups(normalized.groups);
       setCommands(normalized.commands);
+      debug(
+        JSON.stringify({
+          event: "quickbar:loaded",
+          groups: normalized.groups.length,
+          commands: normalized.commands.length,
+        }),
+      );
     } catch (error) {
       warn(
         JSON.stringify({
@@ -237,6 +271,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     }
   }
 
+  /** 将最新配置落盘。 */
   async function saveConfig(payload: QuickBarConfig) {
     const dir = await getGlobalConfigDir();
     await mkdir(dir, { recursive: true });
@@ -244,12 +279,13 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     await writeTextFile(path, JSON.stringify(payload, null, 2));
   }
 
+  // 启动加载与语言跟随。
   useEffect(() => {
     loadConfig().catch(() => {});
   }, [t]);
 
   useEffect(() => {
-    // 默认分组名称始终跟随当前语言切换，避免保留旧语言下的硬编码名称。
+    // 默认分组名称始终跟随当前语言切换。
     setGroups((prev) =>
       prev.map((group) =>
         group.id === defaultGroupId
@@ -259,33 +295,56 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     );
   }, [t]);
 
+  // 防抖异步保存逻辑。
   useEffect(() => {
     if (!loadedRef.current) return;
+
+    const currentConfig: QuickBarConfig = {
+      version: 1,
+      showGroupTitle,
+      groups,
+      commands,
+    };
+
+    const configStr = JSON.stringify(currentConfig);
+    if (configStr === lastSavedConfigRef.current) {
+      return;
+    }
+
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
-    saveTimerRef.current = window.setTimeout(() => {
-      saveConfig({
-        version: 1,
-        showGroupTitle,
-        groups,
-        commands,
-      }).catch((error) => {
+
+    debug(
+      JSON.stringify({
+        event: "quickbar:save-scheduled",
+        debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
+      }),
+    );
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        await saveConfig(currentConfig);
+        lastSavedConfigRef.current = configStr;
+        debug(JSON.stringify({ event: "quickbar:persisted" }));
+      } catch (error) {
         warn(
           JSON.stringify({
             event: "quickbar:save-failed",
             error: extractErrorMessage(error),
           }),
         );
-      });
-    }, 300);
+      }
+    }, PERSISTENCE_SAVE_DEBOUNCE_MS);
+
     return () => {
-      if (!saveTimerRef.current) return;
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
     };
   }, [showGroupTitle, groups, commands]);
 
+  /** 过滤出当前可见的分组 ID 列表。 */
   const visibleGroupIds = useMemo(
     () =>
       groups
@@ -295,6 +354,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     [groups],
   );
 
+  /** 过滤出当前可见的命令列表，并注入所属分组名。 */
   const visibleCommands = useMemo(() => {
     const groupNameById = new Map(
       groups.map((group) => [group.id, group.name]),
@@ -310,37 +370,28 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
       }));
   }, [commands, defaultQuickBarConfig.groups, groups, visibleGroupIds]);
 
+  /** 新增分组。 */
   function addGroup(name: string): GroupMutationResult {
     const trimmed = name.trim();
-    if (!trimmed) {
+    if (!trimmed)
       return { ok: false, errorKey: "quickbar.manager.groupNameRequired" };
-    }
-    // 分组名按去首尾空格 + 不区分大小写的方式判重。
-    if (isDuplicateGroupName(groups, trimmed)) {
+    if (isDuplicateGroupName(groups, trimmed))
       return { ok: false, errorKey: "quickbar.manager.groupNameDuplicate" };
-    }
     const id = createId();
     setGroups((prev) => [
       ...prev,
-      {
-        id,
-        name: trimmed,
-        order: prev.length,
-        visible: false,
-      },
+      { id, name: trimmed, order: prev.length, visible: false },
     ]);
     return { ok: true, id };
   }
 
+  /** 分组重命名。 */
   function renameGroup(groupId: string, name: string): GroupMutationResult {
     const trimmed = name.trim();
-    if (!trimmed) {
+    if (!trimmed)
       return { ok: false, errorKey: "quickbar.manager.groupNameRequired" };
-    }
-    // 重命名时排除当前分组自身，允许“名称不变”的提交通过。
-    if (isDuplicateGroupName(groups, trimmed, groupId)) {
+    if (isDuplicateGroupName(groups, trimmed, groupId))
       return { ok: false, errorKey: "quickbar.manager.groupNameDuplicate" };
-    }
     setGroups((prev) =>
       prev.map((group) =>
         group.id === groupId ? { ...group, name: trimmed } : group,
@@ -349,6 +400,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     return { ok: true };
   }
 
+  /** 删除分组（默认分组禁止删除，命令会回退至默认分组）。 */
   function removeGroup(groupId: string) {
     if (groupId === defaultGroupId) return;
     setGroups((prev) =>
@@ -371,6 +423,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     );
   }
 
+  /** 新增快捷命令。 */
   function addCommand(payload: {
     label: string;
     command: string;
@@ -386,16 +439,11 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
         : defaultGroupId;
     setCommands((prev) => [
       ...prev,
-      {
-        id: createId(),
-        label,
-        command,
-        groupId,
-        type: "sendText",
-      },
+      { id: createId(), label, command, groupId, type: "sendText" },
     ]);
   }
 
+  /** 更新快捷命令内容。 */
   function updateCommand(
     commandId: string,
     payload: Partial<QuickCommandItem>,

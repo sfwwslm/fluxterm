@@ -1,6 +1,9 @@
 /**
  * 会话设置持久化模块。
- * 职责：读写 session.json，并管理对所有终端会话统一生效的终端域全局配置。
+ * 职责：
+ * 1. 读写 session.json 配置文件。
+ * 2. 管理终端域全局配置（回滚行数、资源监控开关、Host Key 策略等）。
+ * 3. 采用“内存态缓存 + 防抖异步落盘”模式，通过 JSON 脏检查避免重复 I/O。
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -9,13 +12,15 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { info, warn } from "@tauri-apps/plugin-log";
+import { debug, warn } from "@tauri-apps/plugin-log";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import {
   getTerminalConfigDir,
   getSessionSettingsPath,
 } from "@/shared/config/paths";
+import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
 
+/** 终端域全局配置结构。 */
 type SessionSettings = {
   version: 1;
   webLinksEnabled?: boolean;
@@ -28,8 +33,10 @@ type SessionSettings = {
   hostKeyPolicy?: HostKeyPolicy;
 };
 
+/** SSH 主机密钥校验策略。 */
 export type HostKeyPolicy = "ask" | "strict" | "off";
 
+/** useSessionSettings 返回的配置与操作接口。 */
 type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
   commandAutocompleteEnabled: boolean;
@@ -50,19 +57,24 @@ type UseSessionSettingsResult = {
   sessionSettingsLoaded: boolean;
 };
 
+/** 终端回滚行数阈值：100 - 50,000。 */
 export const MIN_SCROLLBACK = 100;
 export const MAX_SCROLLBACK = 50000;
+/** 资源监控最小间隔：3 秒。 */
 export const MIN_RESOURCE_MONITOR_INTERVAL_SEC = 3;
 export const DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC = 5;
 
+/** 归一化回滚行数。 */
 function normalizeScrollback(value: number) {
   return Math.max(MIN_SCROLLBACK, Math.min(MAX_SCROLLBACK, Math.round(value)));
 }
 
+/** 归一化资源监控间隔。 */
 function normalizeResourceMonitorIntervalSec(value: number) {
   return Math.max(MIN_RESOURCE_MONITOR_INTERVAL_SEC, Math.round(value));
 }
 
+/** 终端配置默认值。 */
 const defaultSessionSettings: Required<
   Pick<
     SessionSettings,
@@ -86,7 +98,10 @@ const defaultSessionSettings: Required<
   hostKeyPolicy: "ask",
 };
 
-/** 会话设置持久化：管理终端域的全局配置，统一写入 session.json。 */
+/**
+ * 会话设置核心 Hook。
+ * 通过内存状态即时响应 UI，并在静默期自动落盘。
+ */
 export default function useSessionSettings(): UseSessionSettingsResult {
   const [webLinksEnabled, setWebLinksEnabled] = useState(
     defaultSessionSettings.webLinksEnabled,
@@ -113,30 +128,28 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     defaultSessionSettings.hostKeyPolicy,
   );
   const [sessionSettingsLoaded, setSessionSettingsLoaded] = useState(false);
-  const loadedRef = useRef(false);
-  const loggedSettingsRef = useRef({
-    webLinksEnabled: defaultSessionSettings.webLinksEnabled,
-    commandAutocompleteEnabled:
-      defaultSessionSettings.commandAutocompleteEnabled,
-    selectionAutoCopyEnabled: defaultSessionSettings.selectionAutoCopyEnabled,
-    scrollback: defaultSessionSettings.scrollback,
-    terminalPathSyncEnabled: defaultSessionSettings.terminalPathSyncEnabled,
-    resourceMonitorEnabled: defaultSessionSettings.resourceMonitorEnabled,
-    resourceMonitorIntervalSec:
-      defaultSessionSettings.resourceMonitorIntervalSec,
-    hostKeyPolicy: defaultSessionSettings.hostKeyPolicy,
-  });
 
+  // 引用守卫：loadedRef 标记初始数据已就绪，saveTimerRef 控制防抖，lastSavedConfigRef 进行脏检查。
+  const loadedRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
+  const lastSavedConfigRef = useRef<string>("");
+
+  /** 执行实际的文件读取与状态反填。 */
   async function loadSessionSettings() {
-    let parsed: SessionSettings | null = null;
-    let shouldRewrite = false;
     try {
       const path = await getSessionSettingsPath();
       if (!(await exists(path))) {
+        debug(
+          JSON.stringify({
+            event: "session-settings:load-skip",
+            reason: "file-not-exists",
+          }),
+        );
         return;
       }
       const raw = await readTextFile(path);
-      parsed = JSON.parse(raw) as SessionSettings;
+      const parsed = JSON.parse(raw) as SessionSettings;
+
       if (typeof parsed?.webLinksEnabled === "boolean") {
         setWebLinksEnabled(parsed.webLinksEnabled);
       }
@@ -160,35 +173,18 @@ export default function useSessionSettings(): UseSessionSettingsResult {
         setHostKeyPolicy(parsed.hostKeyPolicy);
       }
       if (typeof parsed?.scrollback === "number") {
-        const normalizedScrollback = normalizeScrollback(parsed.scrollback);
-        setScrollback(normalizedScrollback);
-        if (normalizedScrollback !== parsed.scrollback) {
-          shouldRewrite = true;
-          warn(
-            JSON.stringify({
-              event: "session-settings:scrollback-invalid",
-              raw: parsed.scrollback,
-              normalized: normalizedScrollback,
-            }),
-          );
-        }
+        setScrollback(normalizeScrollback(parsed.scrollback));
       }
       if (typeof parsed?.resourceMonitorIntervalSec === "number") {
-        const normalizedInterval = normalizeResourceMonitorIntervalSec(
-          parsed.resourceMonitorIntervalSec,
+        setResourceMonitorIntervalSec(
+          normalizeResourceMonitorIntervalSec(
+            parsed.resourceMonitorIntervalSec,
+          ),
         );
-        setResourceMonitorIntervalSec(normalizedInterval);
-        if (normalizedInterval !== parsed.resourceMonitorIntervalSec) {
-          shouldRewrite = true;
-          warn(
-            JSON.stringify({
-              event: "session-settings:resource-monitor-interval-invalid",
-              raw: parsed.resourceMonitorIntervalSec,
-              normalized: normalizedInterval,
-            }),
-          );
-        }
       }
+      debug(
+        JSON.stringify({ event: "session-settings:loaded", payload: parsed }),
+      );
     } catch (error) {
       warn(
         JSON.stringify({
@@ -197,98 +193,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
         }),
       );
     } finally {
-      // 发现本地手改后的非法 scrollback 时，加载期先纠正内存值，再把合法值回写到 session.json。
-      if (parsed && shouldRewrite) {
-        saveSessionSettings({
-          version: 1,
-          webLinksEnabled:
-            typeof parsed.webLinksEnabled === "boolean"
-              ? parsed.webLinksEnabled
-              : defaultSessionSettings.webLinksEnabled,
-          commandAutocompleteEnabled:
-            typeof parsed.commandAutocompleteEnabled === "boolean"
-              ? parsed.commandAutocompleteEnabled
-              : defaultSessionSettings.commandAutocompleteEnabled,
-          selectionAutoCopyEnabled:
-            typeof parsed.selectionAutoCopyEnabled === "boolean"
-              ? parsed.selectionAutoCopyEnabled
-              : defaultSessionSettings.selectionAutoCopyEnabled,
-          terminalPathSyncEnabled:
-            typeof parsed.terminalPathSyncEnabled === "boolean"
-              ? parsed.terminalPathSyncEnabled
-              : defaultSessionSettings.terminalPathSyncEnabled,
-          resourceMonitorEnabled:
-            typeof parsed.resourceMonitorEnabled === "boolean"
-              ? parsed.resourceMonitorEnabled
-              : defaultSessionSettings.resourceMonitorEnabled,
-          scrollback:
-            typeof parsed.scrollback === "number"
-              ? normalizeScrollback(parsed.scrollback)
-              : defaultSessionSettings.scrollback,
-          resourceMonitorIntervalSec:
-            typeof parsed.resourceMonitorIntervalSec === "number"
-              ? normalizeResourceMonitorIntervalSec(
-                  parsed.resourceMonitorIntervalSec,
-                )
-              : defaultSessionSettings.resourceMonitorIntervalSec,
-          hostKeyPolicy:
-            parsed.hostKeyPolicy === "ask" ||
-            parsed.hostKeyPolicy === "strict" ||
-            parsed.hostKeyPolicy === "off"
-              ? parsed.hostKeyPolicy
-              : defaultSessionSettings.hostKeyPolicy,
-        }).catch((error) => {
-          warn(
-            JSON.stringify({
-              event: "session-settings:rewrite-failed",
-              error: extractErrorMessage(error),
-            }),
-          );
-        });
-      }
-      loggedSettingsRef.current = {
-        webLinksEnabled:
-          typeof parsed?.webLinksEnabled === "boolean"
-            ? parsed.webLinksEnabled
-            : defaultSessionSettings.webLinksEnabled,
-        commandAutocompleteEnabled:
-          typeof parsed?.commandAutocompleteEnabled === "boolean"
-            ? parsed.commandAutocompleteEnabled
-            : defaultSessionSettings.commandAutocompleteEnabled,
-        selectionAutoCopyEnabled:
-          typeof parsed?.selectionAutoCopyEnabled === "boolean"
-            ? parsed.selectionAutoCopyEnabled
-            : defaultSessionSettings.selectionAutoCopyEnabled,
-        terminalPathSyncEnabled:
-          typeof parsed?.terminalPathSyncEnabled === "boolean"
-            ? parsed.terminalPathSyncEnabled
-            : defaultSessionSettings.terminalPathSyncEnabled,
-        resourceMonitorEnabled:
-          typeof parsed?.resourceMonitorEnabled === "boolean"
-            ? parsed.resourceMonitorEnabled
-            : defaultSessionSettings.resourceMonitorEnabled,
-        scrollback:
-          typeof parsed?.scrollback === "number"
-            ? normalizeScrollback(parsed.scrollback)
-            : defaultSessionSettings.scrollback,
-        resourceMonitorIntervalSec:
-          typeof parsed?.resourceMonitorIntervalSec === "number"
-            ? normalizeResourceMonitorIntervalSec(
-                parsed.resourceMonitorIntervalSec,
-              )
-            : defaultSessionSettings.resourceMonitorIntervalSec,
-        hostKeyPolicy:
-          parsed?.hostKeyPolicy === "ask" ||
-          parsed?.hostKeyPolicy === "strict" ||
-          parsed?.hostKeyPolicy === "off"
-            ? parsed.hostKeyPolicy
-            : defaultSessionSettings.hostKeyPolicy,
-      };
       loadedRef.current = true;
       setSessionSettingsLoaded(true);
     }
   }
 
+  /** 将内存配置持久化到文件系统。 */
   async function saveSessionSettings(payload: SessionSettings) {
     const dir = await getTerminalConfigDir();
     await mkdir(dir, { recursive: true });
@@ -296,6 +206,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     await writeTextFile(path, JSON.stringify(payload, null, 2));
   }
 
+  // 启动初始化。
   useEffect(() => {
     loadSessionSettings().catch(() => {
       loadedRef.current = true;
@@ -303,9 +214,11 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     });
   }, []);
 
+  // 防抖异步落盘逻辑。
   useEffect(() => {
     if (!loadedRef.current) return;
-    saveSessionSettings({
+
+    const currentConfig: SessionSettings = {
       version: 1,
       webLinksEnabled,
       commandAutocompleteEnabled,
@@ -317,140 +230,55 @@ export default function useSessionSettings(): UseSessionSettingsResult {
         resourceMonitorIntervalSec,
       ),
       hostKeyPolicy,
-    }).catch((error) => {
-      warn(
-        JSON.stringify({
-          event: "session-settings:save-failed",
-          error: extractErrorMessage(error),
-        }),
-      );
-    });
+    };
+
+    const configStr = JSON.stringify(currentConfig);
+    // 脏检查：若序列化结果一致，说明内存状态变更不涉及配置落盘（可能仅是引用变动）。
+    if (configStr === lastSavedConfigRef.current) {
+      return;
+    }
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    debug(
+      JSON.stringify({
+        event: "session-settings:save-scheduled",
+        debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
+      }),
+    );
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        await saveSessionSettings(currentConfig);
+        lastSavedConfigRef.current = configStr;
+        debug(JSON.stringify({ event: "session-settings:persisted" }));
+      } catch (error) {
+        warn(
+          JSON.stringify({
+            event: "session-settings:save-failed",
+            error: extractErrorMessage(error),
+          }),
+        );
+      }
+    }, PERSISTENCE_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
   }, [
-    scrollback,
+    webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    scrollback,
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
     resourceMonitorIntervalSec,
-    webLinksEnabled,
     hostKeyPolicy,
   ]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (
-      loggedSettingsRef.current.commandAutocompleteEnabled ===
-      commandAutocompleteEnabled
-    ) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:command-autocomplete-changed",
-        enabled: commandAutocompleteEnabled,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.commandAutocompleteEnabled =
-      commandAutocompleteEnabled;
-  }, [commandAutocompleteEnabled]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (
-      loggedSettingsRef.current.selectionAutoCopyEnabled ===
-      selectionAutoCopyEnabled
-    ) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:selection-auto-copy-changed",
-        enabled: selectionAutoCopyEnabled,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.selectionAutoCopyEnabled =
-      selectionAutoCopyEnabled;
-  }, [selectionAutoCopyEnabled]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    const nextScrollback = normalizeScrollback(scrollback);
-    if (loggedSettingsRef.current.scrollback === nextScrollback) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:scrollback-changed",
-        scrollback: nextScrollback,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.scrollback = nextScrollback;
-  }, [scrollback]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (
-      loggedSettingsRef.current.terminalPathSyncEnabled ===
-      terminalPathSyncEnabled
-    ) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:terminal-path-sync-changed",
-        enabled: terminalPathSyncEnabled,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.terminalPathSyncEnabled = terminalPathSyncEnabled;
-  }, [terminalPathSyncEnabled]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (
-      loggedSettingsRef.current.resourceMonitorEnabled ===
-      resourceMonitorEnabled
-    ) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:resource-monitor-changed",
-        enabled: resourceMonitorEnabled,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.resourceMonitorEnabled = resourceMonitorEnabled;
-  }, [resourceMonitorEnabled]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    const nextInterval = normalizeResourceMonitorIntervalSec(
-      resourceMonitorIntervalSec,
-    );
-    if (loggedSettingsRef.current.resourceMonitorIntervalSec === nextInterval) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:resource-monitor-interval-changed",
-        intervalSec: nextInterval,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.resourceMonitorIntervalSec = nextInterval;
-  }, [resourceMonitorIntervalSec]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (loggedSettingsRef.current.hostKeyPolicy === hostKeyPolicy) {
-      return;
-    }
-    info(
-      JSON.stringify({
-        event: "session-settings:host-key-policy-changed",
-        policy: hostKeyPolicy,
-      }),
-    ).catch(() => {});
-    loggedSettingsRef.current.hostKeyPolicy = hostKeyPolicy;
-  }, [hostKeyPolicy]);
 
   return {
     webLinksEnabled,
