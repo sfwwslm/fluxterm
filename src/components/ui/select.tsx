@@ -1,21 +1,34 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type React from "react";
+import "./select.css";
 
+/** 下拉菜单单个选项的元数据。 */
 type SelectOption = {
+  /** 选项值。 */
   value: string;
+  /** 显示标签。 */
   label: string;
+  /** 是否禁用该选项。 */
   disabled?: boolean;
 };
 
+/** 支持的菜单尺寸。 */
 type SelectSize = "sm" | "md";
 
 type SelectProps = {
+  /** 当前选中的值。 */
   value: string | null;
+  /** 选项列表。 */
   options: SelectOption[];
+  /** 未选择时的占位符。 */
   placeholder?: string;
+  /** 是否整体禁用。 */
   disabled?: boolean;
+  /** 视觉尺寸。 */
   size?: SelectSize;
+  /** 选中值变化时的回调。 */
   onChange: (value: string) => void;
+  /** 无障碍访问标签。 */
   "aria-label"?: string;
 };
 
@@ -37,7 +50,10 @@ function findNextEnabledIndex(
   return -1;
 }
 
-/** 通用下拉菜单组件（自定义列表，支持键盘与玻璃拟态样式）。 */
+/**
+ * 通用下拉选择器组件。
+ * 职责：提供基于自定义列表的 Select 交互，支持键盘导航（上下键切换、回车确认）及自动关闭策略。
+ */
 export default function Select({
   value,
   options,

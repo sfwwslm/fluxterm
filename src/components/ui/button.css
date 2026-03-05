@@ -1,0 +1,198 @@
+/**
+ * Button 组件样式。
+ * 职责：定义按钮的基础视觉规范、各种变体（primary, ghost, danger）以及尺寸（sm, md, icon）。
+ * 包含：玻璃拟态效果、悬停/激活态动画及禁用状态处理。
+ */
+.ui-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--ui-button-border);
+  border-radius: var(--ui-radius);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 10%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-button-bg);
+  color: var(--ui-fg);
+  transition:
+    border-color 0.22s ease,
+    color 0.2s ease,
+    background-color 0.22s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+  box-shadow: var(--ui-button-glow);
+  text-shadow: 0 1px 0 color-mix(in srgb, #000 26%, transparent);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+}
+
+.ui-button::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: calc(var(--ui-radius) - 1px);
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #fff 14%, transparent) 0%,
+      transparent 42%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, #000 14%, transparent) 0%,
+      transparent 44%
+    );
+  box-shadow: var(--ui-button-inner-shadow);
+}
+
+.ui-button:hover {
+  border-color: var(--ui-button-border-hover);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 15%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-button-bg-hover);
+  transform: translateY(-1px);
+}
+
+.ui-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 58%, transparent),
+    0 14px 28px color-mix(in srgb, var(--accent-soft) 24%, transparent),
+    var(--ui-button-glow);
+}
+
+.ui-button:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 8px color-mix(in srgb, #000 30%, transparent),
+    0 6px 14px color-mix(in srgb, #000 35%, transparent);
+}
+
+.ui-button:disabled {
+  opacity: 0.55;
+  filter: saturate(0.7);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ui-button--sm {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.ui-button--md {
+  font-size: 13px;
+  padding: 8px 14px;
+}
+
+.ui-button--icon {
+  width: 34px;
+  height: 32px;
+  padding: 0;
+}
+
+.ui-button--default {
+  color: var(--text-primary);
+}
+
+.ui-button--default:hover {
+  color: color-mix(in srgb, var(--text-primary) 92%, var(--accent) 8%);
+}
+
+.ui-button--primary {
+  border-color: color-mix(in srgb, var(--accent) 68%, #fff 16%);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 24%, transparent) 0%,
+      transparent 56%
+    ),
+    linear-gradient(
+      130deg,
+      color-mix(in srgb, var(--accent) 92%, #fff 8%),
+      color-mix(in srgb, var(--accent-strong) 88%, #000 12%)
+    );
+  box-shadow:
+    0 12px 26px color-mix(in srgb, var(--accent-soft) 34%, transparent),
+    0 8px 18px color-mix(in srgb, #000 30%, transparent);
+  color: var(--text-primary);
+}
+
+.ui-button--primary::before {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #fff 26%, transparent) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, #000 16%, transparent) 0%,
+      transparent 50%
+    );
+}
+
+.ui-button--primary:hover {
+  border-color: color-mix(in srgb, var(--accent) 76%, #fff 24%);
+  box-shadow:
+    0 16px 28px color-mix(in srgb, var(--accent-soft) 42%, transparent),
+    0 10px 20px color-mix(in srgb, #000 34%, transparent);
+}
+
+.ui-button--primary:focus-visible {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 76%, transparent),
+    0 16px 30px color-mix(in srgb, var(--accent-soft) 38%, transparent);
+}
+
+.ui-button--primary,
+.modal-actions .ui-button.primary {
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.ui-button--ghost {
+  border-color: color-mix(in srgb, var(--border-input) 86%, transparent);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 7%, transparent) 0%,
+      transparent 58%
+    ),
+    color-mix(in srgb, var(--surface-header) 46%, transparent);
+  color: var(--text-secondary);
+}
+
+.ui-button--danger {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--border-input));
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 8%, transparent) 0%,
+      transparent 60%
+    ),
+    color-mix(in srgb, var(--surface-header) 72%, transparent);
+  color: var(--danger);
+}
+
+.ui-button--danger:hover {
+  border-color: color-mix(in srgb, var(--danger) 72%, var(--border-input));
+  box-shadow:
+    0 14px 26px color-mix(in srgb, var(--danger) 24%, transparent),
+    0 8px 18px color-mix(in srgb, #000 32%, transparent);
+}

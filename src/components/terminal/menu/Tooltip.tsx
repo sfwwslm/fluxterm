@@ -1,16 +1,26 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import "./Tooltip.css";
 
+/** Tooltip 弹出的方向预设。 */
 type TooltipPlacement = "top" | "bottom" | "left" | "right";
 
 type TooltipProps = {
+  /** 提示内容文本。 */
   content: string;
+  /** 触发 Tooltip 的子元素。 */
   children: React.ReactNode;
+  /** 弹出方向，默认为 "top"。 */
   placement?: TooltipPlacement;
+  /** 气泡与目标元素之间的间距（像素），默认为 8。 */
   offset?: number;
 };
 
-/** 全局 Tooltip 组件，用于展示悬浮提示并避免父级溢出裁剪。 */
+/**
+ * 全局 Tooltip 悬浮提示组件。
+ * 职责：展示简短的辅助信息。
+ * 交互：通过 createPortal 将气泡挂载到 body 下，确保气泡在复杂的层级（如 Overflow: hidden 容器）中仍能完整显示。
+ */
 export default function Tooltip({
   content,
   children,

@@ -1,0 +1,163 @@
+/**
+ * Select 组件样式。
+ * 职责：定义自定义下拉菜单及其列表项的视觉规范。
+ * 包含：玻璃拟态菜单容器、带阴影的悬浮选项列表以及键盘导航激活态样式。
+ */
+.select-menu {
+  position: relative;
+  width: 100%;
+}
+
+.select-menu-button {
+  position: relative;
+  width: 100%;
+  border: 1px solid color-mix(in srgb, #ffffff 16%, var(--border-input));
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #ffffff 12%, transparent) 0%,
+      transparent 56%
+    ),
+    var(--chrome-select-button-bg);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 34px 0 12px;
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 26%, transparent),
+    inset 0 -14px 22px color-mix(in srgb, #000 18%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  text-shadow: 0 1px 0 color-mix(in srgb, #000 28%, transparent);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+  cursor: pointer;
+}
+
+.select-menu-button:hover {
+  border-color: color-mix(in srgb, var(--accent-soft) 58%, var(--border-input));
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #ffffff 16%, transparent) 0%,
+      transparent 56%
+    ),
+    var(--chrome-select-button-bg-hover);
+  transform: translateY(-1px);
+}
+
+.select-menu-button:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 78%, #ffffff 10%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 52%, transparent),
+    0 16px 30px color-mix(in srgb, var(--accent-soft) 22%, transparent),
+    0 12px 26px rgba(0, 0, 0, 0.28);
+  transform: none;
+}
+
+.select-menu--sm .select-menu-button {
+  height: 30px;
+  font-size: 12px;
+}
+
+.select-menu--md .select-menu-button {
+  height: 34px;
+  font-size: 13px;
+}
+
+.select-menu-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select-menu-value.is-placeholder {
+  color: var(--text-muted);
+}
+
+.select-menu-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  pointer-events: none;
+}
+
+.select-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  background:
+    linear-gradient(
+      140deg,
+      color-mix(in srgb, #ffffff 12%, transparent) 0%,
+      transparent 55%
+    ),
+    var(--chrome-select-list-bg);
+  border: 1px solid color-mix(in srgb, #ffffff 18%, var(--border-input));
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 26%, transparent),
+    inset 0 -18px 28px color-mix(in srgb, #000 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1200;
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
+.select-menu-option {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 8px 10px;
+  min-height: 32px;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.select-menu-option:hover,
+.select-menu-option.is-active {
+  background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.select-menu-option.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text-primary));
+}
+
+.select-menu-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select-menu.is-disabled .select-menu-button {
+  opacity: 0.58;
+  filter: saturate(0.72);
+  cursor: not-allowed;
+  transform: none;
+}

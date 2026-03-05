@@ -1,0 +1,110 @@
+/**
+ * 基础输入控件样式。
+ * 职责：定义原生 input, textarea 等控件的通用全局 UI 规范（玻璃拟态、边框及焦点反馈）。
+ * 包含：对 placeholder、hover、focus 及 disabled 状态的统一处理。
+ */
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+) {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--ui-input-border);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 9%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-input-bg);
+  color: var(--input-text);
+  padding: 8px 10px;
+  box-shadow: var(--ui-input-glow);
+  text-shadow: 0 1px 0 color-mix(in srgb, #000 28%, transparent);
+  backdrop-filter: blur(12px) saturate(126%);
+  -webkit-backdrop-filter: blur(12px) saturate(126%);
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background-color 0.22s ease,
+    transform 0.2s ease;
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+)::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+):hover {
+  border-color: var(--ui-input-border-hover);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, #fff 12%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--ui-input-bg-hover);
+  transform: translateY(-1px);
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+):focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 74%, #ffffff 10%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent-soft) 50%, transparent),
+    0 14px 28px color-mix(in srgb, var(--accent-soft) 22%, transparent),
+    var(--ui-input-glow);
+  transform: none;
+}
+
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ),
+  textarea
+):disabled {
+  opacity: 0.55;
+  filter: saturate(0.72);
+  cursor: not-allowed;
+  transform: none;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/* 移除 number 输入框的原生增减按钮，保持统一视觉。 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input,
+select {
+  color: var(--input-text);
+}

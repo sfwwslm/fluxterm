@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
+import "@/components/ui/base-input.css";
 import { info, warn } from "@tauri-apps/plugin-log";
 import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";

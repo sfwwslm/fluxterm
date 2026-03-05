@@ -1,0 +1,46 @@
+/**
+ * Tooltip 组件样式。
+ * 职责：定义全局悬浮提示的气泡样式及定位偏移逻辑。
+ * 包含：阴影效果、圆角边框以及针对不同弹出方向（top, bottom, left, right）的偏移处理。
+ */
+.tooltip-target {
+  display: inline-flex;
+}
+
+.tooltip-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.tooltip-bubble {
+  position: fixed;
+  padding: 6px 10px;
+  max-width: 240px;
+  border-radius: 8px;
+  background: var(--surface-menu);
+  border: 1px solid var(--border-weak);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-strong);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.tooltip-bubble[data-placement="top"] {
+  transform: translate(-50%, -100%);
+}
+
+.tooltip-bubble[data-placement="bottom"] {
+  transform: translate(-50%, 0);
+}
+
+.tooltip-bubble[data-placement="left"] {
+  transform: translate(-100%, -50%);
+}
+
+.tooltip-bubble[data-placement="right"] {
+  transform: translate(0, -50%);
+}
