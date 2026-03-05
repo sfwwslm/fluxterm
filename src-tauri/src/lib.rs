@@ -48,6 +48,9 @@ use crate::commands::ssh::{
     ssh_connect, ssh_disconnect, ssh_host_key_confirm, ssh_resize, ssh_write,
 };
 use crate::commands::system::{app_config_dir, app_data_dir, open_devtools};
+use crate::commands::tunnel::{
+    ssh_tunnel_close, ssh_tunnel_close_all, ssh_tunnel_list, ssh_tunnel_open,
+};
 use crate::local_shell::LocalShellState;
 use crate::resource_monitor::ResourceMonitorState;
 use crate::state::EngineState;
@@ -128,6 +131,10 @@ pub fn run() {
             ssh_host_key_confirm,
             ssh_resize,
             ssh_write,
+            ssh_tunnel_open,
+            ssh_tunnel_close,
+            ssh_tunnel_list,
+            ssh_tunnel_close_all,
             sftp_list,
             sftp_home,
             sftp_resolve_path,

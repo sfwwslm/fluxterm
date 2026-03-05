@@ -96,6 +96,49 @@ export type SftpProgress = {
   failedItems: number;
 };
 
+/** SSH 隧道类型。 */
+export type SshTunnelKind = "local" | "remote" | "dynamic";
+
+/** SSH 隧道状态。 */
+export type SshTunnelStatus =
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "failed";
+
+/** SSH 隧道创建参数。 */
+export type SshTunnelSpec = {
+  kind: SshTunnelKind;
+  name?: string | null;
+  bindHost: string;
+  bindPort: number;
+  targetHost?: string | null;
+  targetPort?: number | null;
+};
+
+/** SSH 隧道运行时快照。 */
+export type SshTunnelRuntime = {
+  tunnelId: string;
+  sessionId: string;
+  kind: SshTunnelKind;
+  name?: string | null;
+  bindHost: string;
+  bindPort: number;
+  targetHost?: string | null;
+  targetPort?: number | null;
+  status: SshTunnelStatus;
+  bytesIn: number;
+  bytesOut: number;
+  activeConnections: number;
+  lastError?: {
+    code: string;
+    message: string;
+    detail?: string | null;
+    details?: string | null;
+  } | null;
+};
+
 /** SFTP 可用性状态。 */
 export type SftpAvailability =
   | "ready"
@@ -211,7 +254,8 @@ export type WidgetKey =
   | "transfers"
   | "events"
   | "history"
-  | "ai";
+  | "ai"
+  | "tunnels";
 /** 功能面板区域。 */
 export type WidgetArea = "left" | "right" | "bottom";
 

@@ -8,10 +8,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex as StdMutex, MutexGuard};
 use std::time::Duration;
 
+use log::{info, warn};
 use russh::client;
 use russh::keys::{self, PublicKeyBase64};
-use tokio::sync::{Mutex, mpsc};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::time::timeout;
+use uuid::Uuid;
 
 use crate::auth::authenticate;
 use crate::error::EngineError;
@@ -20,7 +24,8 @@ use crate::sftp::{
     sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
 };
 use crate::types::{
-    EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, TerminalSize,
+    EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, SshTunnelKind,
+    SshTunnelRuntime, SshTunnelSpec, SshTunnelStatus, TerminalSize,
 };
 
 /// 会话发送通道句柄。
@@ -92,6 +97,20 @@ pub enum SessionCommand {
         path: String,
         respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
     },
+    TunnelOpen {
+        spec: SshTunnelSpec,
+        respond_to: tokio::sync::oneshot::Sender<Result<SshTunnelRuntime, EngineError>>,
+    },
+    TunnelClose {
+        tunnel_id: String,
+        respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
+    },
+    TunnelList {
+        respond_to: tokio::sync::oneshot::Sender<Result<Vec<SshTunnelRuntime>, EngineError>>,
+    },
+    TunnelCloseAll {
+        respond_to: tokio::sync::oneshot::Sender<Result<(), EngineError>>,
+    },
     Disconnect,
 }
 
@@ -108,10 +127,31 @@ impl HostKeyCheckState {
     }
 }
 
+#[derive(Debug, Clone)]
+struct RemoteRoute {
+    tunnel_id: String,
+    target_host: String,
+    target_port: u16,
+}
+
+struct TunnelHandle {
+    runtime: Arc<Mutex<SshTunnelRuntime>>,
+    stop: tokio::sync::watch::Sender<bool>,
+}
+
+impl TunnelHandle {
+    fn snapshot(&self) -> Arc<Mutex<SshTunnelRuntime>> {
+        Arc::clone(&self.runtime)
+    }
+}
+
 /// SSH 客户端回调处理器。
 pub struct ClientHandler {
     expected_host_key: Option<ExpectedHostKey>,
     host_key_state: HostKeyCheckState,
+    remote_routes: Arc<RwLock<HashMap<u16, RemoteRoute>>>,
+    session_id: String,
+    on_event: Option<EventCallback>,
 }
 
 impl ClientHandler {
@@ -122,6 +162,9 @@ impl ClientHandler {
             host_key_state: HostKeyCheckState {
                 error: Arc::new(StdMutex::new(None)),
             },
+            remote_routes: Arc::new(RwLock::new(HashMap::new())),
+            session_id: String::new(),
+            on_event: None,
         }
     }
 
@@ -132,6 +175,9 @@ impl ClientHandler {
             host_key_state: HostKeyCheckState {
                 error: Arc::new(StdMutex::new(None)),
             },
+            remote_routes: Arc::new(RwLock::new(HashMap::new())),
+            session_id: String::new(),
+            on_event: None,
         }
     }
 }
@@ -160,6 +206,449 @@ impl client::Handler for ClientHandler {
         ));
         Ok(false)
     }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<russh::client::Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        let Some(route) = self
+            .remote_routes
+            .read()
+            .await
+            .get(&(connected_port as u16))
+            .cloned()
+        else {
+            return Ok(());
+        };
+
+        let on_event = self.on_event.clone();
+        let session_id = self.session_id.clone();
+        tokio::spawn(async move {
+            let Ok(local_stream) =
+                TcpStream::connect(format!("{}:{}", route.target_host, route.target_port)).await
+            else {
+                let mut stream = channel.into_stream();
+                let _ = stream.shutdown().await;
+                if let Some(on_event) = on_event {
+                    on_event(EngineEvent::SshTunnelUpdate(SshTunnelRuntime {
+                        tunnel_id: route.tunnel_id,
+                        session_id,
+                        kind: SshTunnelKind::Remote,
+                        name: None,
+                        bind_host: String::new(),
+                        bind_port: connected_port as u16,
+                        target_host: None,
+                        target_port: None,
+                        status: SshTunnelStatus::Failed,
+                        bytes_in: 0,
+                        bytes_out: 0,
+                        active_connections: 0,
+                        last_error: Some(EngineError::new(
+                            "ssh_tunnel_forward_failed",
+                            "远程转发连接本地目标失败",
+                        )),
+                    }));
+                }
+                return;
+            };
+
+            let mut ssh_stream = channel.into_stream();
+            let mut tcp_stream = local_stream;
+            let _ = tokio::io::copy_bidirectional(&mut ssh_stream, &mut tcp_stream).await;
+            let _ = ssh_stream.shutdown().await;
+            let _ = tcp_stream.shutdown().await;
+        });
+        Ok(())
+    }
+}
+
+fn build_tunnel_runtime(
+    session_id: &str,
+    tunnel_id: &str,
+    spec: &SshTunnelSpec,
+    status: SshTunnelStatus,
+) -> SshTunnelRuntime {
+    SshTunnelRuntime {
+        tunnel_id: tunnel_id.to_string(),
+        session_id: session_id.to_string(),
+        kind: spec.kind,
+        name: spec.name.clone(),
+        bind_host: spec.bind_host.clone(),
+        bind_port: spec.bind_port,
+        target_host: spec.target_host.clone(),
+        target_port: spec.target_port,
+        status,
+        bytes_in: 0,
+        bytes_out: 0,
+        active_connections: 0,
+        last_error: None,
+    }
+}
+
+fn emit_tunnel_update(on_event: &EventCallback, runtime: &SshTunnelRuntime) {
+    on_event(EngineEvent::SshTunnelUpdate(runtime.clone()));
+}
+
+async fn open_local_or_dynamic_tunnel(
+    session_id: String,
+    session: Arc<Mutex<client::Handle<ClientHandler>>>,
+    spec: SshTunnelSpec,
+    on_event: EventCallback,
+) -> Result<TunnelHandle, EngineError> {
+    let tunnel_id = Uuid::new_v4().to_string();
+    info!(
+        "ssh_tunnel_open_start session_id={} tunnel_id={} kind={:?} bind={}:{} target={:?}:{:?}",
+        session_id,
+        tunnel_id,
+        spec.kind,
+        spec.bind_host,
+        spec.bind_port,
+        spec.target_host,
+        spec.target_port
+    );
+    let runtime = Arc::new(Mutex::new(build_tunnel_runtime(
+        &session_id,
+        &tunnel_id,
+        &spec,
+        SshTunnelStatus::Starting,
+    )));
+    {
+        let snapshot = runtime.lock().await.clone();
+        emit_tunnel_update(&on_event, &snapshot);
+    }
+
+    let listener = TcpListener::bind(format!("{}:{}", spec.bind_host, spec.bind_port))
+        .await
+        .map_err(|err| {
+            warn!(
+                "ssh_tunnel_bind_failed tunnel_id={} detail={}",
+                tunnel_id, err
+            );
+            EngineError::with_detail(
+                "ssh_tunnel_bind_failed",
+                "隧道端口监听失败",
+                err.to_string(),
+            )
+        })?;
+    {
+        let mut guard = runtime.lock().await;
+        guard.bind_port = listener
+            .local_addr()
+            .map(|addr| addr.port())
+            .unwrap_or(spec.bind_port);
+        guard.status = SshTunnelStatus::Running;
+        emit_tunnel_update(&on_event, &guard.clone());
+    }
+
+    let (stop_tx, mut stop_rx) = tokio::sync::watch::channel(false);
+    let runtime_clone = Arc::clone(&runtime);
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = stop_rx.changed() => {
+                    if *stop_rx.borrow() {
+                        break;
+                    }
+                }
+                accepted = listener.accept() => {
+                    let Ok((tcp_stream, peer_addr)) = accepted else {
+                        break;
+                    };
+                    let remote_host = match spec.kind {
+                        SshTunnelKind::Dynamic => String::new(),
+                        _ => spec.target_host.clone().unwrap_or_default(),
+                    };
+                    let remote_port = match spec.kind {
+                        SshTunnelKind::Dynamic => 0,
+                        _ => spec.target_port.unwrap_or_default(),
+                    };
+                    let runtime_for_conn = Arc::clone(&runtime_clone);
+                    let on_event_for_conn = Arc::clone(&on_event);
+                    let session_for_conn = Arc::clone(&session);
+                    tokio::spawn(async move {
+                        let (target_host, target_port, upstream) = match spec.kind {
+                            SshTunnelKind::Dynamic => {
+                                match socks5_connect_handshake(tcp_stream).await {
+                                    Ok((host, port, stream)) => (host, port, stream),
+                                    Err(_) => return,
+                                }
+                            }
+                            _ => (remote_host, remote_port, tcp_stream),
+                        };
+                        {
+                            let mut g = runtime_for_conn.lock().await;
+                            g.active_connections = g.active_connections.saturating_add(1);
+                            emit_tunnel_update(&on_event_for_conn, &g.clone());
+                        }
+                        let channel = session_for_conn
+                            .lock()
+                            .await
+                            .channel_open_direct_tcpip(
+                                target_host.clone(),
+                                target_port as u32,
+                                peer_addr.ip().to_string(),
+                                peer_addr.port() as u32,
+                            )
+                            .await;
+                        let Ok(channel) = channel else {
+                            let mut g = runtime_for_conn.lock().await;
+                            g.active_connections = g.active_connections.saturating_sub(1);
+                            g.last_error = Some(EngineError::new("ssh_tunnel_open_failed", "无法创建 SSH 转发通道"));
+                            emit_tunnel_update(&on_event_for_conn, &g.clone());
+                            return;
+                        };
+
+                        let mut ssh_stream = channel.into_stream();
+                        let mut local_stream = upstream;
+                        let copied = tokio::io::copy_bidirectional(&mut local_stream, &mut ssh_stream).await;
+                        if let Ok((up, down)) = copied {
+                            let mut g = runtime_for_conn.lock().await;
+                            g.bytes_out = g.bytes_out.saturating_add(up);
+                            g.bytes_in = g.bytes_in.saturating_add(down);
+                        }
+                        let _ = ssh_stream.shutdown().await;
+                        let _ = local_stream.shutdown().await;
+                        let mut g = runtime_for_conn.lock().await;
+                        g.active_connections = g.active_connections.saturating_sub(1);
+                        emit_tunnel_update(&on_event_for_conn, &g.clone());
+                    });
+                }
+            }
+        }
+        let mut g = runtime_clone.lock().await;
+        g.status = SshTunnelStatus::Stopped;
+        g.active_connections = 0;
+        info!("ssh_tunnel_stopped tunnel_id={}", g.tunnel_id);
+        emit_tunnel_update(&on_event, &g.clone());
+    });
+
+    Ok(TunnelHandle {
+        runtime,
+        stop: stop_tx,
+    })
+}
+
+async fn open_remote_tunnel(
+    session_id: String,
+    session: Arc<Mutex<client::Handle<ClientHandler>>>,
+    spec: SshTunnelSpec,
+    remote_routes: Arc<RwLock<HashMap<u16, RemoteRoute>>>,
+    on_event: EventCallback,
+) -> Result<TunnelHandle, EngineError> {
+    let tunnel_id = Uuid::new_v4().to_string();
+    info!(
+        "ssh_tunnel_open_start session_id={} tunnel_id={} kind={:?} bind={}:{} target={:?}:{:?}",
+        session_id,
+        tunnel_id,
+        spec.kind,
+        spec.bind_host,
+        spec.bind_port,
+        spec.target_host,
+        spec.target_port
+    );
+    let runtime = Arc::new(Mutex::new(build_tunnel_runtime(
+        &session_id,
+        &tunnel_id,
+        &spec,
+        SshTunnelStatus::Starting,
+    )));
+    {
+        let snapshot = runtime.lock().await.clone();
+        emit_tunnel_update(&on_event, &snapshot);
+    }
+
+    let assigned_port = session
+        .lock()
+        .await
+        .tcpip_forward(spec.bind_host.clone(), spec.bind_port as u32)
+        .await
+        .map_err(|err| {
+            warn!(
+                "ssh_tunnel_open_failed tunnel_id={} detail={}",
+                tunnel_id, err
+            );
+            EngineError::with_detail(
+                "ssh_tunnel_open_failed",
+                "无法创建远程转发",
+                err.to_string(),
+            )
+        })?;
+    let bind_port = assigned_port as u16;
+    remote_routes.write().await.insert(
+        bind_port,
+        RemoteRoute {
+            tunnel_id: tunnel_id.clone(),
+            target_host: spec.target_host.clone().unwrap_or_default(),
+            target_port: spec.target_port.unwrap_or_default(),
+        },
+    );
+    {
+        let mut guard = runtime.lock().await;
+        guard.bind_port = bind_port;
+        guard.status = SshTunnelStatus::Running;
+        emit_tunnel_update(&on_event, &guard.clone());
+    }
+
+    let (stop_tx, mut stop_rx) = tokio::sync::watch::channel(false);
+    let runtime_clone = Arc::clone(&runtime);
+    tokio::spawn(async move {
+        let _ = stop_rx.changed().await;
+        {
+            let mut g = runtime_clone.lock().await;
+            g.status = SshTunnelStatus::Stopping;
+            emit_tunnel_update(&on_event, &g.clone());
+        }
+        let _ = session
+            .lock()
+            .await
+            .cancel_tcpip_forward(spec.bind_host.clone(), bind_port as u32)
+            .await;
+        remote_routes.write().await.remove(&bind_port);
+        let mut g = runtime_clone.lock().await;
+        g.status = SshTunnelStatus::Stopped;
+        info!("ssh_tunnel_stopped tunnel_id={}", g.tunnel_id);
+        emit_tunnel_update(&on_event, &g.clone());
+    });
+
+    Ok(TunnelHandle {
+        runtime,
+        stop: stop_tx,
+    })
+}
+
+async fn close_tunnel(handle: TunnelHandle) -> Result<(), EngineError> {
+    let _ = handle.stop.send(true);
+    Ok(())
+}
+
+async fn socks5_connect_handshake(
+    mut stream: TcpStream,
+) -> Result<(String, u16, TcpStream), EngineError> {
+    let mut greeting = [0u8; 2];
+    stream.read_exact(&mut greeting).await.map_err(|err| {
+        EngineError::with_detail(
+            "ssh_tunnel_socks_handshake_failed",
+            "SOCKS 握手失败",
+            err.to_string(),
+        )
+    })?;
+    if greeting[0] != 0x05 {
+        return Err(EngineError::new(
+            "ssh_tunnel_socks_handshake_failed",
+            "仅支持 SOCKS5",
+        ));
+    }
+    let mut methods = vec![0u8; greeting[1] as usize];
+    stream.read_exact(&mut methods).await.map_err(|err| {
+        EngineError::with_detail(
+            "ssh_tunnel_socks_handshake_failed",
+            "SOCKS 握手失败",
+            err.to_string(),
+        )
+    })?;
+    stream.write_all(&[0x05, 0x00]).await.map_err(|err| {
+        EngineError::with_detail(
+            "ssh_tunnel_socks_handshake_failed",
+            "SOCKS 握手失败",
+            err.to_string(),
+        )
+    })?;
+
+    let mut request_head = [0u8; 4];
+    stream.read_exact(&mut request_head).await.map_err(|err| {
+        EngineError::with_detail(
+            "ssh_tunnel_socks_handshake_failed",
+            "SOCKS 请求读取失败",
+            err.to_string(),
+        )
+    })?;
+    if request_head[1] != 0x01 {
+        let _ = stream
+            .write_all(&[0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .await;
+        return Err(EngineError::new(
+            "ssh_tunnel_socks_handshake_failed",
+            "仅支持 CONNECT 命令",
+        ));
+    }
+    let atyp = request_head[3];
+    let host = match atyp {
+        0x01 => {
+            let mut ipv4 = [0u8; 4];
+            stream.read_exact(&mut ipv4).await.map_err(|err| {
+                EngineError::with_detail(
+                    "ssh_tunnel_socks_handshake_failed",
+                    "SOCKS 地址读取失败",
+                    err.to_string(),
+                )
+            })?;
+            format!("{}.{}.{}.{}", ipv4[0], ipv4[1], ipv4[2], ipv4[3])
+        }
+        0x03 => {
+            let mut len = [0u8; 1];
+            stream.read_exact(&mut len).await.map_err(|err| {
+                EngineError::with_detail(
+                    "ssh_tunnel_socks_handshake_failed",
+                    "SOCKS 域名读取失败",
+                    err.to_string(),
+                )
+            })?;
+            let mut domain = vec![0u8; len[0] as usize];
+            stream.read_exact(&mut domain).await.map_err(|err| {
+                EngineError::with_detail(
+                    "ssh_tunnel_socks_handshake_failed",
+                    "SOCKS 域名读取失败",
+                    err.to_string(),
+                )
+            })?;
+            String::from_utf8_lossy(&domain).to_string()
+        }
+        0x04 => {
+            let mut ipv6 = [0u8; 16];
+            stream.read_exact(&mut ipv6).await.map_err(|err| {
+                EngineError::with_detail(
+                    "ssh_tunnel_socks_handshake_failed",
+                    "SOCKS IPv6 读取失败",
+                    err.to_string(),
+                )
+            })?;
+            std::net::Ipv6Addr::from(ipv6).to_string()
+        }
+        _ => {
+            let _ = stream
+                .write_all(&[0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                .await;
+            return Err(EngineError::new(
+                "ssh_tunnel_socks_handshake_failed",
+                "不支持的地址类型",
+            ));
+        }
+    };
+    let mut port_buf = [0u8; 2];
+    stream.read_exact(&mut port_buf).await.map_err(|err| {
+        EngineError::with_detail(
+            "ssh_tunnel_socks_handshake_failed",
+            "SOCKS 端口读取失败",
+            err.to_string(),
+        )
+    })?;
+    let port = u16::from_be_bytes(port_buf);
+    stream
+        .write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+        .await
+        .map_err(|err| {
+            EngineError::with_detail(
+                "ssh_tunnel_socks_handshake_failed",
+                "SOCKS 响应发送失败",
+                err.to_string(),
+            )
+        })?;
+    Ok((host, port, stream))
 }
 
 /// 会话主循环，负责 SSH 与 SFTP 命令处理。
@@ -178,6 +667,8 @@ pub async fn run_session_loop(
     let host_key_state = HostKeyCheckState {
         error: Arc::new(StdMutex::new(None)),
     };
+    let remote_routes: Arc<RwLock<HashMap<u16, RemoteRoute>>> =
+        Arc::new(RwLock::new(HashMap::new()));
     let mut session = timeout(
         Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS),
         client::connect(
@@ -186,6 +677,9 @@ pub async fn run_session_loop(
             ClientHandler {
                 expected_host_key,
                 host_key_state: host_key_state.clone(),
+                remote_routes: Arc::clone(&remote_routes),
+                session_id: session_id.clone(),
+                on_event: Some(Arc::clone(&on_event)),
             },
         ),
     )
@@ -244,12 +738,14 @@ pub async fn run_session_loop(
         state: SessionState::Connected,
         error: None,
     });
-    let session = Arc::new(session);
+    let session = Arc::new(Mutex::new(session));
 
     let mut running = true;
     // 传输任务使用 transfer_id 作为取消粒度；主循环只负责分发命令和置位取消标记，
     // 真正的读写执行发生在独立任务中，避免大文件传输期间无法响应取消请求。
     let transfer_cancellations: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let tunnel_handles: Arc<Mutex<HashMap<String, TunnelHandle>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     while running {
@@ -263,13 +759,16 @@ pub async fn run_session_loop(
                         let _ = channel.window_change(cols as u32, rows as u32, 0, 0).await;
                     }
                     SessionCommand::SftpList { path, respond_to } => {
-                        let _ = respond_to.send(sftp_list(&session, &path).await);
+                        let guard = session.lock().await;
+                        let _ = respond_to.send(sftp_list(&guard, &path).await);
                     }
                     SessionCommand::SftpHome { respond_to } => {
-                        let _ = respond_to.send(sftp_home(&session).await);
+                        let guard = session.lock().await;
+                        let _ = respond_to.send(sftp_home(&guard).await);
                     }
                     SessionCommand::SftpResolvePath { path, respond_to } => {
-                        let _ = respond_to.send(sftp_resolve_path(&session, &path).await);
+                        let guard = session.lock().await;
+                        let _ = respond_to.send(sftp_resolve_path(&guard, &path).await);
                     }
                     SessionCommand::SftpUpload { local_path, remote_path, respond_to } => {
                         let transfer_id = next_transfer_id();
@@ -280,8 +779,9 @@ pub async fn run_session_loop(
                         let on_event = Arc::clone(&on_event);
                         let transfer_cancellations = Arc::clone(&transfer_cancellations);
                         tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
                             let result = sftp_upload(
-                                &session_handle,
+                                &guard,
                                 &session_id,
                                 &local_path,
                                 &remote_path,
@@ -303,8 +803,9 @@ pub async fn run_session_loop(
                         let on_event = Arc::clone(&on_event);
                         let transfer_cancellations = Arc::clone(&transfer_cancellations);
                         tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
                             let result = sftp_upload_batch(
-                                &session_handle,
+                                &guard,
                                 &session_id,
                                 &local_paths,
                                 &remote_dir,
@@ -326,8 +827,9 @@ pub async fn run_session_loop(
                         let on_event = Arc::clone(&on_event);
                         let transfer_cancellations = Arc::clone(&transfer_cancellations);
                         tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
                             let result = sftp_download(
-                                &session_handle,
+                                &guard,
                                 &session_id,
                                 &remote_path,
                                 &local_path,
@@ -349,8 +851,9 @@ pub async fn run_session_loop(
                         let on_event = Arc::clone(&on_event);
                         let transfer_cancellations = Arc::clone(&transfer_cancellations);
                         tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
                             let result = sftp_download_dir(
-                                &session_handle,
+                                &guard,
                                 &session_id,
                                 &remote_path,
                                 &local_dir,
@@ -376,15 +879,84 @@ pub async fn run_session_loop(
                         let _ = respond_to.send(result.map(|_| ()));
                     }
                     SessionCommand::SftpRename { from, to, respond_to } => {
-                        let _ = respond_to.send(sftp_rename(&session, &from, &to).await);
+                        let guard = session.lock().await;
+                        let _ = respond_to.send(sftp_rename(&guard, &from, &to).await);
                     }
                     SessionCommand::SftpRemove { path, respond_to } => {
-                        let _ = respond_to.send(sftp_remove(&session, &path).await);
+                        let guard = session.lock().await;
+                        let _ = respond_to.send(sftp_remove(&guard, &path).await);
                     }
                     SessionCommand::SftpMkdir { path, respond_to } => {
-                        let _ = respond_to.send(sftp_mkdir(&session, &path).await);
+                        let guard = session.lock().await;
+                        let _ = respond_to.send(sftp_mkdir(&guard, &path).await);
+                    }
+                    SessionCommand::TunnelOpen { spec, respond_to } => {
+                        let open_result = match spec.kind {
+                            SshTunnelKind::Local | SshTunnelKind::Dynamic => {
+                                open_local_or_dynamic_tunnel(
+                                    session_id.clone(),
+                                    Arc::clone(&session),
+                                    spec.clone(),
+                                    Arc::clone(&on_event),
+                                )
+                                .await
+                            }
+                            SshTunnelKind::Remote => {
+                                open_remote_tunnel(
+                                    session_id.clone(),
+                                    Arc::clone(&session),
+                                    spec.clone(),
+                                    Arc::clone(&remote_routes),
+                                    Arc::clone(&on_event),
+                                )
+                                .await
+                            }
+                        };
+                        match open_result {
+                            Ok(handle) => {
+                                let snapshot = handle.snapshot().lock().await.clone();
+                                tunnel_handles.lock().await.insert(snapshot.tunnel_id.clone(), handle);
+                                let _ = respond_to.send(Ok(snapshot));
+                            }
+                            Err(err) => {
+                                let _ = respond_to.send(Err(err));
+                            }
+                        }
+                    }
+                    SessionCommand::TunnelClose { tunnel_id, respond_to } => {
+                        let handle = tunnel_handles.lock().await.remove(&tunnel_id);
+                        let result = if let Some(handle) = handle {
+                            close_tunnel(handle).await
+                        } else {
+                            Err(EngineError::new("ssh_tunnel_not_found", "隧道不存在"))
+                        };
+                        let _ = respond_to.send(result);
+                    }
+                    SessionCommand::TunnelList { respond_to } => {
+                        let handles = tunnel_handles.lock().await;
+                        let mut snapshots = Vec::with_capacity(handles.len());
+                        for handle in handles.values() {
+                            snapshots.push(handle.snapshot().lock().await.clone());
+                        }
+                        let _ = respond_to.send(Ok(snapshots));
+                    }
+                    SessionCommand::TunnelCloseAll { respond_to } => {
+                        let mut handles = tunnel_handles.lock().await;
+                        let values: Vec<TunnelHandle> = handles.drain().map(|(_, value)| value).collect();
+                        drop(handles);
+                        for handle in values {
+                            let _ = close_tunnel(handle).await;
+                        }
+                        let _ = respond_to.send(Ok(()));
                     }
                     SessionCommand::Disconnect => {
+                        let mut handles = tunnel_handles.lock().await;
+                        let values: Vec<TunnelHandle> =
+                            handles.drain().map(|(_, value)| value).collect();
+                        drop(handles);
+                        for handle in values {
+                            let _ = close_tunnel(handle).await;
+                        }
                         let _ = channel.eof().await;
                         let _ = channel.close().await;
                         running = false;
@@ -408,6 +980,12 @@ pub async fn run_session_loop(
                 }
             }
         }
+    }
+    let mut handles = tunnel_handles.lock().await;
+    let values: Vec<TunnelHandle> = handles.drain().map(|(_, value)| value).collect();
+    drop(handles);
+    for handle in values {
+        let _ = close_tunnel(handle).await;
     }
 
     on_event(EngineEvent::TerminalExit {

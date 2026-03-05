@@ -57,6 +57,7 @@ import useTerminalController from "@/hooks/useTerminalController";
 import useSftpController from "@/hooks/useSftpController";
 import useCommandHistoryState from "@/hooks/useCommandHistoryState";
 import useAiState from "@/hooks/useAiState";
+import useSshTunnelState from "@/hooks/useSshTunnelState";
 import {
   WIDGET_AI_CHANNEL,
   type FloatingAiMessage,
@@ -95,6 +96,11 @@ import {
   type FloatingTransfersSnapshot,
 } from "@/features/sftp/core/widgetTransfersSync";
 import {
+  WIDGET_TUNNELS_CHANNEL,
+  type FloatingTunnelsMessage,
+  type FloatingTunnelsSnapshot,
+} from "@/features/tunnel/core/widgetSync";
+import {
   openLocalFile,
   openRemoteFileViaCache,
 } from "@/features/file-open/core/commands";
@@ -110,6 +116,7 @@ const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   events: "widget.events",
   history: "widget.history",
   ai: "widget.ai",
+  tunnels: "widget.tunnels",
 };
 const BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA = 0;
 
@@ -369,6 +376,7 @@ export default function AppShell() {
     if (value === "events") return "events";
     if (value === "history") return "history";
     if (value === "ai") return "ai";
+    if (value === "tunnels") return "tunnels";
     if (value === "logs") return "events";
     return null;
   }, []);
@@ -388,6 +396,8 @@ export default function AppShell() {
     useState("");
   const [floatingAiSnapshot, setFloatingAiSnapshot] =
     useState<FloatingAiSnapshot | null>(null);
+  const [floatingTunnelsSnapshot, setFloatingTunnelsSnapshot] =
+    useState<FloatingTunnelsSnapshot | null>(null);
   const previousResourceSessionStateRef = useRef<string | null>(null);
   const [resourceSnapshotsBySession, setResourceSnapshotsBySession] = useState<
     Record<string, SessionResourceSnapshot>
@@ -593,6 +603,7 @@ export default function AppShell() {
       events: t(widgetLabelKeys.events),
       history: t(widgetLabelKeys.history),
       ai: t(widgetLabelKeys.ai),
+      tunnels: t(widgetLabelKeys.tunnels),
     }),
     [t],
   );
@@ -605,6 +616,37 @@ export default function AppShell() {
     settingsLoaded,
     getTerminalSize: () => terminalSizeRef.current,
   });
+  const tunnelState = useSshTunnelState(sessionState.activeSessionId);
+  const activeTunnelSessionMeta = useMemo(() => {
+    if (!sessionState.activeSessionId) {
+      return {
+        label: null as string | null,
+        host: null as string | null,
+        username: null as string | null,
+      };
+    }
+    if (sessionState.isRemoteSession && sessionState.activeSessionProfile) {
+      const profile = sessionState.activeSessionProfile;
+      return {
+        label: profile.name || profile.host || t("session.defaultName"),
+        host: profile.host,
+        username: profile.username,
+      };
+    }
+    return {
+      label:
+        sessionState.localSessionMeta[sessionState.activeSessionId]?.label ??
+        t("session.local"),
+      host: "local",
+      username: null,
+    };
+  }, [
+    sessionState.activeSessionId,
+    sessionState.activeSessionProfile,
+    sessionState.isRemoteSession,
+    sessionState.localSessionMeta,
+    t,
+  ]);
 
   const historyState = useCommandHistoryState({
     activeSessionId: sessionState.activeSessionId,
@@ -699,6 +741,7 @@ export default function AppShell() {
   const isFloatingEventsWidget = floatingWidgetKey === "events";
   const isFloatingHistoryWidget = floatingWidgetKey === "history";
   const isFloatingAiWidget = floatingWidgetKey === "ai";
+  const isFloatingTunnelsWidget = floatingWidgetKey === "tunnels";
 
   const {
     showGroupTitle,
@@ -1556,6 +1599,80 @@ export default function AppShell() {
     ],
   });
 
+  useFloatingWidgetSnapshotSync<FloatingTunnelsMessage>({
+    channelName: WIDGET_TUNNELS_CHANNEL,
+    floatingWidgetKey,
+    isFloatingWidget: isFloatingTunnelsWidget,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingTunnelsSnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        supportsSshTunnel: sessionState.isRemoteSession,
+        sessionState: sessionState.activeSessionState ?? "disconnected",
+        sessionLabel: activeTunnelSessionMeta.label,
+        sessionHost: activeTunnelSessionMeta.host,
+        sessionUsername: activeTunnelSessionMeta.username,
+        tunnels: tunnelState.activeTunnels,
+      };
+      channel.postMessage({
+        type: "tunnels:snapshot",
+        payload,
+      } satisfies FloatingTunnelsMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "tunnels:request-snapshot": {
+          const payload: FloatingTunnelsSnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            supportsSshTunnel: sessionState.isRemoteSession,
+            sessionState: sessionState.activeSessionState ?? "disconnected",
+            sessionLabel: activeTunnelSessionMeta.label,
+            sessionHost: activeTunnelSessionMeta.host,
+            sessionUsername: activeTunnelSessionMeta.username,
+            tunnels: tunnelState.activeTunnels,
+          };
+          channel.postMessage({
+            type: "tunnels:snapshot",
+            payload,
+          } satisfies FloatingTunnelsMessage);
+          break;
+        }
+        case "tunnels:open":
+          tunnelState.open(message.spec).catch(() => {});
+          break;
+        case "tunnels:close":
+          tunnelState.close(message.tunnelId).catch(() => {});
+          break;
+        case "tunnels:close-all":
+          tunnelState.closeAll().catch(() => {});
+          break;
+        case "tunnels:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "tunnels:snapshot") {
+        setFloatingTunnelsSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "tunnels:request-snapshot",
+      } satisfies FloatingTunnelsMessage);
+    },
+    deps: [
+      activeTunnelSessionMeta.host,
+      activeTunnelSessionMeta.label,
+      activeTunnelSessionMeta.username,
+      sessionState.activeSessionId,
+      sessionState.isRemoteSession,
+      sessionState.activeSessionState,
+      tunnelState.activeTunnels,
+      tunnelState.close,
+      tunnelState.closeAll,
+      tunnelState.open,
+    ],
+  });
+
   useMacAppMenu({
     locale,
     themeId,
@@ -1691,6 +1808,11 @@ export default function AppShell() {
     useFloatingWidgetMessagePoster<FloatingAiMessage>(
       WIDGET_AI_CHANNEL,
       isFloatingAiWidget,
+    );
+  const postFloatingTunnelsMessage =
+    useFloatingWidgetMessagePoster<FloatingTunnelsMessage>(
+      WIDGET_TUNNELS_CHANNEL,
+      isFloatingTunnelsWidget,
     );
 
   // 主窗口直接读取本地 SFTP 状态；浮动文件面板则消费主窗口同步过来的只读快照。
@@ -2003,6 +2125,72 @@ export default function AppShell() {
     ],
   );
 
+  const TunnelsWidgetState = useMemo(
+    () =>
+      isFloatingTunnelsWidget
+        ? {
+            activeSessionId: floatingTunnelsSnapshot?.activeSessionId ?? null,
+            supportsSshTunnel:
+              floatingTunnelsSnapshot?.supportsSshTunnel ?? false,
+            sessionState:
+              floatingTunnelsSnapshot?.sessionState ?? "disconnected",
+            sessionLabel: floatingTunnelsSnapshot?.sessionLabel ?? null,
+            sessionHost: floatingTunnelsSnapshot?.sessionHost ?? null,
+            sessionUsername: floatingTunnelsSnapshot?.sessionUsername ?? null,
+            tunnels: floatingTunnelsSnapshot?.tunnels ?? [],
+          }
+        : {
+            activeSessionId: sessionState.activeSessionId,
+            supportsSshTunnel: sessionState.isRemoteSession,
+            sessionState: sessionState.activeSessionState ?? "disconnected",
+            sessionLabel: activeTunnelSessionMeta.label,
+            sessionHost: activeTunnelSessionMeta.host,
+            sessionUsername: activeTunnelSessionMeta.username,
+            tunnels: tunnelState.activeTunnels,
+          },
+    [
+      activeTunnelSessionMeta.host,
+      activeTunnelSessionMeta.label,
+      activeTunnelSessionMeta.username,
+      floatingTunnelsSnapshot,
+      isFloatingTunnelsWidget,
+      sessionState.activeSessionId,
+      sessionState.isRemoteSession,
+      sessionState.activeSessionState,
+      tunnelState.activeTunnels,
+    ],
+  );
+
+  const TunnelsWidgetActions = useMemo(
+    () =>
+      isFloatingTunnelsWidget
+        ? {
+            open: async (spec: Parameters<typeof tunnelState.open>[0]) => {
+              postFloatingTunnelsMessage({ type: "tunnels:open", spec });
+            },
+            close: async (tunnelId: string) => {
+              postFloatingTunnelsMessage({ type: "tunnels:close", tunnelId });
+            },
+            closeAll: async () => {
+              postFloatingTunnelsMessage({ type: "tunnels:close-all" });
+            },
+          }
+        : {
+            open: async (spec: Parameters<typeof tunnelState.open>[0]) => {
+              await tunnelState.open(spec);
+            },
+            close: tunnelState.close,
+            closeAll: tunnelState.closeAll,
+          },
+    [
+      isFloatingTunnelsWidget,
+      postFloatingTunnelsMessage,
+      tunnelState.close,
+      tunnelState.closeAll,
+      tunnelState.open,
+    ],
+  );
+
   const widgets = useMemo(
     () =>
       buildWidgets({
@@ -2082,6 +2270,16 @@ export default function AppShell() {
         onCreateFolder: filesWidgetActions.createFolder,
         onRenameEntry: filesWidgetActions.rename,
         onRemoveEntry: filesWidgetActions.remove,
+        tunnelSessionId: TunnelsWidgetState.activeSessionId,
+        tunnelSupportsSsh: TunnelsWidgetState.supportsSshTunnel,
+        tunnelSessionState: TunnelsWidgetState.sessionState,
+        tunnelSessionLabel: TunnelsWidgetState.sessionLabel,
+        tunnelSessionHost: TunnelsWidgetState.sessionHost,
+        tunnelSessionUsername: TunnelsWidgetState.sessionUsername,
+        tunnelRuntimes: TunnelsWidgetState.tunnels,
+        onOpenTunnel: TunnelsWidgetActions.open,
+        onCloseTunnel: TunnelsWidgetActions.close,
+        onCloseAllTunnels: TunnelsWidgetActions.closeAll,
       }),
     [
       profiles,
@@ -2113,6 +2311,8 @@ export default function AppShell() {
       removeGroup,
       moveProfileToGroup,
       filesWidgetActions,
+      TunnelsWidgetActions,
+      TunnelsWidgetState,
     ],
   );
 

@@ -136,6 +136,57 @@ pub struct SftpProgress {
     pub failed_items: u64,
 }
 
+/// SSH 隧道类型。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SshTunnelKind {
+    Local,
+    Remote,
+    Dynamic,
+}
+
+/// SSH 隧道运行状态。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SshTunnelStatus {
+    Starting,
+    Running,
+    Stopping,
+    Stopped,
+    Failed,
+}
+
+/// SSH 隧道创建参数。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTunnelSpec {
+    pub kind: SshTunnelKind,
+    pub name: Option<String>,
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub target_host: Option<String>,
+    pub target_port: Option<u16>,
+}
+
+/// SSH 隧道运行时快照。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTunnelRuntime {
+    pub tunnel_id: String,
+    pub session_id: String,
+    pub kind: SshTunnelKind,
+    pub name: Option<String>,
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub target_host: Option<String>,
+    pub target_port: Option<u16>,
+    pub status: SshTunnelStatus,
+    pub bytes_in: u64,
+    pub bytes_out: u64,
+    pub active_connections: u32,
+    pub last_error: Option<EngineError>,
+}
+
 /// 资源监控状态。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -202,6 +253,7 @@ pub enum EngineEvent {
         session_id: String,
     },
     SftpProgress(SftpProgress),
+    SshTunnelUpdate(SshTunnelRuntime),
     SessionResource(SessionResourceSnapshot),
     SessionStatus {
         session_id: String,

@@ -9,6 +9,7 @@ import SftpWidget from "@/widgets/files/components/SftpWidget";
 import EventsWidget from "@/widgets/events/components/EventsWidget";
 import CommandHistoryWidget from "@/widgets/history/components/CommandHistoryWidget";
 import AiWidget from "@/widgets/ai/components/AiWidget";
+import TunnelWidget from "@/widgets/tunnels/components/TunnelWidget";
 import type { AiChatMessage } from "@/features/ai/types";
 import type { Locale, Translate } from "@/i18n";
 import type {
@@ -23,6 +24,8 @@ import type {
   SftpAvailability,
   SftpEntry,
   SftpProgress,
+  SshTunnelRuntime,
+  SshTunnelSpec,
 } from "@/types";
 
 type buildWidgetsProps = {
@@ -94,6 +97,16 @@ type buildWidgetsProps = {
   onCreateFolder: (name: string) => Promise<void>;
   onRenameEntry: (entry: SftpEntry, name: string) => Promise<void>;
   onRemoveEntry: (entry: SftpEntry) => Promise<void>;
+  tunnelSessionId: string | null;
+  tunnelSupportsSsh: boolean;
+  tunnelSessionState: SessionStateUi | null;
+  tunnelSessionLabel: string | null;
+  tunnelSessionHost: string | null;
+  tunnelSessionUsername: string | null;
+  tunnelRuntimes: SshTunnelRuntime[];
+  onOpenTunnel: (spec: SshTunnelSpec) => Promise<void>;
+  onCloseTunnel: (tunnelId: string) => Promise<void>;
+  onCloseAllTunnels: () => Promise<void>;
 };
 
 /** 构建工作区面板集合。 */
@@ -161,6 +174,16 @@ export function buildWidgets(
     onCreateFolder,
     onRenameEntry,
     onRemoveEntry,
+    tunnelSessionId,
+    tunnelSupportsSsh,
+    tunnelSessionState,
+    tunnelSessionLabel,
+    tunnelSessionHost,
+    tunnelSessionUsername,
+    tunnelRuntimes,
+    onOpenTunnel,
+    onCloseTunnel,
+    onCloseAllTunnels,
   } = props;
 
   return {
@@ -254,6 +277,21 @@ export function buildWidgets(
         onSend={onAiSend}
         onCancel={onAiCancel}
         onClear={onAiClear}
+        t={t}
+      />
+    ),
+    tunnels: (
+      <TunnelWidget
+        activeSessionId={tunnelSessionId}
+        supportsSshTunnel={tunnelSupportsSsh}
+        activeSessionState={tunnelSessionState}
+        activeSessionLabel={tunnelSessionLabel}
+        activeSessionHost={tunnelSessionHost}
+        activeSessionUsername={tunnelSessionUsername}
+        tunnels={tunnelRuntimes}
+        onOpenTunnel={onOpenTunnel}
+        onCloseTunnel={onCloseTunnel}
+        onCloseAll={onCloseAllTunnels}
         t={t}
       />
     ),

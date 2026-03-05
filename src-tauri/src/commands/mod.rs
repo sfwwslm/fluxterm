@@ -9,3 +9,4 @@ pub mod security;
 pub mod sftp;
 pub mod ssh;
 pub mod system;
+pub mod tunnel;

@@ -8,7 +8,10 @@ use uuid::Uuid;
 
 use crate::error::EngineError;
 use crate::session::{ExpectedHostKey, SessionCommand, SessionHandle, run_session_loop};
-use crate::types::{EventCallback, HostProfile, Session, SessionState, SftpEntry, TerminalSize};
+use crate::types::{
+    EventCallback, HostProfile, Session, SessionState, SftpEntry, SshTunnelRuntime, SshTunnelSpec,
+    TerminalSize,
+};
 use crate::util::now_epoch;
 use log::info;
 
@@ -397,6 +400,88 @@ impl Engine {
                 EngineError::new("session_command_failed", "无法发送 SFTP 创建目录命令")
             })?;
         self.await_response(resp_rx, "无法接收 SFTP 创建目录响应")
+    }
+
+    /// 打开 SSH 隧道。
+    pub fn tunnel_open(
+        &self,
+        session_id: &str,
+        spec: SshTunnelSpec,
+    ) -> Result<SshTunnelRuntime, EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::TunnelOpen {
+                spec,
+                respond_to: resp_tx,
+            })
+            .map_err(|_| EngineError::new("session_command_failed", "无法发送隧道创建命令"))?;
+        self.await_response(resp_rx, "无法接收隧道创建响应")
+    }
+
+    /// 关闭 SSH 隧道。
+    pub fn tunnel_close(&self, session_id: &str, tunnel_id: &str) -> Result<(), EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::TunnelClose {
+                tunnel_id: tunnel_id.to_string(),
+                respond_to: resp_tx,
+            })
+            .map_err(|_| EngineError::new("session_command_failed", "无法发送隧道关闭命令"))?;
+        self.await_response(resp_rx, "无法接收隧道关闭响应")
+    }
+
+    /// 列出会话下所有 SSH 隧道。
+    pub fn tunnel_list(&self, session_id: &str) -> Result<Vec<SshTunnelRuntime>, EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::TunnelList {
+                respond_to: resp_tx,
+            })
+            .map_err(|_| EngineError::new("session_command_failed", "无法发送隧道列表命令"))?;
+        self.await_response(resp_rx, "无法接收隧道列表响应")
+    }
+
+    /// 关闭会话下全部 SSH 隧道。
+    pub fn tunnel_close_all(&self, session_id: &str) -> Result<(), EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::TunnelCloseAll {
+                respond_to: resp_tx,
+            })
+            .map_err(|_| EngineError::new("session_command_failed", "无法发送隧道批量关闭命令"))?;
+        self.await_response(resp_rx, "无法接收隧道批量关闭响应")
     }
 
     /// 等待后台响应并转换为同步结果。

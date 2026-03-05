@@ -48,6 +48,9 @@ pub fn build_event_bridge(app: AppHandle) -> Arc<dyn Fn(EngineEvent) + Send + Sy
         EngineEvent::SftpProgress(progress) => {
             let _ = app.emit("sftp:progress", progress);
         }
+        EngineEvent::SshTunnelUpdate(runtime) => {
+            let _ = app.emit("ssh:tunnel:update", runtime);
+        }
         EngineEvent::SessionResource(resource) => {
             record_resource_snapshot_from_app(&app, &resource);
             let _ = app.emit("session:resource", resource);
