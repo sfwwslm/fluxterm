@@ -6,7 +6,7 @@
 //! - worker 池并发处理 mkdir/文件传输
 //! - 聚合器统一汇报 job 级进度与最终状态
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use log::{debug, info, warn};
+use log::{debug, warn};
 use russh::client;
 use russh_sftp::client::error::Error as SftpClientError;
 use russh_sftp::client::{RawSftpSession, SftpSession};
@@ -1351,7 +1351,7 @@ async fn download_pipeline_worker(
                 .await
                 {
                     Ok(perf) => {
-                        info!(
+                        warn!(
                             "sftp_download_pipeline_file_summary path={} transferred_bytes={} read_requests={} eof_responses={} max_in_flight={} max_pending_chunks={}",
                             display_name,
                             perf.transferred_bytes,
@@ -2094,7 +2094,7 @@ async fn download_remote_file_to_local_pipelined(
     sftp.close(handle_id).await.map_err(|err| {
         EngineError::with_detail("sftp_download_failed", "无法关闭远端文件", err.to_string())
     })?;
-    info!(
+    warn!(
         "sftp_download_pipeline_file_perf remote_path={} local_path={} elapsed_ms={} transferred_bytes={} read_requests={} eof_responses={} max_in_flight={} max_pending_chunks={} chunk_size={} read_window={}",
         remote_path,
         local_path.to_string_lossy(),
@@ -2411,7 +2411,7 @@ fn log_sftp_perf(stats: SftpPerfStats) {
     } else {
         ((stats.transferred_bytes as u128 * 1000) / stats.elapsed_ms) as u64
     };
-    info!(
+    warn!(
         "sftp_perf stage={} session_id={} op={:?} kind={:?} mode={} elapsed_ms={} scan_elapsed_ms={} transferred_bytes={} total_bytes={} throughput_bps={} completed_items={} failed_items={} total_items={} worker_count={} write_window={} read_window={}",
         stats.stage,
         stats.session_id,
