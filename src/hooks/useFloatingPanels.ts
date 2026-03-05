@@ -182,7 +182,7 @@ export default function useFloatingPanels({
           .catch(() => {});
       }
       if (payload.type === "layout" && floatingPanelKey) {
-        if (payload.locale === "zh" || payload.locale === "en") {
+        if (payload.locale === "zh-CN" || payload.locale === "en-US") {
           setLocale(payload.locale);
         }
         const normalizedThemeId = normalizeThemeId(payload.themeId);

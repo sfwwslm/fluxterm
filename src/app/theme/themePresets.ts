@@ -8,7 +8,7 @@ import type { ThemePreset } from "@/app/theme/themeContracts";
 /** 主题预设列表。 */
 export const themePresets: Record<ThemeId, ThemePreset> = {
   dark: {
-    label: { zh: "深色", en: "Dark" },
+    label: { "zh-CN": "深色", "en-US": "Dark" },
     foundation: {
       typography: {
         textPrimary: "#ffffff",
@@ -84,7 +84,7 @@ export const themePresets: Record<ThemeId, ThemePreset> = {
     },
   },
   light: {
-    label: { zh: "浅色", en: "Light" },
+    label: { "zh-CN": "浅色", "en-US": "Light" },
     foundation: {
       typography: {
         textPrimary: "#000000",

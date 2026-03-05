@@ -1,3 +1,5 @@
+import type { Locale } from "@/i18n";
+
 export type AiResponseLanguageStrategy = "follow_ui" | "follow_user_input";
 
 /** 终端域 AI 配置。 */
@@ -59,7 +61,7 @@ export type AiChatMessage = {
 export type AiSessionChatRequest = {
   sessionId: string;
   responseLanguageStrategy: AiResponseLanguageStrategy;
-  uiLanguage: "zh" | "en";
+  uiLanguage: Locale;
   messages: AiChatMessage[];
 };
 
@@ -68,7 +70,7 @@ export type AiSessionChatStreamRequest = {
   requestId: string;
   sessionId: string;
   responseLanguageStrategy: AiResponseLanguageStrategy;
-  uiLanguage: "zh" | "en";
+  uiLanguage: Locale;
   messages: AiChatMessage[];
 };
 
@@ -81,7 +83,7 @@ export type AiSessionChatResponse = {
 export type AiExplainSelectionRequest = {
   sessionId: string;
   responseLanguageStrategy: AiResponseLanguageStrategy;
-  uiLanguage: "zh" | "en";
+  uiLanguage: Locale;
   selectionText: string;
 };
 

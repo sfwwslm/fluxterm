@@ -231,7 +231,7 @@ mod tests {
             AiSessionChatRequest {
                 session_id: "missing".to_string(),
                 response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-                ui_language: "zh".to_string(),
+                ui_language: "zh-CN".to_string(),
                 messages: vec![],
             },
             &crate::ai_settings::AiSettings {
@@ -273,7 +273,7 @@ mod tests {
             AiSessionChatRequest {
                 session_id: "local-1".to_string(),
                 response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-                ui_language: "en".to_string(),
+                ui_language: "en-US".to_string(),
                 messages: vec![ChatMessage {
                     role: "user".to_string(),
                     content: "pwd".to_string(),
@@ -310,7 +310,7 @@ mod tests {
             AiExplainSelectionRequest {
                 session_id: "local-2".to_string(),
                 response_language_strategy: ResponseLanguageStrategy::FollowUi,
-                ui_language: "zh".to_string(),
+                ui_language: "zh-CN".to_string(),
                 selection_text: "   ".to_string(),
             },
             &crate::ai_settings::default_ai_settings_for_test(),
@@ -342,7 +342,7 @@ mod tests {
             AiExplainSelectionRequest {
                 session_id: "local-3".to_string(),
                 response_language_strategy: ResponseLanguageStrategy::FollowUi,
-                ui_language: "zh".to_string(),
+                ui_language: "zh-CN".to_string(),
                 selection_text: "abcdef".to_string(),
             },
             &crate::ai_settings::AiSettings {
@@ -389,7 +389,7 @@ mod tests {
             AiSessionChatRequest {
                 session_id: "local-4".to_string(),
                 response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-                ui_language: "zh".to_string(),
+                ui_language: "zh-CN".to_string(),
                 messages: vec![],
             },
             &crate::ai_settings::AiSettings {
@@ -439,7 +439,7 @@ mod tests {
             AiSessionChatRequest {
                 session_id: "local-5".to_string(),
                 response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-                ui_language: "zh".to_string(),
+                ui_language: "zh-CN".to_string(),
                 messages: vec![],
             },
             &crate::ai_settings::AiSettings {

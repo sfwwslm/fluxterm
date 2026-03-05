@@ -195,8 +195,8 @@ export default function Menus({
                 <Select
                   value={locale}
                   options={[
-                    { value: "zh", label: "中文" },
-                    { value: "en", label: "English" },
+                    { value: "zh-CN", label: t("language.zh-CN") },
+                    { value: "en-US", label: t("language.en-US") },
                   ]}
                   onChange={(next) => onLocaleChange(next as Locale)}
                   aria-label={t("settings.language")}

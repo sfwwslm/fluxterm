@@ -171,8 +171,8 @@ fn detect_explicit_environment(message: &str) -> Option<&'static str> {
 
 fn ui_language_name(value: &str) -> &'static str {
     match value {
-        "zh" => "Simplified Chinese",
-        "en" => "English",
+        "zh-CN" => "Simplified Chinese",
+        "en-US" => "English",
         _ => "the current UI language",
     }
 }
@@ -212,7 +212,7 @@ mod tests {
                 recent_terminal_output: vec!["uname -a".to_string()],
             },
             response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-            ui_language: "zh".to_string(),
+            ui_language: "zh-CN".to_string(),
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: "当前系统是什么？".to_string(),
@@ -249,7 +249,7 @@ mod tests {
                 recent_terminal_output: vec!["tail -f app.log".to_string()],
             },
             response_language_strategy: ResponseLanguageStrategy::FollowUi,
-            ui_language: "en".to_string(),
+            ui_language: "en-US".to_string(),
             selection_text: "error: permission denied".to_string(),
         };
 
@@ -278,7 +278,7 @@ mod tests {
                 recent_terminal_output: vec!["PS C:\\>".to_string()],
             },
             response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-            ui_language: "zh".to_string(),
+            ui_language: "zh-CN".to_string(),
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: "Linux 下怎么查看磁盘分区？".to_string(),
@@ -317,7 +317,7 @@ mod tests {
                 recent_terminal_output: vec!["PS C:\\>".to_string()],
             },
             response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-            ui_language: "zh".to_string(),
+            ui_language: "zh-CN".to_string(),
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: "linux ps命令".to_string(),
@@ -356,7 +356,7 @@ mod tests {
                 recent_terminal_output: vec!["PS C:\\>".to_string()],
             },
             response_language_strategy: ResponseLanguageStrategy::FollowUserInput,
-            ui_language: "zh".to_string(),
+            ui_language: "zh-CN".to_string(),
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: "帮我看下当前环境".to_string(),

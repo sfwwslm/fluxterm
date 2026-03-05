@@ -76,9 +76,11 @@ export default function useAppSettings({
   defaultThemeId,
 }: UseAppSettingsProps): UseAppSettingsResult {
   const [locale, setLocale] = useState<Locale>(() => {
-    const saved = localStorage.getItem("fluxterm.locale");
-    if (saved === "zh" || saved === "en") return saved;
-    return navigator.language?.startsWith("zh") ? "zh" : "en";
+    const saved = localStorage.getItem("fluxterm.locale") as Locale;
+    if (saved === "zh-CN" || saved === "en-US") return saved;
+
+    const sysLang = navigator.language.toLowerCase();
+    return sysLang.startsWith("zh") ? "zh-CN" : "en-US";
   });
   const [themeId, setThemeId] = useState<ThemeId>(() => {
     const saved = normalizeThemeId(localStorage.getItem("fluxterm.theme"));
@@ -117,7 +119,7 @@ export default function useAppSettings({
       if (parsed?.shellId) {
         pendingShellIdRef.current = parsed.shellId;
       }
-      if (parsed?.locale === "zh" || parsed?.locale === "en") {
+      if (parsed?.locale === "zh-CN" || parsed?.locale === "en-US") {
         setLocale(parsed.locale);
       }
       if (typeof parsed?.sftpEnabled === "boolean") {

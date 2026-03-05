@@ -152,16 +152,16 @@ async function createPersonalizeMenu(
     text: t("menu.app.language"),
     items: [
       await MenuItem.new({
-        id: "personalize-language-zh",
-        text: t("language.zh"),
-        action: () => setLocale("zh"),
-        enabled: locale !== "zh",
+        id: "personalize-language-zh-CN",
+        text: t("language.zh-CN"),
+        action: () => setLocale("zh-CN"),
+        enabled: locale !== "zh-CN",
       }),
       await MenuItem.new({
-        id: "personalize-language-en",
-        text: t("language.en"),
-        action: () => setLocale("en"),
-        enabled: locale !== "en",
+        id: "personalize-language-en-US",
+        text: t("language.en-US"),
+        action: () => setLocale("en-US"),
+        enabled: locale !== "en-US",
       }),
     ],
   });

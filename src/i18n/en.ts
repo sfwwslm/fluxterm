@@ -135,8 +135,8 @@ export const en = {
   "config.directory.configUnavailable":
     "Configuration directory is unavailable",
   "config.directory.dataUnavailable": "Data directory is unavailable",
-  "language.zh": "Chinese",
-  "language.en": "English",
+  "language.zh-CN": "Chinese (S)",
+  "language.en-US": "English",
   "settings.language": "Language",
   "settings.theme": "Theme",
   "settings.shell": "Default Shell",
