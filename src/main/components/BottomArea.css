@@ -305,7 +305,7 @@
   border-top: 1px solid var(--border-soft);
 }
 
-.quickbar-manager-v2 {
+.quickbar-manager {
   display: grid;
   grid-template-columns: minmax(170px, 240px) minmax(320px, 1fr);
   grid-template-rows: auto minmax(260px, 1fr) auto;
@@ -446,7 +446,7 @@
     flex-wrap: wrap;
   }
 
-  .quickbar-manager-v2 {
+  .quickbar-manager {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto auto;
     grid-template-areas:

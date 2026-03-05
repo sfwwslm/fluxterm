@@ -713,7 +713,7 @@ export default function BottomArea({
         closeLabel={t("actions.close")}
         onClose={onCloseManager}
       >
-        <div className="quickbar-manager-v2">
+        <div className="quickbar-manager">
           <section className="qm-top">
             <Select
               value={selectedGroupId}
