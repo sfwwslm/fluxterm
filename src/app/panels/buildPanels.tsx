@@ -37,7 +37,7 @@ type BuildPanelsProps = {
   activeReconnectInfo: { attempt: number; delayMs: number } | null;
   isRemoteSession: boolean;
   isRemoteConnected: boolean;
-  progressBySession: Record<string, SftpProgress>;
+  transferProgress: SftpProgress | null;
   busyMessage: string | null;
   logEntries: LogEntry[];
   historyLoaded: boolean;
@@ -112,7 +112,7 @@ export function buildPanels(
     activeReconnectInfo,
     isRemoteSession,
     isRemoteConnected,
-    progressBySession,
+    transferProgress,
     busyMessage,
     logEntries,
     historyLoaded,
@@ -187,9 +187,7 @@ export function buildPanels(
     ),
     transfers: (
       <TransfersPanel
-        progress={
-          activeSessionId ? (progressBySession[activeSessionId] ?? null) : null
-        }
+        progress={transferProgress}
         busyMessage={busyMessage}
         entries={logEntries}
         onCancel={onCancelTransfer}

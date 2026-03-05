@@ -84,6 +84,11 @@ import {
   type FloatingFilesSnapshot,
 } from "@/features/sftp/core/floatingSync";
 import {
+  FLOATING_TRANSFERS_CHANNEL,
+  type FloatingTransfersMessage,
+  type FloatingTransfersSnapshot,
+} from "@/features/sftp/core/floatingTransfersSync";
+import {
   openLocalFile,
   openRemoteFileViaCache,
 } from "@/features/file-open/core/commands";
@@ -367,6 +372,8 @@ export default function AppShell() {
   const activeResourceMonitorKeyRef = useRef("");
   const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
     useState<FloatingFilesSnapshot | null>(null);
+  const [floatingTransfersSnapshot, setFloatingTransfersSnapshot] =
+    useState<FloatingTransfersSnapshot | null>(null);
   const [floatingHistorySnapshot, setFloatingHistorySnapshot] =
     useState<FloatingHistorySnapshot | null>(null);
   const [floatingHistorySearchQuery, setFloatingHistorySearchQuery] =
@@ -680,6 +687,7 @@ export default function AppShell() {
   }, [sessionState.activeSessionId]);
 
   const isFloatingFilesPanel = floatingPanelKey === "files";
+  const isFloatingTransfersPanel = floatingPanelKey === "transfers";
   const isFloatingHistoryPanel = floatingPanelKey === "history";
   const isFloatingAiPanel = floatingPanelKey === "ai";
 
@@ -1272,6 +1280,69 @@ export default function AppShell() {
     ],
   });
 
+  useFloatingPanelSnapshotSync<FloatingTransfersMessage>({
+    channelName: FLOATING_TRANSFERS_CHANNEL,
+    floatingPanelKey,
+    isFloatingPanel: isFloatingTransfersPanel,
+    broadcastSnapshot: (channel) => {
+      const activeSessionId = sessionState.activeSessionId;
+      const payload: FloatingTransfersSnapshot = {
+        activeSessionId,
+        progress: activeSessionId
+          ? (sftpState.progressBySession[activeSessionId] ?? null)
+          : null,
+        busyMessage: sessionState.busyMessage,
+        entries: sessionState.logEntries,
+      };
+      channel.postMessage({
+        type: "transfers:snapshot",
+        payload,
+      } satisfies FloatingTransfersMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "transfers:request-snapshot": {
+          const activeSessionId = sessionState.activeSessionId;
+          const payload: FloatingTransfersSnapshot = {
+            activeSessionId,
+            progress: activeSessionId
+              ? (sftpState.progressBySession[activeSessionId] ?? null)
+              : null,
+            busyMessage: sessionState.busyMessage,
+            entries: sessionState.logEntries,
+          };
+          channel.postMessage({
+            type: "transfers:snapshot",
+            payload,
+          } satisfies FloatingTransfersMessage);
+          break;
+        }
+        case "transfers:cancel":
+          cancelTransfer().catch(() => {});
+          break;
+        case "transfers:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "transfers:snapshot") {
+        setFloatingTransfersSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "transfers:request-snapshot",
+      } satisfies FloatingTransfersMessage);
+    },
+    deps: [
+      cancelTransfer,
+      sessionState.activeSessionId,
+      sessionState.busyMessage,
+      sessionState.logEntries,
+      sftpState.progressBySession,
+    ],
+  });
+
   useFloatingPanelSnapshotSync<FloatingHistoryMessage>({
     channelName: FLOATING_HISTORY_CHANNEL,
     floatingPanelKey,
@@ -1515,6 +1586,11 @@ export default function AppShell() {
       FLOATING_FILES_CHANNEL,
       isFloatingFilesPanel,
     );
+  const postFloatingTransfersMessage =
+    useFloatingPanelMessagePoster<FloatingTransfersMessage>(
+      FLOATING_TRANSFERS_CHANNEL,
+      isFloatingTransfersPanel,
+    );
   const postFloatingHistoryMessage =
     useFloatingPanelMessagePoster<FloatingHistoryMessage>(
       FLOATING_HISTORY_CHANNEL,
@@ -1558,6 +1634,33 @@ export default function AppShell() {
       sessionState.isRemoteSession,
       sftpState.currentPath,
       sftpState.entries,
+    ],
+  );
+
+  // 传输面板在浮动窗口中仅消费主窗口快照，避免浮窗重建本地状态后丢失当前任务上下文。
+  const transfersPanelState = useMemo(
+    () =>
+      isFloatingTransfersPanel
+        ? {
+            progress: floatingTransfersSnapshot?.progress ?? null,
+            busyMessage: floatingTransfersSnapshot?.busyMessage ?? null,
+            entries: floatingTransfersSnapshot?.entries ?? [],
+          }
+        : {
+            progress: sessionState.activeSessionId
+              ? (sftpState.progressBySession[sessionState.activeSessionId] ??
+                null)
+              : null,
+            busyMessage: sessionState.busyMessage,
+            entries: sessionState.logEntries,
+          },
+    [
+      floatingTransfersSnapshot,
+      isFloatingTransfersPanel,
+      sessionState.activeSessionId,
+      sessionState.busyMessage,
+      sessionState.logEntries,
+      sftpState.progressBySession,
     ],
   );
 
@@ -1642,6 +1745,20 @@ export default function AppShell() {
       uploadDroppedPaths,
       cancelTransfer,
     ],
+  );
+
+  const transfersPanelActions = useMemo(
+    () =>
+      isFloatingTransfersPanel
+        ? {
+            cancel: async () => {
+              postFloatingTransfersMessage({ type: "transfers:cancel" });
+            },
+          }
+        : {
+            cancel: cancelTransfer,
+          },
+    [cancelTransfer, isFloatingTransfersPanel, postFloatingTransfersMessage],
   );
 
   const historyPanelState = useMemo(
@@ -1781,9 +1898,9 @@ export default function AppShell() {
         activeReconnectInfo: sessionState.activeReconnectInfo,
         isRemoteSession: filesPanelState.isRemoteSession,
         isRemoteConnected: filesPanelState.isRemoteConnected,
-        progressBySession: sftpState.progressBySession,
-        busyMessage: sessionState.busyMessage,
-        logEntries: sessionState.logEntries,
+        transferProgress: transfersPanelState.progress,
+        busyMessage: transfersPanelState.busyMessage,
+        logEntries: transfersPanelState.entries,
         historyLoaded: historyPanelState.loaded,
         hasActiveSession: historyPanelState.hasActiveSession,
         historyLiveCapture: historyPanelState.liveCapture,
@@ -1842,7 +1959,7 @@ export default function AppShell() {
         onUploadFile: filesPanelActions.uploadFile,
         onUploadDroppedPaths: filesPanelActions.uploadDroppedPaths,
         onDownloadFile: filesPanelActions.downloadFile,
-        onCancelTransfer: filesPanelActions.cancelTransfer,
+        onCancelTransfer: transfersPanelActions.cancel,
         onCreateFolder: filesPanelActions.createFolder,
         onRenameEntry: filesPanelActions.rename,
         onRemoveEntry: filesPanelActions.remove,
@@ -1861,9 +1978,8 @@ export default function AppShell() {
       sessionState.activeReconnectInfo,
       filesPanelState.isRemoteSession,
       filesPanelState.isRemoteConnected,
-      sftpState.progressBySession,
-      sessionState.busyMessage,
-      sessionState.logEntries,
+      transfersPanelActions,
+      transfersPanelState,
       historyPanelActions,
       historyPanelState,
       importOpenSshConfig,
