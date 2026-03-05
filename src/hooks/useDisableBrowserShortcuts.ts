@@ -1,5 +1,10 @@
 import { useEffect } from "react";
 
+/**
+ * 浏览器快捷键禁用 Hook。
+ * 职责：拦截并禁用浏览器常用的原生快捷键（如 F5 刷新、F12 开发者工具、Ctrl+W 关闭窗口等），
+ * 确保应用作为桌面终端的交互完整性，防止用户误触导致会话中断。
+ */
 type Options = {
   enabled?: boolean;
 };
@@ -75,13 +80,13 @@ const isBlockedShortcut = (event: KeyboardEvent) => {
   return false;
 };
 
-/** 禁用浏览器级快捷键，避免刷新/关闭/开发者工具等打断应用。 */
 export const useDisableBrowserShortcuts = ({
   enabled = true,
 }: Options = {}) => {
   useEffect(() => {
     if (!enabled) return;
 
+    /** 拦截键盘按下事件。 */
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isBlockedShortcut(event)) {
         event.preventDefault();
@@ -89,16 +94,10 @@ export const useDisableBrowserShortcuts = ({
       }
     };
 
-    const handleContextMenu = (event: MouseEvent) => {
-      event.preventDefault();
-    };
-
     window.addEventListener("keydown", handleKeyDown, true);
-    window.addEventListener("contextmenu", handleContextMenu, true);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
-      window.removeEventListener("contextmenu", handleContextMenu, true);
     };
   }, [enabled]);
 };

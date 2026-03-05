@@ -23,6 +23,7 @@ import ProfileModal from "@/components/terminal/modals/ProfileModal";
 import NoticeHost from "@/components/ui/notice-host";
 import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
+import { usePreventBrowserDefaults } from "@/hooks/usePreventBrowserDefaults";
 import useProfiles from "@/hooks/profile/useProfiles";
 import useAppSettings from "@/hooks/settings/useAppSettings";
 import {
@@ -312,6 +313,7 @@ export default function AppShell() {
   const { pushToast } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
   useDisableBrowserShortcuts();
+  usePreventBrowserDefaults();
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeConfigSection, setActiveConfigSection] =
