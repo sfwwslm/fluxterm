@@ -2,16 +2,16 @@
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { WidgetSlot as WidgetSlotKey } from "@/layout/types";
-import type { PanelKey } from "@/types";
+import type { WidgetKey } from "@/types";
 import WidgetTitleBar from "./WidgetTitleBar";
 
 type WidgetSlotProps = {
   slot: WidgetSlotKey;
-  active: PanelKey | null;
-  allWidgets: PanelKey[];
-  labels: Record<PanelKey, string>;
+  active: WidgetKey | null;
+  allWidgets: WidgetKey[];
+  labels: Record<WidgetKey, string>;
   body: React.ReactNode;
-  onReplace: (slot: WidgetSlotKey, key: PanelKey) => void;
+  onReplace: (slot: WidgetSlotKey, key: WidgetKey) => void;
   onFloat: (slot: WidgetSlotKey) => void;
   onClose?: (slot: WidgetSlotKey) => void;
   onSplit?: (slot: WidgetSlotKey) => void;
@@ -35,7 +35,7 @@ export default function WidgetSlot({
   t,
 }: WidgetSlotProps) {
   return (
-    <section className={`panel widget-slot ${!active ? "empty" : ""}`}>
+    <section className={`widget widget-slot ${!active ? "empty" : ""}`}>
       <WidgetTitleBar
         active={active}
         allWidgets={allWidgets}
@@ -48,11 +48,11 @@ export default function WidgetSlot({
         closeDisabled={closeDisabled}
         t={t}
       />
-      <div className="panel-body">
+      <div className="widget-body">
         {active ? (
           body
         ) : (
-          <div className="empty-hint">{t("panel.emptyHint")}</div>
+          <div className="empty-hint">{t("widget.emptyHint")}</div>
         )}
       </div>
     </section>

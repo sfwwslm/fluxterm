@@ -9,6 +9,23 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 - `crates/engine/`: Core engine for SSH/SFTP and terminal features.
 - `src-tauri/`: Tauri desktop shell.
 - `ARCHITECTURE_V1.md`: High-level architecture notes.
+- `docs/window-app-model.md`: Window model and ownership rules for Main/Widget/SubApp.
+
+## Window Model & Code Ownership
+
+- Main (Tauri main window) is the global orchestrator for layout/state/window lifecycle.
+- Widgets can render in main layout or floating windows; floating widgets must follow snapshot-sync pattern.
+- SubApps are independent Tauri windows and must not be rendered inside main layout.
+- Non-generic code must stay in its owning domain (`features/widgets/subapps`) and should not be placed in `shared`.
+- `widgets` must not depend on internal code of `subapps`; `subapps` should not back-reference widget internals.
+- Naming rules are strict: use `main` for main-window shell naming and `widget` for component unit naming; do not use `panel` as a synonym for `widget`.
+
+## Hooks & Constants Ownership
+
+- Constants are centrally managed under `src/constants`.
+- Hooks are centrally managed under `src/hooks` by default.
+- If a hook can be clearly classified as Main/Widget/SubApp runtime-shell specific, place it under `src/main/hooks`, `src/widgets/<id>/hooks`, or `src/subapps/<id>/hooks` respectively.
+- Domain logic should still prefer `src/features/<domain>`.
 
 ## Build, Test, and Development Commands
 

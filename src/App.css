@@ -102,8 +102,8 @@ body,
     inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent),
     inset 0 -8px 14px color-mix(in srgb, #000 18%, transparent);
   --chrome-titlebar-bg: var(--surface-header-strong);
-  --chrome-panel-bg: var(--surface);
-  --chrome-panel-header-bg: var(--surface-header);
+  --chrome-widget-bg: var(--surface);
+  --chrome-widget-header-bg: var(--surface-header);
   --chrome-terminal-bg: var(--surface-strong);
   --chrome-terminal-header-bg: var(--surface-header-strong);
   --chrome-terminal-pane-bg: color-mix(
@@ -156,7 +156,7 @@ body,
   );
   --chrome-session-group-item-bg: var(--surface-alt);
   --chrome-session-tab-bg: var(--tab-bg);
-  --chrome-quick-command-panel-bg: color-mix(
+  --chrome-quick-command-widget-bg: color-mix(
     in srgb,
     var(--surface) 74%,
     transparent
@@ -176,12 +176,12 @@ body,
     var(--surface-header-strong) var(--chrome-surface-alpha),
     transparent
   );
-  --chrome-panel-bg: color-mix(
+  --chrome-widget-bg: color-mix(
     in srgb,
     var(--surface) var(--chrome-surface-alpha),
     transparent
   );
-  --chrome-panel-header-bg: color-mix(
+  --chrome-widget-header-bg: color-mix(
     in srgb,
     var(--surface-header) var(--chrome-surface-alpha),
     transparent
@@ -278,7 +278,7 @@ body,
     var(--tab-bg) var(--chrome-surface-alpha),
     transparent
   );
-  --chrome-quick-command-panel-bg: color-mix(
+  --chrome-quick-command-widget-bg: color-mix(
     in srgb,
     var(--surface) var(--chrome-surface-alpha),
     transparent
@@ -580,14 +580,14 @@ select {
   justify-content: flex-end;
 }
 
-.panel-toggles {
+.widget-toggles {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.panel-toggles button {
+.widget-toggles button {
   padding: 8px 14px;
   background: var(--button-bg);
   border: 1px solid transparent;
@@ -597,12 +597,12 @@ select {
   transition: 0.2s ease;
 }
 
-.panel-toggles button.active {
+.widget-toggles button.active {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.panel-toggles button:hover {
+.widget-toggles button:hover {
   border-color: var(--accent-soft);
 }
 
@@ -653,8 +653,8 @@ button:disabled {
   padding-bottom: 4px;
 }
 
-.panel {
-  background: var(--chrome-panel-bg);
+\.widget {
+  background: var(--chrome-widget-bg);
   border: 1px solid var(--border-weak);
   border-radius: 16px;
   display: flex;
@@ -663,18 +663,18 @@ button:disabled {
   min-height: 0;
 }
 
-.panel-header {
+.widget-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: var(--chrome-panel-header-bg);
+  background: var(--chrome-widget-header-bg);
   border-bottom: 1px solid var(--border-soft);
   font-size: 13px;
   color: var(--text-soft);
 }
 
-.panel-header select {
+.widget-header select {
   background: var(--chrome-input-bg);
   color: var(--text-primary);
   border-radius: 8px;
@@ -682,38 +682,38 @@ button:disabled {
   padding: 4px 8px;
 }
 
-.panel-body {
+.widget-body {
   padding: 16px;
   overflow: auto;
   height: 100%;
   min-height: 0;
 }
 
-/* 小组件滚动容器统一滚动条样式（SFTP/HostPanel 使用其独立样式）。 */
-.panel-body {
+/* 小组件滚动容器统一滚动条样式（SFTP/HostWidget 使用其独立样式）。 */
+.widget-body {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
     transparent;
 }
 
-.panel-body::-webkit-scrollbar {
+.widget-body::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
-.panel-body::-webkit-scrollbar-track {
+.widget-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.panel-body::-webkit-scrollbar-thumb {
+.widget-body::-webkit-scrollbar-thumb {
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
   background: color-mix(in srgb, var(--text-muted) 55%, transparent);
 }
 
-.panel-body::-webkit-scrollbar-thumb:hover {
+.widget-body::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--text-primary) 45%, transparent);
 }
 
@@ -780,18 +780,18 @@ input[type="number"] {
   min-height: 0;
 }
 
-.widget-slot.empty .panel-body {
+.widget-slot.empty .widget-body {
   display: flex;
   align-items: center;
 }
 
-.panel-resizer {
+.widget-resizer {
   position: relative;
   background: var(--resizer-bg);
   transition: background 0.2s ease;
 }
 
-.panel-resizer::before {
+.widget-resizer::before {
   content: "";
   position: absolute;
   inset: 20% 35%;
@@ -801,20 +801,20 @@ input[type="number"] {
   transition: opacity 0.2s ease;
 }
 
-.panel-resizer:hover {
+.widget-resizer:hover {
   background: var(--accent-subtle);
 }
 
-.panel-resizer:hover::before {
+.widget-resizer:hover::before {
   opacity: 1;
 }
 
-.panel-resizer.vertical {
+.widget-resizer.vertical {
   cursor: col-resize;
   height: 100%;
 }
 
-.panel-resizer.horizontal {
+.widget-resizer.horizontal {
   height: var(--bottom-resizer, 8px);
   margin: 0 var(--workspace-pad, 16px);
   cursor: row-resize;

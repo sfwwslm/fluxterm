@@ -1,14 +1,14 @@
 /** 左右组件容器，承载多个槽位并支持折叠与动态分割的布局渲染。 */
 import type React from "react";
 import type { Translate } from "@/i18n";
-import type { PanelKey } from "@/types";
+import type { WidgetKey } from "@/types";
 import type { WidgetSide, WidgetSlot } from "@/layout/types";
 import { MAX_SIDE_SLOTS } from "@/layout/model";
 import WidgetSlotView from "./WidgetSlot";
 
 type SlotData = {
   slot: WidgetSlot;
-  active: PanelKey | null;
+  active: WidgetKey | null;
   body: React.ReactNode;
 };
 
@@ -17,9 +17,9 @@ type WidgetContainerProps = {
   visible: boolean;
   collapsed: boolean;
   slots: SlotData[];
-  available: PanelKey[];
-  labels: Record<PanelKey, string>;
-  onReplace: (slot: WidgetSlot, key: PanelKey) => void;
+  available: WidgetKey[];
+  labels: Record<WidgetKey, string>;
+  onReplace: (slot: WidgetSlot, key: WidgetKey) => void;
   onFloat: (slot: WidgetSlot) => void;
   onCloseWidget: (slot: WidgetSlot) => void;
   onToggleSplit: (side: WidgetSide) => void;

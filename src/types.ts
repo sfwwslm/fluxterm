@@ -205,7 +205,7 @@ export type CommandHistoryStore = {
 };
 
 /** 功能面板类型。 */
-export type PanelKey =
+export type WidgetKey =
   | "profiles"
   | "files"
   | "transfers"
@@ -213,7 +213,7 @@ export type PanelKey =
   | "history"
   | "ai";
 /** 功能面板区域。 */
-export type PanelArea = "left" | "right" | "bottom";
+export type WidgetArea = "left" | "right" | "bottom";
 
 /** 主题标识。 */
 export type ThemeId = "dark" | "light";

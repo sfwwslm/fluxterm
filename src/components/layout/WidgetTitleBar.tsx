@@ -2,16 +2,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Translate } from "@/i18n";
-import type { PanelKey } from "@/types";
+import type { WidgetKey } from "@/types";
 import { IoClose, IoSettings } from "react-icons/io5";
 import Button from "@/components/ui/button";
 import "@/components/layout/WidgetTitleBar.css";
 
 type WidgetTitleBarProps = {
-  active: PanelKey | null;
-  allWidgets: PanelKey[];
-  labels: Record<PanelKey, string>;
-  onReplace: (key: PanelKey) => void;
+  active: WidgetKey | null;
+  allWidgets: WidgetKey[];
+  labels: Record<WidgetKey, string>;
+  onReplace: (key: WidgetKey) => void;
   onFloat?: () => void;
   onClose?: () => void;
   onSplit?: () => void;
@@ -55,7 +55,7 @@ export default function WidgetTitleBar({
     const anchorRect = anchorRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const panelHeight = menuRef.current?.offsetHeight ?? MENU_FALLBACK_HEIGHT;
+    const menuHeight = menuRef.current?.offsetHeight ?? MENU_FALLBACK_HEIGHT;
     const left = Math.min(
       Math.max(VIEWPORT_GAP, anchorRect.right - MENU_WIDTH),
       viewportWidth - MENU_WIDTH - VIEWPORT_GAP,
@@ -63,7 +63,7 @@ export default function WidgetTitleBar({
     const spaceBelow =
       viewportHeight - anchorRect.bottom - MENU_GAP - VIEWPORT_GAP;
     const spaceAbove = anchorRect.top - MENU_GAP - VIEWPORT_GAP;
-    const openUp = spaceBelow < panelHeight && spaceAbove > spaceBelow;
+    const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
     const maxHeight = Math.max(
       MIN_MENU_HEIGHT,
       openUp ? spaceAbove : spaceBelow,
@@ -71,7 +71,7 @@ export default function WidgetTitleBar({
     const top = openUp
       ? Math.max(
           VIEWPORT_GAP,
-          anchorRect.top - MENU_GAP - Math.min(panelHeight, maxHeight),
+          anchorRect.top - MENU_GAP - Math.min(menuHeight, maxHeight),
         )
       : anchorRect.bottom + MENU_GAP;
     setMenuPosition({ left, top, maxHeight });
@@ -104,7 +104,7 @@ export default function WidgetTitleBar({
     };
   }, [menuOpen, updateMenuPosition]);
 
-  const displayName = active ? labels[active] : t("panel.empty");
+  const displayName = active ? labels[active] : t("widget.empty");
   const componentItems = useMemo(
     () => allWidgets.filter((key) => Boolean(labels[key])),
     [allWidgets, labels],
@@ -140,7 +140,7 @@ export default function WidgetTitleBar({
               >
                 <div className="widget-settings-group">
                   <div className="widget-settings-group-title">
-                    {t("panel.group.actions")}
+                    {t("widget.group.actions")}
                   </div>
                   {onSplit && (
                     <Button
@@ -166,13 +166,13 @@ export default function WidgetTitleBar({
                     }}
                     disabled={!active}
                   >
-                    {t("panel.float")}
+                    {t("widget.float")}
                   </Button>
                 </div>
                 <div className="widget-settings-divider" />
                 <div className="widget-settings-group">
                   <div className="widget-settings-group-title">
-                    {t("panel.group.components")}
+                    {t("widget.group.components")}
                   </div>
                   {componentItems.map((item) => (
                     <Button

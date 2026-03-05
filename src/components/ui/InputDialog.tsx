@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Modal from "@/components/terminal/modals/Modal";
+import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import "@/components/ui/InputDialog.css";
 

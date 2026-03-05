@@ -1,0 +1,2401 @@
+/**
+ * 应用编排层。
+ * 职责：聚合 settings/profiles/layout/session/terminal/sftp 等领域能力并组装主界面。
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import "@xterm/xterm/css/xterm.css";
+import "@/App.css";
+import "@/components/ui/base-input.css";
+import { info, warn } from "@tauri-apps/plugin-log";
+import { save } from "@tauri-apps/plugin-dialog";
+import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { translations, type Translate, type TranslationKey } from "@/i18n";
+import ConfigModal, {
+  type ConfigSectionItem,
+  type ConfigSectionKey,
+} from "@/components/layout/ConfigModal";
+import TitleBar from "@/components/layout/TitleBar";
+import FloatingShell from "@/main/components/FloatingShell";
+import Workspace from "@/main/components/Workspace";
+import BottomArea from "@/main/components/BottomArea";
+import TerminalWidget from "@/widgets/terminal/components/TerminalWidget";
+import AboutModal from "@/main/components/modals/AboutModal";
+import ProfileModal from "@/main/components/modals/ProfileModal";
+import NoticeHost from "@/components/ui/notice-host";
+import { useNotices } from "@/hooks/useNotices";
+import { useDisableBrowserShortcuts } from "@/main/hooks/useDisableBrowserShortcuts";
+import { usePreventBrowserDefaults } from "@/main/hooks/usePreventBrowserDefaults";
+import useProfiles from "@/hooks/useProfiles";
+import useAppSettings from "@/hooks/useAppSettings";
+import {
+  DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA,
+  MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+  MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
+} from "@/hooks/useAppSettings";
+import useAiSettings from "@/hooks/useAiSettings";
+import useSessionSettings from "@/hooks/useSessionSettings";
+import useLayoutState from "@/main/hooks/useLayoutState";
+import useFloatingWidgets from "@/main/hooks/useFloatingWidgets";
+import {
+  useFloatingWidgetMessagePoster,
+  useFloatingWidgetSnapshotSync,
+} from "@/main/hooks/useFloatingWidgetSync";
+import useMacAppMenu from "@/main/hooks/useMacAppMenu";
+import useQuickBarState from "@/main/hooks/useQuickBarState";
+import useSubApps from "@/main/hooks/useSubApps";
+import { moveWidgetToSlot, widgetKeys } from "@/layout/model";
+import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
+import type {
+  HostProfile,
+  WidgetKey,
+  SessionResourceSnapshot,
+  ThemeId,
+} from "@/types";
+import { isMacOS } from "@/utils/platform";
+import useSessionController from "@/hooks/useSessionController";
+import useTerminalController from "@/hooks/useTerminalController";
+import useSftpController from "@/hooks/useSftpController";
+import useCommandHistoryState from "@/hooks/useCommandHistoryState";
+import useAiState from "@/hooks/useAiState";
+import {
+  WIDGET_AI_CHANNEL,
+  type FloatingAiMessage,
+  type FloatingAiSnapshot,
+} from "@/features/ai/core/widgetSync";
+import { createHistoryAutocompleteProvider } from "@/features/command-history/core/autocomplete";
+import { filterHistoryItems } from "@/features/command-history/core/query";
+import {
+  WIDGET_HISTORY_CHANNEL,
+  type FloatingHistoryMessage,
+  type FloatingHistorySnapshot,
+} from "@/features/command-history/core/widgetSync";
+import {
+  WIDGET_EVENTS_CHANNEL,
+  type FloatingEventsMessage,
+  type FloatingEventsSnapshot,
+} from "@/features/session/core/widgetEventsSync";
+import { MIN_RESOURCE_MONITOR_INTERVAL_SEC } from "@/hooks/useSessionSettings";
+import {
+  startLocalResourceMonitor,
+  startSshResourceMonitor,
+  stopResourceMonitor,
+} from "@/features/resource/core/commands";
+import { themePresets } from "@/main/theme/themePresets";
+import { buildThemeCssVars } from "@/main/theme/buildThemeCssVars";
+import { buildTerminalTheme } from "@/main/theme/buildTerminalTheme";
+import { buildWidgets } from "@/main/widgets/buildWidgets";
+import {
+  WIDGET_FILES_CHANNEL,
+  type FloatingFilesMessage,
+  type FloatingFilesSnapshot,
+} from "@/features/sftp/core/widgetSync";
+import {
+  WIDGET_TRANSFERS_CHANNEL,
+  type FloatingTransfersMessage,
+  type FloatingTransfersSnapshot,
+} from "@/features/sftp/core/widgetTransfersSync";
+import {
+  openLocalFile,
+  openRemoteFileViaCache,
+} from "@/features/file-open/core/commands";
+import { subscribeTauri } from "@/shared/tauri/events";
+import { callTauri } from "@/shared/tauri/commands";
+import { getBackgroundImageAssetPath } from "@/shared/config/paths";
+import { extractErrorMessage } from "@/shared/errors/appError";
+
+const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
+  profiles: "widget.profiles",
+  files: "widget.files",
+  transfers: "widget.transfers",
+  events: "widget.events",
+  history: "widget.history",
+  ai: "widget.ai",
+};
+const BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA = 0;
+
+function clampBackgroundImageSurfaceAlpha(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA;
+  return Math.min(
+    MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
+    Math.max(MIN_BACKGROUND_IMAGE_SURFACE_ALPHA, value),
+  );
+}
+
+function formatMessage(
+  message: string,
+  vars?: Record<string, string | number>,
+) {
+  if (!vars) return message;
+  return Object.entries(vars).reduce(
+    (text, [key, value]) => text.split(`{${key}}`).join(String(value)),
+    message,
+  );
+}
+
+function getErrorMessage(error: unknown) {
+  return extractErrorMessage(error);
+}
+
+function formatOpenSshImportToast(
+  t: Translate,
+  summary: {
+    addedCount: number;
+    skippedCount: number;
+    conflictCount: number;
+    unsupportedCount: number;
+    errorCount: number;
+  },
+) {
+  const parts = [
+    summary.addedCount > 0
+      ? t("host.import.item.added", { count: summary.addedCount })
+      : null,
+    summary.skippedCount > 0
+      ? t("host.import.item.skipped", { count: summary.skippedCount })
+      : null,
+    summary.conflictCount > 0
+      ? t("host.import.item.conflict", { count: summary.conflictCount })
+      : null,
+    summary.unsupportedCount > 0
+      ? t("host.import.item.unsupported", {
+          count: summary.unsupportedCount,
+        })
+      : null,
+    summary.errorCount > 0
+      ? t("host.import.item.error", { count: summary.errorCount })
+      : null,
+  ].filter(Boolean);
+
+  return `${t("host.import.done")}：${parts.join("，")}`;
+}
+
+/** 将快捷命令中的常见转义序列还原为真实控制字符。 */
+function decodeQuickCommandEscapes(input: string) {
+  let output = "";
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (char !== "\\") {
+      output += char;
+      continue;
+    }
+    const next = input[i + 1];
+    if (next === "n") {
+      output += "\n";
+      i += 1;
+      continue;
+    }
+    if (next === "r") {
+      output += "\r";
+      i += 1;
+      continue;
+    }
+    if (next === "t") {
+      output += "\t";
+      i += 1;
+      continue;
+    }
+    if (next === "\\") {
+      output += "\\";
+      i += 1;
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
+/** 统一终端提交符，避免 LF 在部分 shell 中触发续行而不执行。 */
+function normalizeQuickCommandForSubmit(input: string) {
+  // 在终端交互里，提交命令应使用 CR。将用户写的 LF/CRLF 统一折叠为 CR。
+  return input.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
+}
+
+function resolvePromptWorkingDirectory(
+  rawPath: string,
+  homePath: string | null,
+) {
+  // 终端层只会上报 prompt 里看得到的路径字面量。
+  // 这里负责把 `/abs/path` 或 `~` / `~/subdir` 还原成 SFTP 可以直接打开的绝对路径。
+  if (rawPath.startsWith("/")) return rawPath;
+  if (!rawPath.startsWith("~") || !homePath) return null;
+  if (rawPath === "~") return homePath;
+  return `${homePath.replace(/\/+$/, "")}/${rawPath.slice(2)}`;
+}
+
+/** 应用主界面编排层。 */
+export default function AppShell() {
+  const themeIds = useMemo(() => Object.keys(themePresets) as ThemeId[], []);
+  const {
+    locale,
+    setLocale,
+    themeId,
+    setThemeId,
+    shellId,
+    setShellId,
+    sftpEnabled,
+    setSftpEnabled,
+    fileDefaultEditorPath,
+    setFileDefaultEditorPath,
+    backgroundImageEnabled,
+    setBackgroundImageEnabled,
+    backgroundImageAsset,
+    setBackgroundImageAsset,
+    backgroundImageSurfaceAlpha,
+    setBackgroundImageSurfaceAlpha,
+    availableShells,
+    settingsLoaded,
+  } = useAppSettings({
+    themeIds,
+    defaultThemeId: "dark",
+  });
+  const {
+    aiAvailable,
+    aiUnavailableReason,
+    selectionMaxChars: aiSelectionMaxChars,
+    sessionRecentOutputMaxChars: aiSessionRecentOutputMaxChars,
+    debugLoggingEnabled: aiDebugLoggingEnabled,
+    activeOpenaiConfigId: aiActiveOpenaiConfigId,
+    openaiConfigs: aiOpenaiConfigs,
+    activeOpenaiConfig,
+    setSelectionMaxChars: setAiSelectionMaxChars,
+    setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
+    setDebugLoggingEnabled: setAiDebugLoggingEnabled,
+    setActiveOpenaiConfigId: setAiActiveOpenaiConfigId,
+    updateOpenaiConfigName,
+    updateOpenaiConfigBaseUrl,
+    updateOpenaiConfigModel,
+    addOpenaiConfig,
+    removeOpenaiConfig,
+    testOpenAiConnection,
+    replaceOpenaiApiKey,
+    clearOpenaiApiKey,
+  } = useAiSettings();
+  // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
+  const {
+    webLinksEnabled,
+    commandAutocompleteEnabled,
+    selectionAutoCopyEnabled,
+    scrollback,
+    terminalPathSyncEnabled,
+    resourceMonitorEnabled,
+    resourceMonitorIntervalSec,
+    hostKeyPolicy,
+    setWebLinksEnabled,
+    setCommandAutocompleteEnabled,
+    setSelectionAutoCopyEnabled,
+    setScrollback,
+    setTerminalPathSyncEnabled,
+    setResourceMonitorEnabled,
+    setResourceMonitorIntervalSec,
+    setHostKeyPolicy,
+  } = useSessionSettings();
+  const activeThemePreset = themePresets[themeId];
+  const isBackgroundImageRequested =
+    backgroundImageEnabled && !!backgroundImageAsset;
+  const normalizedBackgroundImageSurfaceAlpha = useMemo(
+    () => clampBackgroundImageSurfaceAlpha(backgroundImageSurfaceAlpha),
+    [backgroundImageSurfaceAlpha],
+  );
+  const activeTerminalTheme = useMemo(
+    () =>
+      buildTerminalTheme(activeThemePreset, {
+        translucentBackground: isBackgroundImageRequested,
+        // 终端外层 pane 已承担主要半透明层，xterm 画布只保留极轻底色避免双层叠深。
+        translucentBackgroundAlpha: BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA,
+        // 终端会话区在背景图模式下改用语义 surface 基色，避免与其它面板出现色相割裂。
+        translucentBackgroundBase: activeThemePreset.semantic.surface.strong,
+      }),
+    [activeThemePreset, isBackgroundImageRequested],
+  );
+  const {
+    profiles,
+    sshGroups,
+    activeProfileId,
+    editingProfile,
+    defaultProfile,
+    pickProfile,
+    saveProfile,
+    removeProfile,
+    importOpenSshConfig,
+    addGroup,
+    renameGroup,
+    removeGroup,
+    moveProfileToGroup,
+  } = useProfiles();
+  const { pushToast } = useNotices();
+  const [aboutOpen, setAboutOpen] = useState(false);
+  useDisableBrowserShortcuts();
+  usePreventBrowserDefaults();
+  const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [activeConfigSection, setActiveConfigSection] =
+    useState<ConfigSectionKey>("app-settings");
+  const [configModalSections, setConfigModalSections] = useState<
+    ConfigSectionItem[]
+  >([{ key: "app-settings", label: "" }]);
+  const [footerVisibility, setFooterVisibility] = useState({
+    quickbar: true,
+    statusbar: true,
+  });
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileModalMode, setProfileModalMode] = useState<"new" | "edit">(
+    "new",
+  );
+  const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
+  const [connectingProfileId, setConnectingProfileId] = useState<string | null>(
+    null,
+  );
+  const latestConnectRequestIdRef = useRef(0);
+  const isMac = useMemo(() => isMacOS(), []);
+
+  const t: Translate = useMemo(
+    () => (key, vars) => formatMessage(translations[locale][key] ?? key, vars),
+    [locale],
+  );
+  const aiUnavailableMessage = useMemo(() => {
+    if (!aiUnavailableReason) return null;
+    if (aiUnavailableReason === "openai_incomplete") {
+      return t("ai.unavailable.openaiIncomplete");
+    }
+    return t("ai.unavailable.generic");
+  }, [aiUnavailableReason, t]);
+  const floatingWidgetKey = useMemo<WidgetKey | null>(() => {
+    const match = window.location.hash.match(/widget=([a-z]+)/i);
+    if (!match) return null;
+    const value = match[1];
+    if (value === "profiles") return "profiles";
+    if (value === "files") return "files";
+    if (value === "transfers") return "transfers";
+    if (value === "events") return "events";
+    if (value === "history") return "history";
+    if (value === "ai") return "ai";
+    if (value === "logs") return "events";
+    return null;
+  }, []);
+  const layoutMenuDisabled = Boolean(floatingWidgetKey);
+  const terminalSizeRef = useRef({ cols: 80, rows: 24 });
+  const activeResourceMonitorSessionIdRef = useRef<string | null>(null);
+  const activeResourceMonitorKeyRef = useRef("");
+  const [floatingFilesSnapshot, setFloatingFilesSnapshot] =
+    useState<FloatingFilesSnapshot | null>(null);
+  const [floatingTransfersSnapshot, setFloatingTransfersSnapshot] =
+    useState<FloatingTransfersSnapshot | null>(null);
+  const [floatingEventsSnapshot, setFloatingEventsSnapshot] =
+    useState<FloatingEventsSnapshot | null>(null);
+  const [floatingHistorySnapshot, setFloatingHistorySnapshot] =
+    useState<FloatingHistorySnapshot | null>(null);
+  const [floatingHistorySearchQuery, setFloatingHistorySearchQuery] =
+    useState("");
+  const [floatingAiSnapshot, setFloatingAiSnapshot] =
+    useState<FloatingAiSnapshot | null>(null);
+  const previousResourceSessionStateRef = useRef<string | null>(null);
+  const [resourceSnapshotsBySession, setResourceSnapshotsBySession] = useState<
+    Record<string, SessionResourceSnapshot>
+  >({});
+  const [terminalWorkingDirs, setTerminalWorkingDirs] = useState<
+    Record<string, { username: string | null; path: string }>
+  >({});
+  const [terminalHomeDirs, setTerminalHomeDirs] = useState<
+    Record<string, string>
+  >({});
+  const [lastSyncedTerminalPaths, setLastSyncedTerminalPaths] = useState<
+    Record<string, string>
+  >({});
+  const [terminalPathSyncStateBySession, setTerminalPathSyncStateBySession] =
+    useState<Record<string, "active" | "paused-mismatch" | "unsupported">>({});
+  const focusActiveTerminalRef = useRef<() => boolean>(() => false);
+
+  useEffect(() => {
+    const theme = activeThemePreset;
+    const cssVars = buildThemeCssVars(theme);
+    const root = document.documentElement;
+    root.dataset.theme = themeId;
+    Object.entries(cssVars).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+  }, [themeId, activeThemePreset]);
+
+  useEffect(() => {
+    // 透明度单独走独立链路，确保滑杆拖动时可即时生效，不受主题变量批量更新影响。
+    const root = document.documentElement;
+    root.style.setProperty(
+      "--chrome-surface-alpha",
+      `${Math.round(normalizedBackgroundImageSurfaceAlpha * 100)}%`,
+    );
+  }, [normalizedBackgroundImageSurfaceAlpha]);
+
+  useEffect(() => {
+    let disposed = false;
+    let blobUrl: string | null = null;
+    const root = document.documentElement;
+    const applyBackgroundImageMode = (enabled: boolean) => {
+      root.dataset.backgroundImageMode = enabled ? "on" : "off";
+    };
+    const applyDefaultBackground = () => {
+      root.style.setProperty("--app-bg-image", "none");
+      root.style.setProperty("--app-bg-overlay", "none");
+      applyBackgroundImageMode(false);
+    };
+
+    if (!backgroundImageEnabled || !backgroundImageAsset) {
+      applyDefaultBackground();
+      return;
+    }
+
+    const overlay =
+      themeId === "light"
+        ? "linear-gradient(0deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.36))"
+        : "linear-gradient(0deg, rgba(7, 10, 14, 0.42), rgba(7, 10, 14, 0.42))";
+    root.style.setProperty("--app-bg-overlay", overlay);
+
+    (async () => {
+      try {
+        const filePath =
+          await getBackgroundImageAssetPath(backgroundImageAsset);
+        const bytes = await readFile(filePath);
+        blobUrl = URL.createObjectURL(new Blob([bytes]));
+        if (disposed) {
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
+        // 仅在背景图真正可读后启用语义层半透明模式，避免加载失败时界面过透。
+        applyBackgroundImageMode(true);
+      } catch (error) {
+        if (disposed) return;
+        applyDefaultBackground();
+        warn(
+          JSON.stringify({
+            event: "settings:background-image-load-failed",
+            asset: backgroundImageAsset,
+            error: extractErrorMessage(error),
+          }),
+        );
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      if (!blobUrl) return;
+      URL.revokeObjectURL(blobUrl);
+    };
+  }, [backgroundImageEnabled, backgroundImageAsset, themeId]);
+
+  function openNewProfile() {
+    setProfileModalMode("new");
+    setProfileDraft({ ...defaultProfile, id: "" });
+    setProfileModalOpen(true);
+  }
+
+  function closeProfileModal() {
+    setProfileModalOpen(false);
+  }
+
+  function openEditProfile(profile: HostProfile) {
+    if (!profile.id) return;
+    setProfileModalMode("edit");
+    setProfileDraft(profile);
+    setProfileModalOpen(true);
+  }
+
+  async function submitProfile() {
+    await saveProfile(profileDraft);
+    setProfileModalOpen(false);
+  }
+
+  const configSectionLabels = useMemo(
+    () => ({
+      "app-settings": t("config.section.appSettings"),
+      "ai-settings": t("config.section.aiSettings"),
+      "openai-manage": t("config.section.openaiManage"),
+      "openai-settings": t("config.section.openaiSettings"),
+      "session-settings": t("config.section.sessionSettings"),
+      "config-directory": t("config.section.configDirectory"),
+    }),
+    [t],
+  );
+
+  /** 打开统一配置模态框，并切换到指定配置分区。 */
+  function openConfigSection(section: ConfigSectionKey) {
+    // 每个顶部二级菜单只携带自己所属的配置分组，避免共享一个总导航。
+    const sectionsByEntry: Record<ConfigSectionKey, ConfigSectionItem[]> = {
+      "app-settings": [
+        {
+          key: "app-settings",
+          label: configSectionLabels["app-settings"],
+        },
+      ],
+      "ai-settings": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-manage",
+          label: configSectionLabels["openai-manage"],
+        },
+        {
+          key: "openai-settings",
+          label: configSectionLabels["openai-settings"],
+        },
+      ],
+      "openai-manage": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-manage",
+          label: configSectionLabels["openai-manage"],
+        },
+        {
+          key: "openai-settings",
+          label: configSectionLabels["openai-settings"],
+        },
+      ],
+      "openai-settings": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "openai-manage",
+          label: configSectionLabels["openai-manage"],
+        },
+        {
+          key: "openai-settings",
+          label: configSectionLabels["openai-settings"],
+        },
+      ],
+      "session-settings": [
+        {
+          key: "session-settings",
+          label: configSectionLabels["session-settings"],
+        },
+      ],
+      "config-directory": [
+        {
+          key: "config-directory",
+          label: configSectionLabels["config-directory"],
+        },
+      ],
+    };
+    setConfigModalSections(sectionsByEntry[section]);
+    setActiveConfigSection(section);
+    setConfigModalOpen(true);
+  }
+
+  const widgetLabels = useMemo(
+    () => ({
+      profiles: t(widgetLabelKeys.profiles),
+      files: t(widgetLabelKeys.files),
+      transfers: t(widgetLabelKeys.transfers),
+      events: t(widgetLabelKeys.events),
+      history: t(widgetLabelKeys.history),
+      ai: t(widgetLabelKeys.ai),
+    }),
+    [t],
+  );
+
+  const { sessionState, sessionActions, sessionRefs } = useSessionController({
+    profiles,
+    t,
+    shellId,
+    availableShells,
+    settingsLoaded,
+    getTerminalSize: () => terminalSizeRef.current,
+  });
+
+  const historyState = useCommandHistoryState({
+    activeSessionId: sessionState.activeSessionId,
+    writeToSession: sessionActions.writeToSession,
+    focusActiveTerminal: () => focusActiveTerminalRef.current(),
+  });
+
+  const aiState = useAiState({
+    activeSessionId: sessionState.activeSessionId,
+    locale,
+    debugLoggingEnabled: aiDebugLoggingEnabled,
+    aiAvailable,
+    aiUnavailableMessage,
+    enabled: floatingWidgetKey !== "ai",
+  });
+
+  const autocompleteProvider = useMemo(
+    () =>
+      commandAutocompleteEnabled
+        ? createHistoryAutocompleteProvider(historyState.globalItems)
+        : null,
+    [commandAutocompleteEnabled, historyState.globalItems],
+  );
+
+  const { terminalQuery, terminalActions } = useTerminalController({
+    theme: activeTerminalTheme,
+    webLinksEnabled,
+    selectionAutoCopyEnabled,
+    scrollback,
+    activeSessionId: sessionState.activeSessionId,
+    activeSession: sessionState.activeSession,
+    sessions: sessionState.sessions,
+    sessionStatesRef: sessionRefs.sessionStatesRef,
+    sessionReasonsRef: sessionRefs.sessionReasonsRef,
+    sessionBuffersRef: sessionRefs.sessionBuffersRef,
+    setLastCommand: sessionActions.setLastCommand,
+    writeToSession: sessionActions.writeToSession,
+    resizeSession: sessionActions.resizeSession,
+    onWorkingDirectoryChange: (sessionId, payload) => {
+      setTerminalWorkingDirs((prev) =>
+        prev[sessionId]?.path === payload.path &&
+        prev[sessionId]?.username === payload.username
+          ? prev
+          : { ...prev, [sessionId]: payload },
+      );
+    },
+    onPathSyncSupportChange: (sessionId, status) => {
+      setTerminalPathSyncStateBySession((prev) => {
+        const nextState = status === "unsupported" ? "unsupported" : "active";
+        if (prev[sessionId] === nextState) return prev;
+        return { ...prev, [sessionId]: nextState };
+      });
+    },
+    isLocalSession: sessionActions.isLocalSession,
+    reconnectSession: sessionActions.reconnectSession,
+    reconnectLocalShell: sessionActions.reconnectLocalShell,
+    onCommandCaptureChange: (sessionId, capture) => {
+      historyState.updateLiveCapture({
+        sessionId,
+        command: capture.command,
+        state: capture.state,
+      });
+    },
+    onCommandCommit: (sessionId, command) => {
+      historyState.recordCommand({
+        sessionId,
+        command,
+        source: "typed",
+      });
+    },
+    autocompleteProvider,
+    onSizeChange: (size) => {
+      terminalSizeRef.current = size;
+    },
+  });
+  focusActiveTerminalRef.current = terminalActions.focusActiveTerminal;
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return;
+    // 新会话先走保守默认值，只有真正解析到受支持的 bash prompt 后才提升为 active，
+    // 避免 zsh / 不支持场景在首屏短暂闪成绿色。
+    setTerminalPathSyncStateBySession((prev) =>
+      prev[activeSessionId]
+        ? prev
+        : { ...prev, [activeSessionId]: "unsupported" },
+    );
+  }, [sessionState.activeSessionId]);
+
+  const isFloatingFilesWidget = floatingWidgetKey === "files";
+  const isFloatingTransfersWidget = floatingWidgetKey === "transfers";
+  const isFloatingEventsWidget = floatingWidgetKey === "events";
+  const isFloatingHistoryWidget = floatingWidgetKey === "history";
+  const isFloatingAiWidget = floatingWidgetKey === "ai";
+
+  const {
+    showGroupTitle,
+    setShowGroupTitle,
+    groups: quickbarGroups,
+    commands: quickbarCommands,
+    addGroup: addQuickbarGroup,
+    renameGroup: renameQuickbarGroup,
+    removeGroup: removeQuickbarGroup,
+    toggleGroupVisible: toggleQuickbarGroupVisible,
+    addCommand: addQuickbarCommand,
+    updateCommand: updateQuickbarCommand,
+    removeCommand: removeQuickbarCommand,
+  } = useQuickBarState(t);
+
+  const {
+    layoutCollapsed,
+    sideSlotCounts,
+    slotGroups,
+    floatingOrigins,
+    leftVisible,
+    rightVisible,
+    bottomVisible,
+    layoutVars,
+    setSlotGroups,
+    setFloatingOrigins,
+    setWidgetCollapsed,
+    handleToggleSplit,
+    handleCloseSlot,
+    handleToggleCollapsed,
+    startResize,
+  } = useLayoutState({
+    floatingWidgetKey,
+  });
+  const openCurrentDevtools = useMemo(
+    () => () => {
+      callTauri("open_devtools").catch(() => {});
+    },
+    [],
+  );
+  const {
+    subApps,
+    launchSubApp,
+    focusSubApp,
+    closeSubApp,
+    notifyMainShutdown,
+  } = useSubApps({
+    t,
+    appearance: {
+      locale,
+      themeId,
+      backgroundImageEnabled,
+      backgroundImageAsset,
+      backgroundImageSurfaceAlpha: normalizedBackgroundImageSurfaceAlpha,
+    },
+  });
+
+  const { floatingWidgets, handleFloat, openAllDevtools } = useFloatingWidgets({
+    floatingWidgetKey,
+    floatingOrigins,
+    setFloatingOrigins,
+    slotGroups,
+    setSlotGroups,
+    widgetLabels,
+    layoutCollapsed,
+    locale,
+    themeId,
+    setLocale,
+    setThemeId,
+    onOpenCurrentDevtools: openCurrentDevtools,
+    onMainShutdown: notifyMainShutdown,
+  });
+  const showSubAppMenu = import.meta.env.DEV;
+
+  function handleOpenDevtools() {
+    openCurrentDevtools();
+    openAllDevtools();
+  }
+
+  function isMainSlotVisible(slot: LayoutWidgetSlot) {
+    if (slot === "bottom") return !layoutCollapsed.bottom;
+    return slot.startsWith("left:")
+      ? !layoutCollapsed.left
+      : !layoutCollapsed.right;
+  }
+
+  const availableWidgets = useMemo(() => {
+    // 主窗口里只有“当前真正可见”的组件才占用实例；
+    // 收起区域虽然保留布局配置，但不应阻止其他可见区域再次添加该组件。
+    // floating 中的组件仍然是独立可见实例，因此始终占用。
+    const occupied = new Set<WidgetKey>();
+    Object.entries(slotGroups).forEach(([slot, group]) => {
+      if (!isMainSlotVisible(slot as LayoutWidgetSlot)) return;
+      if (group.active) occupied.add(group.active);
+    });
+    Object.keys(floatingOrigins).forEach((widget) => {
+      occupied.add(widget as WidgetKey);
+    });
+    return widgetKeys.filter((widget) => !occupied.has(widget));
+  }, [
+    floatingOrigins,
+    layoutCollapsed.bottom,
+    layoutCollapsed.left,
+    layoutCollapsed.right,
+    slotGroups,
+  ]);
+  const filesWidgetVisible = useMemo(() => {
+    if (floatingWidgetKey === "files") return true;
+    if (floatingWidgets.files) return true;
+    return Object.entries(slotGroups).some(
+      ([slot, group]) =>
+        isMainSlotVisible(slot as LayoutWidgetSlot) && group.active === "files",
+    );
+  }, [
+    floatingWidgetKey,
+    floatingWidgets.files,
+    layoutCollapsed.bottom,
+    layoutCollapsed.left,
+    layoutCollapsed.right,
+    slotGroups,
+  ]);
+
+  const { sftpState, sftpActions } = useSftpController({
+    enabled: sftpEnabled,
+    active: filesWidgetVisible,
+    activeSessionId: sessionState.activeSessionId,
+    activeSession: sessionState.activeSession,
+    activeSessionState: sessionState.activeSessionState,
+    sessionStatesRef: sessionRefs.sessionStatesRef,
+    isLocalSession: sessionActions.isLocalSession,
+    appendLog: sessionActions.appendLog,
+    setBusyMessage: sessionActions.setBusyMessage,
+    t,
+  });
+  const {
+    refreshList,
+    openRemoteDir,
+    uploadFile,
+    uploadDroppedPaths,
+    downloadFile,
+    cancelTransfer,
+    createFolder,
+    rename: renameEntry,
+    remove: removeEntry,
+  } = sftpActions;
+  const activeSftpAvailability = useMemo(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return "ready";
+    if (sessionActions.isLocalSession(activeSessionId)) return "ready";
+    if (!sftpEnabled || !filesWidgetVisible) return "disabled";
+    return sftpState.availabilityBySession[activeSessionId] ?? "checking";
+  }, [
+    sessionActions,
+    sessionState.activeSessionId,
+    filesWidgetVisible,
+    sftpEnabled,
+    sftpState.availabilityBySession,
+  ]);
+  const activeTerminalPathSyncStatus = useMemo<
+    "active" | "paused" | "checking" | "unsupported" | "disabled"
+  >(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    // 图标状态优先表达“用户主动关闭”与“当前会话天然不支持”的区别，
+    // 避免本地 shell / zsh 这类场景被误显示成绿色联动中。
+    if (!terminalPathSyncEnabled || !sftpEnabled || !filesWidgetVisible) {
+      return "disabled";
+    }
+    if (!activeSessionId) return "unsupported";
+    if (sessionActions.isLocalSession(activeSessionId)) return "unsupported";
+    const pathSyncState = terminalPathSyncStateBySession[activeSessionId];
+    // `checking` 只用于首轮能力检测。
+    // 一旦该会话已经进入过 active，就不要再因为普通目录刷新时的 SFTP checking
+    // 把联动图标打回“检测中”，否则用户会看到路径切换时图标抖动。
+    if (
+      activeSftpAvailability === "checking" &&
+      pathSyncState !== "active" &&
+      pathSyncState !== "paused-mismatch"
+    ) {
+      return "checking";
+    }
+    if (activeSftpAvailability === "unsupported") return "unsupported";
+    if (pathSyncState === "unsupported") {
+      return "unsupported";
+    }
+    return pathSyncState === "paused-mismatch"
+      ? "paused"
+      : pathSyncState === "active"
+        ? "active"
+        : "unsupported";
+  }, [
+    sessionActions,
+    sessionState.activeSessionId,
+    activeSftpAvailability,
+    filesWidgetVisible,
+    sftpEnabled,
+    terminalPathSyncEnabled,
+    terminalPathSyncStateBySession,
+  ]);
+
+  const activeResourceSnapshot = useMemo(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return null;
+    if (sessionState.activeSessionState !== "connected") return null;
+    return resourceSnapshotsBySession[activeSessionId] ?? null;
+  }, [
+    resourceSnapshotsBySession,
+    sessionState.activeSessionId,
+    sessionState.activeSessionState,
+  ]);
+  const activeResourceMonitorStatus = useMemo<
+    "disabled" | "checking" | "ready" | "unsupported"
+  >(() => {
+    if (!resourceMonitorEnabled) return "disabled";
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return "disabled";
+    if (sessionState.activeSessionState !== "connected") return "disabled";
+    const snapshot = resourceSnapshotsBySession[activeSessionId];
+    if (!snapshot) return "checking";
+    if (snapshot.status === "ready" && snapshot.cpu && snapshot.memory) {
+      return "ready";
+    }
+    return snapshot.status;
+  }, [
+    resourceMonitorEnabled,
+    resourceSnapshotsBySession,
+    sessionState.activeSessionId,
+    sessionState.activeSessionState,
+  ]);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    const previousState = previousResourceSessionStateRef.current;
+    const currentState = sessionState.activeSessionState;
+    previousResourceSessionStateRef.current = currentState;
+    if (!activeSessionId) return;
+    if (currentState !== "connected" || previousState === "connected") return;
+    setResourceSnapshotsBySession((prev) => {
+      if (prev[activeSessionId]?.status !== "unsupported") {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[activeSessionId];
+      return next;
+    });
+  }, [sessionState.activeSessionId, sessionState.activeSessionState]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let teardown: (() => void) | null = null;
+
+    const registerResourceListener = async () => {
+      const unlisten = await subscribeTauri<SessionResourceSnapshot>(
+        "session:resource",
+        (event) => {
+          if (cancelled) return;
+          setResourceSnapshotsBySession((prev) => ({
+            ...prev,
+            [event.payload.sessionId]: event.payload,
+          }));
+        },
+      );
+      if (cancelled) {
+        unlisten();
+        return;
+      }
+      teardown = unlisten;
+    };
+
+    registerResourceListener().catch(() => {});
+    return () => {
+      cancelled = true;
+      teardown?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    const normalizedInterval = Math.max(
+      MIN_RESOURCE_MONITOR_INTERVAL_SEC,
+      resourceMonitorIntervalSec,
+    );
+    const isLocalActiveSession =
+      !!activeSessionId && sessionActions.isLocalSession(activeSessionId);
+    const desiredMonitorKey =
+      resourceMonitorEnabled &&
+      activeSessionId &&
+      sessionState.activeSessionState === "connected" &&
+      (isLocalActiveSession || sessionState.activeSessionProfile)
+        ? [
+            activeSessionId,
+            isLocalActiveSession ? "local" : "ssh",
+            sessionState.activeSessionProfile?.id ?? "local",
+            normalizedInterval,
+          ].join(":")
+        : "";
+
+    const stopMonitorById = async (sessionId: string | null) => {
+      if (!sessionId) return;
+      await stopResourceMonitor(sessionId).catch(() => {});
+    };
+
+    const syncMonitor = async () => {
+      // 资源监控的启停只能跟随稳定的“会话 + 模式 + 间隔”键变化，
+      // 不能依赖 controller 包装对象本身，否则 render 抖动会导致 start/stop 循环。
+      if (activeResourceMonitorKeyRef.current === desiredMonitorKey) {
+        return;
+      }
+      activeResourceMonitorKeyRef.current = desiredMonitorKey;
+
+      const previousSessionId = activeResourceMonitorSessionIdRef.current;
+      if (!desiredMonitorKey || !activeSessionId) {
+        await stopMonitorById(previousSessionId);
+        activeResourceMonitorSessionIdRef.current = null;
+        return;
+      }
+
+      if (
+        resourceSnapshotsBySession[activeSessionId]?.status === "unsupported"
+      ) {
+        await stopMonitorById(previousSessionId);
+        activeResourceMonitorSessionIdRef.current = null;
+        activeResourceMonitorKeyRef.current = `unsupported:${activeSessionId}`;
+        return;
+      }
+
+      if (previousSessionId && previousSessionId !== activeSessionId) {
+        await stopMonitorById(previousSessionId);
+      }
+
+      setResourceSnapshotsBySession((prev) => {
+        const existing = prev[activeSessionId];
+        if (existing?.status === "checking" || existing?.status === "ready") {
+          return prev;
+        }
+        return {
+          ...prev,
+          [activeSessionId]: {
+            sessionId: activeSessionId,
+            sampledAt: Date.now(),
+            source: isLocalActiveSession ? "local" : "ssh-linux",
+            status: "checking",
+            cpu: null,
+            memory: null,
+          },
+        };
+      });
+
+      if (isLocalActiveSession) {
+        await startLocalResourceMonitor(activeSessionId, normalizedInterval);
+      } else if (sessionState.activeSessionProfile) {
+        await startSshResourceMonitor(
+          activeSessionId,
+          sessionState.activeSessionProfile,
+          normalizedInterval,
+        );
+      }
+
+      activeResourceMonitorSessionIdRef.current = activeSessionId;
+    };
+
+    syncMonitor().catch(() => {});
+  }, [
+    resourceMonitorEnabled,
+    resourceMonitorIntervalSec,
+    resourceSnapshotsBySession,
+    sessionState.activeSessionId,
+    sessionState.activeSessionProfile,
+    sessionState.activeSessionState,
+    sessionActions.isLocalSession,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      const sessionId = activeResourceMonitorSessionIdRef.current;
+      if (!sessionId) return;
+      stopResourceMonitor(sessionId).catch(() => {});
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return;
+    if (!sessionState.isRemoteConnected) return;
+    // 文件管理器组件不可见时，不应为了“潜在可联动”去隐式拉起 SFTP。
+    // 因此路径联动和 SFTP 初始化共用同一个可见性前置条件。
+    if (!terminalPathSyncEnabled || !sftpEnabled || !filesWidgetVisible) return;
+    const tracked = terminalWorkingDirs[activeSessionId];
+    if (!tracked) return;
+    if (activeSftpAvailability === "unsupported") return;
+    // 终端运行时已经判定该会话 prompt 不可稳定解析时，这里直接停止联动，
+    // 不再尝试根据脏路径去驱动 SFTP。
+    if (terminalPathSyncStateBySession[activeSessionId] === "unsupported") {
+      return;
+    }
+    const sessionProfile = sessionState.activeSessionProfile;
+    const loginUsername = sessionProfile?.username?.trim() || null;
+    const promptUsername = tracked.username?.trim() || null;
+    const syncState =
+      terminalPathSyncStateBySession[activeSessionId] ?? "active";
+    // 终端 prompt 用户一旦和 SSH 初始登录用户不一致，说明 shell 身份已经切换，
+    // 此时再继续用原 SFTP 身份联动路径会产生错误的 home/权限语义，因此直接暂停联动。
+    if (loginUsername && promptUsername && loginUsername !== promptUsername) {
+      if (syncState !== "paused-mismatch") {
+        setTerminalPathSyncStateBySession((prev) => ({
+          ...prev,
+          [activeSessionId]: "paused-mismatch",
+        }));
+        warn(
+          JSON.stringify({
+            event: "terminal:cwd-sync-paused-user-mismatch",
+            sessionId: activeSessionId,
+            loginUsername,
+            promptUsername,
+          }),
+        );
+      }
+      return;
+    }
+    // 当 prompt 用户恢复成初始登录用户后，说明 shell 身份重新与 SFTP 身份对齐，
+    // 此时自动恢复路径联动，不要求用户手动刷新或重新连接。
+    if (syncState === "paused-mismatch") {
+      setTerminalPathSyncStateBySession((prev) => ({
+        ...prev,
+        [activeSessionId]: "active",
+      }));
+      info(
+        JSON.stringify({
+          event: "terminal:cwd-sync-resumed-user-match",
+          sessionId: activeSessionId,
+          loginUsername,
+          promptUsername,
+        }),
+      ).catch(() => {});
+    }
+    const trackedPath = tracked.path;
+    // prompt 中的 `~` 只能表示“当前 shell 的 home 语义”，SFTP 无法直接访问它。
+    // 这里复用当前会话已知的绝对路径来记住 home，并在后续把 `~` / `~/subdir` 展开为绝对路径。
+    const knownHome =
+      terminalHomeDirs[activeSessionId] ??
+      (trackedPath === "~" && sftpState.currentPath.startsWith("/")
+        ? sftpState.currentPath
+        : null);
+    if (
+      trackedPath === "~" &&
+      knownHome &&
+      terminalHomeDirs[activeSessionId] !== knownHome
+    ) {
+      setTerminalHomeDirs((prev) => ({
+        ...prev,
+        [activeSessionId]: knownHome,
+      }));
+    }
+    const resolvedPath = resolvePromptWorkingDirectory(trackedPath, knownHome);
+    if (!resolvedPath) return;
+    if (resolvedPath === sftpState.currentPath) {
+      // 当文件管理器已经处于终端 cwd 时，记住这次已同步的终端路径。
+      // 后续用户手动浏览目录时，只要终端 cwd 没变化，就不要再被这个旧路径覆盖回去。
+      setLastSyncedTerminalPaths((prev) =>
+        prev[activeSessionId] === resolvedPath
+          ? prev
+          : { ...prev, [activeSessionId]: resolvedPath },
+      );
+      return;
+    }
+    if (lastSyncedTerminalPaths[activeSessionId] === resolvedPath) return;
+    // 终端 cwd 只在“路径发生新变化”时单向驱动文件管理器，
+    // 避免文件管理器手动浏览后又被旧的终端路径持续覆盖。
+    openRemoteDir(resolvedPath).catch((error) => {
+      warn(
+        JSON.stringify({
+          event: "sftp:sync-terminal-path-failed",
+          sessionId: activeSessionId,
+          path: resolvedPath,
+          rawPath: trackedPath,
+          error: extractErrorMessage(error),
+        }),
+      );
+    });
+    setLastSyncedTerminalPaths((prev) => ({
+      ...prev,
+      [activeSessionId]: resolvedPath,
+    }));
+  }, [
+    lastSyncedTerminalPaths,
+    openRemoteDir,
+    sessionState.activeSessionProfile,
+    sessionState.activeSessionId,
+    sessionState.isRemoteConnected,
+    activeSftpAvailability,
+    filesWidgetVisible,
+    terminalPathSyncStateBySession,
+    sftpState.currentPath,
+    terminalHomeDirs,
+    sftpEnabled,
+    terminalPathSyncEnabled,
+    terminalWorkingDirs,
+  ]);
+
+  useFloatingWidgetSnapshotSync<FloatingFilesMessage>({
+    channelName: WIDGET_FILES_CHANNEL,
+    floatingWidgetKey,
+    isFloatingWidget: isFloatingFilesWidget,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingFilesSnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        isRemoteSession: sessionState.isRemoteSession,
+        isRemoteConnected: sessionState.isRemoteConnected,
+        sftpAvailability: activeSftpAvailability,
+        terminalPathSyncStatus: activeTerminalPathSyncStatus,
+        currentPath: sftpState.currentPath,
+        entries: sftpState.entries,
+      };
+      channel.postMessage({
+        type: "files:snapshot",
+        payload,
+      } satisfies FloatingFilesMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "files:request-snapshot": {
+          const payload: FloatingFilesSnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            isRemoteSession: sessionState.isRemoteSession,
+            isRemoteConnected: sessionState.isRemoteConnected,
+            sftpAvailability: activeSftpAvailability,
+            terminalPathSyncStatus: activeTerminalPathSyncStatus,
+            currentPath: sftpState.currentPath,
+            entries: sftpState.entries,
+          };
+          channel.postMessage({
+            type: "files:snapshot",
+            payload,
+          } satisfies FloatingFilesMessage);
+          break;
+        }
+        case "files:refresh":
+          refreshList(message.path).catch(() => {});
+          break;
+        case "files:open":
+          openRemoteDir(message.path).catch(() => {});
+          break;
+        case "files:open-file":
+          if (!sessionState.activeSessionId) break;
+          if (sessionState.isRemoteConnected) {
+            openRemoteFileViaCache(
+              sessionState.activeSessionId,
+              message.entry,
+              fileDefaultEditorPath,
+            ).catch(() => {});
+          } else {
+            openLocalFile(message.entry.path, fileDefaultEditorPath).catch(
+              () => {},
+            );
+          }
+          break;
+        case "files:upload":
+          uploadFile().catch(() => {});
+          break;
+        case "files:upload-paths":
+          uploadDroppedPaths(message.paths).catch(() => {});
+          break;
+        case "files:download":
+          downloadFile(message.entry).catch(() => {});
+          break;
+        case "files:mkdir":
+          createFolder(message.name).catch(() => {});
+          break;
+        case "files:rename":
+          renameEntry(message.entry, message.name).catch(() => {});
+          break;
+        case "files:remove":
+          removeEntry(message.entry).catch(() => {});
+          break;
+        case "files:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "files:snapshot") {
+        setFloatingFilesSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "files:request-snapshot",
+      } satisfies FloatingFilesMessage);
+    },
+    deps: [
+      sessionState.activeSessionId,
+      sessionState.isRemoteConnected,
+      sessionState.isRemoteSession,
+      createFolder,
+      downloadFile,
+      activeSftpAvailability,
+      activeTerminalPathSyncStatus,
+      sftpState.currentPath,
+      sftpState.entries,
+      openRemoteDir,
+      refreshList,
+      removeEntry,
+      renameEntry,
+      uploadFile,
+      uploadDroppedPaths,
+      sessionState.isRemoteConnected,
+      fileDefaultEditorPath,
+    ],
+  });
+
+  useFloatingWidgetSnapshotSync<FloatingTransfersMessage>({
+    channelName: WIDGET_TRANSFERS_CHANNEL,
+    floatingWidgetKey,
+    isFloatingWidget: isFloatingTransfersWidget,
+    broadcastSnapshot: (channel) => {
+      const activeSessionId = sessionState.activeSessionId;
+      const payload: FloatingTransfersSnapshot = {
+        activeSessionId,
+        progress: activeSessionId
+          ? (sftpState.progressBySession[activeSessionId] ?? null)
+          : null,
+        busyMessage: sessionState.busyMessage,
+        entries: sessionState.logEntries,
+      };
+      channel.postMessage({
+        type: "transfers:snapshot",
+        payload,
+      } satisfies FloatingTransfersMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "transfers:request-snapshot": {
+          const activeSessionId = sessionState.activeSessionId;
+          const payload: FloatingTransfersSnapshot = {
+            activeSessionId,
+            progress: activeSessionId
+              ? (sftpState.progressBySession[activeSessionId] ?? null)
+              : null,
+            busyMessage: sessionState.busyMessage,
+            entries: sessionState.logEntries,
+          };
+          channel.postMessage({
+            type: "transfers:snapshot",
+            payload,
+          } satisfies FloatingTransfersMessage);
+          break;
+        }
+        case "transfers:cancel":
+          cancelTransfer().catch(() => {});
+          break;
+        case "transfers:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "transfers:snapshot") {
+        setFloatingTransfersSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "transfers:request-snapshot",
+      } satisfies FloatingTransfersMessage);
+    },
+    deps: [
+      cancelTransfer,
+      sessionState.activeSessionId,
+      sessionState.busyMessage,
+      sessionState.logEntries,
+      sftpState.progressBySession,
+    ],
+  });
+
+  useFloatingWidgetSnapshotSync<FloatingEventsMessage>({
+    channelName: WIDGET_EVENTS_CHANNEL,
+    floatingWidgetKey,
+    isFloatingWidget: isFloatingEventsWidget,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingEventsSnapshot = {
+        sessionState: sessionState.activeSessionState ?? "disconnected",
+        sessionReason: sessionState.activeSessionReason,
+        reconnectInfo: sessionState.activeReconnectInfo,
+        entries: sessionState.logEntries,
+      };
+      channel.postMessage({
+        type: "events:snapshot",
+        payload,
+      } satisfies FloatingEventsMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "events:request-snapshot": {
+          const payload: FloatingEventsSnapshot = {
+            sessionState: sessionState.activeSessionState ?? "disconnected",
+            sessionReason: sessionState.activeSessionReason,
+            reconnectInfo: sessionState.activeReconnectInfo,
+            entries: sessionState.logEntries,
+          };
+          channel.postMessage({
+            type: "events:snapshot",
+            payload,
+          } satisfies FloatingEventsMessage);
+          break;
+        }
+        case "events:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "events:snapshot") {
+        setFloatingEventsSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "events:request-snapshot",
+      } satisfies FloatingEventsMessage);
+    },
+    deps: [
+      sessionState.activeSessionState,
+      sessionState.activeSessionReason,
+      sessionState.activeReconnectInfo,
+      sessionState.logEntries,
+    ],
+  });
+
+  useFloatingWidgetSnapshotSync<FloatingHistoryMessage>({
+    channelName: WIDGET_HISTORY_CHANNEL,
+    floatingWidgetKey,
+    isFloatingWidget: isFloatingHistoryWidget,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingHistorySnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        hasActiveSession: !!sessionState.activeSessionId,
+        liveCapture: historyState.activeLiveCapture,
+        items: historyState.activeSessionItems,
+      };
+      channel.postMessage({
+        type: "history:snapshot",
+        payload,
+      } satisfies FloatingHistoryMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "history:request-snapshot": {
+          const payload: FloatingHistorySnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            hasActiveSession: !!sessionState.activeSessionId,
+            liveCapture: historyState.activeLiveCapture,
+            items: historyState.activeSessionItems,
+          };
+          channel.postMessage({
+            type: "history:snapshot",
+            payload,
+          } satisfies FloatingHistoryMessage);
+          break;
+        }
+        case "history:execute":
+          handleExecuteHistoryItem(message.command);
+          break;
+        case "history:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "history:snapshot") {
+        setFloatingHistorySnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "history:request-snapshot",
+      } satisfies FloatingHistoryMessage);
+    },
+    deps: [
+      historyState.activeLiveCapture,
+      historyState.activeSessionItems,
+      sessionState.activeSessionId,
+      handleExecuteHistoryItem,
+    ],
+  });
+
+  useFloatingWidgetSnapshotSync<FloatingAiMessage>({
+    channelName: WIDGET_AI_CHANNEL,
+    floatingWidgetKey,
+    isFloatingWidget: isFloatingAiWidget,
+    broadcastSnapshot: (channel) => {
+      const payload: FloatingAiSnapshot = {
+        activeSessionId: sessionState.activeSessionId,
+        messages: aiState.messages,
+        draft: aiState.draft,
+        pending: aiState.pending,
+        waitingFirstChunk: aiState.waitingFirstChunk,
+        errorMessage: aiState.errorMessage,
+        aiAvailable,
+        aiUnavailableMessage,
+      };
+      channel.postMessage({
+        type: "ai:snapshot",
+        payload,
+      } satisfies FloatingAiMessage);
+    },
+    onMainWindowMessage: (message, channel) => {
+      switch (message.type) {
+        case "ai:request-snapshot": {
+          const payload: FloatingAiSnapshot = {
+            activeSessionId: sessionState.activeSessionId,
+            messages: aiState.messages,
+            draft: aiState.draft,
+            pending: aiState.pending,
+            waitingFirstChunk: aiState.waitingFirstChunk,
+            errorMessage: aiState.errorMessage,
+            aiAvailable,
+            aiUnavailableMessage,
+          };
+          channel.postMessage({
+            type: "ai:snapshot",
+            payload,
+          } satisfies FloatingAiMessage);
+          break;
+        }
+        case "ai:set-draft":
+          aiState.setDraft(message.draft);
+          break;
+        case "ai:send":
+          aiState.sendMessage().catch(() => {});
+          break;
+        case "ai:cancel":
+          aiState.cancelMessage();
+          break;
+        case "ai:clear":
+          aiState.clearMessages();
+          break;
+        case "ai:snapshot":
+          break;
+      }
+    },
+    onFloatingWindowMessage: (message) => {
+      if (message.type === "ai:snapshot") {
+        setFloatingAiSnapshot(message.payload);
+      }
+    },
+    requestSnapshot: (channel) => {
+      channel.postMessage({
+        type: "ai:request-snapshot",
+      } satisfies FloatingAiMessage);
+    },
+    deps: [
+      aiAvailable,
+      aiState.draft,
+      aiState.errorMessage,
+      aiState.messages,
+      aiState.pending,
+      aiState.waitingFirstChunk,
+      aiUnavailableMessage,
+      sessionState.activeSessionId,
+    ],
+  });
+
+  useMacAppMenu({
+    locale,
+    themeId,
+    shellId,
+    availableShells,
+    layoutCollapsed,
+    onToggleCollapsed: handleToggleCollapsed,
+    footerVisibility,
+    onToggleFooterPart: (part) =>
+      setFooterVisibility((prev) => ({ ...prev, [part]: !prev[part] })),
+    onOpenConfigSection: openConfigSection,
+    setLocale,
+    setThemeId,
+    setShellId,
+    showSubAppMenu: showSubAppMenu && !floatingWidgetKey,
+    subApps,
+    onLaunchSubApp: (id) => {
+      launchSubApp(id).catch(() => {});
+    },
+    onFocusSubApp: (id) => {
+      focusSubApp(id).catch(() => {});
+    },
+    onCloseSubApp: (id) => {
+      closeSubApp(id).catch(() => {});
+    },
+    onOpenAbout: () => setAboutOpen(true),
+    t,
+  });
+
+  function handleRunQuickCommand(command: string) {
+    // 无活动会话时不发送，给出短暂提示避免误操作。
+    const sessionId = sessionState.activeSessionId;
+    if (!sessionId) {
+      sessionActions.setBusyMessage(t("quickbar.noSession"));
+      window.setTimeout(() => {
+        sessionActions.setBusyMessage((prev) =>
+          prev === t("quickbar.noSession") ? null : prev,
+        );
+      }, 1500);
+      return;
+    }
+    // 先聚焦终端，确保后续键盘输入（如回车）进入终端而非停留在按钮焦点上。
+    terminalActions.focusActiveTerminal();
+    const parsed = decodeQuickCommandEscapes(command);
+    const normalized = normalizeQuickCommandForSubmit(parsed);
+    sessionActions.writeToSession(sessionId, normalized).catch(() => {});
+  }
+
+  function handleExecuteHistoryItem(command: string) {
+    historyState
+      .executeHistoryItem({
+        sessionId: sessionState.activeSessionId,
+        command,
+      })
+      .then((executed) => {
+        if (!executed || !sessionState.activeSessionId) return;
+        historyState.recordCommand({
+          sessionId: sessionState.activeSessionId,
+          command,
+          source: "history",
+        });
+      })
+      .catch(() => {});
+  }
+
+  async function handleConnectProfile(profileInput: HostProfile) {
+    // 连接流程允许并发触发；用递增 requestId 防止旧请求回写覆盖新状态。
+    const requestId = latestConnectRequestIdRef.current + 1;
+    latestConnectRequestIdRef.current = requestId;
+    if (!profileInput.host || !profileInput.username) {
+      sessionActions.setBusyMessage(t("messages.missingHostUser"));
+      return;
+    }
+    if (profileInput.id) {
+      pickProfile(profileInput.id);
+      setConnectingProfileId(profileInput.id);
+    }
+    sessionActions.setBusyMessage(t("messages.connecting"));
+    try {
+      const profile = profileInput.id
+        ? profileInput
+        : await saveProfile(profileInput);
+      setConnectingProfileId(profile.id);
+      await sessionActions.connectProfile(profile);
+      sessionActions.setBusyMessage(null);
+    } catch (error: any) {
+      sessionActions.setBusyMessage(
+        error?.message ?? t("messages.connectFailed"),
+      );
+    } finally {
+      if (requestId === latestConnectRequestIdRef.current) {
+        setConnectingProfileId(null);
+      }
+    }
+  }
+
+  async function handleSaveSessionBuffer(sessionId: string) {
+    const session = sessionState.sessions.find(
+      (item) => item.sessionId === sessionId,
+    );
+    if (!session) return;
+    const text = terminalQuery.getSessionBufferText(sessionId) ?? "";
+    const isLocal = sessionActions.isLocalSession(sessionId);
+    const profile =
+      profiles.find((item) => item.id === session.profileId) ?? editingProfile;
+    const baseName = isLocal
+      ? (sessionState.localSessionMeta[sessionId]?.label ?? t("session.local"))
+      : profile.name || profile.host || t("session.defaultName");
+    const target = await save({
+      defaultPath: `${baseName}.log`,
+      filters: [{ name: "Log", extensions: ["log", "txt"] }],
+    });
+    if (!target) return;
+    await writeTextFile(target, text);
+  }
+
+  const postFloatingFilesMessage =
+    useFloatingWidgetMessagePoster<FloatingFilesMessage>(
+      WIDGET_FILES_CHANNEL,
+      isFloatingFilesWidget,
+    );
+  const postFloatingTransfersMessage =
+    useFloatingWidgetMessagePoster<FloatingTransfersMessage>(
+      WIDGET_TRANSFERS_CHANNEL,
+      isFloatingTransfersWidget,
+    );
+  const postFloatingHistoryMessage =
+    useFloatingWidgetMessagePoster<FloatingHistoryMessage>(
+      WIDGET_HISTORY_CHANNEL,
+      isFloatingHistoryWidget,
+    );
+  const postFloatingAiMessage =
+    useFloatingWidgetMessagePoster<FloatingAiMessage>(
+      WIDGET_AI_CHANNEL,
+      isFloatingAiWidget,
+    );
+
+  // 主窗口直接读取本地 SFTP 状态；浮动文件面板则消费主窗口同步过来的只读快照。
+  const filesWidgetState = useMemo(
+    () =>
+      isFloatingFilesWidget
+        ? {
+            isRemoteSession: floatingFilesSnapshot?.isRemoteSession ?? false,
+            isRemoteConnected:
+              floatingFilesSnapshot?.isRemoteConnected ?? false,
+            sftpAvailability:
+              floatingFilesSnapshot?.sftpAvailability ?? "checking",
+            terminalPathSyncStatus:
+              floatingFilesSnapshot?.terminalPathSyncStatus ?? "checking",
+            currentPath: floatingFilesSnapshot?.currentPath ?? "",
+            entries: floatingFilesSnapshot?.entries ?? [],
+          }
+        : {
+            isRemoteSession: sessionState.isRemoteSession,
+            isRemoteConnected: sessionState.isRemoteConnected,
+            sftpAvailability: activeSftpAvailability,
+            terminalPathSyncStatus: activeTerminalPathSyncStatus,
+            currentPath: sftpState.currentPath,
+            entries: sftpState.entries,
+          },
+    [
+      activeSftpAvailability,
+      activeTerminalPathSyncStatus,
+      floatingFilesSnapshot,
+      isFloatingFilesWidget,
+      sessionState.isRemoteConnected,
+      sessionState.isRemoteSession,
+      sftpState.currentPath,
+      sftpState.entries,
+    ],
+  );
+
+  // 传输面板在浮动窗口中仅消费主窗口快照，避免浮窗重建本地状态后丢失当前任务上下文。
+  const TransfersWidgetState = useMemo(
+    () =>
+      isFloatingTransfersWidget
+        ? {
+            progress: floatingTransfersSnapshot?.progress ?? null,
+            busyMessage: floatingTransfersSnapshot?.busyMessage ?? null,
+            entries: floatingTransfersSnapshot?.entries ?? [],
+          }
+        : {
+            progress: sessionState.activeSessionId
+              ? (sftpState.progressBySession[sessionState.activeSessionId] ??
+                null)
+              : null,
+            busyMessage: sessionState.busyMessage,
+            entries: sessionState.logEntries,
+          },
+    [
+      floatingTransfersSnapshot,
+      isFloatingTransfersWidget,
+      sessionState.activeSessionId,
+      sessionState.busyMessage,
+      sessionState.logEntries,
+      sftpState.progressBySession,
+    ],
+  );
+
+  // 主窗口直接调用 SFTP action；浮动文件面板通过消息把操作代理回主窗口执行。
+  const filesWidgetActions = useMemo(
+    () =>
+      isFloatingFilesWidget
+        ? {
+            refreshList: async (path?: string) => {
+              postFloatingFilesMessage({ type: "files:refresh", path });
+            },
+            openRemoteDir: async (path: string) => {
+              postFloatingFilesMessage({ type: "files:open", path });
+            },
+            openFile: async (
+              entry: (typeof filesWidgetState.entries)[number],
+            ) => {
+              postFloatingFilesMessage({ type: "files:open-file", entry });
+            },
+            uploadFile: async () => {
+              postFloatingFilesMessage({ type: "files:upload" });
+            },
+            uploadDroppedPaths: async (paths: string[]) => {
+              postFloatingFilesMessage({ type: "files:upload-paths", paths });
+            },
+            downloadFile: async (
+              entry: (typeof filesWidgetState.entries)[number],
+            ) => {
+              postFloatingFilesMessage({ type: "files:download", entry });
+            },
+            cancelTransfer: async () => {},
+            createFolder: async (name: string) => {
+              postFloatingFilesMessage({ type: "files:mkdir", name });
+            },
+            rename: async (
+              entry: (typeof filesWidgetState.entries)[number],
+              name: string,
+            ) => {
+              postFloatingFilesMessage({ type: "files:rename", entry, name });
+            },
+            remove: async (
+              entry: (typeof filesWidgetState.entries)[number],
+            ) => {
+              postFloatingFilesMessage({ type: "files:remove", entry });
+            },
+          }
+        : {
+            refreshList,
+            openRemoteDir,
+            openFile: async (
+              entry: (typeof filesWidgetState.entries)[number],
+            ) => {
+              if (
+                sessionState.isRemoteConnected &&
+                sessionState.activeSessionId
+              ) {
+                await openRemoteFileViaCache(
+                  sessionState.activeSessionId,
+                  entry,
+                  fileDefaultEditorPath,
+                );
+                return;
+              }
+              await openLocalFile(entry.path, fileDefaultEditorPath);
+            },
+            uploadFile,
+            uploadDroppedPaths,
+            downloadFile,
+            cancelTransfer,
+            createFolder,
+            rename: renameEntry,
+            remove: removeEntry,
+          },
+    [
+      createFolder,
+      downloadFile,
+      filesWidgetState.entries,
+      isFloatingFilesWidget,
+      openRemoteDir,
+      refreshList,
+      removeEntry,
+      renameEntry,
+      uploadFile,
+      uploadDroppedPaths,
+      cancelTransfer,
+    ],
+  );
+
+  const TransfersWidgetActions = useMemo(
+    () =>
+      isFloatingTransfersWidget
+        ? {
+            cancel: async () => {
+              postFloatingTransfersMessage({ type: "transfers:cancel" });
+            },
+          }
+        : {
+            cancel: cancelTransfer,
+          },
+    [cancelTransfer, isFloatingTransfersWidget, postFloatingTransfersMessage],
+  );
+
+  const EventsWidgetState = useMemo(
+    () =>
+      isFloatingEventsWidget
+        ? {
+            sessionState:
+              floatingEventsSnapshot?.sessionState ?? "disconnected",
+            sessionReason: floatingEventsSnapshot?.sessionReason ?? null,
+            reconnectInfo: floatingEventsSnapshot?.reconnectInfo ?? null,
+            entries: floatingEventsSnapshot?.entries ?? [],
+          }
+        : {
+            sessionState: sessionState.activeSessionState ?? "disconnected",
+            sessionReason: sessionState.activeSessionReason,
+            reconnectInfo: sessionState.activeReconnectInfo,
+            entries: sessionState.logEntries,
+          },
+    [
+      floatingEventsSnapshot,
+      isFloatingEventsWidget,
+      sessionState.activeReconnectInfo,
+      sessionState.activeSessionReason,
+      sessionState.activeSessionState,
+      sessionState.logEntries,
+    ],
+  );
+
+  const historyWidgetState = useMemo(
+    () =>
+      isFloatingHistoryWidget
+        ? {
+            loaded: true,
+            hasActiveSession:
+              floatingHistorySnapshot?.hasActiveSession ?? false,
+            liveCapture: floatingHistorySnapshot?.liveCapture ?? null,
+            items: filterHistoryItems(
+              floatingHistorySnapshot?.items ?? [],
+              floatingHistorySearchQuery,
+            ),
+            searchQuery: floatingHistorySearchQuery,
+          }
+        : {
+            loaded: historyState.loaded,
+            hasActiveSession: !!sessionState.activeSessionId,
+            liveCapture: historyState.activeLiveCapture,
+            items: historyState.activeItems,
+            searchQuery: historyState.searchQuery,
+          },
+    [
+      floatingHistorySearchQuery,
+      floatingHistorySnapshot,
+      historyState.activeItems,
+      historyState.activeLiveCapture,
+      historyState.loaded,
+      historyState.searchQuery,
+      isFloatingHistoryWidget,
+      sessionState.activeSessionId,
+    ],
+  );
+
+  const historyWidgetActions = useMemo(
+    () =>
+      isFloatingHistoryWidget
+        ? {
+            setSearchQuery: setFloatingHistorySearchQuery,
+            execute: (command: string) => {
+              postFloatingHistoryMessage({ type: "history:execute", command });
+            },
+          }
+        : {
+            setSearchQuery: historyState.setSearchQuery,
+            execute: handleExecuteHistoryItem,
+          },
+    [
+      handleExecuteHistoryItem,
+      historyState.setSearchQuery,
+      isFloatingHistoryWidget,
+    ],
+  );
+
+  const AiWidgetState = useMemo(
+    () =>
+      isFloatingAiWidget
+        ? {
+            activeSessionId: floatingAiSnapshot?.activeSessionId ?? null,
+            messages: floatingAiSnapshot?.messages ?? [],
+            draft: floatingAiSnapshot?.draft ?? "",
+            pending: floatingAiSnapshot?.pending ?? false,
+            waitingFirstChunk: floatingAiSnapshot?.waitingFirstChunk ?? false,
+            errorMessage: floatingAiSnapshot?.errorMessage ?? null,
+            aiAvailable: floatingAiSnapshot?.aiAvailable ?? false,
+            aiUnavailableMessage:
+              floatingAiSnapshot?.aiUnavailableMessage ?? null,
+          }
+        : {
+            activeSessionId: sessionState.activeSessionId,
+            messages: aiState.messages,
+            draft: aiState.draft,
+            pending: aiState.pending,
+            waitingFirstChunk: aiState.waitingFirstChunk,
+            errorMessage: aiState.errorMessage,
+            aiAvailable,
+            aiUnavailableMessage,
+          },
+    [
+      aiAvailable,
+      aiState.draft,
+      aiState.errorMessage,
+      aiState.messages,
+      aiState.pending,
+      aiState.waitingFirstChunk,
+      aiUnavailableMessage,
+      floatingAiSnapshot,
+      isFloatingAiWidget,
+      sessionState.activeSessionId,
+    ],
+  );
+
+  const AiWidgetActions = useMemo(
+    () =>
+      isFloatingAiWidget
+        ? {
+            setDraft: (value: string) => {
+              postFloatingAiMessage({ type: "ai:set-draft", draft: value });
+            },
+            send: async () => {
+              postFloatingAiMessage({ type: "ai:send" });
+            },
+            cancel: () => {
+              postFloatingAiMessage({ type: "ai:cancel" });
+            },
+            clear: () => {
+              postFloatingAiMessage({ type: "ai:clear" });
+            },
+          }
+        : {
+            setDraft: aiState.setDraft,
+            send: aiState.sendMessage,
+            cancel: aiState.cancelMessage,
+            clear: aiState.clearMessages,
+          },
+    [
+      aiState.cancelMessage,
+      aiState.clearMessages,
+      aiState.sendMessage,
+      aiState.setDraft,
+      isFloatingAiWidget,
+    ],
+  );
+
+  const widgets = useMemo(
+    () =>
+      buildWidgets({
+        profiles,
+        sshGroups,
+        activeProfileId,
+        connectingProfileId,
+        availableShells,
+        activeSessionId: AiWidgetState.activeSessionId,
+        activeSessionState: EventsWidgetState.sessionState,
+        activeSessionReason: EventsWidgetState.sessionReason,
+        activeReconnectInfo: EventsWidgetState.reconnectInfo,
+        isRemoteSession: filesWidgetState.isRemoteSession,
+        isRemoteConnected: filesWidgetState.isRemoteConnected,
+        transferProgress: TransfersWidgetState.progress,
+        busyMessage: TransfersWidgetState.busyMessage,
+        logEntries: EventsWidgetState.entries,
+        historyLoaded: historyWidgetState.loaded,
+        hasActiveSession: historyWidgetState.hasActiveSession,
+        historyLiveCapture: historyWidgetState.liveCapture,
+        historyItems: historyWidgetState.items,
+        historySearchQuery: historyWidgetState.searchQuery,
+        aiMessages: AiWidgetState.messages,
+        aiDraft: AiWidgetState.draft,
+        aiAvailable: AiWidgetState.aiAvailable,
+        aiUnavailableMessage: AiWidgetState.aiUnavailableMessage,
+        aiPending: AiWidgetState.pending,
+        aiWaitingFirstChunk: AiWidgetState.waitingFirstChunk,
+        aiErrorMessage: AiWidgetState.errorMessage,
+        isFloatingAiWidget,
+        currentPath: filesWidgetState.currentPath,
+        sftpAvailability: filesWidgetState.sftpAvailability,
+        terminalPathSyncStatus: filesWidgetState.terminalPathSyncStatus,
+        entries: filesWidgetState.entries,
+        locale,
+        t,
+        pickProfile,
+        onConnectProfile: handleConnectProfile,
+        onOpenNewProfile: openNewProfile,
+        onImportOpenSshConfig: () => {
+          importOpenSshConfig()
+            .then((summary) => {
+              pushToast({
+                level: "success",
+                message: formatOpenSshImportToast(t, summary),
+              });
+            })
+            .catch((error) => {
+              pushToast({
+                level: "error",
+                message: getErrorMessage(error),
+              });
+            });
+        },
+        onOpenEditProfile: openEditProfile,
+        onRemoveProfile: (profile) => removeProfile(profile.id),
+        onHistorySearchQueryChange: historyWidgetActions.setSearchQuery,
+        onExecuteHistoryItem: historyWidgetActions.execute,
+        onAiDraftChange: AiWidgetActions.setDraft,
+        onAiSend: AiWidgetActions.send,
+        onAiCancel: AiWidgetActions.cancel,
+        onAiClear: AiWidgetActions.clear,
+        onAddGroup: addGroup,
+        onRenameGroup: renameGroup,
+        onRemoveGroup: removeGroup,
+        onMoveProfileToGroup: moveProfileToGroup,
+        onConnectLocalShell: (shell) => {
+          sessionActions.connectLocalShell(shell, true).catch(() => {});
+        },
+        onRefreshList: filesWidgetActions.refreshList,
+        onOpenRemoteDir: filesWidgetActions.openRemoteDir,
+        onOpenFile: filesWidgetActions.openFile,
+        onUploadFile: filesWidgetActions.uploadFile,
+        onUploadDroppedPaths: filesWidgetActions.uploadDroppedPaths,
+        onDownloadFile: filesWidgetActions.downloadFile,
+        onCancelTransfer: TransfersWidgetActions.cancel,
+        onCreateFolder: filesWidgetActions.createFolder,
+        onRenameEntry: filesWidgetActions.rename,
+        onRemoveEntry: filesWidgetActions.remove,
+      }),
+    [
+      profiles,
+      sshGroups,
+      activeProfileId,
+      connectingProfileId,
+      availableShells,
+      AiWidgetActions,
+      AiWidgetState,
+      isFloatingAiWidget,
+      EventsWidgetState,
+      filesWidgetState.isRemoteSession,
+      filesWidgetState.isRemoteConnected,
+      TransfersWidgetActions,
+      TransfersWidgetState,
+      historyWidgetActions,
+      historyWidgetState,
+      importOpenSshConfig,
+      filesWidgetState.currentPath,
+      filesWidgetState.terminalPathSyncStatus,
+      filesWidgetState.sftpAvailability,
+      filesWidgetState.entries,
+      locale,
+      pushToast,
+      t,
+      pickProfile,
+      addGroup,
+      renameGroup,
+      removeGroup,
+      moveProfileToGroup,
+      filesWidgetActions,
+    ],
+  );
+
+  function handleSlotReplace(slot: LayoutWidgetSlot, key: WidgetKey) {
+    // UI 候选列表已经做过过滤，这里再做一次防守式保护，
+    // 避免未来新增入口时把“已存在或已浮动”的组件重新塞回主窗口。
+    if (!availableWidgets.includes(key)) return;
+    setSlotGroups((prev) => moveWidgetToSlot(prev, key, slot));
+  }
+
+  function handleOpenTransfersWidget() {
+    // 仅在用户主动点击状态栏传输指示器时展开并切换，不在传输开始时自动打断当前布局。
+    setWidgetCollapsed("bottom", false);
+    setSlotGroups((prev) => {
+      const bottomGroup = prev.bottom;
+      if (!bottomGroup) return prev;
+      if (bottomGroup.active === "transfers") return prev;
+      return {
+        ...prev,
+        bottom: {
+          ...bottomGroup,
+          active: "transfers",
+        },
+      };
+    });
+  }
+
+  return (
+    <>
+      {floatingWidgetKey ? (
+        <FloatingShell
+          floatingWidgetKey={floatingWidgetKey}
+          widgetLabels={widgetLabels}
+          widgetBody={widgets[floatingWidgetKey]}
+          layoutCollapsed={layoutCollapsed}
+          onToggleCollapsed={handleToggleCollapsed}
+          layoutMenuDisabled={layoutMenuDisabled}
+          aboutOpen={aboutOpen}
+          onOpenAbout={() => setAboutOpen(true)}
+          onCloseAbout={() => setAboutOpen(false)}
+          onOpenDevtools={handleOpenDevtools}
+          onOpenConfigSection={openConfigSection}
+          locale={locale}
+          themeId={themeId}
+          shellId={shellId}
+          availableShells={availableShells}
+          themes={themePresets}
+          onLocaleChange={(next) => setLocale(next)}
+          onShellChange={(next) => setShellId(next)}
+          onThemeChange={(next) => setThemeId(next)}
+          t={t}
+        />
+      ) : (
+        <div className="app-shell" style={layoutVars}>
+          {!isMac && (
+            <TitleBar
+              onOpenConfigSection={openConfigSection}
+              layoutCollapsed={layoutCollapsed}
+              onToggleCollapsed={handleToggleCollapsed}
+              onOpenAbout={() => setAboutOpen(true)}
+              footerVisibility={footerVisibility}
+              onToggleFooterPart={(part) =>
+                setFooterVisibility((prev) => ({
+                  ...prev,
+                  [part]: !prev[part],
+                }))
+              }
+              layoutDisabled={layoutMenuDisabled}
+              locale={locale}
+              themeId={themeId}
+              shellId={shellId}
+              availableShells={availableShells}
+              themes={themePresets}
+              onLocaleChange={(next) => setLocale(next)}
+              onShellChange={(next) => setShellId(next)}
+              onThemeChange={(next) => setThemeId(next)}
+              showSubAppMenu={showSubAppMenu}
+              subApps={subApps}
+              onLaunchSubApp={(id) => {
+                launchSubApp(id).catch(() => {});
+              }}
+              onFocusSubApp={(id) => {
+                focusSubApp(id).catch(() => {});
+              }}
+              onCloseSubApp={(id) => {
+                closeSubApp(id).catch(() => {});
+              }}
+              t={t}
+            />
+          )}
+
+          <Workspace
+            layoutCollapsed={layoutCollapsed}
+            sideSlotCounts={sideSlotCounts}
+            slotGroups={slotGroups}
+            widgetLabels={widgetLabels}
+            widgets={widgets}
+            terminalWidget={
+              <TerminalWidget
+                sessions={sessionState.sessions}
+                workspace={sessionState.workspace}
+                profiles={profiles}
+                editingProfile={editingProfile}
+                localSessionMeta={sessionState.localSessionMeta}
+                activeSessionId={sessionState.activeSessionId}
+                activeSession={sessionState.activeSession}
+                activeSessionState={sessionState.activeSessionState}
+                activeSessionReason={sessionState.activeSessionReason}
+                sessionStates={sessionState.sessionStates}
+                sessionReasons={sessionState.sessionReasons}
+                registerTerminalContainer={
+                  terminalActions.registerTerminalContainer
+                }
+                isTerminalReady={terminalQuery.isTerminalReady}
+                activeLinkMenu={terminalQuery.getActiveLinkMenu()}
+                hasFocusedLine={terminalQuery.hasFocusedLine}
+                onFocusLineAtPoint={terminalActions.focusTerminalLineAtPoint}
+                onCopyFocusedLine={terminalActions.copyActiveFocusedLine}
+                hasActiveSelection={terminalQuery.hasActiveSelection}
+                getActiveSelectionText={terminalQuery.getActiveSelectionText}
+                onCopySelection={terminalActions.copyActiveSelection}
+                onSendSelectionToAi={aiState.sendSelectionText}
+                onOpenLink={terminalActions.openActiveLink}
+                onCopyLink={terminalActions.copyActiveLink}
+                onCloseLinkMenu={terminalActions.closeActiveLinkMenu}
+                onPaste={terminalActions.pasteToActiveTerminal}
+                onClear={terminalActions.clearActiveTerminal}
+                onSearchNext={terminalActions.searchActiveTerminalNext}
+                onSearchPrev={terminalActions.searchActiveTerminalPrev}
+                onSearchClear={terminalActions.clearActiveSearchDecorations}
+                searchResultStats={terminalQuery.getActiveSearchStats()}
+                autocomplete={
+                  terminalQuery.getActiveAutocomplete()
+                    ? {
+                        sessionId:
+                          terminalQuery.getActiveAutocomplete()!.sessionId,
+                        items: terminalQuery
+                          .getActiveAutocomplete()!
+                          .items.map((item) => ({
+                            command: item.command,
+                            useCount: item.useCount,
+                          })),
+                        selectedIndex:
+                          terminalQuery.getActiveAutocomplete()!.selectedIndex,
+                      }
+                    : null
+                }
+                autocompleteAnchor={terminalQuery.getActiveAutocompleteAnchor()}
+                onApplyAutocompleteSuggestion={(command) => {
+                  terminalActions
+                    .applyActiveAutocompleteSuggestion(command)
+                    .catch(() => {});
+                }}
+                onDismissAutocomplete={terminalActions.closeActiveAutocomplete}
+                isLocalSession={sessionActions.isLocalSession}
+                onSwitchSession={sessionActions.switchSession}
+                onFocusPane={sessionActions.focusPane}
+                onReorderPaneSessions={sessionActions.reorderPaneSessions}
+                onReconnectSession={sessionActions.reconnectSession}
+                onSaveSession={handleSaveSessionBuffer}
+                onSplitActivePane={sessionActions.splitActivePane}
+                onClosePaneSession={sessionActions.closePaneSession}
+                onResizePaneSplit={sessionActions.resizePaneSplit}
+                onCloseOtherSessionsInPane={
+                  sessionActions.closeOtherSessionsInPane
+                }
+                onCloseSessionsToRightInPane={
+                  sessionActions.closeSessionsToRightInPane
+                }
+                onCloseAllSessionsInPane={sessionActions.closeAllSessionsInPane}
+                t={t}
+              />
+            }
+            availableWidgets={availableWidgets}
+            leftVisible={leftVisible}
+            rightVisible={rightVisible}
+            bottomVisible={bottomVisible}
+            onReplace={handleSlotReplace}
+            onFloat={handleFloat}
+            onCloseWidget={handleCloseSlot}
+            onToggleSplit={handleToggleSplit}
+            onStartResize={startResize}
+            t={t}
+          />
+
+          <BottomArea
+            visibility={footerVisibility}
+            managerOpen={quickbarManagerOpen}
+            onOpenManager={() => setQuickbarManagerOpen(true)}
+            showGroupTitle={showGroupTitle}
+            groups={quickbarGroups}
+            commands={quickbarCommands}
+            onCloseManager={() => setQuickbarManagerOpen(false)}
+            onAddGroup={addQuickbarGroup}
+            onRenameGroup={renameQuickbarGroup}
+            onRemoveGroup={removeQuickbarGroup}
+            onToggleGroupVisible={toggleQuickbarGroupVisible}
+            onAddCommand={addQuickbarCommand}
+            onUpdateCommand={updateQuickbarCommand}
+            onRemoveCommand={removeQuickbarCommand}
+            onShowGroupTitleChange={setShowGroupTitle}
+            onRunCommand={handleRunQuickCommand}
+            getActiveTerminalStats={terminalQuery.getActiveTerminalStats}
+            resourceMonitorEnabled={resourceMonitorEnabled}
+            resourceMonitorStatus={activeResourceMonitorStatus}
+            resourceSnapshot={activeResourceSnapshot}
+            sftpProgressBySession={sftpState.progressBySession}
+            onOpenTransfersWidget={handleOpenTransfersWidget}
+            activeAiConfigName={activeOpenaiConfig?.name?.trim() || null}
+            locale={locale}
+            t={t}
+          />
+
+          <AboutModal
+            open={aboutOpen}
+            onClose={() => setAboutOpen(false)}
+            onOpenDevtools={handleOpenDevtools}
+            t={t}
+          />
+        </div>
+      )}
+      <ProfileModal
+        open={profileModalOpen}
+        mode={profileModalMode}
+        draft={profileDraft}
+        sshGroups={sshGroups}
+        onDraftChange={setProfileDraft}
+        onClose={closeProfileModal}
+        onSubmit={submitProfile}
+        t={t}
+      />
+      <ConfigModal
+        open={configModalOpen}
+        activeSection={activeConfigSection}
+        sections={configModalSections}
+        sftpEnabled={sftpEnabled}
+        fileDefaultEditorPath={fileDefaultEditorPath}
+        backgroundImageEnabled={backgroundImageEnabled}
+        backgroundImageAsset={backgroundImageAsset}
+        backgroundImageSurfaceAlpha={normalizedBackgroundImageSurfaceAlpha}
+        aiSelectionMaxChars={aiSelectionMaxChars}
+        aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
+        aiDebugLoggingEnabled={aiDebugLoggingEnabled}
+        aiActiveOpenaiConfigId={aiActiveOpenaiConfigId}
+        aiOpenaiConfigs={aiOpenaiConfigs}
+        webLinksEnabled={webLinksEnabled}
+        commandAutocompleteEnabled={commandAutocompleteEnabled}
+        selectionAutoCopyEnabled={selectionAutoCopyEnabled}
+        scrollback={scrollback}
+        terminalPathSyncEnabled={terminalPathSyncEnabled}
+        resourceMonitorEnabled={resourceMonitorEnabled}
+        resourceMonitorIntervalSec={resourceMonitorIntervalSec}
+        hostKeyPolicy={hostKeyPolicy}
+        onSftpEnabledChange={setSftpEnabled}
+        onFileDefaultEditorPathChange={setFileDefaultEditorPath}
+        onBackgroundImageEnabledChange={setBackgroundImageEnabled}
+        onBackgroundImageAssetChange={setBackgroundImageAsset}
+        onBackgroundImageSurfaceAlphaChange={setBackgroundImageSurfaceAlpha}
+        onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
+        onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
+        onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
+        onAiActiveOpenaiConfigIdChange={setAiActiveOpenaiConfigId}
+        onAiOpenaiConfigAdd={addOpenaiConfig}
+        onAiOpenaiConfigRemove={removeOpenaiConfig}
+        onAiOpenaiConfigNameChange={updateOpenaiConfigName}
+        onAiOpenaiBaseUrlChange={updateOpenaiConfigBaseUrl}
+        onAiOpenaiModelChange={updateOpenaiConfigModel}
+        onAiOpenAiTest={testOpenAiConnection}
+        onAiOpenaiApiKeyReplace={replaceOpenaiApiKey}
+        onAiOpenaiApiKeyClear={clearOpenaiApiKey}
+        onWebLinksEnabledChange={setWebLinksEnabled}
+        onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
+        onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
+        onScrollbackChange={setScrollback}
+        onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}
+        onResourceMonitorEnabledChange={setResourceMonitorEnabled}
+        onResourceMonitorIntervalSecChange={setResourceMonitorIntervalSec}
+        onHostKeyPolicyChange={setHostKeyPolicy}
+        onClose={() => setConfigModalOpen(false)}
+        onSectionChange={setActiveConfigSection}
+        t={t}
+      />
+      <NoticeHost />
+    </>
+  );
+}

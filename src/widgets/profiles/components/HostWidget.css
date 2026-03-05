@@ -1,0 +1,299 @@
+.host-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.host-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.host-list-header {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-soft);
+  font-size: 13px;
+  gap: 8px;
+  align-items: center;
+}
+
+.host-search {
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.host-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.host-list-actions button,
+.host-list-header button {
+  background: var(--button-bg-strong);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  padding: 4px 10px;
+}
+
+.host-list-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
+    transparent;
+}
+
+.host-list-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.host-list-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.host-list-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+.host-list-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
+}
+
+.host-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(
+    in srgb,
+    var(--chrome-session-group-bg) 72%,
+    transparent
+  );
+}
+
+.host-group-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.host-group-title.expanded {
+  color: var(--accent);
+}
+
+.host-group-title em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.host-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.host-connecting-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.host-connecting-icon {
+  animation: host-connecting-spin 0.9s linear infinite;
+}
+
+@keyframes host-connecting-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.host-row-icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--text-muted) 76%, var(--accent));
+}
+
+.host-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.host-group-list--nested {
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px dashed var(--border-input);
+}
+
+.host-list-body button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 5px 12px;
+  border-radius: 12px;
+  background: color-mix(
+    in srgb,
+    var(--chrome-session-group-item-bg) 68%,
+    transparent
+  );
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.host-list-body .host-group-title {
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--chrome-session-group-title-bg) 74%,
+    transparent
+  );
+  border: 1px solid var(--border-weak);
+}
+
+.host-list-body button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.host-list-body button.active .host-row-icon {
+  color: var(--accent);
+}
+
+.host-list-body .host-root-profile {
+  flex-shrink: 0;
+  margin-top: 5px;
+  margin-left: 10px;
+  border-radius: 12px;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--border-soft) 62%, transparent);
+  background: color-mix(in srgb, var(--surface-alt) 38%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 84%, var(--text-muted));
+  box-shadow: none;
+}
+
+.host-list-body .host-root-profile .host-row-icon {
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--accent) 18%);
+}
+
+.host-list-body .host-root-profile:hover {
+  border-color: color-mix(in srgb, var(--border-weak) 78%, var(--accent) 22%);
+  background: color-mix(in srgb, var(--surface-alt) 54%, transparent);
+  color: var(--text-secondary);
+}
+
+.host-list-body .host-root-profile:hover .host-row-icon {
+  color: color-mix(in srgb, var(--text-muted) 68%, var(--accent) 32%);
+}
+
+.host-list-body .host-root-profile.active {
+  border-style: solid;
+  color: var(--accent);
+}
+
+.host-list-body em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.host-move-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+}
+
+.modal-body.host-move-modal-body {
+  min-height: 220px;
+  max-height: min(56vh, 420px);
+  overflow-y: auto;
+  overflow-x: visible;
+}
+
+.modal-body.host-remove-group-modal-body {
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.host-remove-group-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.host-remove-group-dialog p {
+  margin: 0;
+}
+
+.host-move-dialog .select-menu-list {
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
+    transparent;
+}
+
+.host-move-dialog .select-menu-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.host-move-dialog .select-menu-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.host-move-dialog .select-menu-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+.host-move-dialog .select-menu-list::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
+}

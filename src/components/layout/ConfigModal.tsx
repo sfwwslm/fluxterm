@@ -4,7 +4,7 @@ import { open as openDialogFile } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, mkdir, readFile } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Translate } from "@/i18n";
-import Modal from "@/components/terminal/modals/Modal";
+import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
 import {
@@ -21,11 +21,11 @@ import {
   MAX_SCROLLBACK,
   MIN_RESOURCE_MONITOR_INTERVAL_SEC,
   MIN_SCROLLBACK,
-} from "@/hooks/settings/useSessionSettings";
+} from "@/hooks/useSessionSettings";
 import {
   MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
-} from "@/hooks/settings/useAppSettings";
+} from "@/hooks/useAppSettings";
 import "@/components/layout/ConfigModal.css";
 import { extractErrorMessage } from "@/shared/errors/appError";
 
@@ -450,7 +450,7 @@ export default function ConfigModal({
   function renderSectionContent() {
     if (activeSection === "app-settings") {
       return (
-        <div className="config-modal-panel config-modal-panel-scrollable">
+        <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.appSettings")}</h3>
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
@@ -610,7 +610,7 @@ export default function ConfigModal({
     }
     if (activeSection === "ai-settings") {
       return (
-        <div className="config-modal-panel config-modal-panel-scrollable">
+        <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.aiSettings")}</h3>
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
@@ -708,7 +708,7 @@ export default function ConfigModal({
     }
     if (activeSection === "openai-manage") {
       return (
-        <div className="config-modal-panel config-modal-panel-scrollable">
+        <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.openaiManage")}</h3>
           <p>{t("config.openai.manageHint")}</p>
           <div className="config-file-picker-actions">
@@ -785,7 +785,7 @@ export default function ConfigModal({
     }
     if (activeSection === "openai-settings") {
       return (
-        <div className="config-modal-panel config-modal-panel-scrollable">
+        <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.openaiSettings")}</h3>
           {!selectedOpenAiConfig && (
             <div className="config-empty-state">
@@ -988,7 +988,7 @@ export default function ConfigModal({
     }
     if (activeSection === "session-settings") {
       return (
-        <div className="config-modal-panel config-modal-panel-scrollable">
+        <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.sessionSettings")}</h3>
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
@@ -1164,7 +1164,7 @@ export default function ConfigModal({
     }
     return (
       // 右侧配置区统一使用固定高度 + 内部滚动，避免不同分区在内容增长后把模态框继续撑高。
-      <div className="config-modal-panel config-modal-panel-scrollable">
+      <div className="config-modal-widget config-modal-widget-scrollable">
         <h3>{t("config.section.configDirectory")}</h3>
         <div className="config-dir-card">
           <div className="config-toggle-copy">

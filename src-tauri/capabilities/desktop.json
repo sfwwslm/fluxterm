@@ -1,7 +1,7 @@
 {
   "identifier": "desktop-capability",
   "platforms": ["macOS", "windows", "linux"],
-  "windows": ["main", "float-*"],
+  "windows": ["main", "widget-*", "subapp-*"],
   "permissions": [
     "dialog:default",
     "window-state:default",
@@ -47,3 +47,4 @@
     }
   ]
 }
+

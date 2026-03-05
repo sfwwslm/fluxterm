@@ -1,0 +1,17 @@
+.subapp-titlebar {
+  border-bottom-color: var(--border-weak);
+}
+
+.subapp-titlebar-brand {
+  align-items: center;
+  gap: 10px;
+}
+
+.subapp-titlebar-brand-name {
+  font-size: 18px;
+}
+
+.subapp-titlebar-brand-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}

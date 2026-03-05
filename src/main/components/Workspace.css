@@ -1,0 +1,20 @@
+/* 底部面板使用纵向布局，让组件槽位拿到剩余高度。 */
+.bottom-widget {
+  height: var(--bottom-height, 240px);
+  margin: 0 var(--workspace-pad, 16px) var(--workspace-pad, 16px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 仅对底部槽位生效，避免影响左右侧组件布局。 */
+.bottom-widget .widget-slot {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 底部 widget-body 参与纵向伸缩，保持滚动落在统一容器。 */
+.bottom-widget .widget-body {
+  flex: 1;
+  min-height: 0;
+}

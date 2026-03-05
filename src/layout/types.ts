@@ -1,5 +1,5 @@
 /** 布局相关类型定义，覆盖槽位标识与小组件布局配置结构。 */
-import type { PanelKey } from "@/types";
+import type { WidgetKey } from "@/types";
 
 /** 组件槽位标识。 */
 export type WidgetSlot = `${WidgetSide}:${number}` | "bottom";
@@ -9,13 +9,13 @@ export type WidgetSide = "left" | "right";
 
 /** 单个槽位的组件组。 */
 export type WidgetGroup = {
-  active: PanelKey | null;
+  active: WidgetKey | null;
 };
 
 /** 持久化的浮动窗口布局。 */
-export type FloatingPanelLayout = Partial<
+export type FloatingWidgetLayout = Partial<
   Record<
-    PanelKey,
+    WidgetKey,
     {
       origin: WidgetSlot;
     }
@@ -37,5 +37,5 @@ export type WidgetLayout = {
   };
   sideSlotCounts: Record<WidgetSide, number>;
   slots: Record<string, WidgetGroup>;
-  floating: FloatingPanelLayout;
+  floating: FloatingWidgetLayout;
 };

@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Locale, Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { ThemeId } from "@/types";
+import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import Menus from "./Menus";
 import WindowControls from "./WindowControls";
@@ -27,6 +28,15 @@ type TitleBarProps = {
   onLocaleChange: (locale: Locale) => void;
   onShellChange: (shellId: string | null) => void;
   onThemeChange: (themeId: ThemeId) => void;
+  showSubAppMenu?: boolean;
+  subApps?: Array<{
+    id: SubAppId;
+    label: string;
+    status: SubAppRuntimeStatus;
+  }>;
+  onLaunchSubApp?: (id: SubAppId) => void;
+  onFocusSubApp?: (id: SubAppId) => void;
+  onCloseSubApp?: (id: SubAppId) => void;
   t: Translate;
 };
 
@@ -48,6 +58,11 @@ export default function TitleBar({
   onLocaleChange,
   onShellChange,
   onThemeChange,
+  showSubAppMenu = false,
+  subApps = [],
+  onLaunchSubApp,
+  onFocusSubApp,
+  onCloseSubApp,
   t,
 }: TitleBarProps) {
   const hasTauriRuntime =
@@ -88,6 +103,11 @@ export default function TitleBar({
           onLocaleChange={onLocaleChange}
           onShellChange={onShellChange}
           onThemeChange={onThemeChange}
+          showSubAppMenu={showSubAppMenu}
+          subApps={subApps}
+          onLaunchSubApp={onLaunchSubApp}
+          onFocusSubApp={onFocusSubApp}
+          onCloseSubApp={onCloseSubApp}
           t={t}
         />
       )}

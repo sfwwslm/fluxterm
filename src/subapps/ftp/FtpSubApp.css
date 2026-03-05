@@ -1,0 +1,44 @@
+.subapp-demo-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--accent) 20%, transparent),
+      transparent 62%
+    ),
+    transparent;
+  color: var(--text-primary, #e8f1ff);
+}
+
+.subapp-demo-content {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.subapp-demo-card {
+  width: min(560px, 100%);
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.14));
+  background: color-mix(
+    in srgb,
+    var(--surface-elevated, #141b24) 72%,
+    transparent
+  );
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+}
+
+.subapp-demo-card h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.subapp-demo-card p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-secondary, rgba(232, 241, 255, 0.78));
+}

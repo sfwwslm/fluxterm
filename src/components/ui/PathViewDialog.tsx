@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import Modal from "@/components/terminal/modals/Modal";
+import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import "@/components/ui/PathViewDialog.css";
 

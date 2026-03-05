@@ -1,7 +1,7 @@
 /** 布局结构与槽位操作工具，负责默认布局与布局配置规范化。 */
-import type { PanelKey } from "@/types";
+import type { WidgetKey } from "@/types";
 import type {
-  FloatingPanelLayout,
+  FloatingWidgetLayout,
   WidgetLayout,
   WidgetGroup,
   WidgetSide,
@@ -12,7 +12,7 @@ import type {
 export const MAX_SIDE_SLOTS = 10;
 
 /** 所有可用组件键。 */
-export const panelKeys: PanelKey[] = [
+export const widgetKeys: WidgetKey[] = [
   "profiles",
   "files",
   "transfers",
@@ -61,7 +61,7 @@ export function normalizeGroup(group: unknown): WidgetGroup {
   if (!group || typeof group !== "object") return createEmptyGroup();
   const raw = group as Partial<WidgetGroup>;
   return {
-    active: normalizePanelKey(raw.active),
+    active: normalizeWidgetKey(raw.active),
   };
 }
 
@@ -134,7 +134,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
     ),
   };
   const structured = normalizeSideSlotStructure(baseSlots, initialCounts);
-  const dedupedSlots = dedupeActivePanels(structured.slots);
+  const dedupedSlots = dedupeActiveWidgets(structured.slots);
   const floating = normalizeFloating(value.floating, dedupedSlots);
 
   return {
@@ -185,7 +185,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
 /** 将组件放入槽位：从其他槽位移除后，直接替换目标槽位当前组件。 */
 export function moveWidgetToSlot(
   slots: Record<string, WidgetGroup>,
-  widget: PanelKey,
+  widget: WidgetKey,
   target: WidgetSlot,
 ) {
   const next = cloneSlots(slots);
@@ -243,33 +243,33 @@ function normalizeSlots(rawSlots: Record<string, unknown>) {
 function normalizeFloating(
   raw: unknown,
   slots: Record<string, WidgetGroup>,
-): FloatingPanelLayout {
+): FloatingWidgetLayout {
   if (!raw || typeof raw !== "object") return {};
-  const activePanels = new Set<PanelKey>();
+  const activeWidgets = new Set<WidgetKey>();
   Object.values(slots).forEach((group) => {
-    if (group.active) activePanels.add(group.active);
+    if (group.active) activeWidgets.add(group.active);
   });
-  const next: FloatingPanelLayout = {};
+  const next: FloatingWidgetLayout = {};
   Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
-    const panel = normalizePanelKey(key);
-    if (!panel || activePanels.has(panel)) return;
+    const widget = normalizeWidgetKey(key);
+    if (!widget || activeWidgets.has(widget)) return;
     if (!value || typeof value !== "object") return;
     const origin = (value as { origin?: unknown }).origin;
     if (origin !== "bottom") {
       const parsed =
         typeof origin === "string" ? parseSideSlotKey(origin) : null;
       if (!parsed) return;
-      next[panel] = { origin: sideSlotKey(parsed.side, parsed.index) };
+      next[widget] = { origin: sideSlotKey(parsed.side, parsed.index) };
       return;
     }
-    next[panel] = { origin: "bottom" };
+    next[widget] = { origin: "bottom" };
   });
   return next;
 }
 
-function dedupeActivePanels(slots: Record<string, WidgetGroup>) {
+function dedupeActiveWidgets(slots: Record<string, WidgetGroup>) {
   const next = cloneSlots(slots);
-  const used = new Set<PanelKey>();
+  const used = new Set<WidgetKey>();
   const orderedKeys = [
     ...getSideSlotKeys(next, "left"),
     ...getSideSlotKeys(next, "right"),
@@ -308,7 +308,7 @@ function clampNumber(
   return Math.min(max, Math.max(min, value));
 }
 
-function normalizePanelKey(value: unknown): PanelKey | null {
+function normalizeWidgetKey(value: unknown): WidgetKey | null {
   if (value === "profiles") return "profiles";
   if (value === "files") return "files";
   if (value === "transfers") return "transfers";

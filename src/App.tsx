@@ -1,7 +1,7 @@
 /**
- * 应用历史入口兼容层。
- * 职责：将根入口转发到新的 app 分层实现，避免旧导入路径失效。
+ * 应用根入口模块。
+ * 职责：导出 Main 运行单元根组件。
  */
-import AppRoot from "@/app/AppRoot";
+import AppRoot from "@/main/AppRoot";
 
 export default AppRoot;

@@ -4,6 +4,7 @@ import type React from "react";
 import type { Locale, Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { ThemeId } from "@/types";
+import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 
@@ -64,6 +65,15 @@ type MenusProps = {
   onLocaleChange: (locale: Locale) => void;
   onShellChange: (shellId: string | null) => void;
   onThemeChange: (themeId: ThemeId) => void;
+  showSubAppMenu?: boolean;
+  subApps?: Array<{
+    id: SubAppId;
+    label: string;
+    status: SubAppRuntimeStatus;
+  }>;
+  onLaunchSubApp?: (id: SubAppId) => void;
+  onFocusSubApp?: (id: SubAppId) => void;
+  onCloseSubApp?: (id: SubAppId) => void;
   t: Translate;
 };
 
@@ -83,6 +93,11 @@ export default function Menus({
   onLocaleChange,
   onShellChange,
   onThemeChange,
+  showSubAppMenu = false,
+  subApps = [],
+  onLaunchSubApp,
+  onFocusSubApp,
+  onCloseSubApp,
   t,
 }: MenusProps) {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -105,8 +120,8 @@ export default function Menus({
     };
   }, [closeMenus]);
 
-  const menuItems = useMemo<MenuItem[]>(
-    () => [
+  const menuItems = useMemo<MenuItem[]>(() => {
+    const items: MenuItem[] = [
       {
         id: "config",
         label: t("menu.config"),
@@ -247,29 +262,92 @@ export default function Menus({
         label: t("menu.about"),
         onClick: onOpenAbout,
       },
-    ],
-    [
-      onOpenConfigSection,
-      layoutCollapsed.bottom,
-      layoutCollapsed.left,
-      layoutCollapsed.right,
-      footerVisibility.quickbar,
-      footerVisibility.statusbar,
-      layoutDisabled,
-      locale,
-      themeId,
-      shellId,
-      availableShells,
-      themes,
-      onLocaleChange,
-      onShellChange,
-      onThemeChange,
-      onOpenAbout,
-      onToggleFooterPart,
-      onToggleCollapsed,
-      t,
-    ],
-  );
+    ];
+
+    if (showSubAppMenu) {
+      const launchableActions: MenuEntry[] = [
+        {
+          type: "section",
+          id: "apps-launch-section",
+          label: t("menu.apps.section.available"),
+        },
+        ...subApps.map((subApp) => ({
+          id: `apps-launch-${subApp.id}`,
+          label: t("menu.apps.open", { name: subApp.label }),
+          onClick: () => onLaunchSubApp?.(subApp.id),
+          disabled: subApp.status !== "idle",
+        })),
+        { type: "divider", id: "apps-divider" },
+        {
+          type: "section",
+          id: "apps-running-section",
+          label: t("menu.apps.section.running"),
+        },
+      ];
+
+      const runningApps = subApps.filter((item) => item.status !== "idle");
+      const runningActions: MenuEntry[] = runningApps.length
+        ? runningApps.flatMap((subApp) => {
+            const stateLabel =
+              subApp.status === "ready"
+                ? t("menu.apps.state.ready")
+                : t("menu.apps.state.launching");
+            return [
+              {
+                id: `apps-focus-${subApp.id}`,
+                label: `${t("menu.apps.focus", { name: subApp.label })} · ${stateLabel}`,
+                onClick: () => onFocusSubApp?.(subApp.id),
+              },
+              {
+                id: `apps-close-${subApp.id}`,
+                label: t("menu.apps.close", { name: subApp.label }),
+                onClick: () => onCloseSubApp?.(subApp.id),
+              },
+            ];
+          })
+        : [
+            {
+              id: "apps-running-empty",
+              label: t("menu.apps.noneRunning"),
+              onClick: () => {},
+              disabled: true,
+            },
+          ];
+
+      items.splice(items.length - 1, 0, {
+        id: "apps",
+        label: t("menu.apps"),
+        actions: [...launchableActions, ...runningActions],
+      });
+    }
+
+    return items;
+  }, [
+    onOpenConfigSection,
+    layoutCollapsed.bottom,
+    layoutCollapsed.left,
+    layoutCollapsed.right,
+    footerVisibility.quickbar,
+    footerVisibility.statusbar,
+    layoutDisabled,
+    locale,
+    themeId,
+    shellId,
+    availableShells,
+    themes,
+    onLocaleChange,
+    onShellChange,
+    onThemeChange,
+    showSubAppMenu,
+    subApps,
+    onLaunchSubApp,
+    onFocusSubApp,
+    onCloseSubApp,
+    onOpenAbout,
+    onToggleFooterPart,
+    onToggleCollapsed,
+    t,
+  ]);
 
   return (
     <div className="menu-bar" ref={menuRef}>
