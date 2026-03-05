@@ -179,26 +179,54 @@ export default function useAiSettings(): UseAiSettingsResult {
 
   useEffect(() => {
     if (!loadedRef.current || savingSecretRef.current) return;
+
+    const nextSaveInput = buildSaveInput(
+      {
+        selectionMaxChars,
+        sessionRecentOutputMaxChars,
+        debugLoggingEnabled,
+        activeOpenaiConfigId,
+        openaiConfigs,
+      },
+      lastLoadedRef.current,
+    );
+
+    // 只有在配置内容真正发生变化时才触发保存，避免因后端返回新对象引用导致的死循环。
+    const currentSaveInput = buildSaveInput(
+      {
+        selectionMaxChars: lastLoadedRef.current.selectionMaxChars,
+        sessionRecentOutputMaxChars:
+          lastLoadedRef.current.sessionRecentOutputMaxChars,
+        debugLoggingEnabled: lastLoadedRef.current.debugLoggingEnabled,
+        activeOpenaiConfigId: lastLoadedRef.current.activeOpenaiConfigId,
+        openaiConfigs: lastLoadedRef.current.openaiConfigs,
+      },
+      lastLoadedRef.current,
+    );
+
+    if (JSON.stringify(nextSaveInput) === JSON.stringify(currentSaveInput)) {
+      return;
+    }
+
     // 设置页字段采用自动保存，旧请求返回时不应覆盖用户刚刚编辑的新状态。
     const requestId = latestSaveRequestIdRef.current + 1;
     latestSaveRequestIdRef.current = requestId;
-    aiSettingsSave(
-      buildSaveInput(
-        {
-          selectionMaxChars,
-          sessionRecentOutputMaxChars,
-          debugLoggingEnabled,
-          activeOpenaiConfigId,
-          openaiConfigs,
-        },
-        lastLoadedRef.current,
-      ),
-    )
+
+    aiSettingsSave(nextSaveInput)
       .then((saved) => {
         if (requestId !== latestSaveRequestIdRef.current) return;
         lastLoadedRef.current = saved;
-        setOpenaiConfigs(saved.openaiConfigs);
-        setActiveOpenaiConfigId(saved.activeOpenaiConfigId);
+        setOpenaiConfigs((current) => {
+          if (JSON.stringify(current) === JSON.stringify(saved.openaiConfigs)) {
+            return current;
+          }
+          return saved.openaiConfigs;
+        });
+        setActiveOpenaiConfigId((current) =>
+          current === saved.activeOpenaiConfigId
+            ? current
+            : saved.activeOpenaiConfigId,
+        );
       })
       .catch((error) => {
         warn(
