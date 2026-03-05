@@ -52,11 +52,11 @@ export default function useSftpDropUpload({
           y >= rect.top &&
           y <= rect.bottom;
         if (event.payload.type === "over") {
-          setDropState(inside ? "accept" : "reject");
+          setDropState(inside ? "accept" : "idle");
           return;
         }
         if (event.payload.type === "enter") {
-          setDropState(inside ? "accept" : "reject");
+          setDropState(inside ? "accept" : "idle");
           return;
         }
         if (event.payload.type === "drop") {
