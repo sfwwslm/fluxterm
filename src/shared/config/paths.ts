@@ -44,7 +44,7 @@ export async function getSettingsPath() {
 
 /** 获取 layout.json 路径。 */
 export async function getLayoutPath() {
-  const dir = await getTerminalConfigDir();
+  const dir = await getGlobalConfigDir();
   return join(dir, "layout.json");
 }
 

@@ -27,7 +27,7 @@ import type {
   WidgetSlot,
 } from "@/layout/types";
 import type { PanelKey } from "@/types";
-import { getLayoutPath, getTerminalConfigDir } from "@/shared/config/paths";
+import { getGlobalConfigDir, getLayoutPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
 
@@ -160,7 +160,7 @@ export default function useLayoutState({
 
   /** 将当前布局状态写入磁盘。 */
   async function saveLayoutConfig(payload: WidgetLayout) {
-    const dir = await getTerminalConfigDir();
+    const dir = await getGlobalConfigDir();
     await mkdir(dir, { recursive: true });
     const path = await getLayoutPath();
     await writeTextFile(path, JSON.stringify(payload, null, 2));

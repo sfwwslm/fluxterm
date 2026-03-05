@@ -111,6 +111,6 @@ pub fn resolve_known_hosts_path(app: &AppHandle) -> Result<PathBuf, EngineError>
 
 /// 解析主机配置文件路径。
 pub fn resolve_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_global_config_dir(app)?;
+    let dir = resolve_terminal_config_dir(app)?;
     Ok(dir.join("profiles.json"))
 }
