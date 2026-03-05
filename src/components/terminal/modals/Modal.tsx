@@ -1,17 +1,30 @@
 import type React from "react";
 import Button from "@/components/ui/button";
+import "./Modal.css";
 
+/**
+ * 通用模态框组件。
+ * 职责：提供一个居中的对话框容器，包含标题栏、内容区和可选的操作按钮区。
+ * 交互：支持点击遮罩层关闭，内容区具有独立滚动条。
+ */
 type ModalProps = {
+  /** 是否打开模态框。 */
   open: boolean;
+  /** 模态框标题。 */
   title: string;
+  /** 底部操作按钮区的 React 节点。 */
   actions?: React.ReactNode;
+  /** 关闭按钮的文本标签。 */
   closeLabel: string;
+  /** 内容区的额外类名。 */
   bodyClassName?: string;
+  /** 点击关闭按钮或遮罩层时的回调函数。 */
   onClose: () => void;
+  /** 模态框主体内容。 */
   children: React.ReactNode;
 };
 
-/** 通用模态框组件。 */
+/** 渲染标准模态对话框。 */
 export default function Modal({
   open,
   title,

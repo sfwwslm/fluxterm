@@ -55,6 +55,7 @@ body,
   --progress-gradient: linear-gradient(120deg, #7affa2, #f8d254);
   --shadow-strong: 0 16px 32px rgba(0, 0, 0, 0.35);
   --brand-glow: 0 0 12px rgba(248, 210, 84, 0.6);
+  --chrome-titlebar-height: 40px;
   --ui-radius: 10px;
   --ui-ring: var(--accent-soft);
   --ui-border: var(--border-input);
@@ -782,7 +783,7 @@ textarea {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 16px;
-  height: 40px;
+  height: var(--chrome-titlebar-height);
   padding: 0 12px;
   background: var(--chrome-titlebar-bg);
   border-bottom: 1px solid var(--border-weak);
@@ -1162,83 +1163,6 @@ input[type="number"] {
   appearance: textfield;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--chrome-modal-overlay-bg);
-  backdrop-filter: blur(12px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-  padding: 24px;
-}
-
-.modal {
-  width: min(720px, 100%);
-  max-height: 90vh;
-  background: var(--chrome-modal-bg);
-  border: 1px solid var(--border-weak);
-  border-radius: 18px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 18px;
-  background: var(--chrome-modal-header-bg);
-  border-bottom: 1px solid var(--border-soft);
-  color: var(--text-secondary);
-}
-
-.modal-body {
-  padding: 18px;
-  overflow: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
-    transparent;
-}
-
-.modal-body::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.modal-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.modal-body::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
-}
-
-.modal-body::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px 16px;
-  background: var(--chrome-modal-actions-bg);
-  border-top: 1px solid var(--border-soft);
-}
-
-.modal-actions button.primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 600;
-}
-
 .modal-actions button.ghost {
   background: transparent;
   border-color: var(--border-input);
@@ -1292,59 +1216,6 @@ input[type="number"] {
   padding: 12px 10px;
 }
 
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(5, 8, 12, 0.62);
-  backdrop-filter: blur(12px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2100;
-  padding: 24px;
-}
-
-.dialog-card {
-  width: min(420px, 100%);
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, #ffffff 14%, transparent) 0%,
-      transparent 56%
-    ),
-    color-mix(in srgb, var(--surface-menu) 90%, transparent);
-  border: 1px solid color-mix(in srgb, #ffffff 18%, var(--border-input));
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent),
-    inset 0 -16px 24px color-mix(in srgb, #000 18%, transparent);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.dialog-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.dialog-body {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  white-space: pre-line;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
 .widget-container.left {
   grid-area: left;
 }

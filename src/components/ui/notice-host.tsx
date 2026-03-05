@@ -2,7 +2,13 @@ import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
 import "@/components/ui/notice-host.css";
 
-/** 通用提示容器（Toast + 对话框）。 */
+/**
+ * 全局通知宿主组件。
+ * 职责：作为全局交互反馈层的渲染入口。
+ * 1. 渲染自动消失的 Toast 消息。
+ * 2. 渲染命令式弹出的 Dialog 确认框（如删除确认、错误提示等）。
+ * 交互：Dialog 遮罩层特意避开了标题栏，以便在弹窗时依然可以关闭或最小化应用。
+ */
 export default function NoticeHost() {
   const { toasts, dialogs, closeDialog } = useNotices();
   const activeDialog = dialogs[dialogs.length - 1] ?? null;

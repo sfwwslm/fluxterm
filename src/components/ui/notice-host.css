@@ -54,3 +54,62 @@
 .toast-item.error {
   color: var(--danger);
 }
+
+.dialog-overlay {
+  position: fixed;
+  top: var(--chrome-titlebar-height);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(5, 8, 12, 0.62);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
+  padding: 24px;
+}
+
+.dialog-card {
+  width: min(420px, 100%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-menu) 80%, transparent),
+      var(--surface-menu)
+    ),
+    color-mix(in srgb, var(--app-bg-base) 86%, transparent);
+  border: 1px solid var(--border-soft);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 12%, transparent);
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.dialog-body {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  text-align: center;
+  white-space: pre-wrap;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
