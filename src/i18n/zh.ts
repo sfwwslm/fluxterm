@@ -240,7 +240,7 @@ export const zh = {
   "tunnel.empty.noTunnels": "当前会话暂无隧道",
   "tunnel.bind.warning": "当前监听地址可被外部访问，请确认网络暴露风险。",
   "tunnel.connections": "连接",
-  "tunnel.onlySsh": "仅 SSH 会话可用。当前为本地 shell，会话不支持 SSH 隧道。",
+  "tunnel.onlySsh": "当前为本地模式，不支持 SSH 隧道。",
   "proxy.form.protocol": "代理协议",
   "proxy.form.name": "名称（可选）",
   "proxy.form.bindHost": "监听地址",

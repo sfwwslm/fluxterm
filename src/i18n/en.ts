@@ -253,8 +253,7 @@ export const en = {
   "tunnel.bind.warning":
     "Current bind host is externally reachable. Review exposure risk.",
   "tunnel.connections": "connections",
-  "tunnel.onlySsh":
-    "Available for SSH sessions only. Current session is local shell and does not support SSH tunnels.",
+  "tunnel.onlySsh": "SSH tunnels are not supported in local mode.",
   "proxy.form.protocol": "Protocol",
   "proxy.form.name": "Name (optional)",
   "proxy.form.bindHost": "Bind Host",

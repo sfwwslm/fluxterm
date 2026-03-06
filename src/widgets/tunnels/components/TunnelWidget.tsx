@@ -61,6 +61,8 @@ export default function TunnelWidget({
     [bindHost],
   );
   const sessionState = activeSessionState ?? "disconnected";
+  const isTunnelUnsupportedInLocalMode =
+    Boolean(activeSessionId) && !supportsSshTunnel;
   const sessionMeta = useMemo(() => {
     const table: Record<
       SessionStateUi,
@@ -95,6 +97,14 @@ export default function TunnelWidget({
     return table[sessionState];
   }, [sessionState, t]);
   const SessionIcon = sessionMeta.icon;
+
+  if (isTunnelUnsupportedInLocalMode) {
+    return (
+      <div className="tunnel-widget">
+        <div className="tunnel-unavailable">{t("tunnel.onlySsh")}</div>
+      </div>
+    );
+  }
 
   async function handleSubmit() {
     if (!activeSessionId || !supportsSshTunnel || submitting) return;
@@ -229,9 +239,6 @@ export default function TunnelWidget({
         </div>
       </div>
       <div className="tunnel-list">
-        {activeSessionId && !supportsSshTunnel && (
-          <div className="tunnel-unavailable">{t("tunnel.onlySsh")}</div>
-        )}
         {activeSessionId && tunnels.length === 0 && (
           <div className="tunnel-empty">{t("tunnel.empty.noTunnels")}</div>
         )}
