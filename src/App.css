@@ -653,7 +653,7 @@ button:disabled {
   padding-bottom: 4px;
 }
 
-\.widget {
+.widget {
   background: var(--chrome-widget-bg);
   border: 1px solid var(--border-weak);
   border-radius: 16px;
