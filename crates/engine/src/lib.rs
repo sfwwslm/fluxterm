@@ -4,8 +4,12 @@ pub mod engine;
 pub mod error;
 pub mod host_key;
 pub mod monitor;
+pub mod proxy;
+pub mod proxy_backend;
+pub mod proxy_error_codes;
 pub mod session;
 pub mod sftp;
+pub mod telemetry;
 pub mod types;
 pub mod util;
 

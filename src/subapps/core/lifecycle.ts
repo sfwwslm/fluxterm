@@ -18,7 +18,7 @@ export function parseSubAppIdFromHash(hash: string): SubAppId | null {
   const match = hash.match(/subapp=([a-z-]+)/i);
   if (!match) return null;
   const raw = match[1]?.toLowerCase();
-  if (raw === "ftp") return "ftp";
+  if (raw === "proxy") return "proxy";
   return null;
 }
 

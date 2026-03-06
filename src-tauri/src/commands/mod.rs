@@ -4,6 +4,7 @@ pub mod file;
 pub mod local;
 pub mod local_shell;
 pub mod profile;
+pub mod proxy;
 pub mod resource_monitor;
 pub mod security;
 pub mod sftp;

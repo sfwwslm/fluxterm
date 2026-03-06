@@ -7,6 +7,8 @@ import useAppSettings, {
   MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/useAppSettings";
+import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
+import { usePreventBrowserDefaults } from "@/hooks/usePreventBrowserDefaults";
 import { translations, type Locale, type Translate } from "@/i18n";
 import type { ThemeId } from "@/types";
 import { getBackgroundImageAssetPath } from "@/shared/config/paths";
@@ -19,8 +21,9 @@ import {
   parseSubAppIdFromHash,
   type SubAppLifecycleMessage,
 } from "@/subapps/core/lifecycle";
-import FtpSubApp from "@/subapps/ftp/FtpSubApp";
-import "@/subapps/ftp/FtpSubApp.css";
+import ProxySubApp from "@/subapps/proxy/ProxySubApp";
+import "@/subapps/SubAppShell.css";
+import "@/subapps/proxy/ProxySubApp.css";
 
 function formatMessage(
   message: string,
@@ -43,6 +46,9 @@ function clampBackgroundImageSurfaceAlpha(value: number) {
 
 /** 子应用根入口，仅渲染独立 SubApp 窗口。 */
 export default function SubAppRoot() {
+  useDisableBrowserShortcuts();
+  usePreventBrowserDefaults();
+
   const themeIds = useMemo(() => Object.keys(themePresets) as ThemeId[], []);
   const {
     locale,
@@ -196,14 +202,14 @@ export default function SubAppRoot() {
     effectiveThemeId,
   ]);
 
-  if (subAppId === "ftp") {
-    return <FtpSubApp id={subAppId} locale={effectiveLocale} t={t} />;
+  if (subAppId === "proxy") {
+    return <ProxySubApp id={subAppId} locale={effectiveLocale} t={t} />;
   }
 
   return (
-    <div className="subapp-demo-shell">
-      <main className="subapp-demo-content">
-        <article className="subapp-demo-card">
+    <div className="subapp-shell">
+      <main className="subapp-content">
+        <article className="subapp-card">
           <h2>{t("subapp.unknown.title")}</h2>
           <p>{t("subapp.unknown.description")}</p>
         </article>

@@ -50,9 +50,9 @@ export default function useSubApps({
   const defs = useMemo<SubAppDefinition[]>(
     () => [
       {
-        id: "ftp",
-        menuLabel: t("subapp.ftp.menuLabel"),
-        windowTitle: t("subapp.ftp.title"),
+        id: "proxy",
+        menuLabel: t("subapp.proxy.menuLabel"),
+        windowTitle: t("subapp.proxy.title"),
       },
     ],
     [t],
@@ -62,7 +62,7 @@ export default function useSubApps({
   const [statusById, setStatusById] = useState<
     Record<SubAppId, SubAppRuntimeStatus>
   >({
-    ftp: "idle",
+    proxy: "idle",
   });
 
   const postLifecycleMessage = useCallback(

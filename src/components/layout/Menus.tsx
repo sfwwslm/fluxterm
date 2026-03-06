@@ -65,7 +65,6 @@ type MenusProps = {
   onLocaleChange: (locale: Locale) => void;
   onShellChange: (shellId: string | null) => void;
   onThemeChange: (themeId: ThemeId) => void;
-  showSubAppMenu?: boolean;
   subApps?: Array<{
     id: SubAppId;
     label: string;
@@ -93,7 +92,6 @@ export default function Menus({
   onLocaleChange,
   onShellChange,
   onThemeChange,
-  showSubAppMenu = false,
   subApps = [],
   onLaunchSubApp,
   onFocusSubApp,
@@ -264,62 +262,60 @@ export default function Menus({
       },
     ];
 
-    if (showSubAppMenu) {
-      const launchableActions: MenuEntry[] = [
-        {
-          type: "section",
-          id: "apps-launch-section",
-          label: t("menu.apps.section.available"),
-        },
-        ...subApps.map((subApp) => ({
-          id: `apps-launch-${subApp.id}`,
-          label: t("menu.apps.open", { name: subApp.label }),
-          onClick: () => onLaunchSubApp?.(subApp.id),
-          disabled: subApp.status !== "idle",
-        })),
-        { type: "divider", id: "apps-divider" },
-        {
-          type: "section",
-          id: "apps-running-section",
-          label: t("menu.apps.section.running"),
-        },
-      ];
+    const launchableActions: MenuEntry[] = [
+      {
+        type: "section",
+        id: "apps-launch-section",
+        label: t("menu.apps.section.available"),
+      },
+      ...subApps.map((subApp) => ({
+        id: `apps-launch-${subApp.id}`,
+        label: t("menu.apps.open", { name: subApp.label }),
+        onClick: () => onLaunchSubApp?.(subApp.id),
+        disabled: subApp.status !== "idle",
+      })),
+      { type: "divider", id: "apps-divider" },
+      {
+        type: "section",
+        id: "apps-running-section",
+        label: t("menu.apps.section.running"),
+      },
+    ];
 
-      const runningApps = subApps.filter((item) => item.status !== "idle");
-      const runningActions: MenuEntry[] = runningApps.length
-        ? runningApps.flatMap((subApp) => {
-            const stateLabel =
-              subApp.status === "ready"
-                ? t("menu.apps.state.ready")
-                : t("menu.apps.state.launching");
-            return [
-              {
-                id: `apps-focus-${subApp.id}`,
-                label: `${t("menu.apps.focus", { name: subApp.label })} · ${stateLabel}`,
-                onClick: () => onFocusSubApp?.(subApp.id),
-              },
-              {
-                id: `apps-close-${subApp.id}`,
-                label: t("menu.apps.close", { name: subApp.label }),
-                onClick: () => onCloseSubApp?.(subApp.id),
-              },
-            ];
-          })
-        : [
+    const runningApps = subApps.filter((item) => item.status !== "idle");
+    const runningActions: MenuEntry[] = runningApps.length
+      ? runningApps.flatMap((subApp) => {
+          const stateLabel =
+            subApp.status === "ready"
+              ? t("menu.apps.state.ready")
+              : t("menu.apps.state.launching");
+          return [
             {
-              id: "apps-running-empty",
-              label: t("menu.apps.noneRunning"),
-              onClick: () => {},
-              disabled: true,
+              id: `apps-focus-${subApp.id}`,
+              label: `${t("menu.apps.focus", { name: subApp.label })} · ${stateLabel}`,
+              onClick: () => onFocusSubApp?.(subApp.id),
+            },
+            {
+              id: `apps-close-${subApp.id}`,
+              label: t("menu.apps.close", { name: subApp.label }),
+              onClick: () => onCloseSubApp?.(subApp.id),
             },
           ];
+        })
+      : [
+          {
+            id: "apps-running-empty",
+            label: t("menu.apps.noneRunning"),
+            onClick: () => {},
+            disabled: true,
+          },
+        ];
 
-      items.splice(items.length - 1, 0, {
-        id: "apps",
-        label: t("menu.apps"),
-        actions: [...launchableActions, ...runningActions],
-      });
-    }
+    items.splice(items.length - 1, 0, {
+      id: "apps",
+      label: t("menu.apps"),
+      actions: [...launchableActions, ...runningActions],
+    });
 
     return items;
   }, [
@@ -338,7 +334,6 @@ export default function Menus({
     onLocaleChange,
     onShellChange,
     onThemeChange,
-    showSubAppMenu,
     subApps,
     onLaunchSubApp,
     onFocusSubApp,

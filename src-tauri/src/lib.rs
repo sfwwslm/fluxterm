@@ -14,6 +14,7 @@ pub mod session_settings;
 pub mod ssh_config_import;
 pub mod ssh_host_keys;
 pub mod state;
+pub mod telemetry;
 pub mod utils;
 
 use std::sync::Arc;
@@ -36,6 +37,7 @@ use crate::commands::profile::{
     profile_groups_list, profile_groups_save, profile_list, profile_remove, profile_save,
     ssh_import_openssh_config,
 };
+use crate::commands::proxy::{proxy_close, proxy_close_all, proxy_list, proxy_open};
 use crate::commands::resource_monitor::{
     resource_monitor_start_local, resource_monitor_start_ssh, resource_monitor_stop,
 };
@@ -161,6 +163,10 @@ pub fn run() {
             app_config_dir,
             app_data_dir,
             open_devtools,
+            proxy_open,
+            proxy_close,
+            proxy_list,
+            proxy_close_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

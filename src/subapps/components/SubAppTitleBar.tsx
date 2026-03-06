@@ -36,8 +36,8 @@ type SubAppMenu = MenuI18nLabel & {
 
 type SubAppTitleBarProps = {
   title: string;
-  subtitle: string;
-  menus: SubAppMenu[];
+  subtitle?: string;
+  menus?: SubAppMenu[];
   t: Translate;
 };
 
@@ -45,7 +45,7 @@ type SubAppTitleBarProps = {
 export default function SubAppTitleBar({
   title,
   subtitle,
-  menus,
+  menus = [],
   t,
 }: SubAppTitleBarProps) {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -88,69 +88,78 @@ export default function SubAppTitleBar({
       >
         <img className="brand-logo" src="/icon.ico" alt="FluxTerm" />
         <span className="brand-name subapp-titlebar-brand-name">{title}</span>
-        <span className="subapp-titlebar-brand-sub">{subtitle}</span>
+        {subtitle ? (
+          <span className="subapp-titlebar-brand-sub">{subtitle}</span>
+        ) : null}
       </div>
 
-      <div
-        className="menu-bar"
-        ref={menuRootRef}
-        data-tauri-drag-region="false"
-      >
-        {normalizedMenus.map((menu) => {
-          const isActive = activeMenuId === menu.id;
-          return (
-            <div
-              key={menu.id}
-              className={`menu-item ${isActive ? "active" : ""}`}
-              onClick={() => {
-                setActiveMenuId((prev) => (prev === menu.id ? null : menu.id));
-              }}
-            >
-              <span>{t(menu.labelKey, menu.labelVars)}</span>
-              {isActive && (
-                <div
-                  className="menu-sub"
-                  data-tauri-drag-region="false"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {menu.actions.map((action) => {
-                    if (action.type === "divider") {
+      {normalizedMenus.length > 0 ? (
+        <div
+          className="menu-bar"
+          ref={menuRootRef}
+          data-tauri-drag-region="false"
+        >
+          {normalizedMenus.map((menu) => {
+            const isActive = activeMenuId === menu.id;
+            return (
+              <div
+                key={menu.id}
+                className={`menu-item ${isActive ? "active" : ""}`}
+                onClick={() => {
+                  setActiveMenuId((prev) =>
+                    prev === menu.id ? null : menu.id,
+                  );
+                }}
+              >
+                <span>{t(menu.labelKey, menu.labelVars)}</span>
+                {isActive && (
+                  <div
+                    className="menu-sub"
+                    data-tauri-drag-region="false"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {menu.actions.map((action) => {
+                      if (action.type === "divider") {
+                        return (
+                          <div key={action.id} className="menu-sub-divider" />
+                        );
+                      }
+                      if (action.type === "section") {
+                        return (
+                          <div
+                            key={action.id}
+                            className="menu-sub-section-title"
+                          >
+                            {t(action.labelKey, action.labelVars)}
+                          </div>
+                        );
+                      }
                       return (
-                        <div key={action.id} className="menu-sub-divider" />
-                      );
-                    }
-                    if (action.type === "section") {
-                      return (
-                        <div key={action.id} className="menu-sub-section-title">
+                        <Button
+                          key={action.id}
+                          className="menu-sub-item"
+                          variant="ghost"
+                          size="sm"
+                          disabled={action.disabled}
+                          data-tauri-drag-region="false"
+                          onClick={() => {
+                            if (action.disabled) return;
+                            action.onClick();
+                            closeMenus();
+                          }}
+                        >
                           {t(action.labelKey, action.labelVars)}
-                        </div>
+                        </Button>
                       );
-                    }
-                    return (
-                      <Button
-                        key={action.id}
-                        className="menu-sub-item"
-                        variant="ghost"
-                        size="sm"
-                        disabled={action.disabled}
-                        data-tauri-drag-region="false"
-                        onClick={() => {
-                          if (action.disabled) return;
-                          action.onClick();
-                          closeMenus();
-                        }}
-                      >
-                        {t(action.labelKey, action.labelVars)}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
       <WindowControls disabled={!hasTauriRuntime} />
     </header>

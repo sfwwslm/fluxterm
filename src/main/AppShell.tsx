@@ -23,8 +23,8 @@ import AboutModal from "@/main/components/modals/AboutModal";
 import ProfileModal from "@/main/components/modals/ProfileModal";
 import NoticeHost from "@/components/ui/notice-host";
 import { useNotices } from "@/hooks/useNotices";
-import { useDisableBrowserShortcuts } from "@/main/hooks/useDisableBrowserShortcuts";
-import { usePreventBrowserDefaults } from "@/main/hooks/usePreventBrowserDefaults";
+import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
+import { usePreventBrowserDefaults } from "@/hooks/usePreventBrowserDefaults";
 import useProfiles from "@/hooks/useProfiles";
 import useAppSettings from "@/hooks/useAppSettings";
 import {
@@ -814,8 +814,6 @@ export default function AppShell() {
     onOpenCurrentDevtools: openCurrentDevtools,
     onMainShutdown: notifyMainShutdown,
   });
-  const showSubAppMenu = import.meta.env.DEV;
-
   function handleOpenDevtools() {
     openCurrentDevtools();
     openAllDevtools();
@@ -1687,7 +1685,6 @@ export default function AppShell() {
     setLocale,
     setThemeId,
     setShellId,
-    showSubAppMenu: showSubAppMenu && !floatingWidgetKey,
     subApps,
     onLaunchSubApp: (id) => {
       launchSubApp(id).catch(() => {});
@@ -2389,7 +2386,6 @@ export default function AppShell() {
               onLocaleChange={(next) => setLocale(next)}
               onShellChange={(next) => setShellId(next)}
               onThemeChange={(next) => setThemeId(next)}
-              showSubAppMenu={showSubAppMenu}
               subApps={subApps}
               onLaunchSubApp={(id) => {
                 launchSubApp(id).catch(() => {});

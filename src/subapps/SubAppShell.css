@@ -1,4 +1,4 @@
-.subapp-demo-shell {
+.subapp-shell {
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -12,14 +12,14 @@
   color: var(--text-primary, #e8f1ff);
 }
 
-.subapp-demo-content {
+.subapp-content {
   flex: 1;
   display: grid;
   place-items: center;
   padding: 24px;
 }
 
-.subapp-demo-card {
+.subapp-card {
   width: min(560px, 100%);
   padding: 18px;
   border-radius: 12px;
@@ -32,12 +32,12 @@
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
 }
 
-.subapp-demo-card h2 {
+.subapp-card h2 {
   margin: 0 0 10px;
   font-size: 15px;
 }
 
-.subapp-demo-card p {
+.subapp-card p {
   margin: 0;
   line-height: 1.6;
   color: var(--text-secondary, rgba(232, 241, 255, 0.78));

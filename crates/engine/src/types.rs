@@ -187,6 +187,60 @@ pub struct SshTunnelRuntime {
     pub last_error: Option<EngineError>,
 }
 
+/// 代理协议类型。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyProtocol {
+    Http,
+    Socks5,
+}
+
+/// 代理运行状态。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyStatus {
+    Starting,
+    Running,
+    Stopping,
+    Stopped,
+    Failed,
+}
+
+/// 代理认证参数。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyAuth {
+    pub username: String,
+    pub password: String,
+}
+
+/// 代理实例创建参数。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxySpec {
+    pub protocol: ProxyProtocol,
+    pub name: Option<String>,
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub auth: Option<ProxyAuth>,
+}
+
+/// 代理实例运行时快照。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyRuntime {
+    pub proxy_id: String,
+    pub protocol: ProxyProtocol,
+    pub name: Option<String>,
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub status: ProxyStatus,
+    pub bytes_in: u64,
+    pub bytes_out: u64,
+    pub active_connections: u32,
+    pub last_error: Option<EngineError>,
+}
+
 /// 资源监控状态。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -254,6 +308,7 @@ pub enum EngineEvent {
     },
     SftpProgress(SftpProgress),
     SshTunnelUpdate(SshTunnelRuntime),
+    ProxyUpdate(ProxyRuntime),
     SessionResource(SessionResourceSnapshot),
     SessionStatus {
         session_id: String,

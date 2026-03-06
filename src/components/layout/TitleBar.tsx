@@ -28,7 +28,6 @@ type TitleBarProps = {
   onLocaleChange: (locale: Locale) => void;
   onShellChange: (shellId: string | null) => void;
   onThemeChange: (themeId: ThemeId) => void;
-  showSubAppMenu?: boolean;
   subApps?: Array<{
     id: SubAppId;
     label: string;
@@ -58,7 +57,6 @@ export default function TitleBar({
   onLocaleChange,
   onShellChange,
   onThemeChange,
-  showSubAppMenu = false,
   subApps = [],
   onLaunchSubApp,
   onFocusSubApp,
@@ -103,7 +101,6 @@ export default function TitleBar({
           onLocaleChange={onLocaleChange}
           onShellChange={onShellChange}
           onThemeChange={onThemeChange}
-          showSubAppMenu={showSubAppMenu}
           subApps={subApps}
           onLaunchSubApp={onLaunchSubApp}
           onFocusSubApp={onFocusSubApp}

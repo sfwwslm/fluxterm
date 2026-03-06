@@ -1,5 +1,6 @@
 //! 引擎错误类型定义。
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// 引擎错误类型，统一携带错误码、消息与可选细节。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,3 +34,14 @@ impl EngineError {
         }
     }
 }
+
+impl fmt::Display for EngineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.detail {
+            Some(detail) => write!(f, "{}: {} ({detail})", self.code, self.message),
+            None => write!(f, "{}: {}", self.code, self.message),
+        }
+    }
+}
+
+impl std::error::Error for EngineError {}

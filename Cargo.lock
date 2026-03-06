@@ -1402,12 +1402,14 @@ name = "engine"
 version = "0.1.0-beta.3"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "futures-util",
  "log",
  "regex",
  "russh",
  "russh-sftp",
  "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]

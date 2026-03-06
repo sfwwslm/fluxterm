@@ -14,3 +14,5 @@ uuid = { workspace = true, features = ["v4"] }
 log= { workspace = true }
 regex = "1"
 futures-util = "0.3"
+base64 = "0.22.1"
+serde_json = { workspace = true }

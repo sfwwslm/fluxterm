@@ -7,10 +7,11 @@ use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::error::EngineError;
+use crate::proxy_backend::{BuiltinProxyBackend, ProxyBackend};
 use crate::session::{ExpectedHostKey, SessionCommand, SessionHandle, run_session_loop};
 use crate::types::{
-    EventCallback, HostProfile, Session, SessionState, SftpEntry, SshTunnelRuntime, SshTunnelSpec,
-    TerminalSize,
+    EventCallback, HostProfile, ProxyRuntime, ProxySpec, Session, SessionState, SftpEntry,
+    SshTunnelRuntime, SshTunnelSpec, TerminalSize,
 };
 use crate::util::now_epoch;
 use log::info;
@@ -18,6 +19,7 @@ use log::info;
 /// 会话引擎，负责连接管理与命令分发。
 pub struct Engine {
     sessions: Mutex<HashMap<String, SessionHandle>>,
+    proxy_backend: Arc<dyn ProxyBackend>,
     runtime: Arc<Runtime>,
 }
 
@@ -30,10 +32,11 @@ impl Default for Engine {
 impl Engine {
     /// 创建新的引擎实例。
     pub fn new() -> Self {
-        let runtime = Runtime::new().expect("failed to create runtime");
+        let runtime = Arc::new(Runtime::new().expect("failed to create runtime"));
         Self {
             sessions: Mutex::new(HashMap::new()),
-            runtime: Arc::new(runtime),
+            proxy_backend: Arc::new(BuiltinProxyBackend::new(Arc::clone(&runtime))),
+            runtime,
         }
     }
 
@@ -482,6 +485,31 @@ impl Engine {
             })
             .map_err(|_| EngineError::new("session_command_failed", "无法发送隧道批量关闭命令"))?;
         self.await_response(resp_rx, "无法接收隧道批量关闭响应")
+    }
+
+    /// 创建全局代理实例。
+    pub fn proxy_open(
+        &self,
+        spec: ProxySpec,
+        on_event: EventCallback,
+        trace_id: Option<&str>,
+    ) -> Result<ProxyRuntime, EngineError> {
+        self.proxy_backend.open(spec, on_event, trace_id)
+    }
+
+    /// 关闭全局代理实例。
+    pub fn proxy_close(&self, proxy_id: &str, trace_id: Option<&str>) -> Result<(), EngineError> {
+        self.proxy_backend.close(proxy_id, trace_id)
+    }
+
+    /// 获取全局代理实例列表。
+    pub fn proxy_list(&self) -> Result<Vec<ProxyRuntime>, EngineError> {
+        self.proxy_backend.list()
+    }
+
+    /// 关闭全部全局代理实例。
+    pub fn proxy_close_all(&self, trace_id: Option<&str>) -> Result<(), EngineError> {
+        self.proxy_backend.close_all(trace_id)
     }
 
     /// 等待后台响应并转换为同步结果。

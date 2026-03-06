@@ -139,6 +139,51 @@ export type SshTunnelRuntime = {
   } | null;
 };
 
+/** 代理协议类型。 */
+export type ProxyProtocol = "http" | "socks5";
+
+/** 代理运行状态。 */
+export type ProxyStatus =
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "failed";
+
+/** 代理认证参数。 */
+export type ProxyAuth = {
+  username: string;
+  password: string;
+};
+
+/** 代理创建参数。 */
+export type ProxySpec = {
+  protocol: ProxyProtocol;
+  name?: string | null;
+  bindHost: string;
+  bindPort: number;
+  auth?: ProxyAuth | null;
+};
+
+/** 代理实例运行时快照。 */
+export type ProxyRuntime = {
+  proxyId: string;
+  protocol: ProxyProtocol;
+  name?: string | null;
+  bindHost: string;
+  bindPort: number;
+  status: ProxyStatus;
+  bytesIn: number;
+  bytesOut: number;
+  activeConnections: number;
+  lastError?: {
+    code: string;
+    message: string;
+    detail?: string | null;
+    details?: string | null;
+  } | null;
+};
+
 /** SFTP 可用性状态。 */
 export type SftpAvailability =
   | "ready"

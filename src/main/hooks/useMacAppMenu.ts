@@ -27,7 +27,6 @@ type UseMacAppMenuOptions = {
   setLocale: (locale: Locale) => void;
   setThemeId: (themeId: ThemeId) => void;
   setShellId: (shellId: string | null) => void;
-  showSubAppMenu?: boolean;
   subApps?: Array<{
     id: SubAppId;
     label: string;
@@ -360,7 +359,6 @@ export default function useMacAppMenu({
   setLocale,
   setThemeId,
   setShellId,
-  showSubAppMenu = false,
   subApps = [],
   onLaunchSubApp,
   onFocusSubApp,
@@ -403,7 +401,7 @@ export default function useMacAppMenu({
           t,
         );
         const appsMenu =
-          showSubAppMenu && onLaunchSubApp && onFocusSubApp && onCloseSubApp
+          onLaunchSubApp && onFocusSubApp && onCloseSubApp
             ? await createSubAppMenu({
                 subApps,
                 onLaunchSubApp,
@@ -472,7 +470,6 @@ export default function useMacAppMenu({
     setLocale,
     setThemeId,
     setShellId,
-    showSubAppMenu,
     subApps,
     onLaunchSubApp,
     onFocusSubApp,
