@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { IconType } from "react-icons";
 import type {
   SessionStateUi,
@@ -11,6 +11,7 @@ import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import {
   FiAlertCircle,
+  FiArrowRight,
   FiCheckCircle,
   FiRefreshCw,
   FiRotateCw,
@@ -32,6 +33,16 @@ type TunnelWidgetProps = {
   t: Translate;
 };
 
+/** 格式化端点显示文本，避免空值时出现难读的地址。 */
+function formatEndpoint(
+  host: string | null | undefined,
+  port: string | number | null | undefined,
+) {
+  const finalHost = host && host.trim() ? host.trim() : "-";
+  const finalPort = String(port ?? "").trim();
+  return `${finalHost}:${finalPort || "-"}`;
+}
+
 /** SSH 隧道管理小组件。 */
 export default function TunnelWidget({
   activeSessionId,
@@ -52,6 +63,11 @@ export default function TunnelWidget({
   const [targetHost, setTargetHost] = useState("127.0.0.1");
   const [targetPortInput, setTargetPortInput] = useState("22");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSubmitError(null);
+  }, [activeSessionId]);
 
   const bindWarning = useMemo(
     () =>
@@ -125,9 +141,23 @@ export default function TunnelWidget({
       targetHost: kind === "dynamic" ? null : targetHost,
       targetPort: kind === "dynamic" ? null : targetPort,
     };
+    setSubmitError(null);
     setSubmitting(true);
     try {
       await onOpenTunnel(spec);
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? (error as { code?: unknown }).code
+          : null;
+      if (code === "ssh_tunnel_bind_failed") {
+        setSubmitError(t("tunnel.error.bindFailed"));
+      } else {
+        setSubmitError(
+          error instanceof Error ? error.message : t("tunnel.error.openFailed"),
+        );
+      }
+      throw error;
     } finally {
       setSubmitting(false);
     }
@@ -139,104 +169,119 @@ export default function TunnelWidget({
         {!activeSessionId ? (
           <div className="tunnel-empty">{t("tunnel.empty.noSession")}</div>
         ) : (
-          <>
-            <div className="tunnel-session-row">
-              <span className={`tunnel-session-indicator ${sessionMeta.tone}`}>
-                <SessionIcon />
-              </span>
-              <strong>{sessionMeta.label}</strong>
-            </div>
-            <div className="tunnel-session-object">
-              <span className="tunnel-session-name">
-                {activeSessionLabel ?? t("session.defaultName")}
-              </span>
-              <span className="tunnel-session-subtitle">
-                {activeSessionHost ?? "-"}{" "}
-                {activeSessionUsername ? `· ${activeSessionUsername}` : ""}
-              </span>
-            </div>
-          </>
+          <div className="tunnel-session-row single-line">
+            <span className={`tunnel-session-indicator ${sessionMeta.tone}`}>
+              <SessionIcon />
+            </span>
+            <strong>{sessionMeta.label}</strong>
+            <span className="tunnel-session-name">
+              {activeSessionLabel ?? t("session.defaultName")}
+            </span>
+            <span className="tunnel-session-subtitle">
+              {activeSessionHost ?? "-"}
+              {activeSessionUsername ? ` · ${activeSessionUsername}` : ""}
+            </span>
+          </div>
         )}
       </div>
       <div className="tunnel-form">
-        <div className="form-row">
-          <label>{t("tunnel.form.kind")}</label>
-          <Select
-            value={kind}
-            options={[
-              { value: "local", label: t("tunnel.kind.local") },
-              { value: "remote", label: t("tunnel.kind.remote") },
-              { value: "dynamic", label: t("tunnel.kind.dynamic") },
-            ]}
-            onChange={(value) => setKind(value as SshTunnelKind)}
-            aria-label={t("tunnel.form.kind")}
-          />
-        </div>
-        <div className="form-row split">
-          <div>
-            <label>{t("tunnel.form.bindHost")}</label>
-            <input
-              value={bindHost}
-              onChange={(e) => setBindHost(e.target.value)}
-            />
-          </div>
-          <div>
-            <label>{t("tunnel.form.bindPort")}</label>
-            <input
-              inputMode="numeric"
-              value={bindPortInput}
-              onChange={(e) =>
-                setBindPortInput(e.target.value.replace(/[^\d]/g, ""))
+        <div className="tunnel-form-toolbar">
+          <div className="tunnel-actions tunnel-actions-inline">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                handleSubmit().catch(() => {});
+              }}
+              disabled={!activeSessionId || !supportsSshTunnel || submitting}
+            >
+              {t("tunnel.actions.open")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onCloseAll()
+                  .then(() => setSubmitError(null))
+                  .catch(() => {});
+              }}
+              disabled={
+                !activeSessionId || !supportsSshTunnel || tunnels.length === 0
               }
-            />
+            >
+              {t("tunnel.actions.closeAll")}
+            </Button>
           </div>
         </div>
-        {kind !== "dynamic" && (
-          <div className="form-row split">
-            <div>
-              <label>{t("tunnel.form.targetHost")}</label>
-              <input
-                value={targetHost}
-                onChange={(e) => setTargetHost(e.target.value)}
-              />
+        <div
+          className={`form-row tunnel-config-row ${
+            kind === "dynamic" ? "is-dynamic" : ""
+          }`}
+        >
+          <div className="tunnel-endpoint-card tunnel-type-card">
+            <div className="tunnel-endpoint-title">{t("tunnel.form.kind")}</div>
+            <Select
+              value={kind}
+              options={[
+                { value: "local", label: t("tunnel.kind.local") },
+                { value: "remote", label: t("tunnel.kind.remote") },
+                { value: "dynamic", label: t("tunnel.kind.dynamic") },
+              ]}
+              onChange={(value) => setKind(value as SshTunnelKind)}
+              aria-label={t("tunnel.form.kind")}
+            />
+          </div>
+          <div className="tunnel-endpoint-card">
+            <div className="tunnel-endpoint-title">
+              {t("tunnel.form.local")}
             </div>
-            <div>
-              <label>{t("tunnel.form.targetPort")}</label>
+            <div className="tunnel-endpoint-fields">
               <input
-                inputMode="numeric"
-                value={targetPortInput}
-                onChange={(e) =>
-                  setTargetPortInput(e.target.value.replace(/[^\d]/g, ""))
-                }
+                aria-label={`${t("tunnel.form.local")} ${t("tunnel.form.address")}`}
+                value={bindHost}
+                onChange={(e) => setBindHost(e.target.value)}
               />
+              <div className="tunnel-port-field">
+                <input
+                  aria-label={`${t("tunnel.form.local")} ${t("tunnel.form.port")}`}
+                  inputMode="numeric"
+                  value={bindPortInput}
+                  onChange={(e) =>
+                    setBindPortInput(e.target.value.replace(/[^\d]/g, ""))
+                  }
+                />
+              </div>
             </div>
           </div>
-        )}
+          {kind !== "dynamic" && (
+            <div className="tunnel-endpoint-card">
+              <div className="tunnel-endpoint-title">
+                {t("tunnel.form.remote")}
+              </div>
+              <div className="tunnel-endpoint-fields">
+                <input
+                  aria-label={`${t("tunnel.form.remote")} ${t("tunnel.form.address")}`}
+                  value={targetHost}
+                  onChange={(e) => setTargetHost(e.target.value)}
+                />
+                <div className="tunnel-port-field">
+                  <input
+                    aria-label={`${t("tunnel.form.remote")} ${t("tunnel.form.port")}`}
+                    inputMode="numeric"
+                    value={targetPortInput}
+                    onChange={(e) =>
+                      setTargetPortInput(e.target.value.replace(/[^\d]/g, ""))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         {bindWarning && (
           <div className="tunnel-warning">{t("tunnel.bind.warning")}</div>
         )}
-        <div className="tunnel-actions">
-          <Button
-            variant="primary"
-            onClick={() => {
-              handleSubmit().catch(() => {});
-            }}
-            disabled={!activeSessionId || !supportsSshTunnel || submitting}
-          >
-            {t("tunnel.actions.open")}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              onCloseAll().catch(() => {});
-            }}
-            disabled={
-              !activeSessionId || !supportsSshTunnel || tunnels.length === 0
-            }
-          >
-            {t("tunnel.actions.closeAll")}
-          </Button>
-        </div>
+        {submitError && <div className="tunnel-warning">{submitError}</div>}
       </div>
       <div className="tunnel-list">
         {activeSessionId && tunnels.length === 0 && (
@@ -246,14 +291,13 @@ export default function TunnelWidget({
           <div key={item.tunnelId} className="tunnel-item">
             <div className="tunnel-item-main">
               <strong>{t(`tunnel.kind.${item.kind}` as never)}</strong>
-              <span>
-                {item.bindHost}:{item.bindPort}
+              <span className="tunnel-item-route">
+                {formatEndpoint(item.bindHost, item.bindPort)}
+                <FiArrowRight aria-hidden="true" />
+                {item.kind === "dynamic"
+                  ? t("tunnel.flow.dynamicTarget")
+                  : formatEndpoint(item.targetHost, item.targetPort)}
               </span>
-              {item.kind !== "dynamic" && item.targetHost && item.targetPort ? (
-                <span>
-                  {item.targetHost}:{item.targetPort}
-                </span>
-              ) : null}
             </div>
             <div className="tunnel-item-meta">
               <span>{item.status}</span>
@@ -266,7 +310,9 @@ export default function TunnelWidget({
                 size="sm"
                 variant="ghost"
                 onClick={() => {
-                  onCloseTunnel(item.tunnelId).catch(() => {});
+                  onCloseTunnel(item.tunnelId)
+                    .then(() => setSubmitError(null))
+                    .catch(() => {});
                 }}
                 disabled={!supportsSshTunnel}
               >

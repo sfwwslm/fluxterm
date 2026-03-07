@@ -98,6 +98,7 @@ export default function useSshTunnelState(activeSessionId: string | null) {
             message: error instanceof Error ? error.message : String(error),
           }),
         ).catch(() => {});
+        await refresh().catch(() => {});
         throw error;
       }
     },
@@ -132,6 +133,14 @@ export default function useSshTunnelState(activeSessionId: string | null) {
             message: error instanceof Error ? error.message : String(error),
           }),
         ).catch(() => {});
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code?: unknown }).code === "ssh_tunnel_not_found"
+        ) {
+          await refresh().catch(() => {});
+        }
         throw error;
       }
     },

@@ -291,6 +291,23 @@ export const en = {
   "tunnel.form.bindPort": "Bind Port",
   "tunnel.form.targetHost": "Target Host",
   "tunnel.form.targetPort": "Target Port",
+  "tunnel.form.local": "Local Address",
+  "tunnel.form.remote": "Remote Address",
+  "tunnel.form.address": "Address",
+  "tunnel.form.port": "Port",
+  "tunnel.endpoint.localEntry": "Local Entry",
+  "tunnel.endpoint.remoteEntry": "Remote Entry",
+  "tunnel.endpoint.remoteTarget": "Remote Target",
+  "tunnel.endpoint.localTarget": "Local Target",
+  "tunnel.endpoint.localSocksEntry": "Local SOCKS5 Entry",
+  "tunnel.flow.title": "Flow",
+  "tunnel.flow.local":
+    "Traffic entering the local entry port is forwarded to the remote target port.",
+  "tunnel.flow.remote":
+    "Traffic entering the remote entry port is forwarded to the local target port.",
+  "tunnel.flow.dynamic":
+    "Traffic entering the local SOCKS5 entry chooses destination host and port per client request.",
+  "tunnel.flow.dynamicTarget": "Dynamic target from client request",
   "tunnel.kind.local": "Local Forward (L)",
   "tunnel.kind.remote": "Remote Forward (R)",
   "tunnel.kind.dynamic": "Dynamic Forward (D)",
@@ -301,6 +318,9 @@ export const en = {
   "tunnel.empty.noTunnels": "No tunnels in this session",
   "tunnel.bind.warning":
     "Current bind host is externally reachable. Review exposure risk.",
+  "tunnel.error.bindFailed": "Port is already in use. Failed to create tunnel.",
+  "tunnel.error.openFailed":
+    "Failed to create tunnel. Check the configuration and try again.",
   "tunnel.connections": "connections",
   "tunnel.onlySsh": "SSH tunnels are not supported in local mode.",
   "proxy.form.protocol": "Protocol",

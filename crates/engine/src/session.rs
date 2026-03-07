@@ -317,10 +317,6 @@ async fn open_local_or_dynamic_tunnel(
         &spec,
         SshTunnelStatus::Starting,
     )));
-    {
-        let snapshot = runtime.lock().await.clone();
-        emit_tunnel_update(&on_event, &snapshot);
-    }
 
     let listener = TcpListener::bind(format!("{}:{}", spec.bind_host, spec.bind_port))
         .await
@@ -457,10 +453,6 @@ async fn open_remote_tunnel(
         &spec,
         SshTunnelStatus::Starting,
     )));
-    {
-        let snapshot = runtime.lock().await.clone();
-        emit_tunnel_update(&on_event, &snapshot);
-    }
 
     let assigned_port = session
         .lock()

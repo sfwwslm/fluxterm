@@ -15,6 +15,10 @@
   background: var(--chrome-surface-2);
 }
 
+.tunnel-form {
+  container-type: inline-size;
+}
+
 .tunnel-session-meta {
   border: 1px solid var(--chrome-border-muted);
   border-radius: 10px;
@@ -30,15 +34,19 @@
 .tunnel-session-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   font-size: 13px;
   color: var(--text-soft);
 }
 
+.tunnel-session-row.single-line {
+  flex-wrap: nowrap;
+}
+
 .tunnel-session-row strong {
   color: var(--text-primary);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .tunnel-session-indicator {
@@ -89,22 +97,19 @@
   border-color: color-mix(in srgb, var(--border-input) 72%, transparent);
 }
 
-.tunnel-session-object {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .tunnel-session-name {
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .tunnel-session-subtitle {
   opacity: 0.8;
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tunnel-form .form-row {
@@ -114,10 +119,54 @@
   margin-bottom: 10px;
 }
 
-.tunnel-form .form-row.split {
+.tunnel-form .form-row.tunnel-config-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(140px, max-content) minmax(0, 1fr) minmax(
+      0,
+      1fr
+    );
   gap: 10px;
+  align-items: start;
+}
+
+.tunnel-form .form-row.tunnel-config-row.is-dynamic {
+  grid-template-columns: minmax(140px, max-content) minmax(0, 1fr);
+}
+
+.tunnel-form-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.tunnel-endpoint-card {
+  border: 1px solid
+    color-mix(in srgb, var(--chrome-border-muted) 72%, transparent);
+  border-radius: 8px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface-header-strong) 14%, transparent);
+}
+
+.tunnel-endpoint-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.tunnel-endpoint-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+  align-items: center;
+}
+
+.tunnel-type-card {
+  align-self: start;
+}
+
+.tunnel-port-field {
+  min-width: 0;
 }
 
 .tunnel-form input,
@@ -128,6 +177,13 @@
 .tunnel-actions {
   display: flex;
   gap: 8px;
+}
+
+.tunnel-actions-inline {
+  justify-content: flex-end;
+  align-items: center;
+  flex-direction: row;
+  white-space: nowrap;
 }
 
 .tunnel-warning {
@@ -159,6 +215,20 @@
   gap: 10px;
   flex-wrap: wrap;
   font-size: 12px;
+  align-items: center;
+}
+
+.tunnel-item-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.tunnel-item-route svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-muted);
 }
 
 .tunnel-item-meta {
@@ -171,4 +241,21 @@
 
 .tunnel-item-actions {
   margin-top: 8px;
+}
+
+@media (max-width: 880px) {
+  .tunnel-session-row.single-line {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+
+  .tunnel-actions-inline {
+    align-items: center;
+  }
+}
+
+@container (max-width: 900px) {
+  .tunnel-form .form-row.tunnel-config-row {
+    grid-template-columns: 1fr;
+  }
 }
