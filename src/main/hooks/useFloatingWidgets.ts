@@ -16,6 +16,7 @@ import type {
   FloatingWidgetLayout,
   WidgetSlot as LayoutWidgetSlot,
 } from "@/layout/types";
+import { isMacOS } from "@/utils/platform";
 
 type useFloatingWidgetsProps = {
   floatingWidgetKey?: WidgetKey | null;
@@ -78,6 +79,7 @@ export default function useFloatingWidgets({
   onOpenCurrentDevtools,
   onMainShutdown,
 }: useFloatingWidgetsProps): FloatingWidgetsState {
+  const isMac = isMacOS();
   const floatingWidgetKey = useMemo<WidgetKey | null>(() => {
     if (typeof floatingWidgetKeyProp !== "undefined") {
       return floatingWidgetKeyProp;
@@ -333,8 +335,8 @@ export default function useFloatingWidgets({
           width: 900,
           height: 640,
           resizable: true,
-          decorations: false,
-          transparent: true,
+          decorations: isMac,
+          transparent: !isMac,
           center: true,
           visible: false,
         });
@@ -389,6 +391,7 @@ export default function useFloatingWidgets({
     [
       cleanupFloatingRuntime,
       dismissFloatingWidget,
+      isMac,
       widgetLabels,
       setFloatingOrigins,
       setSlotGroups,

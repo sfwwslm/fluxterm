@@ -19,6 +19,7 @@ import SubAppTitleBar from "@/subapps/components/SubAppTitleBar";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import { formatBytes } from "@/utils/format";
+import { isMacOS } from "@/utils/platform";
 import useProxyState from "@/subapps/proxy/hooks/useProxyState";
 import "./ProxySubApp.css";
 
@@ -30,6 +31,7 @@ type ProxySubAppProps = {
 
 /** 代理子应用。 */
 export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
+  const isMac = useMemo(() => isMacOS(), []);
   const windowLabel = useMemo(() => createSubAppWindowLabel(id), [id]);
   const closingRef = useRef(false);
   const [protocol, setProtocol] = useState<ProxyProtocol>("http");
@@ -259,7 +261,7 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
 
   return (
     <div className="subapp-shell proxy-subapp-shell">
-      <SubAppTitleBar title="FluxTerm" t={t} />
+      {!isMac ? <SubAppTitleBar title="FluxTerm" t={t} /> : null}
       <main className="subapp-content proxy-subapp-content">
         <article className="proxy-subapp-body">
           <div className="proxy-heading-row">

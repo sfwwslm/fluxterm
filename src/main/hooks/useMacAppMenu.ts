@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Menu,
   MenuItem,
@@ -273,6 +274,9 @@ export default function useMacAppMenu({
 }: UseMacAppMenuOptions) {
   useEffect(() => {
     if (!isMacOS() || !isTauri()) {
+      return;
+    }
+    if (getCurrentWindow().label !== "main") {
       return;
     }
 

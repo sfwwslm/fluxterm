@@ -15,6 +15,7 @@ import type {
   BackgroundRenderMode,
   BackgroundVideoReplayMode,
 } from "@/constants/backgroundMedia";
+import { isMacOS } from "@/utils/platform";
 
 type SubAppDefinition = {
   id: SubAppId;
@@ -56,6 +57,7 @@ export default function useSubApps({
   t,
   appearance,
 }: UseSubAppsOptions): UseSubAppsState {
+  const isMac = isMacOS();
   const defs = useMemo<SubAppDefinition[]>(
     () => [
       {
@@ -208,8 +210,8 @@ export default function useSubApps({
           minWidth: 860,
           minHeight: 560,
           resizable: true,
-          decorations: false,
-          transparent: true,
+          decorations: isMac,
+          transparent: !isMac,
           center: true,
           visible: false,
         });
@@ -235,6 +237,7 @@ export default function useSubApps({
       clearWindowRuntime,
       defs,
       focusSubApp,
+      isMac,
       postLifecycleMessage,
       setRuntimeStatus,
       syncAppearance,
