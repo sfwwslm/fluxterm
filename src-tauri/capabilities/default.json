@@ -149,6 +149,20 @@
       ]
     },
     {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
+    {
       "identifier": "fs:allow-home-read",
       "allow": [
         {
@@ -164,4 +178,3 @@
     }
   ]
 }
-

@@ -46,18 +46,20 @@ export const en = {
   "config.section.configDirectory": "Config Directory",
   "config.app.sftpEnabled": "Enable SFTP",
   "config.app.sftpEnabledHint":
-    "When disabled, remote SFTP is not initialized and file manager sync is turned off.",
-  "config.app.fileDefaultEditorPath": "Default Editor Path",
+    "Enable file browsing, upload, and download for remote hosts in the file widget.",
+  "config.app.fileDefaultEditorPath": "Default Editor",
   "config.app.fileDefaultEditorPathHint":
     "When set, double-clicking a file will try this editor first and fall back to the system default app when empty.",
   "config.app.fileDefaultEditorPathPlaceholder":
     "For example C:\\Program Files\\Notepad++\\notepad++.exe",
+  "config.app.fileDefaultEditorUnset": "No default editor set",
   "config.app.pickEditor": "Choose App",
   "config.app.backgroundImage": "Custom Background Image",
   "config.app.backgroundImageHint":
     "Selected images are copied into config storage under $HOME with content dedupe; clear only unbinds current setting and keeps files.",
   "config.app.backgroundImagePlaceholder": "No background image selected",
   "config.app.pickBackgroundImage": "Choose Image",
+  "config.app.deleteBackgroundImage": "Delete Image",
   "config.app.backgroundImageUnsupported":
     "Only png/jpg/jpeg/webp image formats are supported",
   "config.app.backgroundImagePermissionDenied":
@@ -117,29 +119,29 @@ export const en = {
     "You have unsaved changes. Discard them and close?",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
-    "When disabled, the URL click menu in the terminal will no longer respond.",
+    "Detect links in terminal output and open them in your browser quickly.",
   "config.session.selectionAutoCopyEnabled": "Auto Copy Selection",
   "config.session.selectionAutoCopyEnabledHint":
-    "When enabled, selected text in the terminal is copied to the system clipboard automatically.",
+    "Copy selected terminal text to clipboard automatically.",
   "config.session.commandAutocompleteEnabled": "Enable Command Autocomplete",
   "config.session.commandAutocompleteEnabledHint":
-    "When enabled, the terminal shows autocomplete suggestions from global command history. When disabled, the suggestion widget stays hidden.",
+    "Show command suggestions from history to speed up repeated input.",
   "config.session.terminalPathSyncEnabled":
     "Sync Terminal Path to File Manager",
   "config.session.terminalPathSyncEnabledHint":
-    "When enabled, supported terminal prompt paths are synced to the file manager automatically. Currently bash only.",
+    "Keep the file widget in sync with your current terminal working directory.",
   "config.session.scrollback": "Terminal Scrollback",
   "config.session.scrollbackHint":
-    "Controls how many history lines the terminal keeps, from {min} to {max}.",
+    "Choose how many past output lines you can scroll back to ({min} to {max}).",
   "config.session.resourceMonitorEnabled": "Enable Resource Monitor",
   "config.session.resourceMonitorEnabledHint":
-    "Shows CPU and memory information for the current active session host in the status bar.",
+    "Show current session resource usage in the status bar.",
   "config.session.resourceMonitorIntervalSec": "Resource Sampling Interval",
   "config.session.resourceMonitorIntervalSecHint":
-    "Sampling interval in seconds, minimum {min}s and default 5s.",
+    "Set how often resource usage is refreshed (minimum {min}s).",
   "config.session.hostKeyPolicy": "SSH Host Key Policy",
   "config.session.hostKeyPolicyHint":
-    "Control how SSH host identity is verified on first connection or fingerprint changes.",
+    "Choose how to handle security checks on first connect or host key changes.",
   "config.session.hostKeyPolicy.ask": "Ask",
   "config.session.hostKeyPolicy.strict": "Strict",
   "config.session.hostKeyPolicy.off": "Off",

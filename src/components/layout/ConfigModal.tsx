@@ -1,7 +1,13 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { error as logError } from "@tauri-apps/plugin-log";
 import { open as openDialogFile } from "@tauri-apps/plugin-dialog";
-import { copyFile, exists, mkdir, readFile } from "@tauri-apps/plugin-fs";
+import {
+  copyFile,
+  exists,
+  mkdir,
+  readFile,
+  remove,
+} from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { Locale, Translate } from "@/i18n";
 import Modal from "@/components/ui/modal/Modal";
@@ -50,6 +56,14 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 
 function getErrorMessage(error: unknown) {
   return extractErrorMessage(error);
+}
+
+/** 从完整路径提取程序文件名，用于配置页简洁展示。 */
+function getProgramNameFromPath(path: string) {
+  if (!path) return "";
+  const normalized = path.replace(/[\\/]+$/, "");
+  const parts = normalized.split(/[\\/]/);
+  return parts[parts.length - 1] || path;
 }
 
 type ConfigModalProps = {
@@ -183,7 +197,6 @@ export default function ConfigModal({
   onFileDefaultEditorPathChange,
   onBackgroundImageEnabledChange,
   onBackgroundImageAssetChange,
-  onBackgroundImageSurfaceAlphaChange,
   onAiSelectionMaxCharsChange,
   onAiSessionRecentOutputMaxCharsChange,
   onAiDebugLoggingEnabledChange,
@@ -391,12 +404,6 @@ export default function ConfigModal({
     }
   }
 
-  function handleBackgroundImageSurfaceAlphaInput(rawValue: string) {
-    onBackgroundImageSurfaceAlphaChange?.(
-      clampBackgroundImageSurfaceAlpha(Number(rawValue)),
-    );
-  }
-
   // 数值草稿在失焦、回车或关闭模态框时统一提交；非法输入回退到当前生效值。
   function commitScrollbackDraft() {
     const value = scrollbackDraft.trim();
@@ -564,6 +571,9 @@ export default function ConfigModal({
   // 当前入口只渲染所属配置分组，保证同一模态框内的导航与当前菜单语义一致。
   function renderSectionContent() {
     if (activeSection === "app-settings") {
+      const defaultEditorProgramName = getProgramNameFromPath(
+        defaultEditorPathDraft,
+      );
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.appSettings")}</h3>
@@ -583,32 +593,32 @@ export default function ConfigModal({
               onChange={(event) => onSftpEnabledChange?.(event.target.checked)}
             />
           </label>
-          <div className="config-toggle-card">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("config.app.fileDefaultEditorPath")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.app.fileDefaultEditorPathHint")}
-              </span>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-head">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.fileDefaultEditorPath")}
+                </span>
+              </div>
             </div>
-            <div className="config-file-picker">
+            <div className="config-file-picker config-file-picker-align-end">
               <div
-                className={`config-file-picker-path ${
-                  defaultEditorPathDraft ? "" : "empty"
+                className={`config-file-picker-path config-file-picker-path-single-line ${
+                  defaultEditorProgramName ? "" : "empty"
                 }`.trim()}
                 title={
                   defaultEditorPathDraft ||
-                  t("config.app.fileDefaultEditorPathPlaceholder")
+                  t("config.app.fileDefaultEditorUnset")
                 }
               >
-                {defaultEditorPathDraft ||
-                  t("config.app.fileDefaultEditorPathPlaceholder")}
+                {defaultEditorProgramName ||
+                  t("config.app.fileDefaultEditorUnset")}
               </div>
-              <div className="config-file-picker-actions">
+              <div className="config-file-picker-actions config-file-picker-actions-nowrap">
                 <Button
                   variant="primary"
                   size="sm"
+                  className="config-bg-image-action-button"
                   onClick={async () => {
                     const selected = await openDialogFile({
                       multiple: false,
@@ -621,8 +631,9 @@ export default function ConfigModal({
                   {t("config.app.pickEditor")}
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
+                  className="config-bg-image-action-button"
                   disabled={!defaultEditorPathDraft}
                   onClick={() => {
                     setDefaultEditorPathDraft("");
@@ -633,6 +644,7 @@ export default function ConfigModal({
                 <Button
                   variant="primary"
                   size="sm"
+                  className="config-bg-image-action-button"
                   disabled={!isDefaultEditorPathDirty}
                   onClick={commitDefaultEditorPathDraft}
                 >
@@ -642,89 +654,58 @@ export default function ConfigModal({
             </div>
           </div>
           <div className="config-toggle-card config-feature-group">
+            {/** 未选择图片时禁用开关，避免“开启但无背景图”的无效状态。 */}
             <label className="config-toggle-head">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
                   {t("config.app.backgroundImage")}
                 </span>
-                <span className="config-toggle-desc">
-                  {t("config.app.backgroundImageHint")}
-                </span>
               </div>
               <input
                 type="checkbox"
-                checked={backgroundImageEnabled}
+                checked={backgroundImageEnabled && !!backgroundImageAsset}
+                disabled={!backgroundImageAsset}
                 onChange={(event) =>
                   onBackgroundImageEnabledChange?.(event.target.checked)
                 }
               />
             </label>
-            <div className="config-file-picker">
-              <div
-                className={`config-file-picker-path ${
-                  backgroundImageAsset ? "" : "empty"
-                }`.trim()}
-                title={
-                  backgroundImageAsset ||
-                  t("config.app.backgroundImagePlaceholder")
-                }
+            <div className="config-file-picker-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                className="config-bg-image-action-button"
+                onClick={pickBackgroundImage}
               >
-                {backgroundImageAsset ||
-                  t("config.app.backgroundImagePlaceholder")}
-              </div>
-              <div className="config-file-picker-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={pickBackgroundImage}
-                >
-                  {t("config.app.pickBackgroundImage")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={!backgroundImageAsset}
-                  onClick={() => {
-                    // 清空仅解绑配置，不删除文件，避免误删被复用的去重资源。
+                {t("config.app.pickBackgroundImage")}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="config-bg-image-action-button"
+                disabled={!backgroundImageAsset}
+                onClick={async () => {
+                  try {
+                    const assetToDelete = backgroundImageAsset;
+                    if (assetToDelete) {
+                      const targetPath =
+                        await getBackgroundImageAssetPath(assetToDelete);
+                      if (await exists(targetPath)) {
+                        await remove(targetPath);
+                      }
+                    }
                     onBackgroundImageAssetChange?.("");
                     onBackgroundImageEnabledChange?.(false);
-                  }}
-                >
-                  {t("actions.clear")}
-                </Button>
-              </div>
-            </div>
-            <div className="config-subsetting config-range-setting">
-              <div className="config-toggle-copy">
-                <span className="config-toggle-title">
-                  {t("config.app.backgroundImageSurfaceAlpha")}
-                </span>
-                <span className="config-toggle-desc">
-                  {t("config.app.backgroundImageSurfaceAlphaHint")}
-                </span>
-              </div>
-              <div className="config-range-control">
-                <input
-                  type="range"
-                  min={MIN_BACKGROUND_IMAGE_SURFACE_ALPHA}
-                  max={MAX_BACKGROUND_IMAGE_SURFACE_ALPHA}
-                  step={0.01}
-                  value={backgroundImageSurfaceAlpha}
-                  onInput={(event) =>
-                    handleBackgroundImageSurfaceAlphaInput(
-                      event.currentTarget.value,
-                    )
+                  } catch (error) {
+                    pushToast({
+                      level: "error",
+                      message: getErrorMessage(error),
+                    });
                   }
-                  onChange={(event) =>
-                    handleBackgroundImageSurfaceAlphaInput(
-                      event.currentTarget.value,
-                    )
-                  }
-                />
-                <span className="config-range-value">
-                  {Math.round(backgroundImageSurfaceAlpha * 100)}%
-                </span>
-              </div>
+                }}
+              >
+                {t("config.app.deleteBackgroundImage")}
+              </Button>
             </div>
           </div>
         </div>

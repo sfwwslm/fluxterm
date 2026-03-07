@@ -45,19 +45,20 @@ export const zh = {
   "config.section.sessionShell": "默认 Shell",
   "config.section.configDirectory": "配置文件目录",
   "config.app.sftpEnabled": "启用 SFTP",
-  "config.app.sftpEnabledHint":
-    "关闭后，不再初始化远端 SFTP，也不会驱动文件管理器和路径联动。",
-  "config.app.fileDefaultEditorPath": "默认编辑器路径",
+  "config.app.sftpEnabledHint": "开启后可在文件面板浏览、上传和下载远端文件。",
+  "config.app.fileDefaultEditorPath": "默认编辑器",
   "config.app.fileDefaultEditorPathHint":
     "设置后，双击文件会优先使用该编辑器打开；留空时回退到系统默认程序。",
   "config.app.fileDefaultEditorPathPlaceholder":
     "例如 C:\\Program Files\\Notepad++\\notepad++.exe",
+  "config.app.fileDefaultEditorUnset": "未设置默认编辑器",
   "config.app.pickEditor": "选择程序",
   "config.app.backgroundImage": "自定义背景图",
   "config.app.backgroundImageHint":
     "选择本地图片后会复制到配置目录（$HOME）并按内容去重；清空只解绑当前配置，不删除文件。",
   "config.app.backgroundImagePlaceholder": "未设置背景图",
   "config.app.pickBackgroundImage": "选择图片",
+  "config.app.deleteBackgroundImage": "删除图片",
   "config.app.backgroundImageUnsupported":
     "仅支持 png/jpg/jpeg/webp 格式的图片",
   "config.app.backgroundImagePermissionDenied":
@@ -110,28 +111,28 @@ export const zh = {
   "config.unsavedChangesConfirm": "当前有未保存的修改，确认放弃并关闭吗？",
   "config.session.webLinksEnabled": "启用 Web Links",
   "config.session.webLinksEnabledHint":
-    "关闭后，终端中的 URL 点击菜单将不再生效。",
+    "自动识别终端中的链接，并可一键在浏览器中打开。",
   "config.session.selectionAutoCopyEnabled": "选中文本自动复制",
   "config.session.selectionAutoCopyEnabledHint":
-    "开启后，终端中只要选中文本，就会自动写入系统剪贴板。",
+    "选中文本后自动复制，减少手动复制操作。",
   "config.session.commandAutocompleteEnabled": "启用命令联想",
   "config.session.commandAutocompleteEnabledHint":
-    "开启后，终端会根据全局历史命令显示联想候选；关闭后不再弹出联想框。",
+    "根据历史命令提供输入建议，帮助更快输入常用命令。",
   "config.session.terminalPathSyncEnabled": "终端路径联动文件管理器",
   "config.session.terminalPathSyncEnabledHint":
-    "开启后，支持的终端提示符路径会自动同步到文件管理器，当前仅支持 bash。",
+    "让文件面板跟随终端当前目录切换，减少来回定位路径。",
   "config.session.scrollback": "终端滚动回溯",
   "config.session.scrollbackHint":
-    "控制终端保留的历史行数，范围 {min} 到 {max}。",
+    "控制可回看的历史输出行数（{min} 到 {max}）。",
   "config.session.resourceMonitorEnabled": "启用资源监控",
   "config.session.resourceMonitorEnabledHint":
-    "开启后，状态栏会显示当前活动会话主机的 CPU 与内存信息。",
+    "在状态栏显示当前会话的资源占用，便于判断负载情况。",
   "config.session.resourceMonitorIntervalSec": "资源监控采样间隔",
   "config.session.resourceMonitorIntervalSecHint":
-    "资源采样间隔的秒数，最小 {min} 秒，默认 5 秒。",
+    "设置资源信息刷新频率，最小 {min} 秒。",
   "config.session.hostKeyPolicy": "SSH Host Key 校验策略",
   "config.session.hostKeyPolicyHint":
-    "控制首次连接和指纹变更时的 SSH 主机身份校验行为。",
+    "决定首次连接或主机指纹变化时的安全确认方式。",
   "config.session.hostKeyPolicy.ask": "询问确认",
   "config.session.hostKeyPolicy.strict": "严格阻断",
   "config.session.hostKeyPolicy.off": "关闭校验",
