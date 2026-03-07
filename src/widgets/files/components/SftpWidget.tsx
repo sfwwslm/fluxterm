@@ -225,7 +225,7 @@ export default function SftpWidget({
   const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(
     null,
   );
-  const [showHiddenEntries, setShowHiddenEntries] = useState(true);
+  const [showHiddenEntries, setShowHiddenEntries] = useState(false);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
