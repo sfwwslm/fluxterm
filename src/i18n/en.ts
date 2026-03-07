@@ -39,8 +39,9 @@ export const en = {
   "config.section.appSettings": "Settings",
   "config.section.appAppearance": "Language & Theme",
   "config.section.aiSettings": "AI Assistant",
-  "config.section.openaiManage": "Access Manager",
-  "config.section.openaiSettings": "OpenAI",
+  "config.section.aiProviderManage": "Access Management",
+  "config.section.aiProviderQuick": "Quick Access",
+  "config.section.aiProviderCompat": "OpenAI",
   "config.section.sessionSettings": "Session Settings",
   "config.section.sessionShell": "Default Shell",
   "config.section.configDirectory": "Config Directory",
@@ -73,15 +74,53 @@ export const en = {
   "config.ai.sessionRecentOutputMaxChars": "Session Context Length",
   "config.ai.sessionRecentOutputMaxCharsHint":
     "Limits the total recent terminal output characters attached to session chat.",
-  "config.ai.activeOpenAiConfig": "Current OpenAI Access",
-  "config.ai.activeOpenAiConfigHint":
-    "Choose which OpenAI access the AI assistant uses.",
-  "config.ai.openaiConfigEmpty": "Not set",
+  "config.ai.activeProvider": "Current Access",
+  "config.ai.activeProviderHint":
+    "Choose which provider the AI assistant uses.",
+  "config.ai.providerEmpty": "Not set",
+  "config.ai.providerUnnamed": "Unnamed Access",
+  "config.ai.quickHint":
+    "Use a vendor template, then only set model and API key.",
+  "config.ai.providerVendor": "Vendor Template",
+  "config.ai.addPresetProvider": "Add Quick Access",
+  "config.ai.addCompatibleProvider": "Add Compatible Access",
+  "config.ai.providerName": "Name",
+  "config.ai.providerNamePlaceholder": "Enter name",
+  "config.ai.providerNameRequired": "Please enter a name first",
+  "config.ai.providerNameDuplicate":
+    "This name already exists. Please use another one.",
+  "config.ai.providerModelRequired": "Please enter a model first",
+  "config.ai.providerBaseUrlRequired": "Please enter a Base URL first",
+  "config.ai.providerBaseUrl": "Base URL",
+  "config.ai.providerBaseUrlEmpty": "Base URL not set",
+  "config.ai.providerModel": "Model",
+  "config.ai.providerModelCustom": "Custom Model",
+  "config.ai.providerModelPlaceholder": "qwen3:4B",
+  "config.ai.providerApiKey": "API Key",
+  "config.ai.providerApiKeyConfigured":
+    "An API key is configured. Entering a new one replaces it.",
+  "config.ai.providerApiKeyEmpty":
+    "No API key is configured. Keep empty if endpoint does not require auth.",
+  "config.ai.providerApiKeyPlaceholder": "Enter API Key",
+  "config.ai.confirmAdd": "Confirm Add",
+  "config.ai.providerApiKeySaved": "API key saved",
+  "config.ai.providerApiKeyCleared": "API key cleared",
+  "config.ai.providerApiKeyClear": "Clear Key",
+  "config.ai.providerCurrentBadge": "In Use",
+  "config.ai.providerRemove": "Delete Access",
+  "config.ai.testCurrentProvider": "Test Current Access",
+  "config.ai.removeCurrentProvider": "Delete Current Access",
+  "config.ai.providerTest": "Test",
+  "config.ai.providerTesting": "Testing...",
+  "config.ai.providerTestSuccess": "Connection test succeeded",
+  "config.ai.manageEmpty": "No access entries yet. Add one first.",
+  "config.ai.compatEmpty": "No compatible access entries. Add one first.",
   "config.ai.removeActiveOpenAiConfig": "Delete Current Access",
   "config.ai.debugLoggingEnabled": "Enable AI Debug Logging",
   "config.ai.debugLoggingEnabledHint":
     "Log the final outbound model messages and returned content for debugging.",
-  "config.openai.name": "Access Name",
+  "config.openai.name": "Name",
+  "config.openai.namePlaceholder": "OpenAI",
   "config.openai.manageHint":
     "Browse, switch, and remove saved OpenAI access entries.",
   "config.openai.manageEmpty": "No saved access entries yet",
@@ -91,19 +130,19 @@ export const en = {
     "Use a short name to distinguish different OpenAI access configs.",
   "config.openai.unnamed": "Unnamed Access",
   "config.openai.baseUrl": "Base URL",
+  "config.openai.baseUrlPlaceholder": "https://api.openai.com/v1",
   "config.openai.baseUrlEmpty": "Base URL not set",
   "config.openai.baseUrlHint": "Set the OpenAI-compatible endpoint.",
   "config.openai.model": "Model",
   "config.openai.modelHint":
     "The default model used by the current OpenAI access.",
-  "config.openai.modelPlaceholder":
-    "For example deepseek-chat / qwen2.5:latest",
+  "config.openai.modelPlaceholder": "gpt-4o-mini",
   "config.openai.apiKey": "API Key",
   "config.openai.apiKeyConfigured":
     "An API key is already configured. Entering a new one will replace it.",
   "config.openai.apiKeyEmpty":
     "No API key is configured. Leave it empty for endpoints that do not require authentication.",
-  "config.openai.apiKeyPlaceholder": "Enter a new OpenAI API Key",
+  "config.openai.apiKeyPlaceholder": "sk-...",
   "config.openai.apiKeySaved": "API key saved",
   "config.openai.apiKeyCleared": "API key cleared",
   "config.openai.clearApiKey": "Clear Key",
@@ -183,8 +222,8 @@ export const en = {
   "subapp.unknown.title": "Unknown SubApp",
   "subapp.unknown.description":
     "No available sub-application entry matches this window.",
-  "ai.unavailable.openaiIncomplete":
-    "The current OpenAI configuration is incomplete. Complete the setup first.",
+  "ai.unavailable.providerIncomplete":
+    "The current AI provider configuration is incomplete. Complete the setup first.",
   "ai.unavailable.generic":
     "The AI assistant is unavailable. Check the configuration first.",
   "widget.empty": "Empty Slot",

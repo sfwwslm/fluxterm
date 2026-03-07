@@ -23,10 +23,6 @@ const DEFAULT_DEBUG_LOGGING_ENABLED: bool = true;
 const CURRENT_AI_SETTINGS_VERSION: u32 = 1;
 
 /// 终端 AI 助手落盘结构。
-///
-/// 当前文件同时保存两类信息：
-/// - 终端 AI 助手本地能力配置
-/// - 多个 OpenAI 标准接入配置与当前激活项
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiSettings {
@@ -46,27 +42,29 @@ pub struct AiSettings {
     #[serde(default = "default_debug_logging_enabled")]
     pub debug_logging_enabled: bool,
     #[serde(default)]
-    pub active_openai_config_id: String,
+    pub active_provider_id: String,
     #[serde(default)]
-    pub openai_configs: Vec<OpenAiConfigSettings>,
+    pub providers: Vec<AiProviderSettings>,
 }
 
 impl AiSettings {
-    /// 返回当前激活的 OpenAI 标准接入配置。
-    pub fn active_openai_config(&self) -> Option<&OpenAiConfigSettings> {
-        self.openai_configs
+    /// 返回当前激活的 AI 接入配置。
+    pub fn active_provider(&self) -> Option<&AiProviderSettings> {
+        self.providers
             .iter()
-            .find(|config| config.id == self.active_openai_config_id)
+            .find(|provider| provider.id == self.active_provider_id)
     }
 }
 
-/// 单个 OpenAI 标准接入配置。
-///
-/// `api_key_ref` 只保存加密后的 token，不回显明文 API Key。
+/// 单个 AI 接入配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenAiConfigSettings {
+pub struct AiProviderSettings {
     pub id: String,
+    #[serde(default)]
+    pub mode: AiProviderMode,
+    #[serde(default)]
+    pub vendor: AiProviderVendor,
     #[serde(default)]
     pub name: String,
     #[serde(default)]
@@ -75,6 +73,25 @@ pub struct OpenAiConfigSettings {
     pub model: String,
     #[serde(default)]
     pub api_key_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProviderMode {
+    #[default]
+    Preset,
+    Compatible,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProviderVendor {
+    Openai,
+    Deepseek,
+    Qwen,
+    Moonshot,
+    #[default]
+    Custom,
 }
 
 /// 返回给前端设置页的 AI 配置视图。
@@ -89,15 +106,17 @@ pub struct AiSettingsView {
     pub selection_recent_output_max_snippets: usize,
     pub request_cache_ttl_ms: u64,
     pub debug_logging_enabled: bool,
-    pub active_openai_config_id: String,
-    pub openai_configs: Vec<OpenAiConfigView>,
+    pub active_provider_id: String,
+    pub providers: Vec<AiProviderView>,
 }
 
-/// 前端可见的 OpenAI 接入配置视图。
+/// 前端可见的接入配置视图。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenAiConfigView {
+pub struct AiProviderView {
     pub id: String,
+    pub mode: AiProviderMode,
+    pub vendor: AiProviderVendor,
     pub name: String,
     pub base_url: String,
     pub model: String,
@@ -105,9 +124,6 @@ pub struct OpenAiConfigView {
 }
 
 /// 前端保存 AI 配置时使用的输入结构。
-///
-/// 前端始终提交完整的 OpenAI 接入列表与当前激活项，
-/// 后端据此生成新的落盘结构。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiSettingsSaveInput {
@@ -118,15 +134,19 @@ pub struct AiSettingsSaveInput {
     pub selection_recent_output_max_snippets: usize,
     pub request_cache_ttl_ms: u64,
     pub debug_logging_enabled: bool,
-    pub active_openai_config_id: String,
-    pub openai_configs: Vec<OpenAiConfigInput>,
+    pub active_provider_id: String,
+    pub providers: Vec<AiProviderInput>,
 }
 
-/// 前端保存单个 OpenAI 接入时使用的输入结构。
+/// 前端保存单个接入时使用的输入结构。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenAiConfigInput {
+pub struct AiProviderInput {
     pub id: String,
+    #[serde(default)]
+    pub mode: AiProviderMode,
+    #[serde(default)]
+    pub vendor: AiProviderVendor,
     pub name: String,
     pub base_url: String,
     pub model: String,
@@ -134,8 +154,6 @@ pub struct OpenAiConfigInput {
 }
 
 /// 受保护字段的更新策略。
-///
-/// 密钥字段不直接回传明文，保存时通过 keep/replace/clear 明确表达意图。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "mode")]
 pub enum SecretFieldUpdate {
@@ -144,12 +162,6 @@ pub enum SecretFieldUpdate {
     Clear,
 }
 
-/// 读取终端 AI 助手配置。
-///
-/// 职责：
-/// 1. 解析 ai.json 文件路径。
-/// 2. 处理文件不存在时的默认值回退。
-/// 3. 执行版本匹配与反序列化校验。
 pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
     let path = resolve_ai_settings_path(app)?;
     if !path.exists() {
@@ -163,11 +175,6 @@ pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
             err.to_string(),
         )
     })?;
-    debug!(
-        "read_ai_settings loaded path={} size={}",
-        path.display(),
-        content.len()
-    );
     let raw_value: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
         EngineError::with_detail(
             "ai_settings_parse_failed",
@@ -178,7 +185,7 @@ pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
     let version = raw_value
         .get("version")
         .and_then(|value| value.as_u64())
-        .unwrap_or(1);
+        .unwrap_or(0);
     match version {
         1 => {
             let settings: AiSettings = serde_json::from_value(raw_value).map_err(|err| {
@@ -192,12 +199,11 @@ pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
         }
         _ => Err(EngineError::new(
             "ai_settings_parse_failed",
-            "终端 AI 配置文件版本不受支持",
+            "终端 AI 配置文件版本不受支持，请清理旧配置后重试。",
         )),
     }
 }
 
-/// 写入终端 AI 助手设置。
 pub fn write_ai_settings(app: &AppHandle, settings: AiSettings) -> Result<AiSettings, EngineError> {
     let validated = validate_ai_settings(settings)?;
     let path = resolve_ai_settings_path(app)?;
@@ -208,18 +214,15 @@ pub fn write_ai_settings(app: &AppHandle, settings: AiSettings) -> Result<AiSett
             err.to_string(),
         )
     })?;
-    debug!("write_ai_settings starting path={}", path.display());
     write_atomic(path, &content)?;
     Ok(validated)
 }
 
-/// 读取前端设置页使用的 AI 配置视图。
 pub fn read_ai_settings_view(app: &AppHandle) -> Result<AiSettingsView, EngineError> {
     let settings = read_ai_settings(app)?;
     Ok(build_settings_view(settings))
 }
 
-/// 保存前端设置页提交的 AI 配置。
 pub fn save_ai_settings_input(
     app: &AppHandle,
     input: AiSettingsSaveInput,
@@ -270,12 +273,11 @@ fn default_ai_settings() -> AiSettings {
         selection_recent_output_max_snippets: default_selection_recent_output_max_snippets(),
         request_cache_ttl_ms: default_request_cache_ttl_ms(),
         debug_logging_enabled: default_debug_logging_enabled(),
-        active_openai_config_id: String::new(),
-        openai_configs: Vec::new(),
+        active_provider_id: String::new(),
+        providers: Vec::new(),
     }
 }
 
-/// 对终端 AI 助手配置做统一归一化与校验。
 fn validate_ai_settings(mut settings: AiSettings) -> Result<AiSettings, EngineError> {
     settings.version = CURRENT_AI_SETTINGS_VERSION;
     if settings.selection_max_chars == 0 {
@@ -297,49 +299,46 @@ fn validate_ai_settings(mut settings: AiSettings) -> Result<AiSettings, EngineEr
     }
 
     let mut seen_ids = HashSet::new();
-    for config in &mut settings.openai_configs {
-        config.id = config.id.trim().to_string();
-        config.name = config.name.trim().to_string();
-        config.base_url = config.base_url.trim().to_string();
-        config.model = config.model.trim().to_string();
-        config.api_key_ref = config
+    for provider in &mut settings.providers {
+        provider.id = provider.id.trim().to_string();
+        provider.name = provider.name.trim().to_string();
+        provider.base_url = provider.base_url.trim().to_string();
+        provider.model = provider.model.trim().to_string();
+        provider.api_key_ref = provider
             .api_key_ref
             .take()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
-        if config.id.is_empty() {
+        if provider.id.is_empty() {
             return Err(EngineError::new(
                 "ai_settings_invalid",
-                "OpenAI 接入配置的 id 不能为空",
+                "AI 接入配置的 id 不能为空",
             ));
         }
-        if !seen_ids.insert(config.id.clone()) {
+        if !seen_ids.insert(provider.id.clone()) {
             return Err(EngineError::new(
                 "ai_settings_invalid",
-                "OpenAI 接入配置的 id 不能重复",
+                "AI 接入配置的 id 不能重复",
             ));
         }
     }
 
-    settings.active_openai_config_id = settings.active_openai_config_id.trim().to_string();
-    if settings.openai_configs.is_empty() {
-        settings.active_openai_config_id.clear();
-    } else if settings.active_openai_config_id.is_empty()
-        || !settings
-            .openai_configs
+    settings.active_provider_id = settings.active_provider_id.trim().to_string();
+    if settings.providers.is_empty() {
+        settings.active_provider_id.clear();
+    } else if !settings.active_provider_id.is_empty()
+        && !settings
+            .providers
             .iter()
-            .any(|config| config.id == settings.active_openai_config_id)
+            .any(|provider| provider.id == settings.active_provider_id)
     {
-        return Err(EngineError::new(
-            "ai_settings_invalid",
-            "当前激活的 OpenAI 接入不存在",
-        ));
+        // 允许“未接入”状态；当激活项指向已不存在的旧 id 时自动降级为未接入。
+        settings.active_provider_id.clear();
     }
 
     Ok(settings)
 }
 
-/// 将落盘结构转换成前端设置页使用的只读视图。
 fn build_settings_view(settings: AiSettings) -> AiSettingsView {
     AiSettingsView {
         version: settings.version,
@@ -350,16 +349,18 @@ fn build_settings_view(settings: AiSettings) -> AiSettingsView {
         selection_recent_output_max_snippets: settings.selection_recent_output_max_snippets,
         request_cache_ttl_ms: settings.request_cache_ttl_ms,
         debug_logging_enabled: settings.debug_logging_enabled,
-        active_openai_config_id: settings.active_openai_config_id,
-        openai_configs: settings
-            .openai_configs
+        active_provider_id: settings.active_provider_id,
+        providers: settings
+            .providers
             .into_iter()
-            .map(|config| OpenAiConfigView {
-                id: config.id,
-                name: config.name,
-                base_url: config.base_url,
-                model: config.model,
-                api_key_configured: config.api_key_ref.is_some(),
+            .map(|provider| AiProviderView {
+                id: provider.id,
+                mode: provider.mode,
+                vendor: provider.vendor,
+                name: provider.name,
+                base_url: provider.base_url,
+                model: provider.model,
+                api_key_configured: provider.api_key_ref.is_some(),
             })
             .collect(),
     }
@@ -370,32 +371,33 @@ fn build_ai_settings_from_input(
     input: AiSettingsSaveInput,
     secret_store: &SecretStore<'_>,
 ) -> Result<AiSettings, EngineError> {
-    let current_config_map = current
-        .openai_configs
+    let current_provider_map = current
+        .providers
         .iter()
-        .map(|config| (config.id.clone(), config.clone()))
+        .map(|provider| (provider.id.clone(), provider.clone()))
         .collect::<HashMap<_, _>>();
-    let mut next_configs = Vec::with_capacity(input.openai_configs.len());
-    for config in input.openai_configs {
-        let current_config = current_config_map.get(&config.id);
-        // 前端不会回传明文密钥状态，后端按显式策略保留、替换或清空当前 token。
-        let api_key_ref = match config.api_key {
-            SecretFieldUpdate::Keep => current_config.and_then(|item| item.api_key_ref.clone()),
+    let mut next_providers = Vec::with_capacity(input.providers.len());
+    for provider in input.providers {
+        let current_provider = current_provider_map.get(&provider.id);
+        let api_key_ref = match provider.api_key {
+            SecretFieldUpdate::Keep => current_provider.and_then(|item| item.api_key_ref.clone()),
             SecretFieldUpdate::Clear => None,
             SecretFieldUpdate::Replace { value } => {
                 let trimmed = value.trim().to_string();
                 if trimmed.is_empty() {
-                    current_config.and_then(|item| item.api_key_ref.clone())
+                    current_provider.and_then(|item| item.api_key_ref.clone())
                 } else {
                     secret_store.protect_optional_string(Some(trimmed))?
                 }
             }
         };
-        next_configs.push(OpenAiConfigSettings {
-            id: config.id,
-            name: config.name,
-            base_url: config.base_url,
-            model: config.model,
+        next_providers.push(AiProviderSettings {
+            id: provider.id,
+            mode: provider.mode,
+            vendor: provider.vendor,
+            name: provider.name,
+            base_url: provider.base_url,
+            model: provider.model,
             api_key_ref,
         });
     }
@@ -409,12 +411,11 @@ fn build_ai_settings_from_input(
         selection_recent_output_max_snippets: input.selection_recent_output_max_snippets,
         request_cache_ttl_ms: input.request_cache_ttl_ms,
         debug_logging_enabled: input.debug_logging_enabled,
-        active_openai_config_id: input.active_openai_config_id,
-        openai_configs: next_configs,
+        active_provider_id: input.active_provider_id,
+        providers: next_providers,
     })
 }
 
-/// 复用应用现有 secret provider，为 OpenAI API Key 提供同一套加密能力。
 fn load_ai_crypto(app: &AppHandle) -> Result<CryptoService, EngineError> {
     let store = read_profiles(app).unwrap_or_else(|_| ProfileStore::default());
     CryptoService::new(store.secret.as_ref())
@@ -430,11 +431,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_ai_settings_are_blank_until_user_configures_openai() {
+    fn default_ai_settings_are_blank_until_user_configures_provider() {
         let settings = default_ai_settings();
         assert_eq!(settings.version, 1);
         assert_eq!(settings.selection_max_chars, 1_500);
-        assert!(settings.active_openai_config_id.is_empty());
-        assert!(settings.openai_configs.is_empty());
+        assert!(settings.active_provider_id.is_empty());
+        assert!(settings.providers.is_empty());
     }
 }

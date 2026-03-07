@@ -98,6 +98,7 @@ async fn request_chat_completion(
         .map_err(|err| OpenAiError::Request(format!("无法创建 OpenAI 客户端: {err}")))?;
 
     let base = config.base_url.trim_end_matches('/');
+    let endpoint = build_chat_completions_endpoint(base);
     let request = ChatCompletionsRequest {
         model: config.model.clone(),
         messages,
@@ -106,9 +107,7 @@ async fn request_chat_completion(
         }),
     };
 
-    let request_builder = client
-        .post(format!("{base}/v1/chat/completions"))
-        .json(&request);
+    let request_builder = client.post(endpoint).json(&request);
     let response = attach_bearer_auth(request_builder, &config.api_key)
         .send()
         .await
@@ -174,6 +173,7 @@ async fn stream_chat_completion(
     }
 
     let base = config.base_url.trim_end_matches('/');
+    let endpoint = build_chat_completions_endpoint(base);
     let request = serde_json::json!({
         "model": config.model,
         "messages": messages,
@@ -193,9 +193,7 @@ async fn stream_chat_completion(
         );
     }
 
-    let request_builder = client
-        .post(format!("{base}/v1/chat/completions"))
-        .json(&request);
+    let request_builder = client.post(endpoint).json(&request);
     let mut response = attach_bearer_auth(request_builder, &config.api_key)
         .send()
         .await
@@ -345,6 +343,14 @@ fn attach_bearer_auth(request: reqwest::RequestBuilder, api_key: &str) -> reqwes
         return request;
     }
     request.bearer_auth(api_key)
+}
+
+fn build_chat_completions_endpoint(base: &str) -> String {
+    // 兼容用户填写 base_url 是否包含 /v1，避免生成 /v1/v1 路径导致 404。
+    if base.ends_with("/v1") {
+        return format!("{base}/chat/completions");
+    }
+    format!("{base}/v1/chat/completions")
 }
 
 fn map_transport_error(err: reqwest::Error) -> OpenAiError {

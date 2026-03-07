@@ -21,7 +21,7 @@ import {
   getBackgroundImagesDir,
   toBackgroundImageAsset,
 } from "@/shared/config/paths";
-import type { OpenAiConfigView } from "@/features/ai/types";
+import type { AiProviderVendor, AiProviderView } from "@/features/ai/types";
 import {
   DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   type HostKeyPolicy,
@@ -36,13 +36,18 @@ import {
 import type { ThemeId } from "@/types";
 import "@/components/layout/ConfigModal.css";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import {
+  AI_PROVIDER_PRESETS,
+  getAiProviderPreset,
+} from "@/constants/aiProviders";
 
 export type ConfigSectionKey =
   | "app-settings"
   | "app-appearance"
   | "ai-settings"
-  | "openai-manage"
-  | "openai-settings"
+  | "ai-provider-manage"
+  | "ai-provider-quick"
+  | "ai-provider-compat"
   | "session-settings"
   | "session-shell"
   | "config-directory";
@@ -83,8 +88,8 @@ type ConfigModalProps = {
   aiSelectionMaxChars?: number;
   aiSessionRecentOutputMaxChars?: number;
   aiDebugLoggingEnabled?: boolean;
-  aiActiveOpenaiConfigId?: string;
-  aiOpenaiConfigs?: OpenAiConfigView[];
+  aiActiveProviderId?: string;
+  aiProviders?: AiProviderView[];
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
@@ -104,18 +109,21 @@ type ConfigModalProps = {
   onAiSelectionMaxCharsChange?: (value: number) => void;
   onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
   onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
-  onAiActiveOpenaiConfigIdChange?: (value: string) => void;
-  onAiOpenaiConfigAdd?: () => string | void;
-  onAiOpenaiConfigRemove?: (configId: string) => void;
-  onAiOpenaiConfigNameChange?: (configId: string, value: string) => void;
-  onAiOpenaiBaseUrlChange?: (configId: string, value: string) => void;
-  onAiOpenaiModelChange?: (configId: string, value: string) => void;
-  onAiOpenAiTest?: (configId: string) => Promise<void> | void;
-  onAiOpenaiApiKeyReplace?: (
-    configId: string,
-    value: string,
-  ) => Promise<void> | void;
-  onAiOpenaiApiKeyClear?: (configId: string) => Promise<void> | void;
+  onAiActiveProviderIdChange?: (value: string) => void;
+  onAiPresetProviderCreate?: (input: {
+    vendor?: AiProviderVendor;
+    name: string;
+    model: string;
+    apiKey: string;
+  }) => Promise<string | void> | string | void;
+  onAiCompatibleProviderCreate?: (input: {
+    name: string;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+  }) => Promise<string | void> | string | void;
+  onAiProviderRemove?: (providerId: string) => void;
+  onAiProviderTest?: (providerId: string) => Promise<void> | void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
@@ -180,8 +188,8 @@ export default function ConfigModal({
   aiSelectionMaxChars = 1500,
   aiSessionRecentOutputMaxChars = 1200,
   aiDebugLoggingEnabled = true,
-  aiActiveOpenaiConfigId = "",
-  aiOpenaiConfigs = [],
+  aiActiveProviderId = "",
+  aiProviders = [],
   webLinksEnabled = true,
   commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
@@ -200,15 +208,11 @@ export default function ConfigModal({
   onAiSelectionMaxCharsChange,
   onAiSessionRecentOutputMaxCharsChange,
   onAiDebugLoggingEnabledChange,
-  onAiActiveOpenaiConfigIdChange,
-  onAiOpenaiConfigAdd,
-  onAiOpenaiConfigRemove,
-  onAiOpenaiConfigNameChange,
-  onAiOpenaiBaseUrlChange,
-  onAiOpenaiModelChange,
-  onAiOpenAiTest,
-  onAiOpenaiApiKeyReplace,
-  onAiOpenaiApiKeyClear,
+  onAiActiveProviderIdChange,
+  onAiPresetProviderCreate,
+  onAiCompatibleProviderCreate,
+  onAiProviderRemove,
+  onAiProviderTest,
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
@@ -249,23 +253,24 @@ export default function ConfigModal({
   );
   const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
     useState(() => String(resourceMonitorIntervalSec));
-  const [selectedOpenAiConfigId, setSelectedOpenAiConfigId] = useState(
-    aiActiveOpenaiConfigId || aiOpenaiConfigs[0]?.id || "",
+  const [selectedProviderId, setSelectedProviderId] = useState(
+    aiActiveProviderId || aiProviders[0]?.id || "",
   );
-  const selectedOpenAiConfig =
-    aiOpenaiConfigs.find((config) => config.id === selectedOpenAiConfigId) ??
-    null;
-  const [aiOpenAiNameDraft, setAiOpenAiNameDraft] = useState(
-    selectedOpenAiConfig?.name ?? "",
+  const [quickPresetVendorDraft, setQuickPresetVendorDraft] =
+    useState<AiProviderVendor>("deepseek");
+  const [quickPresetNameDraft, setQuickPresetNameDraft] = useState("");
+  const [quickPresetModelDraft, setQuickPresetModelDraft] = useState(
+    getAiProviderPreset("deepseek")?.models[0] ?? "",
   );
-  const [aiOpenAiBaseUrlDraft, setAiOpenAiBaseUrlDraft] = useState(
-    selectedOpenAiConfig?.baseUrl ?? "",
-  );
-  const [aiOpenAiModelDraft, setAiOpenAiModelDraft] = useState(
-    selectedOpenAiConfig?.model ?? "",
-  );
-  const [aiOpenAiApiKeyDraft, setAiOpenAiApiKeyDraft] = useState("");
-  const [testingOpenAiConfigId, setTestingOpenAiConfigId] = useState("");
+  const [quickPresetApiKeyDraft, setQuickPresetApiKeyDraft] = useState("");
+  const [quickPresetCreating, setQuickPresetCreating] = useState(false);
+  const [compatibleNameDraft, setCompatibleNameDraft] = useState("");
+  const [compatibleBaseUrlDraft, setCompatibleBaseUrlDraft] = useState("");
+  const [compatibleModelDraft, setCompatibleModelDraft] = useState("");
+  const [compatibleApiKeyDraft, setCompatibleApiKeyDraft] = useState("");
+  const [compatibleCreating, setCompatibleCreating] = useState(false);
+  const [testingProviderId, setTestingProviderId] = useState("");
+  const isDeveloperMode = import.meta.env.DEV;
   const isBackgroundImageModeActive =
     backgroundImageEnabled && !!backgroundImageAsset;
   const effectiveModalSurfaceAlpha = isBackgroundImageModeActive
@@ -273,21 +278,7 @@ export default function ConfigModal({
     : 0.76;
   const isDefaultEditorPathDirty =
     defaultEditorPathDraft.trim() !== fileDefaultEditorPath.trim();
-  const isOpenAiNameDirty =
-    !!selectedOpenAiConfig &&
-    aiOpenAiNameDraft.trim() !== (selectedOpenAiConfig.name ?? "").trim();
-  const isOpenAiBaseUrlDirty =
-    !!selectedOpenAiConfig &&
-    aiOpenAiBaseUrlDraft.trim() !== (selectedOpenAiConfig.baseUrl ?? "").trim();
-  const isOpenAiModelDirty =
-    !!selectedOpenAiConfig &&
-    aiOpenAiModelDraft.trim() !== (selectedOpenAiConfig.model ?? "").trim();
-  const hasUnsavedHighRiskChanges =
-    isDefaultEditorPathDirty ||
-    isOpenAiNameDirty ||
-    isOpenAiBaseUrlDirty ||
-    isOpenAiModelDirty ||
-    !!aiOpenAiApiKeyDraft.trim();
+  const hasUnsavedHighRiskChanges = isDefaultEditorPathDirty;
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -331,23 +322,18 @@ export default function ConfigModal({
 
   useEffect(() => {
     if (
-      selectedOpenAiConfigId &&
-      aiOpenaiConfigs.some((config) => config.id === selectedOpenAiConfigId)
+      selectedProviderId &&
+      aiProviders.some((provider) => provider.id === selectedProviderId)
     ) {
       return;
     }
-    setSelectedOpenAiConfigId(
-      aiActiveOpenaiConfigId || aiOpenaiConfigs[0]?.id || "",
-    );
-  }, [aiActiveOpenaiConfigId, aiOpenaiConfigs, selectedOpenAiConfigId]);
+    setSelectedProviderId(aiActiveProviderId || aiProviders[0]?.id || "");
+  }, [aiActiveProviderId, aiProviders, selectedProviderId]);
 
   useEffect(() => {
-    // OpenAI 接入字段在当前分区内允许连续编辑，不应被自动保存后的同 id 回写覆盖。
-    // 这里只在真正切换管理中的接入 id 时重置草稿，避免 baseUrl/model 输入过程中被打断。
-    setAiOpenAiNameDraft(selectedOpenAiConfig?.name ?? "");
-    setAiOpenAiBaseUrlDraft(selectedOpenAiConfig?.baseUrl ?? "");
-    setAiOpenAiModelDraft(selectedOpenAiConfig?.model ?? "");
-  }, [selectedOpenAiConfigId]);
+    const preset = getAiProviderPreset(quickPresetVendorDraft);
+    setQuickPresetModelDraft(preset?.models[0] ?? "");
+  }, [quickPresetVendorDraft]);
 
   async function pickBackgroundImage() {
     try {
@@ -469,32 +455,83 @@ export default function ConfigModal({
     onAiSessionRecentOutputMaxCharsChange?.(next);
   }
 
-  function commitAiOpenAiNameDraft() {
-    if (!selectedOpenAiConfigId) return;
-    onAiOpenaiConfigNameChange?.(
-      selectedOpenAiConfigId,
-      aiOpenAiNameDraft.trim(),
+  function isProviderNameDuplicate(name: string, excludeId?: string) {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return false;
+    return aiProviders.some(
+      (provider) =>
+        provider.id !== excludeId &&
+        provider.name.trim().toLowerCase() === normalized,
     );
   }
 
-  function commitAiOpenAiBaseUrlDraft() {
-    if (!selectedOpenAiConfigId) return;
-    onAiOpenaiBaseUrlChange?.(
-      selectedOpenAiConfigId,
-      aiOpenAiBaseUrlDraft.trim(),
+  function renderProviderList(
+    list: AiProviderView[],
+    options?: { removable?: boolean },
+  ) {
+    if (!list.length) return null;
+    return (
+      <div className="config-openai-list">
+        {list.map((provider) => {
+          const isSelected = provider.id === selectedProviderId;
+          const isActive = provider.id === aiActiveProviderId;
+          return (
+            <button
+              key={provider.id}
+              type="button"
+              className={`config-openai-item ${isSelected ? "active" : ""}`.trim()}
+              onClick={() => setSelectedProviderId(provider.id)}
+            >
+              <span className="config-openai-item-main">
+                <span className="config-openai-item-title">
+                  {provider.name || t("config.ai.providerUnnamed")}
+                </span>
+                <span className="config-openai-item-meta">
+                  {provider.baseUrl || t("config.ai.providerBaseUrlEmpty")}
+                </span>
+              </span>
+              {isActive ? (
+                <span className="config-openai-badge">
+                  {t("config.ai.providerCurrentBadge")}
+                </span>
+              ) : null}
+              {options?.removable ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="config-openai-badge"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const isRemovingActive = provider.id === aiActiveProviderId;
+                    onAiProviderRemove?.(provider.id);
+                    if (selectedProviderId === provider.id) {
+                      setSelectedProviderId("");
+                    }
+                    if (isRemovingActive) {
+                      onAiActiveProviderIdChange?.("");
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    const isRemovingActive = provider.id === aiActiveProviderId;
+                    onAiProviderRemove?.(provider.id);
+                    if (selectedProviderId === provider.id) {
+                      setSelectedProviderId("");
+                    }
+                    if (isRemovingActive) {
+                      onAiActiveProviderIdChange?.("");
+                    }
+                  }}
+                >
+                  {t("config.ai.providerRemove")}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
     );
-  }
-
-  function commitAiOpenAiModelDraft() {
-    if (!selectedOpenAiConfigId) return;
-    onAiOpenaiModelChange?.(selectedOpenAiConfigId, aiOpenAiModelDraft.trim());
-  }
-
-  async function commitAiOpenAiApiKeyDraft() {
-    const value = aiOpenAiApiKeyDraft.trim();
-    if (!value || !selectedOpenAiConfigId) return;
-    await onAiOpenaiApiKeyReplace?.(selectedOpenAiConfigId, value);
-    setAiOpenAiApiKeyDraft("");
   }
 
   /** 渲染统一的配置持久化状态提示。 */
@@ -545,9 +582,13 @@ export default function ConfigModal({
     }
     if (
       activeSection === "ai-settings" ||
-      activeSection === "openai-manage" ||
-      activeSection === "openai-settings"
+      activeSection === "ai-provider-manage" ||
+      activeSection === "ai-provider-quick" ||
+      activeSection === "ai-provider-compat"
     ) {
+      if (!aiActiveProviderId && aiSaveState === "error") {
+        return null;
+      }
       return renderSaveStatus(aiSaveState, aiSaveError, onAiSaveRetry);
     }
     return null;
@@ -754,34 +795,67 @@ export default function ConfigModal({
       );
     }
     if (activeSection === "ai-settings") {
+      const activeProvider =
+        aiProviders.find((provider) => provider.id === aiActiveProviderId) ??
+        null;
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.aiSettings")}</h3>
           {renderActiveSectionSaveStatus()}
-          <label className="config-toggle-card">
+          <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
-                {t("config.ai.activeOpenAiConfig")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.ai.activeOpenAiConfigHint")}
+                {t("config.ai.activeProvider")}
               </span>
             </div>
-            <select
-              className="config-select-input"
-              value={aiActiveOpenaiConfigId}
-              onChange={(event) =>
-                onAiActiveOpenaiConfigIdChange?.(event.target.value)
-              }
-            >
-              <option value="">{t("config.ai.openaiConfigEmpty")}</option>
-              {aiOpenaiConfigs.map((config) => (
-                <option key={config.id} value={config.id}>
-                  {config.name || t("config.openai.unnamed")}
-                </option>
-              ))}
-            </select>
-          </label>
+            <div className="config-ai-provider-inline">
+              <div className="config-select-control">
+                <Select
+                  value={aiActiveProviderId}
+                  options={[
+                    { value: "", label: t("config.ai.providerEmpty") },
+                    ...aiProviders.map((provider) => ({
+                      value: provider.id,
+                      label: provider.name || t("config.ai.providerUnnamed"),
+                    })),
+                  ]}
+                  onChange={(value) => onAiActiveProviderIdChange?.(value)}
+                  aria-label={t("config.ai.activeProvider")}
+                />
+              </div>
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={
+                    !activeProvider || testingProviderId === activeProvider.id
+                  }
+                  onClick={async () => {
+                    try {
+                      if (!activeProvider) return;
+                      setTestingProviderId(activeProvider.id);
+                      await onAiProviderTest?.(activeProvider.id);
+                      pushToast({
+                        level: "success",
+                        message: t("config.ai.providerTestSuccess"),
+                      });
+                    } catch (error) {
+                      pushToast({
+                        level: "error",
+                        message: getErrorMessage(error),
+                      });
+                    } finally {
+                      setTestingProviderId("");
+                    }
+                  }}
+                >
+                  {activeProvider && testingProviderId === activeProvider.id
+                    ? t("config.ai.providerTesting")
+                    : t("config.ai.providerTest")}
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
@@ -832,330 +906,299 @@ export default function ConfigModal({
               }}
             />
           </div>
+          {isDeveloperMode ? (
+            <label className="config-toggle-card">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.ai.debugLoggingEnabled")}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={aiDebugLoggingEnabled}
+                onChange={(event) =>
+                  onAiDebugLoggingEnabledChange?.(event.target.checked)
+                }
+              />
+            </label>
+          ) : null}
+        </div>
+      );
+    }
+    if (activeSection === "ai-provider-manage") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.aiProviderManage")}</h3>
+          {renderActiveSectionSaveStatus()}
+          {!aiProviders.length ? (
+            <div className="config-empty-state">
+              {t("config.ai.manageEmpty")}
+            </div>
+          ) : (
+            renderProviderList(aiProviders, { removable: true })
+          )}
+        </div>
+      );
+    }
+    if (activeSection === "ai-provider-quick") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.aiProviderQuick")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerName")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={quickPresetNameDraft}
+              placeholder={t("config.ai.providerNamePlaceholder")}
+              onChange={(event) => setQuickPresetNameDraft(event.target.value)}
+            />
+          </div>
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
-                {t("config.ai.debugLoggingEnabled")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.ai.debugLoggingEnabledHint")}
+                {t("config.ai.providerVendor")}
               </span>
             </div>
-            <input
-              type="checkbox"
-              checked={aiDebugLoggingEnabled}
-              onChange={(event) =>
-                onAiDebugLoggingEnabledChange?.(event.target.checked)
-              }
-            />
-          </label>
-        </div>
-      );
-    }
-    if (activeSection === "openai-manage") {
-      return (
-        <div className="config-modal-widget config-modal-widget-scrollable">
-          <h3>{t("config.section.openaiManage")}</h3>
-          {renderActiveSectionSaveStatus()}
-          <p>{t("config.openai.manageHint")}</p>
-          <div className="config-file-picker-actions">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                const nextId = onAiOpenaiConfigAdd?.();
-                if (nextId) {
-                  setSelectedOpenAiConfigId(nextId);
+            <div className="config-select-control">
+              <Select
+                value={quickPresetVendorDraft}
+                options={AI_PROVIDER_PRESETS.map((preset) => ({
+                  value: preset.vendor,
+                  label: preset.label,
+                }))}
+                onChange={(value) =>
+                  setQuickPresetVendorDraft(value as AiProviderVendor)
                 }
-              }}
-            >
-              {t("config.openai.addConfig")}
-            </Button>
-          </div>
-          {!aiOpenaiConfigs.length ? (
-            <div className="config-empty-state">
-              {t("config.openai.manageEmpty")}
-            </div>
-          ) : (
-            <div className="config-openai-list">
-              {aiOpenaiConfigs.map((config) => {
-                const isSelected = config.id === selectedOpenAiConfigId;
-                const isActive = config.id === aiActiveOpenaiConfigId;
-                return (
-                  <button
-                    key={config.id}
-                    type="button"
-                    className={`config-openai-item ${isSelected ? "active" : ""}`.trim()}
-                    onClick={() => setSelectedOpenAiConfigId(config.id)}
-                  >
-                    <span className="config-openai-item-main">
-                      <span className="config-openai-item-title">
-                        {config.name || t("config.openai.unnamed")}
-                      </span>
-                      <span className="config-openai-item-meta">
-                        {config.baseUrl || t("config.openai.baseUrlEmpty")}
-                      </span>
-                    </span>
-                    {isActive ? (
-                      <span className="config-openai-badge">
-                        {t("config.openai.currentBadge")}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <div className="config-file-picker-actions">
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!selectedOpenAiConfig}
-              onClick={() => {
-                if (!selectedOpenAiConfig) return;
-                const currentIndex = aiOpenaiConfigs.findIndex(
-                  (config) => config.id === selectedOpenAiConfig.id,
-                );
-                const fallbackId =
-                  aiOpenaiConfigs[currentIndex + 1]?.id ??
-                  aiOpenaiConfigs[currentIndex - 1]?.id ??
-                  "";
-                onAiOpenaiConfigRemove?.(selectedOpenAiConfig.id);
-                setSelectedOpenAiConfigId(fallbackId);
-              }}
-            >
-              {t("config.openai.removeConfig")}
-            </Button>
-          </div>
-        </div>
-      );
-    }
-    if (activeSection === "openai-settings") {
-      return (
-        <div className="config-modal-widget config-modal-widget-scrollable">
-          <h3>{t("config.section.openaiSettings")}</h3>
-          {renderActiveSectionSaveStatus()}
-          {!selectedOpenAiConfig && (
-            <div className="config-empty-state">
-              {t("config.openai.manageEmpty")}
-            </div>
-          )}
-          <div className="config-toggle-card config-feature-group">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("config.openai.name")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.openai.nameHint")}
-              </span>
-            </div>
-            <input
-              type="text"
-              className="config-text-input"
-              value={aiOpenAiNameDraft}
-              onChange={(event) => setAiOpenAiNameDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                commitAiOpenAiNameDraft();
-              }}
-              disabled={!selectedOpenAiConfig}
-            />
-            <div className="config-file-picker-actions">
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!selectedOpenAiConfig || !isOpenAiNameDirty}
-                onClick={commitAiOpenAiNameDraft}
-              >
-                {t("actions.save")}
-              </Button>
-            </div>
-          </div>
-          <div className="config-toggle-card config-feature-group">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("config.openai.baseUrl")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.openai.baseUrlHint")}
-              </span>
-            </div>
-            <input
-              type="text"
-              className="config-text-input"
-              value={aiOpenAiBaseUrlDraft}
-              onChange={(event) => setAiOpenAiBaseUrlDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                commitAiOpenAiBaseUrlDraft();
-              }}
-              disabled={!selectedOpenAiConfig}
-            />
-            <div className="config-file-picker-actions">
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!selectedOpenAiConfig || !isOpenAiBaseUrlDirty}
-                onClick={commitAiOpenAiBaseUrlDraft}
-              >
-                {t("actions.save")}
-              </Button>
-            </div>
-          </div>
-          <div className="config-toggle-card config-feature-group">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("config.openai.model")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.openai.modelHint")}
-              </span>
-            </div>
-            <input
-              type="text"
-              className="config-text-input"
-              value={aiOpenAiModelDraft}
-              placeholder={t("config.openai.modelPlaceholder")}
-              onChange={(event) => setAiOpenAiModelDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                commitAiOpenAiModelDraft();
-              }}
-              disabled={!selectedOpenAiConfig}
-            />
-            <div className="config-file-picker-actions">
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!selectedOpenAiConfig || !isOpenAiModelDirty}
-                onClick={commitAiOpenAiModelDraft}
-              >
-                {t("actions.save")}
-              </Button>
-            </div>
-          </div>
-          <div className="config-toggle-card config-feature-group">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("config.openai.apiKey")}
-              </span>
-              <span className="config-toggle-desc">
-                {selectedOpenAiConfig?.apiKeyConfigured
-                  ? t("config.openai.apiKeyConfigured")
-                  : t("config.openai.apiKeyEmpty")}
-              </span>
-            </div>
-            <div className="config-file-picker-actions">
-              <input
-                type="password"
-                className="config-text-input"
-                value={aiOpenAiApiKeyDraft}
-                placeholder={t("config.openai.apiKeyPlaceholder")}
-                onChange={(event) => setAiOpenAiApiKeyDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  commitAiOpenAiApiKeyDraft()
-                    .then(() => {
-                      pushToast({
-                        level: "success",
-                        message: t("config.openai.apiKeySaved"),
-                      });
-                    })
-                    .catch((error) => {
-                      pushToast({
-                        level: "error",
-                        message: getErrorMessage(error),
-                      });
-                    });
-                }}
-                disabled={!selectedOpenAiConfig}
+                aria-label={t("config.ai.providerVendor")}
               />
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!selectedOpenAiConfig || !aiOpenAiApiKeyDraft.trim()}
-                onClick={() => {
-                  commitAiOpenAiApiKeyDraft()
-                    .then(() => {
-                      pushToast({
-                        level: "success",
-                        message: t("config.openai.apiKeySaved"),
-                      });
-                    })
-                    .catch((error) => {
-                      pushToast({
-                        level: "error",
-                        message: getErrorMessage(error),
-                      });
-                    });
-                }}
-              >
-                {t("actions.save")}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!selectedOpenAiConfig?.apiKeyConfigured}
-                onClick={() => {
-                  setAiOpenAiApiKeyDraft("");
-                  Promise.resolve(
-                    selectedOpenAiConfig
-                      ? onAiOpenaiApiKeyClear?.(selectedOpenAiConfig.id)
-                      : undefined,
-                  )
-                    .then(() => {
-                      pushToast({
-                        level: "success",
-                        message: t("config.openai.apiKeyCleared"),
-                      });
-                    })
-                    .catch((error) => {
-                      pushToast({
-                        level: "error",
-                        message: getErrorMessage(error),
-                      });
-                    });
-                }}
-              >
-                {t("config.openai.clearApiKey")}
-              </Button>
             </div>
+          </label>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerModel")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={quickPresetModelDraft}
+              placeholder={t("config.ai.providerModelPlaceholder")}
+              onChange={(event) => setQuickPresetModelDraft(event.target.value)}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerApiKey")}
+              </span>
+            </div>
+            <input
+              type="password"
+              className="config-text-input"
+              value={quickPresetApiKeyDraft}
+              placeholder={t("config.ai.providerApiKeyPlaceholder")}
+              onChange={(event) =>
+                setQuickPresetApiKeyDraft(event.target.value)
+              }
+            />
           </div>
           <div className="config-file-picker-actions">
             <Button
               variant="primary"
               size="sm"
-              disabled={
-                !selectedOpenAiConfig ||
-                testingOpenAiConfigId === selectedOpenAiConfig.id
-              }
-              onClick={async () => {
-                try {
-                  if (!selectedOpenAiConfig) return;
-                  setTestingOpenAiConfigId(selectedOpenAiConfig.id);
-                  await onAiOpenAiTest?.(selectedOpenAiConfig.id);
-                  pushToast({
-                    level: "success",
-                    message: t("config.openai.testSuccess"),
-                  });
-                } catch (error) {
+              disabled={quickPresetCreating}
+              onClick={() => {
+                const nextName = quickPresetNameDraft.trim();
+                if (!nextName) {
                   pushToast({
                     level: "error",
-                    message: getErrorMessage(error),
+                    message: t("config.ai.providerNameRequired"),
                   });
-                } finally {
-                  setTestingOpenAiConfigId("");
+                  return;
                 }
+                if (isProviderNameDuplicate(nextName)) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.ai.providerNameDuplicate"),
+                  });
+                  return;
+                }
+                const nextModel = quickPresetModelDraft.trim();
+                if (!nextModel) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.ai.providerModelRequired"),
+                  });
+                  return;
+                }
+                setQuickPresetCreating(true);
+                Promise.resolve(
+                  onAiPresetProviderCreate?.({
+                    vendor: quickPresetVendorDraft,
+                    name: nextName,
+                    model: nextModel,
+                    apiKey: quickPresetApiKeyDraft.trim(),
+                  }),
+                )
+                  .then(() => {
+                    setQuickPresetNameDraft("");
+                    setQuickPresetApiKeyDraft("");
+                    setQuickPresetModelDraft(
+                      getAiProviderPreset(quickPresetVendorDraft)?.models[0] ??
+                        "",
+                    );
+                  })
+                  .catch((error) => {
+                    pushToast({
+                      level: "error",
+                      message: getErrorMessage(error),
+                    });
+                  })
+                  .finally(() => {
+                    setQuickPresetCreating(false);
+                  });
               }}
             >
-              {selectedOpenAiConfig &&
-              testingOpenAiConfigId === selectedOpenAiConfig.id
-                ? t("config.openai.testing")
-                : t("config.openai.test")}
+              {t("config.ai.confirmAdd")}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    if (activeSection === "ai-provider-compat") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.aiProviderCompat")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerName")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={compatibleNameDraft}
+              placeholder={t("config.openai.namePlaceholder")}
+              onChange={(event) => setCompatibleNameDraft(event.target.value)}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerBaseUrl")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={compatibleBaseUrlDraft}
+              placeholder={t("config.openai.baseUrlPlaceholder")}
+              onChange={(event) =>
+                setCompatibleBaseUrlDraft(event.target.value)
+              }
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerModel")}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="config-text-input"
+              value={compatibleModelDraft}
+              placeholder={t("config.openai.modelPlaceholder")}
+              onChange={(event) => setCompatibleModelDraft(event.target.value)}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.providerApiKey")}
+              </span>
+            </div>
+            <input
+              type="password"
+              className="config-text-input"
+              value={compatibleApiKeyDraft}
+              placeholder={t("config.openai.apiKeyPlaceholder")}
+              onChange={(event) => setCompatibleApiKeyDraft(event.target.value)}
+            />
+          </div>
+          <div className="config-file-picker-actions">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={compatibleCreating}
+              onClick={() => {
+                const nextName = compatibleNameDraft.trim();
+                if (!nextName) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.ai.providerNameRequired"),
+                  });
+                  return;
+                }
+                if (isProviderNameDuplicate(nextName)) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.ai.providerNameDuplicate"),
+                  });
+                  return;
+                }
+                const nextBaseUrl = compatibleBaseUrlDraft.trim();
+                if (!nextBaseUrl) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.ai.providerBaseUrlRequired"),
+                  });
+                  return;
+                }
+                const nextModel = compatibleModelDraft.trim();
+                if (!nextModel) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.ai.providerModelRequired"),
+                  });
+                  return;
+                }
+                setCompatibleCreating(true);
+                Promise.resolve(
+                  onAiCompatibleProviderCreate?.({
+                    name: nextName,
+                    baseUrl: nextBaseUrl,
+                    model: nextModel,
+                    apiKey: compatibleApiKeyDraft.trim(),
+                  }),
+                )
+                  .then(() => {
+                    setCompatibleNameDraft("");
+                    setCompatibleBaseUrlDraft("");
+                    setCompatibleModelDraft("");
+                    setCompatibleApiKeyDraft("");
+                  })
+                  .catch((error) => {
+                    pushToast({
+                      level: "error",
+                      message: getErrorMessage(error),
+                    });
+                  })
+                  .finally(() => {
+                    setCompatibleCreating(false);
+                  });
+              }}
+            >
+              {t("config.ai.confirmAdd")}
             </Button>
           </div>
         </div>

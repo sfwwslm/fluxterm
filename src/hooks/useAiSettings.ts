@@ -2,59 +2,73 @@
  * 终端 AI 配置持久化模块。
  * 职责：
  * 1. 读写 ai/ai.json 配置文件。
- * 2. 管理终端 AI 助手偏好与多个 OpenAI 标准接入配置。
- * 3. 采用“内存态缓存 + 防抖异步落盘”模式，打破因后端返回新对象引用导致的死循环。
+ * 2. 管理终端 AI 助手偏好与接入列表（快速接入 + 兼容接入）。
+ * 3. 采用“内存态缓存 + 防抖异步落盘”模式。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { debug, info, warn } from "@tauri-apps/plugin-log";
 import {
-  aiOpenAiTest,
+  aiProviderTest,
   aiSettingsGet,
   aiSettingsSave,
 } from "@/features/ai/core/commands";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import type {
+  AiProviderInput,
+  AiProviderMode,
+  AiProviderVendor,
   AiSettingsSaveInput,
   AiSettingsView,
-  OpenAiConfigInput,
-  OpenAiConfigView,
+  AiProviderView,
   SecretFieldUpdate,
 } from "@/features/ai/types";
 import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
+import { getAiProviderPreset } from "@/constants/aiProviders";
 
-/** useAiSettings 返回的操作接口。 */
 type UseAiSettingsResult = {
   aiAvailable: boolean;
   aiUnavailableReason: string | null;
   selectionMaxChars: number;
   sessionRecentOutputMaxChars: number;
   debugLoggingEnabled: boolean;
-  activeOpenaiConfigId: string;
-  openaiConfigs: OpenAiConfigView[];
-  activeOpenaiConfig: OpenAiConfigView | null;
+  activeProviderId: string;
+  providers: AiProviderView[];
+  activeProvider: AiProviderView | null;
   aiSettingsLoaded: boolean;
   setSelectionMaxChars: React.Dispatch<React.SetStateAction<number>>;
   setSessionRecentOutputMaxChars: React.Dispatch<React.SetStateAction<number>>;
   setDebugLoggingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
-  setActiveOpenaiConfigId: React.Dispatch<React.SetStateAction<string>>;
-  updateOpenaiConfigName: (configId: string, value: string) => void;
-  updateOpenaiConfigBaseUrl: (configId: string, value: string) => void;
-  updateOpenaiConfigModel: (configId: string, value: string) => void;
-  addOpenaiConfig: () => string;
-  removeOpenaiConfig: (configId: string) => void;
-  testOpenAiConnection: (configId?: string) => Promise<void>;
-  replaceOpenaiApiKey: (configId: string, value: string) => Promise<void>;
-  clearOpenaiApiKey: (configId: string) => Promise<void>;
+  setActiveProviderId: React.Dispatch<React.SetStateAction<string>>;
+  updateProviderName: (providerId: string, value: string) => void;
+  updateProviderBaseUrl: (providerId: string, value: string) => void;
+  updateProviderModel: (providerId: string, value: string) => void;
+  updateProviderVendor: (providerId: string, vendor: AiProviderVendor) => void;
+  addPresetProvider: (vendor?: AiProviderVendor, name?: string) => string;
+  addPresetProviderWithConfig: (input: {
+    vendor?: AiProviderVendor;
+    name: string;
+    model: string;
+    apiKey: string;
+  }) => Promise<string>;
+  addCompatibleProviderWithConfig: (input: {
+    name: string;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+  }) => Promise<string>;
+  addCompatibleProvider: () => string;
+  removeProvider: (providerId: string) => void;
+  testProviderConnection: (providerId?: string) => Promise<void>;
+  replaceProviderApiKey: (providerId: string, value: string) => Promise<void>;
+  clearProviderApiKey: (providerId: string) => Promise<void>;
   saveState: "idle" | "saving" | "saved" | "error";
   saveError: string | null;
   retrySave: () => void;
 };
 
-/** AI 文本上下文阈值限制。 */
 const MIN_AI_TEXT_LIMIT = 100;
 const MAX_AI_TEXT_LIMIT = 20_000;
 
-/** AI 设置默认值。 */
 const DEFAULT_AI_SETTINGS: AiSettingsView = {
   version: 1,
   selectionMaxChars: 1500,
@@ -64,11 +78,10 @@ const DEFAULT_AI_SETTINGS: AiSettingsView = {
   selectionRecentOutputMaxSnippets: 2,
   requestCacheTtlMs: 15000,
   debugLoggingEnabled: true,
-  activeOpenaiConfigId: "",
-  openaiConfigs: [],
+  activeProviderId: "",
+  providers: [],
 };
 
-/** 归一化 AI 上下文长度。 */
 function normalizeTextLimit(value: number) {
   return Math.max(
     MIN_AI_TEXT_LIMIT,
@@ -76,30 +89,29 @@ function normalizeTextLimit(value: number) {
   );
 }
 
-/** 计算 AI 功能是否就绪。 */
-function computeAiAvailability(config: OpenAiConfigView | null) {
+function computeAiAvailability(config: AiProviderView | null) {
   if (!config?.baseUrl.trim() || !config.model.trim()) {
     return {
       aiAvailable: false,
-      aiUnavailableReason: "openai_incomplete",
+      aiUnavailableReason: "provider_incomplete",
     };
   }
   return { aiAvailable: true, aiUnavailableReason: null };
 }
 
-/** 生成新的 OpenAI 配置名称。 */
-function createOpenAiConfigName(configs: OpenAiConfigView[]) {
-  return `OpenAI ${configs.length + 1}`;
+function buildProviderName(vendor: AiProviderVendor, index: number) {
+  const preset = getAiProviderPreset(vendor);
+  if (preset) return `${preset.label} ${index}`;
+  return `Compatible ${index}`;
 }
 
-/** 构建向后端提交的保存负载。 */
 function buildSaveInput(
   source: {
     selectionMaxChars: number;
     sessionRecentOutputMaxChars: number;
     debugLoggingEnabled: boolean;
-    activeOpenaiConfigId: string;
-    openaiConfigs: OpenAiConfigView[];
+    activeProviderId: string;
+    providers: AiProviderView[];
   },
   lastLoaded: AiSettingsView,
   overrides: Record<string, SecretFieldUpdate> = {},
@@ -115,20 +127,47 @@ function buildSaveInput(
       lastLoaded.selectionRecentOutputMaxSnippets,
     requestCacheTtlMs: lastLoaded.requestCacheTtlMs,
     debugLoggingEnabled: source.debugLoggingEnabled,
-    activeOpenaiConfigId: source.activeOpenaiConfigId,
-    openaiConfigs: source.openaiConfigs.map<OpenAiConfigInput>((config) => ({
-      id: config.id,
-      name: config.name.trim(),
-      baseUrl: config.baseUrl.trim(),
-      model: config.model.trim(),
-      apiKey: overrides[config.id] ?? { mode: "keep" },
+    activeProviderId: source.activeProviderId,
+    providers: source.providers.map<AiProviderInput>((provider) => ({
+      id: provider.id,
+      mode: provider.mode,
+      vendor: provider.vendor,
+      name: provider.name.trim(),
+      baseUrl: provider.baseUrl.trim(),
+      model: provider.model.trim(),
+      apiKey: overrides[provider.id] ?? { mode: "keep" },
     })),
   };
 }
 
-/**
- * 终端 AI 配置持久化 Hook。
- */
+function buildPresetProvider(
+  vendor: AiProviderVendor,
+  count: number,
+): AiProviderView {
+  const preset = getAiProviderPreset(vendor);
+  return {
+    id: crypto.randomUUID(),
+    mode: "preset",
+    vendor,
+    name: buildProviderName(vendor, count + 1),
+    baseUrl: preset?.defaultBaseUrl ?? "",
+    model: preset?.models[0] ?? "",
+    apiKeyConfigured: false,
+  };
+}
+
+function buildCompatibleProvider(count: number): AiProviderView {
+  return {
+    id: crypto.randomUUID(),
+    mode: "compatible",
+    vendor: "custom",
+    name: buildProviderName("custom", count + 1),
+    baseUrl: "",
+    model: "",
+    apiKeyConfigured: false,
+  };
+}
+
 export default function useAiSettings(): UseAiSettingsResult {
   const [selectionMaxChars, setSelectionMaxChars] = useState(
     DEFAULT_AI_SETTINGS.selectionMaxChars,
@@ -138,11 +177,11 @@ export default function useAiSettings(): UseAiSettingsResult {
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(
     DEFAULT_AI_SETTINGS.debugLoggingEnabled,
   );
-  const [activeOpenaiConfigId, setActiveOpenaiConfigId] = useState(
-    DEFAULT_AI_SETTINGS.activeOpenaiConfigId,
+  const [activeProviderId, setActiveProviderId] = useState(
+    DEFAULT_AI_SETTINGS.activeProviderId,
   );
-  const [openaiConfigs, setOpenaiConfigs] = useState<OpenAiConfigView[]>(
-    DEFAULT_AI_SETTINGS.openaiConfigs,
+  const [providers, setProviders] = useState<AiProviderView[]>(
+    DEFAULT_AI_SETTINGS.providers,
   );
   const [aiSettingsLoaded, setAiSettingsLoaded] = useState(false);
   const [saveState, setSaveState] = useState<
@@ -151,26 +190,22 @@ export default function useAiSettings(): UseAiSettingsResult {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveRetryToken, setSaveRetryToken] = useState(0);
 
-  // 持久化与状态追踪。
   const loadedRef = useRef(false);
   const savingSecretRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const lastSavedConfigRef = useRef<string>("");
   const lastLoadedViewRef = useRef<AiSettingsView>(DEFAULT_AI_SETTINGS);
-  const lastLoggedActiveConfigIdRef = useRef("");
+  const lastLoggedActiveProviderIdRef = useRef("");
 
-  const activeOpenaiConfig = useMemo(
-    () =>
-      openaiConfigs.find((config) => config.id === activeOpenaiConfigId) ??
-      null,
-    [activeOpenaiConfigId, openaiConfigs],
+  const activeProvider = useMemo(
+    () => providers.find((config) => config.id === activeProviderId) ?? null,
+    [activeProviderId, providers],
   );
   const availability = useMemo(
-    () => computeAiAvailability(activeOpenaiConfig),
-    [activeOpenaiConfig],
+    () => computeAiAvailability(activeProvider),
+    [activeProvider],
   );
 
-  // 初始化加载。
   useEffect(() => {
     let active = true;
     aiSettingsGet()
@@ -180,16 +215,16 @@ export default function useAiSettings(): UseAiSettingsResult {
         setSelectionMaxChars(settings.selectionMaxChars);
         setSessionRecentOutputMaxChars(settings.sessionRecentOutputMaxChars);
         setDebugLoggingEnabled(settings.debugLoggingEnabled);
-        setActiveOpenaiConfigId(settings.activeOpenaiConfigId);
-        setOpenaiConfigs(settings.openaiConfigs);
+        setActiveProviderId(settings.activeProviderId);
+        setProviders(settings.providers);
         lastSavedConfigRef.current = JSON.stringify(
           buildSaveInput(
             {
               selectionMaxChars: settings.selectionMaxChars,
               sessionRecentOutputMaxChars: settings.sessionRecentOutputMaxChars,
               debugLoggingEnabled: settings.debugLoggingEnabled,
-              activeOpenaiConfigId: settings.activeOpenaiConfigId,
-              openaiConfigs: settings.openaiConfigs,
+              activeProviderId: settings.activeProviderId,
+              providers: settings.providers,
             },
             settings,
           ),
@@ -218,26 +253,20 @@ export default function useAiSettings(): UseAiSettingsResult {
     };
   }, []);
 
-  // 防抖异步保存逻辑。
   useEffect(() => {
     if (!loadedRef.current || savingSecretRef.current) return;
-
     const nextSaveInput = buildSaveInput(
       {
         selectionMaxChars,
         sessionRecentOutputMaxChars,
         debugLoggingEnabled,
-        activeOpenaiConfigId,
-        openaiConfigs,
+        activeProviderId,
+        providers,
       },
       lastLoadedViewRef.current,
     );
-
     const configStr = JSON.stringify(nextSaveInput);
-    // 深度对比打破保存循环。
-    if (configStr === lastSavedConfigRef.current) {
-      return;
-    }
+    if (configStr === lastSavedConfigRef.current) return;
 
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
@@ -280,67 +309,36 @@ export default function useAiSettings(): UseAiSettingsResult {
     selectionMaxChars,
     sessionRecentOutputMaxChars,
     debugLoggingEnabled,
-    activeOpenaiConfigId,
-    openaiConfigs,
+    activeProviderId,
+    providers,
     saveRetryToken,
   ]);
 
-  // 日志记录。
   useEffect(() => {
     if (!loadedRef.current) return;
     info(
       JSON.stringify({
-        event: "ai-settings:selection-max-chars-changed",
-        value: normalizeTextLimit(selectionMaxChars),
+        event: "ai-settings:active-provider-changed",
+        id: activeProviderId,
       }),
     ).catch(() => {});
-  }, [selectionMaxChars]);
+  }, [activeProviderId]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
-    info(
-      JSON.stringify({
-        event: "ai-settings:session-context-max-chars-changed",
-        value: normalizeTextLimit(sessionRecentOutputMaxChars),
-      }),
-    ).catch(() => {});
-  }, [sessionRecentOutputMaxChars]);
+    if (lastLoggedActiveProviderIdRef.current === activeProviderId) return;
+    lastLoggedActiveProviderIdRef.current = activeProviderId;
+  }, [activeProviderId]);
 
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    info(
-      JSON.stringify({
-        event: "ai-settings:debug-logging-changed",
-        enabled: debugLoggingEnabled,
-      }),
-    ).catch(() => {});
-  }, [debugLoggingEnabled]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (lastLoggedActiveConfigIdRef.current === activeOpenaiConfigId) return;
-    lastLoggedActiveConfigIdRef.current = activeOpenaiConfigId;
-    info(
-      JSON.stringify({
-        event: "ai-settings:active-openai-config-changed",
-        id: activeOpenaiConfigId,
-      }),
-    ).catch(() => {});
-  }, [activeOpenaiConfigId]);
-
-  /** 更新指定 OpenAI 配置项。 */
-  function updateOpenaiConfig(
-    configId: string,
-    updater: (config: OpenAiConfigView) => OpenAiConfigView,
+  function updateProvider(
+    providerId: string,
+    updater: (provider: AiProviderView) => AiProviderView,
   ) {
-    setOpenaiConfigs((current) =>
-      current.map((config) =>
-        config.id === configId ? updater(config) : config,
-      ),
+    setProviders((current) =>
+      current.map((item) => (item.id === providerId ? updater(item) : item)),
     );
   }
 
-  /** 手动触发一次包含密钥更新的强制保存。 */
   async function saveWithSecretUpdate(
     overrides: Record<string, SecretFieldUpdate>,
   ) {
@@ -349,32 +347,23 @@ export default function useAiSettings(): UseAiSettingsResult {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
       setSaveState("saving");
       setSaveError(null);
-
       const nextSaveInput = buildSaveInput(
         {
           selectionMaxChars,
           sessionRecentOutputMaxChars,
           debugLoggingEnabled,
-          activeOpenaiConfigId,
-          openaiConfigs,
+          activeProviderId,
+          providers,
         },
         lastLoadedViewRef.current,
         overrides,
       );
-
-      debug(
-        JSON.stringify({
-          event: "ai-settings:forced-save-start",
-          overrides: Object.keys(overrides),
-        }),
-      );
       const saved = await aiSettingsSave(nextSaveInput);
       lastLoadedViewRef.current = saved;
       lastSavedConfigRef.current = JSON.stringify(nextSaveInput);
-      setOpenaiConfigs(saved.openaiConfigs);
-      setActiveOpenaiConfigId(saved.activeOpenaiConfigId);
+      setProviders(saved.providers);
+      setActiveProviderId(saved.activeProviderId);
       setSaveState("saved");
-      debug(JSON.stringify({ event: "ai-settings:forced-save-ok" }));
     } catch (error) {
       setSaveState("error");
       setSaveError(extractErrorMessage(error));
@@ -384,91 +373,180 @@ export default function useAiSettings(): UseAiSettingsResult {
     }
   }
 
-  /** 手动触发一次 AI 设置重试保存。 */
   function retrySave() {
     setSaveRetryToken((current) => current + 1);
   }
 
-  /** 新增 OpenAI 配置。 */
-  function addOpenaiConfig() {
-    const nextConfig: OpenAiConfigView = {
-      id: crypto.randomUUID(),
-      name: createOpenAiConfigName(openaiConfigs),
-      baseUrl: "",
-      model: "",
-      apiKeyConfigured: false,
-    };
-    setOpenaiConfigs((current) => [...current, nextConfig]);
-    setActiveOpenaiConfigId((current) => current || nextConfig.id);
-    info(
-      JSON.stringify({
-        event: "ai-settings:openai-config-added",
-        id: nextConfig.id,
-      }),
-    ).catch(() => {});
-    return nextConfig.id;
+  function addPresetProvider(
+    vendor: AiProviderVendor = "deepseek",
+    name?: string,
+  ) {
+    const normalizedVendor = vendor === "custom" ? "deepseek" : vendor;
+    const next = buildPresetProvider(normalizedVendor, providers.length);
+    if (name?.trim()) {
+      next.name = name.trim();
+    }
+    setProviders((current) => [...current, next]);
+    return next.id;
   }
 
-  /** 删除 OpenAI 配置。 */
-  function removeOpenaiConfig(configId: string) {
-    const targetId = configId.trim();
-    if (!targetId) return;
-    setOpenaiConfigs((current) => {
-      const nextConfigs = current.filter((config) => config.id !== targetId);
-      setActiveOpenaiConfigId((currentActiveId) =>
-        currentActiveId === targetId
-          ? (nextConfigs[0]?.id ?? "")
-          : currentActiveId,
+  async function addPresetProviderWithConfig(input: {
+    vendor?: AiProviderVendor;
+    name: string;
+    model: string;
+    apiKey: string;
+  }) {
+    const normalizedVendor =
+      input.vendor && input.vendor !== "custom" ? input.vendor : "deepseek";
+    const next = buildPresetProvider(normalizedVendor, providers.length);
+    next.name = input.name.trim();
+    next.model = input.model.trim();
+    const apiKey = input.apiKey.trim();
+    if (!next.name) {
+      throw new Error("provider_name_required");
+    }
+    if (!next.model) {
+      throw new Error("provider_model_required");
+    }
+    savingSecretRef.current = true;
+    try {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      setSaveState("saving");
+      setSaveError(null);
+      const nextProviders = [...providers, next];
+      const nextSaveInput = buildSaveInput(
+        {
+          selectionMaxChars,
+          sessionRecentOutputMaxChars,
+          debugLoggingEnabled,
+          activeProviderId,
+          providers: nextProviders,
+        },
+        lastLoadedViewRef.current,
+        apiKey ? { [next.id]: { mode: "replace", value: apiKey } } : {},
       );
-      return nextConfigs;
-    });
-    info(
-      JSON.stringify({
-        event: "ai-settings:openai-config-removed",
-        id: targetId,
-      }),
-    ).catch(() => {});
+      const saved = await aiSettingsSave(nextSaveInput);
+      lastLoadedViewRef.current = saved;
+      lastSavedConfigRef.current = JSON.stringify(nextSaveInput);
+      setProviders(saved.providers);
+      setActiveProviderId(saved.activeProviderId);
+      setSaveState("saved");
+      return next.id;
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(extractErrorMessage(error));
+      throw error;
+    } finally {
+      savingSecretRef.current = false;
+    }
   }
 
-  /** 替换 API Key。 */
-  async function replaceOpenaiApiKey(configId: string, value: string) {
+  async function addCompatibleProviderWithConfig(input: {
+    name: string;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+  }) {
+    const next = buildCompatibleProvider(providers.length);
+    next.name = input.name.trim();
+    next.baseUrl = input.baseUrl.trim();
+    next.model = input.model.trim();
+    const apiKey = input.apiKey.trim();
+    if (!next.name) {
+      throw new Error("provider_name_required");
+    }
+    if (!next.baseUrl) {
+      throw new Error("provider_base_url_required");
+    }
+    if (!next.model) {
+      throw new Error("provider_model_required");
+    }
+    savingSecretRef.current = true;
+    try {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      setSaveState("saving");
+      setSaveError(null);
+      const nextProviders = [...providers, next];
+      const nextSaveInput = buildSaveInput(
+        {
+          selectionMaxChars,
+          sessionRecentOutputMaxChars,
+          debugLoggingEnabled,
+          activeProviderId,
+          providers: nextProviders,
+        },
+        lastLoadedViewRef.current,
+        apiKey ? { [next.id]: { mode: "replace", value: apiKey } } : {},
+      );
+      const saved = await aiSettingsSave(nextSaveInput);
+      lastLoadedViewRef.current = saved;
+      lastSavedConfigRef.current = JSON.stringify(nextSaveInput);
+      setProviders(saved.providers);
+      setActiveProviderId(saved.activeProviderId);
+      setSaveState("saved");
+      return next.id;
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(extractErrorMessage(error));
+      throw error;
+    } finally {
+      savingSecretRef.current = false;
+    }
+  }
+
+  function addCompatibleProvider() {
+    const next = buildCompatibleProvider(providers.length);
+    setProviders((current) => [...current, next]);
+    return next.id;
+  }
+
+  function removeProvider(providerId: string) {
+    const targetId = providerId.trim();
+    if (!targetId) return;
+    setProviders((current) => {
+      const next = current.filter((item) => item.id !== targetId);
+      setActiveProviderId((currentActiveId) =>
+        currentActiveId === targetId ? "" : currentActiveId,
+      );
+      return next;
+    });
+  }
+
+  async function replaceProviderApiKey(providerId: string, value: string) {
     const trimmed = value.trim();
-    const targetId = configId.trim();
+    const targetId = providerId.trim();
     if (!trimmed || !targetId) return;
     await saveWithSecretUpdate({
       [targetId]: { mode: "replace", value: trimmed },
     });
-    info(
-      JSON.stringify({
-        event: "ai-settings:openai-api-key-replaced",
-        id: targetId,
-      }),
-    ).catch(() => {});
   }
 
-  /** 清空 API Key。 */
-  async function clearOpenaiApiKey(configId: string) {
-    const targetId = configId.trim();
+  async function clearProviderApiKey(providerId: string) {
+    const targetId = providerId.trim();
     if (!targetId) return;
     await saveWithSecretUpdate({ [targetId]: { mode: "clear" } });
-    info(
-      JSON.stringify({
-        event: "ai-settings:openai-api-key-cleared",
-        id: targetId,
-      }),
-    ).catch(() => {});
   }
 
-  /** 测试连接。 */
-  async function testOpenAiConnection(configId?: string) {
-    const targetId = configId?.trim();
-    await aiOpenAiTest(targetId || undefined);
-    info(
-      JSON.stringify({
-        event: "ai-settings:openai-connection-tested",
-        id: targetId ?? activeOpenaiConfigId,
-      }),
-    ).catch(() => {});
+  async function testProviderConnection(providerId?: string) {
+    const targetId = providerId?.trim();
+    const nextSaveInput = buildSaveInput(
+      {
+        selectionMaxChars,
+        sessionRecentOutputMaxChars,
+        debugLoggingEnabled,
+        activeProviderId,
+        providers,
+      },
+      lastLoadedViewRef.current,
+    );
+    // 测试前先强制落盘，避免防抖窗口内后端仍读取到旧配置。
+    const saved = await aiSettingsSave(nextSaveInput);
+    lastLoadedViewRef.current = saved;
+    lastSavedConfigRef.current = JSON.stringify(nextSaveInput);
+    setProviders(saved.providers);
+    setActiveProviderId(saved.activeProviderId);
+    setSaveState("saved");
+    await aiProviderTest(targetId || undefined);
   }
 
   return {
@@ -479,28 +557,54 @@ export default function useAiSettings(): UseAiSettingsResult {
       sessionRecentOutputMaxChars,
     ),
     debugLoggingEnabled,
-    activeOpenaiConfigId,
-    openaiConfigs,
-    activeOpenaiConfig,
+    activeProviderId,
+    providers,
+    activeProvider,
     aiSettingsLoaded,
     setSelectionMaxChars,
     setSessionRecentOutputMaxChars,
     setDebugLoggingEnabled,
-    setActiveOpenaiConfigId,
-    updateOpenaiConfigName: (configId, value) => {
-      updateOpenaiConfig(configId, (config) => ({ ...config, name: value }));
+    setActiveProviderId,
+    updateProviderName: (providerId, value) => {
+      updateProvider(providerId, (provider) => ({ ...provider, name: value }));
     },
-    updateOpenaiConfigBaseUrl: (configId, value) => {
-      updateOpenaiConfig(configId, (config) => ({ ...config, baseUrl: value }));
+    updateProviderBaseUrl: (providerId, value) => {
+      updateProvider(providerId, (provider) => ({
+        ...provider,
+        baseUrl: value,
+      }));
     },
-    updateOpenaiConfigModel: (configId, value) => {
-      updateOpenaiConfig(configId, (config) => ({ ...config, model: value }));
+    updateProviderModel: (providerId, value) => {
+      updateProvider(providerId, (provider) => ({ ...provider, model: value }));
     },
-    addOpenaiConfig,
-    removeOpenaiConfig,
-    testOpenAiConnection,
-    replaceOpenaiApiKey,
-    clearOpenaiApiKey,
+    updateProviderVendor: (providerId, vendor) => {
+      updateProvider(providerId, (provider) => {
+        const preset = getAiProviderPreset(vendor);
+        if (!preset) {
+          return {
+            ...provider,
+            vendor,
+            mode: "compatible",
+          };
+        }
+        return {
+          ...provider,
+          vendor,
+          mode: "preset" as AiProviderMode,
+          baseUrl: preset.defaultBaseUrl,
+          model: preset.models[0] ?? provider.model,
+          name: provider.name.trim() || preset.label,
+        };
+      });
+    },
+    addPresetProvider,
+    addPresetProviderWithConfig,
+    addCompatibleProviderWithConfig,
+    addCompatibleProvider,
+    removeProvider,
+    testProviderConnection,
+    replaceProviderApiKey,
+    clearProviderApiKey,
     saveState,
     saveError,
     retrySave,

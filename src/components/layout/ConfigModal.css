@@ -212,6 +212,21 @@
   flex: none;
 }
 
+.config-ai-provider-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-ai-provider-inline .config-select-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.config-ai-provider-inline .config-file-picker-actions {
+  margin-left: auto;
+}
+
 .config-toggle-copy {
   display: flex;
   flex-direction: column;
@@ -340,10 +355,15 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .config-file-picker-actions-nowrap {
   flex-wrap: nowrap;
+}
+
+.config-file-picker-actions .ui-button {
+  white-space: nowrap;
 }
 
 .config-bg-image-action-button {
@@ -457,5 +477,13 @@
   .config-modal-nav {
     border-right: none;
     border-bottom: 1px solid var(--border-soft);
+  }
+
+  .config-ai-provider-inline {
+    flex-wrap: wrap;
+  }
+
+  .config-ai-provider-inline .config-file-picker-actions {
+    margin-left: 0;
   }
 }

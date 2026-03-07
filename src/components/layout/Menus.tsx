@@ -4,6 +4,7 @@ import type React from "react";
 import type { Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
+import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import Button from "@/components/ui/button";
 
 type MenuAction = {
@@ -42,13 +43,7 @@ type MenuItem = {
 };
 
 type MenusProps = {
-  onOpenConfigSection: (
-    section:
-      | "app-settings"
-      | "ai-settings"
-      | "session-settings"
-      | "config-directory",
-  ) => void;
+  onOpenConfigSection: (section: ConfigSectionKey) => void;
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
   onOpenAbout: () => void;

@@ -265,21 +265,17 @@ export default function AppShell() {
     selectionMaxChars: aiSelectionMaxChars,
     sessionRecentOutputMaxChars: aiSessionRecentOutputMaxChars,
     debugLoggingEnabled: aiDebugLoggingEnabled,
-    activeOpenaiConfigId: aiActiveOpenaiConfigId,
-    openaiConfigs: aiOpenaiConfigs,
-    activeOpenaiConfig,
+    activeProviderId: aiActiveProviderId,
+    providers: aiProviders,
+    activeProvider: aiActiveProvider,
     setSelectionMaxChars: setAiSelectionMaxChars,
     setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
     setDebugLoggingEnabled: setAiDebugLoggingEnabled,
-    setActiveOpenaiConfigId: setAiActiveOpenaiConfigId,
-    updateOpenaiConfigName,
-    updateOpenaiConfigBaseUrl,
-    updateOpenaiConfigModel,
-    addOpenaiConfig,
-    removeOpenaiConfig,
-    testOpenAiConnection,
-    replaceOpenaiApiKey,
-    clearOpenaiApiKey,
+    setActiveProviderId: setAiActiveProviderId,
+    addPresetProviderWithConfig,
+    addCompatibleProviderWithConfig,
+    removeProvider,
+    testProviderConnection,
     saveState: aiSaveState,
     saveError: aiSaveError,
     retrySave: retryAiSave,
@@ -371,8 +367,8 @@ export default function AppShell() {
   );
   const aiUnavailableMessage = useMemo(() => {
     if (!aiUnavailableReason) return null;
-    if (aiUnavailableReason === "openai_incomplete") {
-      return t("ai.unavailable.openaiIncomplete");
+    if (aiUnavailableReason === "provider_incomplete") {
+      return t("ai.unavailable.providerIncomplete");
     }
     return t("ai.unavailable.generic");
   }, [aiUnavailableReason, t]);
@@ -573,8 +569,9 @@ export default function AppShell() {
       "app-settings": t("config.section.appSettings"),
       "app-appearance": t("config.section.appAppearance"),
       "ai-settings": t("config.section.aiSettings"),
-      "openai-manage": t("config.section.openaiManage"),
-      "openai-settings": t("config.section.openaiSettings"),
+      "ai-provider-manage": t("config.section.aiProviderManage"),
+      "ai-provider-quick": t("config.section.aiProviderQuick"),
+      "ai-provider-compat": t("config.section.aiProviderCompat"),
       "session-settings": t("config.section.sessionSettings"),
       "session-shell": t("config.section.sessionShell"),
       "config-directory": t("config.section.configDirectory"),
@@ -612,40 +609,70 @@ export default function AppShell() {
           label: configSectionLabels["ai-settings"],
         },
         {
-          key: "openai-manage",
-          label: configSectionLabels["openai-manage"],
+          key: "ai-provider-quick",
+          label: configSectionLabels["ai-provider-quick"],
         },
         {
-          key: "openai-settings",
-          label: configSectionLabels["openai-settings"],
+          key: "ai-provider-compat",
+          label: configSectionLabels["ai-provider-compat"],
+        },
+        {
+          key: "ai-provider-manage",
+          label: configSectionLabels["ai-provider-manage"],
         },
       ],
-      "openai-manage": [
+      "ai-provider-manage": [
         {
           key: "ai-settings",
           label: configSectionLabels["ai-settings"],
         },
         {
-          key: "openai-manage",
-          label: configSectionLabels["openai-manage"],
+          key: "ai-provider-quick",
+          label: configSectionLabels["ai-provider-quick"],
         },
         {
-          key: "openai-settings",
-          label: configSectionLabels["openai-settings"],
+          key: "ai-provider-compat",
+          label: configSectionLabels["ai-provider-compat"],
+        },
+        {
+          key: "ai-provider-manage",
+          label: configSectionLabels["ai-provider-manage"],
         },
       ],
-      "openai-settings": [
+      "ai-provider-quick": [
         {
           key: "ai-settings",
           label: configSectionLabels["ai-settings"],
         },
         {
-          key: "openai-manage",
-          label: configSectionLabels["openai-manage"],
+          key: "ai-provider-quick",
+          label: configSectionLabels["ai-provider-quick"],
         },
         {
-          key: "openai-settings",
-          label: configSectionLabels["openai-settings"],
+          key: "ai-provider-compat",
+          label: configSectionLabels["ai-provider-compat"],
+        },
+        {
+          key: "ai-provider-manage",
+          label: configSectionLabels["ai-provider-manage"],
+        },
+      ],
+      "ai-provider-compat": [
+        {
+          key: "ai-settings",
+          label: configSectionLabels["ai-settings"],
+        },
+        {
+          key: "ai-provider-quick",
+          label: configSectionLabels["ai-provider-quick"],
+        },
+        {
+          key: "ai-provider-compat",
+          label: configSectionLabels["ai-provider-compat"],
+        },
+        {
+          key: "ai-provider-manage",
+          label: configSectionLabels["ai-provider-manage"],
         },
       ],
       "session-settings": [
@@ -2579,7 +2606,7 @@ export default function AppShell() {
             resourceSnapshot={activeResourceSnapshot}
             sftpProgressBySession={sftpState.progressBySession}
             onOpenTransfersWidget={handleOpenTransfersWidget}
-            activeAiConfigName={activeOpenaiConfig?.name?.trim() || null}
+            activeAiConfigName={aiActiveProvider?.name?.trim() || null}
             locale={locale}
             t={t}
           />
@@ -2619,8 +2646,8 @@ export default function AppShell() {
         aiSelectionMaxChars={aiSelectionMaxChars}
         aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
         aiDebugLoggingEnabled={aiDebugLoggingEnabled}
-        aiActiveOpenaiConfigId={aiActiveOpenaiConfigId}
-        aiOpenaiConfigs={aiOpenaiConfigs}
+        aiActiveProviderId={aiActiveProviderId}
+        aiProviders={aiProviders}
         webLinksEnabled={webLinksEnabled}
         commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
@@ -2640,15 +2667,11 @@ export default function AppShell() {
         onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
         onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
         onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
-        onAiActiveOpenaiConfigIdChange={setAiActiveOpenaiConfigId}
-        onAiOpenaiConfigAdd={addOpenaiConfig}
-        onAiOpenaiConfigRemove={removeOpenaiConfig}
-        onAiOpenaiConfigNameChange={updateOpenaiConfigName}
-        onAiOpenaiBaseUrlChange={updateOpenaiConfigBaseUrl}
-        onAiOpenaiModelChange={updateOpenaiConfigModel}
-        onAiOpenAiTest={testOpenAiConnection}
-        onAiOpenaiApiKeyReplace={replaceOpenaiApiKey}
-        onAiOpenaiApiKeyClear={clearOpenaiApiKey}
+        onAiActiveProviderIdChange={setAiActiveProviderId}
+        onAiPresetProviderCreate={addPresetProviderWithConfig}
+        onAiCompatibleProviderCreate={addCompatibleProviderWithConfig}
+        onAiProviderRemove={removeProvider}
+        onAiProviderTest={testProviderConnection}
         onWebLinksEnabledChange={setWebLinksEnabled}
         onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}

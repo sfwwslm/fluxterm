@@ -11,7 +11,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::ai::{
     AiRuntimeState, cancel_chat_stream, context, finish_chat_stream, get_cached_response,
-    read_openai_config, read_openai_config_by_id, register_chat_stream, store_cached_response,
+    read_active_provider_config, read_provider_config_by_id, register_chat_stream,
+    store_cached_response,
 };
 use crate::ai_settings::{
     AiSettingsSaveInput, AiSettingsView, read_ai_settings, read_ai_settings_view,
@@ -33,10 +34,13 @@ pub fn ai_settings_save(
     save_ai_settings_input(&app, settings)
 }
 
-/// 测试当前 OpenAI-compatible 接入是否可用。
+/// 测试当前 AI 接入是否可用。
 #[tauri::command]
-pub async fn ai_openai_test(app: AppHandle, config_id: Option<String>) -> Result<(), EngineError> {
-    let config = read_openai_config_by_id(&app, config_id.as_deref())?;
+pub async fn ai_provider_test(
+    app: AppHandle,
+    provider_id: Option<String>,
+) -> Result<(), EngineError> {
+    let config = read_provider_config_by_id(&app, provider_id.as_deref())?;
     openai::test_connection(&config)
         .await
         .map_err(map_openai_error)
@@ -50,7 +54,7 @@ pub async fn ai_session_chat(
     request: context::AiSessionChatRequest,
 ) -> Result<OpenAiSessionChatResponse, EngineError> {
     let settings = read_ai_settings(&app)?;
-    let config = read_openai_config(&app)?;
+    let config = read_active_provider_config(&app)?;
     let input = context::build_session_chat_input(&state, request, &settings)?;
     let cache_key = build_cache_key("session_chat", &input)?;
     if let Some(content) = get_cached_response(&state, &cache_key)? {
@@ -105,7 +109,7 @@ pub async fn ai_session_chat_stream_start(
     request: context::AiSessionChatStreamRequest,
 ) -> Result<(), EngineError> {
     let settings = read_ai_settings(&app)?;
-    let config = read_openai_config(&app)?;
+    let config = read_active_provider_config(&app)?;
     let stream_request_id = request.request_id.clone();
     let input = context::build_session_chat_stream_input(&state, request, &settings)?;
     let cache_key = build_cache_key(
@@ -232,7 +236,7 @@ pub async fn ai_explain_selection(
     state: State<'_, AiRuntimeState>,
     request: context::AiExplainSelectionRequest,
 ) -> Result<OpenAiSessionChatResponse, EngineError> {
-    let config = read_openai_config(&app)?;
+    let config = read_active_provider_config(&app)?;
     let settings = read_ai_settings(&app)?;
     let input = context::build_selection_explain_input(&state, request, &settings)?;
     let cache_key = build_cache_key("selection_explain", &input)?;

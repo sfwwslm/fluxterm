@@ -2,6 +2,15 @@ import type { Locale } from "@/i18n";
 
 export type AiResponseLanguageStrategy = "follow_ui" | "follow_user_input";
 
+export type AiProviderMode = "preset" | "compatible";
+
+export type AiProviderVendor =
+  | "openai"
+  | "deepseek"
+  | "qwen"
+  | "moonshot"
+  | "custom";
+
 /** 终端域 AI 配置。 */
 export type AiSettingsView = {
   version: 1;
@@ -12,12 +21,14 @@ export type AiSettingsView = {
   selectionRecentOutputMaxSnippets: number;
   requestCacheTtlMs: number;
   debugLoggingEnabled: boolean;
-  activeOpenaiConfigId: string;
-  openaiConfigs: OpenAiConfigView[];
+  activeProviderId: string;
+  providers: AiProviderView[];
 };
 
-export type OpenAiConfigView = {
+export type AiProviderView = {
   id: string;
+  mode: AiProviderMode;
+  vendor: AiProviderVendor;
   name: string;
   baseUrl: string;
   model: string;
@@ -39,12 +50,14 @@ export type AiSettingsSaveInput = {
   selectionRecentOutputMaxSnippets: number;
   requestCacheTtlMs: number;
   debugLoggingEnabled: boolean;
-  activeOpenaiConfigId: string;
-  openaiConfigs: OpenAiConfigInput[];
+  activeProviderId: string;
+  providers: AiProviderInput[];
 };
 
-export type OpenAiConfigInput = {
+export type AiProviderInput = {
   id: string;
+  mode: AiProviderMode;
+  vendor: AiProviderVendor;
   name: string;
   baseUrl: string;
   model: string;

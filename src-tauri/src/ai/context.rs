@@ -243,8 +243,8 @@ mod tests {
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
                 debug_logging_enabled: true,
-                active_openai_config_id: String::new(),
-                openai_configs: Vec::new(),
+                active_provider_id: String::new(),
+                providers: Vec::new(),
             },
         )
         .expect_err("missing session should fail");
@@ -354,8 +354,8 @@ mod tests {
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
                 debug_logging_enabled: true,
-                active_openai_config_id: String::new(),
-                openai_configs: Vec::new(),
+                active_provider_id: String::new(),
+                providers: Vec::new(),
             },
         )
         .expect("selection input should build");
@@ -401,8 +401,8 @@ mod tests {
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
                 debug_logging_enabled: true,
-                active_openai_config_id: String::new(),
-                openai_configs: Vec::new(),
+                active_provider_id: String::new(),
+                providers: Vec::new(),
             },
         )
         .expect("session chat input should build");
@@ -451,8 +451,8 @@ mod tests {
                 selection_recent_output_max_snippets: 2,
                 request_cache_ttl_ms: 15_000,
                 debug_logging_enabled: true,
-                active_openai_config_id: String::new(),
-                openai_configs: Vec::new(),
+                active_provider_id: String::new(),
+                providers: Vec::new(),
             },
         )
         .expect("session chat input should build");
