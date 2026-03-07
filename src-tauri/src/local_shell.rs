@@ -229,6 +229,14 @@ pub fn start_local_shell(
     })?;
 
     let mut command = CommandBuilder::new(&shell.path);
+    let term = env::var("TERM").unwrap_or_default();
+    if term.trim().is_empty() {
+        command.env("TERM", "xterm-256color");
+    }
+    let colorterm = env::var("COLORTERM").unwrap_or_default();
+    if colorterm.trim().is_empty() {
+        command.env("COLORTERM", "truecolor");
+    }
     for arg in &shell.args {
         command.arg(arg);
     }
