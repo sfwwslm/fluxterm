@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "@/App.css";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { warn } from "@tauri-apps/plugin-log";
 import useAppSettings, {
@@ -56,6 +57,7 @@ export default function SubAppRoot() {
     backgroundImageEnabled,
     backgroundImageAsset,
     backgroundImageSurfaceAlpha,
+    settingsLoaded,
   } = useAppSettings({
     themeIds,
     defaultThemeId: "dark",
@@ -71,6 +73,9 @@ export default function SubAppRoot() {
     backgroundImageAsset: string;
     backgroundImageSurfaceAlpha: number;
   } | null>(null);
+  const [subAppWindowAppearanceReady, setSubAppWindowAppearanceReady] =
+    useState(false);
+  const subAppWindowShownRef = useRef(false);
 
   useEffect(() => {
     if (!subAppId) return () => {};
@@ -154,8 +159,13 @@ export default function SubAppRoot() {
       applyBackgroundImageMode(false);
     };
 
+    if (!settingsLoaded) {
+      return;
+    }
+
     if (!effectiveBackgroundImageEnabled || !effectiveBackgroundImageAsset) {
       applyDefaultBackground();
+      setSubAppWindowAppearanceReady(true);
       return;
     }
 
@@ -178,9 +188,11 @@ export default function SubAppRoot() {
         }
         root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
         applyBackgroundImageMode(true);
+        setSubAppWindowAppearanceReady(true);
       } catch (error) {
         if (disposed) return;
         applyDefaultBackground();
+        setSubAppWindowAppearanceReady(true);
         warn(
           JSON.stringify({
             event: "subapp:background-image-load-failed",
@@ -200,7 +212,28 @@ export default function SubAppRoot() {
     effectiveBackgroundImageEnabled,
     effectiveBackgroundImageAsset,
     effectiveThemeId,
+    settingsLoaded,
   ]);
+
+  useLayoutEffect(() => {
+    document.body.style.visibility = subAppWindowAppearanceReady
+      ? "visible"
+      : "hidden";
+    return () => {
+      document.body.style.visibility = "";
+    };
+  }, [subAppWindowAppearanceReady]);
+
+  useEffect(() => {
+    if (!subAppWindowAppearanceReady) return;
+    if (subAppWindowShownRef.current) return;
+    subAppWindowShownRef.current = true;
+    const current = getCurrentWindow();
+    current
+      .show()
+      .then(() => current.setFocus().catch(() => {}))
+      .catch(() => {});
+  }, [subAppWindowAppearanceReady]);
 
   if (subAppId === "proxy") {
     return <ProxySubApp id={subAppId} locale={effectiveLocale} t={t} />;

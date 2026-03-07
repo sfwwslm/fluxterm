@@ -197,6 +197,7 @@ export default function useSubApps({
           decorations: false,
           transparent: true,
           center: true,
+          visible: false,
         });
         windowRef.current[id] = win;
         postLifecycleMessage({
@@ -212,7 +213,6 @@ export default function useSubApps({
         win.once("tauri://error", () => {
           clearWindowRuntime(id);
         });
-        await win.setFocus().catch(() => {});
       } catch {
         clearWindowRuntime(id);
       }

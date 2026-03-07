@@ -2,10 +2,11 @@
  * 应用编排层。
  * 职责：聚合 settings/profiles/layout/session/terminal/sftp 等领域能力并组装主界面。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import "@/components/ui/base-input.css";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { info, warn } from "@tauri-apps/plugin-log";
 import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -390,6 +391,10 @@ export default function AppShell() {
     return null;
   }, []);
   const layoutMenuDisabled = Boolean(floatingWidgetKey);
+  const shouldDeferFloatingWindowReveal = Boolean(floatingWidgetKey);
+  const [floatingWindowAppearanceReady, setFloatingWindowAppearanceReady] =
+    useState(!shouldDeferFloatingWindowReveal);
+  const floatingWindowShownRef = useRef(false);
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
   const activeResourceMonitorSessionIdRef = useRef<string | null>(null);
   const activeResourceMonitorKeyRef = useRef("");
@@ -456,8 +461,15 @@ export default function AppShell() {
       applyBackgroundImageMode(false);
     };
 
+    if (!settingsLoaded) {
+      return;
+    }
+
     if (!backgroundImageEnabled || !backgroundImageAsset) {
       applyDefaultBackground();
+      if (shouldDeferFloatingWindowReveal) {
+        setFloatingWindowAppearanceReady(true);
+      }
       return;
     }
 
@@ -480,9 +492,15 @@ export default function AppShell() {
         root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
         // 仅在背景图真正可读后启用语义层半透明模式，避免加载失败时界面过透。
         applyBackgroundImageMode(true);
+        if (shouldDeferFloatingWindowReveal) {
+          setFloatingWindowAppearanceReady(true);
+        }
       } catch (error) {
         if (disposed) return;
         applyDefaultBackground();
+        if (shouldDeferFloatingWindowReveal) {
+          setFloatingWindowAppearanceReady(true);
+        }
         warn(
           JSON.stringify({
             event: "settings:background-image-load-failed",
@@ -498,7 +516,35 @@ export default function AppShell() {
       if (!blobUrl) return;
       URL.revokeObjectURL(blobUrl);
     };
-  }, [backgroundImageEnabled, backgroundImageAsset, themeId]);
+  }, [
+    backgroundImageEnabled,
+    backgroundImageAsset,
+    settingsLoaded,
+    shouldDeferFloatingWindowReveal,
+    themeId,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!shouldDeferFloatingWindowReveal) return;
+    document.body.style.visibility = floatingWindowAppearanceReady
+      ? "visible"
+      : "hidden";
+    return () => {
+      document.body.style.visibility = "";
+    };
+  }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
+
+  useEffect(() => {
+    if (!shouldDeferFloatingWindowReveal) return;
+    if (!floatingWindowAppearanceReady) return;
+    if (floatingWindowShownRef.current) return;
+    floatingWindowShownRef.current = true;
+    const current = getCurrentWindow();
+    current
+      .show()
+      .then(() => current.setFocus().catch(() => {}))
+      .catch(() => {});
+  }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
 
   function openNewProfile() {
     setProfileModalMode("new");
