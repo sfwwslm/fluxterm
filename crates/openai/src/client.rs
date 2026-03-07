@@ -186,7 +186,7 @@ async fn stream_chat_completion(
 
     if config.debug_logging_enabled {
         log_telemetry(
-            TelemetryLevel::Info,
+            TelemetryLevel::Debug,
             "openai.request.start",
             None,
             json!({
@@ -219,7 +219,7 @@ async fn stream_chat_completion(
         if is_cancelled() {
             if config.debug_logging_enabled {
                 log_telemetry(
-                    TelemetryLevel::Info,
+                    TelemetryLevel::Debug,
                     "openai.response.cancelled",
                     None,
                     json!({
@@ -266,7 +266,7 @@ fn log_request(config: &OpenAiClientConfig, request_type: &str, messages: &[Chat
     }
     log_system_prompt_summary(request_type, messages);
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "openai.request.start",
         None,
         json!({
@@ -282,7 +282,7 @@ fn log_system_prompt_summary(request_type: &str, messages: &[ChatMessage]) {
         return;
     };
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "openai.request.summary",
         None,
         json!({
@@ -346,7 +346,7 @@ fn log_response(config: &OpenAiClientConfig, request_type: &str, message: &ChatM
         return;
     }
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "openai.response.success",
         None,
         json!({
@@ -361,7 +361,7 @@ fn log_error(config: &OpenAiClientConfig, request_type: &str, error: &OpenAiErro
         return;
     }
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "openai.request.failed",
         None,
         json!({

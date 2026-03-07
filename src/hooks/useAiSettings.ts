@@ -6,7 +6,7 @@
  * 3. 采用“内存态缓存 + 防抖异步落盘”模式。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { debug, info, warn } from "@/shared/logging/telemetry";
+import { debug, warn } from "@/shared/logging/telemetry";
 import {
   aiProviderTest,
   aiSettingsGet,
@@ -316,18 +316,14 @@ export default function useAiSettings(): UseAiSettingsResult {
 
   useEffect(() => {
     if (!loadedRef.current) return;
-    info(
+    if (lastLoggedActiveProviderIdRef.current === activeProviderId) return;
+    lastLoggedActiveProviderIdRef.current = activeProviderId;
+    debug(
       JSON.stringify({
         event: "ai-settings:active-provider-changed",
         id: activeProviderId,
       }),
     ).catch(() => {});
-  }, [activeProviderId]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (lastLoggedActiveProviderIdRef.current === activeProviderId) return;
-    lastLoggedActiveProviderIdRef.current = activeProviderId;
   }, [activeProviderId]);
 
   function updateProvider(

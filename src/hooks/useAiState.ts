@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { info as logInfo } from "@/shared/logging/telemetry";
+import { debug as logDebug } from "@/shared/logging/telemetry";
 import {
   aiExplainSelection,
   aiSessionChatStreamCancel,
@@ -259,7 +259,7 @@ export default function useAiState({
       return next;
     });
     if (debugLoggingEnabled) {
-      void logInfo(
+      void logDebug(
         JSON.stringify({
           event: "ai.session-chat.error",
           sessionId: payload.sessionId,
@@ -309,7 +309,7 @@ export default function useAiState({
 
     try {
       if (debugLoggingEnabled) {
-        void logInfo(
+        void logDebug(
           JSON.stringify({
             event: "ai.session-chat.request",
             sessionId: activeSessionId,
@@ -329,7 +329,7 @@ export default function useAiState({
       });
     } catch (error) {
       if (debugLoggingEnabled) {
-        void logInfo(
+        void logDebug(
           JSON.stringify({
             event: "ai.session-chat.error",
             sessionId: activeSessionId,
@@ -384,7 +384,7 @@ export default function useAiState({
 
     try {
       if (debugLoggingEnabled) {
-        void logInfo(
+        void logDebug(
           JSON.stringify({
             event: "ai.selection.request",
             sessionId: activeSessionId,
@@ -401,7 +401,7 @@ export default function useAiState({
         selectionText: content,
       });
       if (debugLoggingEnabled) {
-        void logInfo(
+        void logDebug(
           JSON.stringify({
             event: "ai.selection.response",
             sessionId: activeSessionId,
@@ -422,7 +422,7 @@ export default function useAiState({
       });
     } catch (error) {
       if (debugLoggingEnabled) {
-        void logInfo(
+        void logDebug(
           JSON.stringify({
             event: "ai.selection.error",
             sessionId: activeSessionId,
