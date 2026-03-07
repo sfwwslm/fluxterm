@@ -166,7 +166,7 @@ async fn run_local_resource_monitor(
                     status: ResourceMonitorStatus::Ready,
                     unsupported_reason: None,
                     cpu: Some(ResourceCpuSnapshot {
-                        total_percent: system.global_cpu_info().cpu_usage(),
+                        total_percent: system.global_cpu_usage(),
                         user_percent: 0.0,
                         system_percent: 0.0,
                         idle_percent: 0.0,
