@@ -537,6 +537,13 @@ export default function useTerminalRuntime({
       );
       return;
     }
+    const meta = ensureCommandCaptureMeta(sessionId);
+    if (meta.waitingForNextPrompt) {
+      setActiveAutocomplete((prev) =>
+        prev?.sessionId === sessionId ? null : prev,
+      );
+      return;
+    }
     const items = provider
       .getSuggestions(input)
       .filter((item) => item.command.trim() !== normalizedInput);
@@ -1116,10 +1123,15 @@ export default function useTerminalRuntime({
           return;
         }
         const autocomplete = activeAutocompleteRef.current;
-        if (
-          autocomplete?.sessionId === sessionId &&
-          (data === "\u001b[A" || data === "\u001b[B")
-        ) {
+        const activeAutocomplete =
+          autocomplete?.sessionId === sessionId ? autocomplete : null;
+        const autocompleteInput =
+          autocompleteInputBufferRef.current[sessionId] ?? "";
+        const autocompleteReady =
+          !!activeAutocomplete?.items.length &&
+          !!autocompleteInput.trim() &&
+          !ensureCommandCaptureMeta(sessionId).waitingForNextPrompt;
+        if (autocompleteReady && (data === "\u001b[A" || data === "\u001b[B")) {
           setActiveAutocomplete((prev) => {
             if (!prev || prev.sessionId !== sessionId || !prev.items.length) {
               return prev;
@@ -1141,10 +1153,7 @@ export default function useTerminalRuntime({
           });
           return;
         }
-        if (
-          autocomplete?.sessionId === sessionId &&
-          (data === "\u001b[C" || data === "\u001b[D")
-        ) {
+        if (autocompleteReady && (data === "\u001b[C" || data === "\u001b[D")) {
           setActiveAutocomplete(null);
           handlersRef.current.writeToSession(sessionId, data).catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
@@ -1152,13 +1161,12 @@ export default function useTerminalRuntime({
         }
         if (data === "\r" || data === "\n") {
           if (
-            autocomplete?.sessionId === sessionId &&
-            autocomplete.selectedIndex >= 0
+            (activeAutocomplete?.selectedIndex ?? -1) >= 0 &&
+            autocompleteReady
           ) {
             applyAutocompleteSuggestion(sessionId).catch(() => {});
             return;
           }
-
           const committedCommand =
             activeCommandCaptureBySessionRef.current[
               sessionId

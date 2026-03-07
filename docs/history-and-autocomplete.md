@@ -190,23 +190,38 @@ type CommandAutocompleteProvider = {
 
 - 最低使用次数：`useCount >= 5`
 - 输入非空才触发联想
+- 仅在命令行编辑态触发（存在输入缓冲，且不处于“等待下一次 prompt”阶段）
+- 不再使用全文 `includes`，避免中段字符误命中
+- 单词输入（无空格）按“首词前缀”匹配（命令名维度）
+- 含空格输入按“整行从开头连续前缀”匹配
 - 完全等于当前输入的命令不显示
 - 默认最多返回 `100` 条候选
 
 排序因素：
 
-1. 前缀命中优先
-2. 命中位置越靠前越优先
-3. 使用次数越高越优先
-4. 最近使用越新越优先
+1. 命中质量分
+2. 使用频次分（`log2(useCount + 1)`，避免高频命令完全碾压）
+3. 近期性分（按 30 天窗口线性衰减）
+4. 长度惩罚（候选越长，分值越低）
+
+当前权重常量统一定义在 `src/features/terminal/core/constants.ts`，包括：
+
+- `AUTOCOMPLETE_MIN_USE_COUNT`
+- `AUTOCOMPLETE_RECENCY_DECAY_WINDOW_DAYS`
+- `AUTOCOMPLETE_FREQUENCY_WEIGHT`
+- `AUTOCOMPLETE_RECENCY_MAX_SCORE`
+- `AUTOCOMPLETE_MATCH_SCORE_COMMAND_PREFIX`
+- `AUTOCOMPLETE_MATCH_SCORE_COMMAND_EXACT`
+- `AUTOCOMPLETE_MATCH_SCORE_ARGS_PREFIX`
+- `AUTOCOMPLETE_LENGTH_PENALTY_PER_CHAR`
 
 ### 6.4 交互规则
 
 - `↑ / ↓` 进入候选选择
 - 联想面板默认不自动选中第一项
 - `Enter`
-  - 选中候选时：只写回输入行，不直接执行
-  - 未选中候选时：保持终端原生回车行为
+  - 选中候选时：写回输入行，不直接执行
+  - 未选中候选时：保持终端原生回车执行行为
 - `Esc`、左右方向键、应用内点击空白区域、窗口失焦时关闭联想
 
 ## 7. 联想浮层布局规则

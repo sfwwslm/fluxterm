@@ -23,3 +23,27 @@ export const AUTOCOMPLETE_MAX_CANDIDATES = 100;
 
 /** 联想浮层最多显示的可视条目数，超出后滚动展示。 */
 export const AUTOCOMPLETE_VISIBLE_ITEMS = 5;
+
+/** 联想候选最低使用次数，小于该值不参与候选。 */
+export const AUTOCOMPLETE_MIN_USE_COUNT = 5;
+
+/** 联想近期性打分衰减窗口（天）。 */
+export const AUTOCOMPLETE_RECENCY_DECAY_WINDOW_DAYS = 30;
+
+/** 联想频次打分系数，作用于 log2(useCount + 1)。 */
+export const AUTOCOMPLETE_FREQUENCY_WEIGHT = 35;
+
+/** 联想近期性打分满分。 */
+export const AUTOCOMPLETE_RECENCY_MAX_SCORE = 120;
+
+/** 仅命令名前缀匹配时的命中质量基础分。 */
+export const AUTOCOMPLETE_MATCH_SCORE_COMMAND_PREFIX = 280;
+
+/** 命令名精确匹配时的命中质量基础分。 */
+export const AUTOCOMPLETE_MATCH_SCORE_COMMAND_EXACT = 320;
+
+/** 含参数前缀匹配时的命中质量基础分。 */
+export const AUTOCOMPLETE_MATCH_SCORE_ARGS_PREFIX = 260;
+
+/** 候选长度惩罚系数，越长的候选分值越低。 */
+export const AUTOCOMPLETE_LENGTH_PENALTY_PER_CHAR = 2.5;
