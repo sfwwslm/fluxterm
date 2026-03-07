@@ -619,7 +619,7 @@ async fn handle_socks5_handshake(
         )
     })?;
 
-    if auth.is_some() {
+    if let Some(auth) = auth {
         if !methods.contains(&0x02) {
             let _ = stream.write_all(&[0x05, 0xFF]).await;
             return Err(EngineError::new(
@@ -641,7 +641,7 @@ async fn handle_socks5_handshake(
                 err.to_string(),
             )
         })?;
-        validate_socks5_username_password(&mut stream, auth.expect("checked")).await?;
+        validate_socks5_username_password(&mut stream, auth).await?;
     } else {
         if !methods.contains(&0x00) {
             let _ = stream.write_all(&[0x05, 0xFF]).await;
@@ -964,20 +964,20 @@ async fn handle_http_handshake(
     let req_text = String::from_utf8_lossy(&header_bytes).to_string();
     let parsed = parse_http_request_head(&req_text)?;
 
-    if let Some(expected) = auth {
-        if !check_http_basic_auth(parsed.proxy_authorization.as_deref(), expected) {
-            write_all_with_timeout(
-                &mut client,
-                b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"FluxTerm Proxy\"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
-                PROXY_AUTH_FAILED,
-                "发送认证失败响应失败",
-            )
-                .await
-                .map_err(|err| {
-                    EngineError::with_detail(PROXY_AUTH_FAILED, "发送认证失败响应失败", err.to_string())
-                })?;
-            return Err(EngineError::new(PROXY_AUTH_FAILED, "HTTP 代理认证失败"));
-        }
+    if let Some(expected) = auth
+        && !check_http_basic_auth(parsed.proxy_authorization.as_deref(), expected)
+    {
+        write_all_with_timeout(
+            &mut client,
+            b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"FluxTerm Proxy\"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+            PROXY_AUTH_FAILED,
+            "发送认证失败响应失败",
+        )
+        .await
+        .map_err(|err| {
+            EngineError::with_detail(PROXY_AUTH_FAILED, "发送认证失败响应失败", err.to_string())
+        })?;
+        return Err(EngineError::new(PROXY_AUTH_FAILED, "HTTP 代理认证失败"));
     }
 
     if parsed.method.eq_ignore_ascii_case("CONNECT") {
