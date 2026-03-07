@@ -48,7 +48,7 @@ impl ResourceMonitorState {
             .insert(session_id.clone(), ResourceMonitorHandle { stop_tx });
 
         log_telemetry(
-            TelemetryLevel::Info,
+            TelemetryLevel::Debug,
             "resource.monitor.local.start",
             None,
             json!({
@@ -78,7 +78,7 @@ impl ResourceMonitorState {
             .insert(session_id.clone(), ResourceMonitorHandle { stop_tx });
 
         log_telemetry(
-            TelemetryLevel::Info,
+            TelemetryLevel::Debug,
             "resource.monitor.ssh.start",
             None,
             json!({
@@ -163,7 +163,7 @@ impl ResourceMonitorState {
         if let Some(handle) = handle {
             let _ = handle.stop_tx.send(true);
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "resource.monitor.stop.success",
                 None,
                 json!({

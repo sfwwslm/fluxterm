@@ -104,7 +104,7 @@ pub async fn run_ssh_resource_monitor(
                     }
                     Err(error) => {
                         log_telemetry(
-                            TelemetryLevel::Warn,
+                            TelemetryLevel::Debug,
                             "resource.monitor.ssh.sample.failed",
                             None,
                             json!({
