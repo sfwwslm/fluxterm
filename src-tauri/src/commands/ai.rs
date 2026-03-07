@@ -4,9 +4,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use engine::EngineError;
-use log::info;
 use openai::OpenAiSessionChatResponse;
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::ai::{
@@ -18,6 +18,7 @@ use crate::ai_settings::{
     AiSettingsSaveInput, AiSettingsView, read_ai_settings, read_ai_settings_view,
     save_ai_settings_input,
 };
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 /// 读取终端 AI 助手配置。
 #[tauri::command]
@@ -58,7 +59,14 @@ pub async fn ai_session_chat(
     let input = context::build_session_chat_input(&state, request, &settings)?;
     let cache_key = build_cache_key("session_chat", &input)?;
     if let Some(content) = get_cached_response(&state, &cache_key)? {
-        info!("ai_cache_hit type=session_chat");
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ai.cache.hit",
+            None,
+            json!({
+                "requestType": "sessionChat",
+            }),
+        );
         return Ok(OpenAiSessionChatResponse {
             message: openai::ChatMessage {
                 role: "assistant".to_string(),
@@ -122,7 +130,14 @@ pub async fn ai_session_chat_stream_start(
         },
     )?;
     if let Some(content) = get_cached_response(&state, &cache_key)? {
-        info!("ai_cache_hit type=session_chat_stream");
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ai.cache.hit",
+            None,
+            json!({
+                "requestType": "sessionChatStream",
+            }),
+        );
         app.emit(
             "ai:chat-chunk",
             AiChatChunkPayload {
@@ -241,7 +256,14 @@ pub async fn ai_explain_selection(
     let input = context::build_selection_explain_input(&state, request, &settings)?;
     let cache_key = build_cache_key("selection_explain", &input)?;
     if let Some(content) = get_cached_response(&state, &cache_key)? {
-        info!("ai_cache_hit type=selection_explain");
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ai.cache.hit",
+            None,
+            json!({
+                "requestType": "selectionExplain",
+            }),
+        );
         return Ok(OpenAiSessionChatResponse {
             message: openai::ChatMessage {
                 role: "assistant".to_string(),

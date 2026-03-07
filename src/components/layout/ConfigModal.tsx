@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { error as logError } from "@tauri-apps/plugin-log";
+import { error as logError } from "@/shared/logging/telemetry";
 import { open as openDialogFile } from "@tauri-apps/plugin-dialog";
 import {
   copyFile,

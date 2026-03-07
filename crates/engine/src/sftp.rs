@@ -6,12 +6,12 @@
 //! - worker 池并发处理 mkdir/文件传输
 //! - 聚合器统一汇报 job 级进度与最终状态
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use log::{debug, warn};
 use russh::client;
 use russh_sftp::client::error::Error as SftpClientError;
 use russh_sftp::client::{RawSftpSession, SftpSession};
 use russh_sftp::extensions;
 use russh_sftp::protocol::{FileAttributes, OpenFlags, StatusCode};
+use serde_json::json;
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,6 +24,7 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tokio::task::JoinSet;
 
 use crate::error::EngineError;
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
     EngineEvent, EventCallback, SftpEntry, SftpEntryKind, SftpProgress, SftpProgressOp,
     SftpTransferKind, SftpTransferStatus,
@@ -217,7 +218,15 @@ pub async fn sftp_list(
 ) -> Result<Vec<SftpEntry>, EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    debug!("sftp_list_start path={} started_at_ms={}", path, started_at);
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.list.start",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+        }),
+    );
     let sftp = open_sftp(session).await?;
     let entries = sftp.read_dir(path.to_string()).await.map_err(|err| {
         let err = EngineError::with_detail("sftp_list_failed", "无法读取目录", err.to_string());
@@ -269,12 +278,16 @@ pub async fn sftp_list(
         });
     }
     results.sort_by(|a, b| a.name.cmp(&b.name));
-    debug!(
-        "sftp_list_success path={} started_at_ms={} elapsed_ms={} entry_count={}",
-        path,
-        started_at,
-        started.elapsed().as_millis(),
-        results.len()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.list.success",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+            "elapsedMs": started.elapsed().as_millis(),
+            "entryCount": results.len(),
+        }),
     );
     Ok(results)
 }
@@ -318,13 +331,17 @@ pub async fn sftp_upload(
         on_event,
     };
     emit_transfer_progress(on_event, progress_context, 0);
-    debug!(
-        "sftp_upload_start session_id={} local_path={} remote_path={} started_at_ms={} total_bytes={}",
-        session_id,
-        local_path,
-        remote_path,
-        started_at,
-        total.unwrap_or(0)
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.upload.start",
+        None,
+        json!({
+            "sessionId": session_id,
+            "sourcePath": local_path,
+            "targetPath": remote_path,
+            "startedAtMs": started_at,
+            "totalBytes": total.unwrap_or(0),
+        }),
     );
     let handle = sftp
         .open(
@@ -591,9 +608,16 @@ pub async fn sftp_upload_batch(
             .clone(),
         None,
     );
-    debug!(
-        "sftp_upload_batch_start session_id={} remote_dir={} started_at_ms={} mode=pipeline",
-        session_id, remote_dir, started_at
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.upload.batch.start",
+        None,
+        json!({
+            "sessionId": session_id,
+            "targetPath": remote_dir,
+            "startedAtMs": started_at,
+            "mode": "pipeline",
+        }),
     );
 
     let (task_tx, task_rx) = mpsc::unbounded_channel::<UploadPipelineTask>();
@@ -628,12 +652,18 @@ pub async fn sftp_upload_batch(
             &emit_context,
             cancel_flag,
         ) {
-            warn!(
-                "sftp_upload_stream_failed path={} error_code={} error_message={} error_detail={}",
-                root.to_string_lossy(),
-                err.code,
-                err.message,
-                err.detail.as_deref().unwrap_or("")
+            log_telemetry(
+                TelemetryLevel::Warn,
+                "sftp.upload.batch.stream.failed",
+                None,
+                json!({
+                    "path": root.to_string_lossy().to_string(),
+                    "error": {
+                        "code": err.code,
+                        "message": err.message,
+                        "detail": err.detail,
+                    }
+                }),
             );
             pipeline_discover_failed_item(&state, &emit_context);
         }
@@ -647,11 +677,17 @@ pub async fn sftp_upload_batch(
             Ok(()) => {}
             Err(err) => {
                 worker_failed = true;
-                warn!(
-                    "sftp_upload_worker_failed error_code={} error_message={} error_detail={}",
-                    err.code,
-                    err.message,
-                    err.detail.as_deref().unwrap_or("")
+                log_telemetry(
+                    TelemetryLevel::Warn,
+                    "sftp.upload.batch.worker.failed",
+                    None,
+                    json!({
+                        "error": {
+                            "code": err.code,
+                            "message": err.message,
+                            "detail": err.detail,
+                        }
+                    }),
                 );
             }
         }
@@ -1223,12 +1259,18 @@ async fn upload_pipeline_worker(
                 }
                 Err(err) => {
                     pipeline_fail_item(&state, &emit_context, &display_name);
-                    warn!(
-                        "sftp_upload_batch_dir_failed path={} error_code={} error_message={} error_detail={}",
-                        display_name,
-                        err.code,
-                        err.message,
-                        err.detail.as_deref().unwrap_or("")
+                    log_telemetry(
+                        TelemetryLevel::Warn,
+                        "sftp.upload.batch.dir.failed",
+                        None,
+                        json!({
+                            "path": display_name,
+                            "error": {
+                                "code": err.code,
+                                "message": err.message,
+                                "detail": err.detail,
+                            }
+                        }),
                     );
                 }
             },
@@ -1242,12 +1284,18 @@ async fn upload_pipeline_worker(
                         ensure_remote_parent_dirs_raw(&raw_sftp, &remote_dir_cache, &parent).await
                 {
                     pipeline_fail_item(&state, &emit_context, &display_name);
-                    warn!(
-                        "sftp_upload_batch_mkdir_parent_failed path={} error_code={} error_message={} error_detail={}",
-                        display_name,
-                        err.code,
-                        err.message,
-                        err.detail.as_deref().unwrap_or("")
+                    log_telemetry(
+                        TelemetryLevel::Warn,
+                        "sftp.upload.batch.mkdir.parent.failed",
+                        None,
+                        json!({
+                            "path": display_name,
+                            "error": {
+                                "code": err.code,
+                                "message": err.message,
+                                "detail": err.detail,
+                            }
+                        }),
                     );
                     continue;
                 }
@@ -1272,12 +1320,18 @@ async fn upload_pipeline_worker(
                     Err(err) if err.code == "sftp_transfer_cancelled" => break,
                     Err(err) => {
                         pipeline_fail_item(&state, &emit_context, &display_name);
-                        warn!(
-                            "sftp_upload_batch_file_failed path={} error_code={} error_message={} error_detail={}",
-                            display_name,
-                            err.code,
-                            err.message,
-                            err.detail.as_deref().unwrap_or("")
+                        log_telemetry(
+                            TelemetryLevel::Warn,
+                            "sftp.upload.batch.file.failed",
+                            None,
+                            json!({
+                                "path": display_name,
+                                "error": {
+                                    "code": err.code,
+                                    "message": err.message,
+                                    "detail": err.detail,
+                                }
+                            }),
                         );
                     }
                 }
@@ -1318,9 +1372,18 @@ async fn download_pipeline_worker(
                 }
                 Err(err) => {
                     pipeline_fail_item(&state, &emit_context, &display_name);
-                    warn!(
-                        "sftp_download_dir_mkdir_failed path={} detail={}",
-                        display_name, err
+                    log_telemetry(
+                        TelemetryLevel::Warn,
+                        "sftp.download.dir.mkdir.failed",
+                        None,
+                        json!({
+                            "path": display_name,
+                            "error": {
+                                "code": "sftp_download_dir_mkdir_failed",
+                                "message": "本地目录创建失败",
+                                "detail": err.to_string(),
+                            }
+                        }),
                     );
                 }
             },
@@ -1351,26 +1414,36 @@ async fn download_pipeline_worker(
                 .await
                 {
                     Ok(perf) => {
-                        warn!(
-                            "sftp_download_pipeline_file_summary path={} transferred_bytes={} read_requests={} eof_responses={} max_in_flight={} max_pending_chunks={}",
-                            display_name,
-                            perf.transferred_bytes,
-                            perf.read_requests,
-                            perf.eof_responses,
-                            perf.max_in_flight,
-                            perf.max_pending_chunks
+                        log_telemetry(
+                            TelemetryLevel::Warn,
+                            "sftp.download.pipeline.file.summary",
+                            None,
+                            json!({
+                                "path": display_name,
+                                "transferredBytes": perf.transferred_bytes,
+                                "readRequests": perf.read_requests,
+                                "eofResponses": perf.eof_responses,
+                                "maxInFlight": perf.max_in_flight,
+                                "maxPendingChunks": perf.max_pending_chunks,
+                            }),
                         );
                         pipeline_complete_item(&state, &emit_context, &display_name);
                     }
                     Err(err) if err.code == "sftp_transfer_cancelled" => break,
                     Err(err) => {
                         pipeline_fail_item(&state, &emit_context, &display_name);
-                        warn!(
-                            "sftp_download_dir_file_failed path={} error_code={} error_message={} error_detail={}",
-                            display_name,
-                            err.code,
-                            err.message,
-                            err.detail.as_deref().unwrap_or("")
+                        log_telemetry(
+                            TelemetryLevel::Warn,
+                            "sftp.download.dir.file.failed",
+                            None,
+                            json!({
+                                "path": display_name,
+                                "error": {
+                                    "code": err.code,
+                                    "message": err.message,
+                                    "detail": err.detail,
+                                }
+                            }),
                         );
                     }
                 }
@@ -1446,13 +1519,17 @@ pub async fn sftp_download(
         EngineError::with_detail("sftp_download_failed", "无法打开远端文件", err.to_string())
     })?;
     let total = remote.metadata().await.ok().and_then(|m| m.size);
-    debug!(
-        "sftp_download_start session_id={} remote_path={} local_path={} started_at_ms={} total_bytes={}",
-        session_id,
-        remote_path,
-        local_path,
-        started_at,
-        total.unwrap_or(0)
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.download.start",
+        None,
+        json!({
+            "sessionId": session_id,
+            "sourcePath": remote_path,
+            "targetPath": local_path,
+            "startedAtMs": started_at,
+            "totalBytes": total.unwrap_or(0),
+        }),
     );
     let resolved_local_path = resolve_available_local_path(Path::new(local_path)).await?;
     let resolved_target_name = resolved_local_path
@@ -1617,9 +1694,17 @@ pub async fn sftp_download_dir(
             .clone(),
         None,
     );
-    debug!(
-        "sftp_download_dir_start session_id={} remote_path={} local_dir={} started_at_ms={} mode=pipeline",
-        session_id, remote_path, local_dir, started_at
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.download.dir.start",
+        None,
+        json!({
+            "sessionId": session_id,
+            "sourcePath": remote_path,
+            "targetPath": local_dir,
+            "startedAtMs": started_at,
+            "mode": "pipeline",
+        }),
     );
 
     let (task_tx, task_rx) = mpsc::unbounded_channel::<DownloadPipelineTask>();
@@ -1663,12 +1748,18 @@ pub async fn sftp_download_dir(
         cancel_flag,
     };
     if let Err(err) = stream_remote_download_tasks(&scan_ctx, "").await {
-        warn!(
-            "sftp_download_scan_failed path={} error_code={} error_message={} error_detail={}",
-            remote_path,
-            err.code,
-            err.message,
-            err.detail.as_deref().unwrap_or("")
+        log_telemetry(
+            TelemetryLevel::Warn,
+            "sftp.download.scan.failed",
+            None,
+            json!({
+                "path": remote_path,
+                "error": {
+                    "code": err.code,
+                    "message": err.message,
+                    "detail": err.detail,
+                }
+            }),
         );
         pipeline_discover_failed_item(&state, &emit_context);
     }
@@ -1681,11 +1772,17 @@ pub async fn sftp_download_dir(
             Ok(()) => {}
             Err(err) => {
                 worker_failed = true;
-                warn!(
-                    "sftp_download_worker_failed error_code={} error_message={} error_detail={}",
-                    err.code,
-                    err.message,
-                    err.detail.as_deref().unwrap_or("")
+                log_telemetry(
+                    TelemetryLevel::Warn,
+                    "sftp.download.worker.failed",
+                    None,
+                    json!({
+                        "error": {
+                            "code": err.code,
+                            "message": err.message,
+                            "detail": err.detail,
+                        }
+                    }),
                 );
             }
         }
@@ -1810,9 +1907,15 @@ pub async fn sftp_rename(
 ) -> Result<(), EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    debug!(
-        "sftp_rename_start source_path={} target_path={} started_at_ms={}",
-        from, to, started_at
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.rename.start",
+        None,
+        json!({
+            "sourcePath": from,
+            "targetPath": to,
+            "startedAtMs": started_at,
+        }),
     );
     let sftp = open_sftp(session).await?;
     sftp.rename(from.to_string(), to.to_string())
@@ -1829,12 +1932,16 @@ pub async fn sftp_rename(
             );
             err
         })?;
-    debug!(
-        "sftp_rename_success source_path={} target_path={} started_at_ms={} elapsed_ms={}",
-        from,
-        to,
-        started_at,
-        started.elapsed().as_millis()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.rename.success",
+        None,
+        json!({
+            "sourcePath": from,
+            "targetPath": to,
+            "startedAtMs": started_at,
+            "elapsedMs": started.elapsed().as_millis(),
+        }),
     );
     Ok(())
 }
@@ -1846,9 +1953,14 @@ pub async fn sftp_remove(
 ) -> Result<(), EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    debug!(
-        "sftp_remove_start path={} started_at_ms={}",
-        path, started_at
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.remove.start",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+        }),
     );
     let sftp = open_sftp(session).await?;
     remove_remote_path_recursive(&sftp, path)
@@ -1862,11 +1974,15 @@ pub async fn sftp_remove(
                 err,
             );
         })?;
-    debug!(
-        "sftp_remove_success path={} started_at_ms={} elapsed_ms={}",
-        path,
-        started_at,
-        started.elapsed().as_millis()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.remove.success",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+            "elapsedMs": started.elapsed().as_millis(),
+        }),
     );
     Ok(())
 }
@@ -1878,9 +1994,14 @@ pub async fn sftp_mkdir(
 ) -> Result<(), EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    debug!(
-        "sftp_mkdir_start path={} started_at_ms={}",
-        path, started_at
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.mkdir.start",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+        }),
     );
     let sftp = open_sftp(session).await?;
     sftp.create_dir(path.to_string()).await.map_err(|err| {
@@ -1894,11 +2015,15 @@ pub async fn sftp_mkdir(
         );
         err
     })?;
-    debug!(
-        "sftp_mkdir_success path={} started_at_ms={} elapsed_ms={}",
-        path,
-        started_at,
-        started.elapsed().as_millis()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.mkdir.success",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+            "elapsedMs": started.elapsed().as_millis(),
+        }),
     );
     Ok(())
 }
@@ -1909,25 +2034,42 @@ pub async fn sftp_home(
 ) -> Result<String, EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    debug!("sftp_home_start started_at_ms={}", started_at);
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.home.start",
+        None,
+        json!({
+            "startedAtMs": started_at,
+        }),
+    );
     let sftp = open_sftp(session).await?;
     let home = sftp.canonicalize(".").await.map_err(|err| {
         let err = EngineError::with_detail("sftp_home_failed", "无法获取家目录", err.to_string());
-        warn!(
-            "sftp_home_failed started_at_ms={} elapsed_ms={} error_code={} error_message={} error_detail={}",
-            started_at,
-            started.elapsed().as_millis(),
-            err.code,
-            err.message,
-            err.detail.as_deref().unwrap_or("")
+        log_telemetry(
+            TelemetryLevel::Warn,
+            "sftp.home.failed",
+            None,
+            json!({
+                "startedAtMs": started_at,
+                "elapsedMs": started.elapsed().as_millis(),
+                "error": {
+                    "code": err.code.clone(),
+                    "message": err.message.clone(),
+                    "detail": err.detail.clone(),
+                }
+            }),
         );
         err
     })?;
-    debug!(
-        "sftp_home_success path={} started_at_ms={} elapsed_ms={}",
-        home,
-        started_at,
-        started.elapsed().as_millis()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.home.success",
+        None,
+        json!({
+            "path": home.clone(),
+            "startedAtMs": started_at,
+            "elapsedMs": started.elapsed().as_millis(),
+        }),
     );
     Ok(home)
 }
@@ -1939,9 +2081,14 @@ pub async fn sftp_resolve_path(
 ) -> Result<String, EngineError> {
     let started_at = now_epoch_millis();
     let started = Instant::now();
-    debug!(
-        "sftp_resolve_path_start path={} started_at_ms={}",
-        path, started_at
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.resolve.path.start",
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at,
+        }),
     );
     let sftp = open_sftp(session).await?;
     let resolved = sftp.canonicalize(path).await.map_err(|err| {
@@ -1959,12 +2106,16 @@ pub async fn sftp_resolve_path(
         );
         err
     })?;
-    debug!(
-        "sftp_resolve_path_success path={} resolved_path={} started_at_ms={} elapsed_ms={}",
-        path,
-        resolved,
-        started_at,
-        started.elapsed().as_millis()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "sftp.resolve.path.success",
+        None,
+        json!({
+            "path": path,
+            "resolvedPath": resolved.clone(),
+            "startedAtMs": started_at,
+            "elapsedMs": started.elapsed().as_millis(),
+        }),
     );
     Ok(resolved)
 }
@@ -2094,18 +2245,22 @@ async fn download_remote_file_to_local_pipelined(
     sftp.close(handle_id).await.map_err(|err| {
         EngineError::with_detail("sftp_download_failed", "无法关闭远端文件", err.to_string())
     })?;
-    warn!(
-        "sftp_download_pipeline_file_perf remote_path={} local_path={} elapsed_ms={} transferred_bytes={} read_requests={} eof_responses={} max_in_flight={} max_pending_chunks={} chunk_size={} read_window={}",
-        remote_path,
-        local_path.to_string_lossy(),
-        started.elapsed().as_millis(),
-        transferred,
-        read_requests,
-        eof_responses,
-        max_in_flight_seen,
-        max_pending_chunks_seen,
-        chunk_size,
-        DOWNLOAD_READ_WINDOW
+    log_telemetry(
+        TelemetryLevel::Warn,
+        "sftp.download.pipeline.file.perf",
+        None,
+        json!({
+            "sourcePath": remote_path,
+            "targetPath": local_path.to_string_lossy().to_string(),
+            "elapsedMs": started.elapsed().as_millis(),
+            "transferredBytes": transferred,
+            "readRequests": read_requests,
+            "eofResponses": eof_responses,
+            "maxInFlight": max_in_flight_seen,
+            "maxPendingChunks": max_pending_chunks_seen,
+            "chunkSize": chunk_size,
+            "readWindow": DOWNLOAD_READ_WINDOW,
+        }),
     );
     Ok(DownloadPipelinePerf {
         transferred_bytes: transferred,
@@ -2411,24 +2566,28 @@ fn log_sftp_perf(stats: SftpPerfStats) {
     } else {
         ((stats.transferred_bytes as u128 * 1000) / stats.elapsed_ms) as u64
     };
-    warn!(
-        "sftp_perf stage={} session_id={} op={:?} kind={:?} mode={} elapsed_ms={} scan_elapsed_ms={} transferred_bytes={} total_bytes={} throughput_bps={} completed_items={} failed_items={} total_items={} worker_count={} write_window={} read_window={}",
-        stats.stage,
-        stats.session_id,
-        stats.op,
-        stats.kind,
-        stats.mode,
-        stats.elapsed_ms,
-        stats.scan_elapsed_ms.unwrap_or(0),
-        stats.transferred_bytes,
-        stats.total_bytes.unwrap_or(0),
-        throughput_bps,
-        stats.completed_items,
-        stats.failed_items,
-        stats.total_items.unwrap_or(0),
-        stats.worker_count.unwrap_or(0),
-        stats.write_window.unwrap_or(0),
-        stats.read_window.unwrap_or(0)
+    log_telemetry(
+        TelemetryLevel::Warn,
+        "sftp.perf.update",
+        None,
+        json!({
+            "stage": stats.stage,
+            "sessionId": stats.session_id,
+            "op": format!("{:?}", stats.op),
+            "kind": format!("{:?}", stats.kind),
+            "mode": stats.mode,
+            "elapsedMs": stats.elapsed_ms,
+            "scanElapsedMs": stats.scan_elapsed_ms.unwrap_or(0),
+            "transferredBytes": stats.transferred_bytes,
+            "totalBytes": stats.total_bytes.unwrap_or(0),
+            "throughputBps": throughput_bps,
+            "completedItems": stats.completed_items,
+            "failedItems": stats.failed_items,
+            "totalItems": stats.total_items.unwrap_or(0),
+            "workerCount": stats.worker_count.unwrap_or(0),
+            "writeWindow": stats.write_window.unwrap_or(0),
+            "readWindow": stats.read_window.unwrap_or(0),
+        }),
     );
 }
 
@@ -2439,35 +2598,43 @@ fn log_sftp_success(action: &str, context: &TransferLogContext<'_>) {
     } else {
         ((context.transferred_bytes as u128 * 1000) / context.elapsed_ms) as u64
     };
-    debug!(
-        "{} session_id={} source_path={} target_path={} started_at_ms={} elapsed_ms={} transferred_bytes={} total_bytes={} avg_bytes_per_sec={}",
-        action,
-        context.session_id,
-        context.source_path,
-        context.target_path,
-        context.started_at_ms,
-        context.elapsed_ms,
-        context.transferred_bytes,
-        context.total_bytes.unwrap_or(0),
-        speed_bytes_per_sec
+    log_telemetry(
+        TelemetryLevel::Debug,
+        &action.replace('_', "."),
+        None,
+        json!({
+            "sessionId": context.session_id,
+            "sourcePath": context.source_path,
+            "targetPath": context.target_path,
+            "startedAtMs": context.started_at_ms,
+            "elapsedMs": context.elapsed_ms,
+            "transferredBytes": context.transferred_bytes,
+            "totalBytes": context.total_bytes.unwrap_or(0),
+            "avgBytesPerSec": speed_bytes_per_sec,
+        }),
     );
 }
 
 /// 记录 SFTP 传输失败日志。
 fn log_sftp_failure(action: &str, context: &TransferLogContext<'_>, err: &EngineError) {
-    warn!(
-        "{} session_id={} source_path={} target_path={} started_at_ms={} elapsed_ms={} transferred_bytes={} total_bytes={} error_code={} error_message={} error_detail={}",
-        action,
-        context.session_id,
-        context.source_path,
-        context.target_path,
-        context.started_at_ms,
-        context.elapsed_ms,
-        context.transferred_bytes,
-        context.total_bytes.unwrap_or(0),
-        err.code,
-        err.message,
-        err.detail.as_deref().unwrap_or("")
+    log_telemetry(
+        TelemetryLevel::Warn,
+        &action.replace('_', "."),
+        None,
+        json!({
+            "sessionId": context.session_id,
+            "sourcePath": context.source_path,
+            "targetPath": context.target_path,
+            "startedAtMs": context.started_at_ms,
+            "elapsedMs": context.elapsed_ms,
+            "transferredBytes": context.transferred_bytes,
+            "totalBytes": context.total_bytes.unwrap_or(0),
+            "error": {
+                "code": err.code,
+                "message": err.message,
+                "detail": err.detail,
+            }
+        }),
     );
 }
 
@@ -2479,15 +2646,20 @@ fn log_sftp_path_failure(
     elapsed_ms: u128,
     err: &EngineError,
 ) {
-    warn!(
-        "{} path={} started_at_ms={} elapsed_ms={} error_code={} error_message={} error_detail={}",
-        action,
-        path,
-        started_at_ms,
-        elapsed_ms,
-        err.code,
-        err.message,
-        err.detail.as_deref().unwrap_or("")
+    log_telemetry(
+        TelemetryLevel::Warn,
+        &action.replace('_', "."),
+        None,
+        json!({
+            "path": path,
+            "startedAtMs": started_at_ms,
+            "elapsedMs": elapsed_ms,
+            "error": {
+                "code": err.code,
+                "message": err.message,
+                "detail": err.detail,
+            }
+        }),
     );
 }
 
@@ -2500,16 +2672,21 @@ fn log_sftp_pair_failure(
     elapsed_ms: u128,
     err: &EngineError,
 ) {
-    warn!(
-        "{} source_path={} target_path={} started_at_ms={} elapsed_ms={} error_code={} error_message={} error_detail={}",
-        action,
-        source_path,
-        target_path,
-        started_at_ms,
-        elapsed_ms,
-        err.code,
-        err.message,
-        err.detail.as_deref().unwrap_or("")
+    log_telemetry(
+        TelemetryLevel::Warn,
+        &action.replace('_', "."),
+        None,
+        json!({
+            "sourcePath": source_path,
+            "targetPath": target_path,
+            "startedAtMs": started_at_ms,
+            "elapsedMs": elapsed_ms,
+            "error": {
+                "code": err.code,
+                "message": err.message,
+                "detail": err.detail,
+            }
+        }),
     );
 }
 

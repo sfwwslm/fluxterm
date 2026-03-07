@@ -2,13 +2,13 @@
 
 use std::time::Duration;
 
-use log::info;
 use reqwest::StatusCode;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::error::OpenAiError;
 use crate::prompts::{build_selection_explain_messages, build_session_chat_messages};
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
     ChatMessage, OpenAiClientConfig, OpenAiSelectionExplainInput, OpenAiSessionChatInput,
     OpenAiSessionChatResponse, OpenAiSessionChatStreamInput,
@@ -185,11 +185,15 @@ async fn stream_chat_completion(
         .unwrap_or_else(|| Value::Array(Vec::new()));
 
     if config.debug_logging_enabled {
-        info!(
-            "openai_request type={} model={} messages={}",
-            request_type,
-            config.model,
-            serde_json::to_string(&logged_messages).unwrap_or_else(|_| "[]".to_string())
+        log_telemetry(
+            TelemetryLevel::Info,
+            "openai.request.start",
+            None,
+            json!({
+                "requestType": request_type,
+                "model": config.model,
+                "messages": logged_messages,
+            }),
         );
     }
 
@@ -214,7 +218,15 @@ async fn stream_chat_completion(
     while let Some(chunk) = response.chunk().await.map_err(map_transport_error)? {
         if is_cancelled() {
             if config.debug_logging_enabled {
-                info!("openai_response type={} cancelled=true", request_type);
+                log_telemetry(
+                    TelemetryLevel::Info,
+                    "openai.response.cancelled",
+                    None,
+                    json!({
+                        "requestType": request_type,
+                        "cancelled": true,
+                    }),
+                );
             }
             return Ok(());
         }
@@ -253,11 +265,15 @@ fn log_request(config: &OpenAiClientConfig, request_type: &str, messages: &[Chat
         return;
     }
     log_system_prompt_summary(request_type, messages);
-    info!(
-        "openai_request type={} model={} messages={}",
-        request_type,
-        config.model,
-        serde_json::to_string(messages).unwrap_or_else(|_| "[]".to_string())
+    log_telemetry(
+        TelemetryLevel::Info,
+        "openai.request.start",
+        None,
+        json!({
+            "requestType": request_type,
+            "model": config.model,
+            "messages": messages,
+        }),
     );
 }
 
@@ -265,9 +281,14 @@ fn log_system_prompt_summary(request_type: &str, messages: &[ChatMessage]) {
     let Some(summary) = build_system_prompt_summary(messages) else {
         return;
     };
-    info!(
-        "openai_request_summary type={} system_prompt=\n{}",
-        request_type, summary
+    log_telemetry(
+        TelemetryLevel::Info,
+        "openai.request.summary",
+        None,
+        json!({
+            "requestType": request_type,
+            "systemPromptSummary": summary,
+        }),
     );
 }
 
@@ -324,10 +345,14 @@ fn log_response(config: &OpenAiClientConfig, request_type: &str, message: &ChatM
     if !config.debug_logging_enabled {
         return;
     }
-    info!(
-        "openai_response type={} message={}",
-        request_type,
-        serde_json::to_string(message).unwrap_or_else(|_| "\"<serialize_failed>\"".to_string())
+    log_telemetry(
+        TelemetryLevel::Info,
+        "openai.response.success",
+        None,
+        json!({
+            "requestType": request_type,
+            "message": message,
+        }),
     );
 }
 
@@ -335,7 +360,19 @@ fn log_error(config: &OpenAiClientConfig, request_type: &str, error: &OpenAiErro
     if !config.debug_logging_enabled {
         return;
     }
-    info!("openai_error type={} error={error}", request_type);
+    log_telemetry(
+        TelemetryLevel::Info,
+        "openai.request.failed",
+        None,
+        json!({
+            "requestType": request_type,
+            "error": {
+                "code": "openai_request_failed",
+                "message": error.to_string(),
+                "detail": Option::<String>::None,
+            }
+        }),
+    );
 }
 
 fn attach_bearer_auth(request: reqwest::RequestBuilder, api_key: &str) -> reqwest::RequestBuilder {

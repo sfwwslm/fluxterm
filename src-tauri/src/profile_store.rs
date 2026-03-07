@@ -3,11 +3,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use engine::{EngineError, HostProfile};
-use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::AppHandle;
 
 use crate::config_paths::resolve_profiles_path;
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::utils::write_atomic;
 
 /// 主密码配置。
@@ -61,16 +62,27 @@ impl Default for ProfileStore {
 pub fn read_profiles(app: &AppHandle) -> Result<ProfileStore, EngineError> {
     let path = profiles_path(app)?;
     if !path.exists() {
-        debug!("read_profiles skip reason=not_found");
+        log_telemetry(
+            TelemetryLevel::Debug,
+            "profile.read.skipped",
+            None,
+            json!({
+                "reason": "notFound",
+            }),
+        );
         return Ok(ProfileStore::default());
     }
     let content = fs::read_to_string(&path).map_err(|err| {
         EngineError::with_detail("profile_read_failed", "无法读取配置文件", err.to_string())
     })?;
-    debug!(
-        "read_profiles loaded path={} size={}",
-        path.display(),
-        content.len()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "profile.read.success",
+        None,
+        json!({
+            "path": path.display().to_string(),
+            "size": content.len(),
+        }),
     );
     serde_json::from_str(&content).map_err(|err| {
         EngineError::with_detail("profile_parse_failed", "配置文件解析失败", err.to_string())
@@ -87,7 +99,14 @@ pub fn write_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), Engin
             err.to_string(),
         )
     })?;
-    debug!("write_profiles starting path={}", path.display());
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "profile.write.start",
+        None,
+        json!({
+            "path": path.display().to_string(),
+        }),
+    );
     write_atomic(path, &content)
 }
 

@@ -7,7 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import "@/components/ui/base-input.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { info, warn } from "@tauri-apps/plugin-log";
+import { info, warn } from "@/shared/logging/telemetry";
 import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { translations, type Translate, type TranslationKey } from "@/i18n";

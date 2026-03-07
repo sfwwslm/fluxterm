@@ -7,7 +7,9 @@ use std::io::Write;
 use std::path::Path;
 
 use engine::EngineError;
-use log::debug;
+use serde_json::json;
+
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 /// 原子级写入文件。
 ///
@@ -26,7 +28,14 @@ pub fn write_atomic<P: AsRef<Path>>(path: P, content: &str) -> Result<(), Engine
         fs::create_dir_all(parent).map_err(|err| {
             EngineError::with_detail("file_write_failed", "无法创建配置目录", err.to_string())
         })?;
-        debug!("write_atomic created_dir path={}", parent.display());
+        log_telemetry(
+            TelemetryLevel::Debug,
+            "file.write.dir.create.success",
+            None,
+            json!({
+                "path": parent.display().to_string(),
+            }),
+        );
     }
 
     let temp_path = path.with_extension("tmp");
@@ -50,10 +59,14 @@ pub fn write_atomic<P: AsRef<Path>>(path: P, content: &str) -> Result<(), Engine
         EngineError::with_detail("file_write_failed", "无法替换目标文件", err.to_string())
     })?;
 
-    debug!(
-        "write_atomic finished path={} size={}",
-        path_display,
-        content.len()
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "file.write.atomic.success",
+        None,
+        json!({
+            "path": path_display,
+            "size": content.len(),
+        }),
     );
 
     Ok(())

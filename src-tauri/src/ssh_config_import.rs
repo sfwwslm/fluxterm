@@ -3,13 +3,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use engine::{AuthType, EngineError, HostProfile};
-use log::warn;
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::commands::profile::{validate_and_dedupe_groups, validate_profile_name};
 use crate::profile_store::{ProfileStore, read_profiles, write_profiles};
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 const IMPORT_GROUP_NAME: &str = "OpenSSH";
 /// 导入会话名称沿用前端 ProfileModal 的 14 字符显示约束，避免导入结果与手工编辑规则不一致。
@@ -366,9 +367,15 @@ fn expand_identity_file(value: &str, home: &Path) -> String {
 fn truncate_profile_name(value: &str) -> String {
     let truncated: String = value.chars().take(IMPORT_PROFILE_NAME_MAX_CHARS).collect();
     if truncated != value {
-        warn!(
-            "ssh_config_import_profile_name_truncated original={} truncated={} max_chars={}",
-            value, truncated, IMPORT_PROFILE_NAME_MAX_CHARS
+        log_telemetry(
+            TelemetryLevel::Warn,
+            "ssh.config.import.truncate.success",
+            None,
+            json!({
+                "original": value,
+                "truncated": truncated,
+                "maxChars": IMPORT_PROFILE_NAME_MAX_CHARS,
+            }),
         );
     }
     truncated

@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use serde_json::json;
 use tokio::runtime::Runtime;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
@@ -9,12 +10,12 @@ use uuid::Uuid;
 use crate::error::EngineError;
 use crate::proxy_backend::{BuiltinProxyBackend, ProxyBackend};
 use crate::session::{ExpectedHostKey, SessionCommand, SessionHandle, run_session_loop};
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
     EventCallback, HostProfile, ProxyRuntime, ProxySpec, Session, SessionState, SftpEntry,
     SshTunnelRuntime, SshTunnelSpec, TerminalSize,
 };
 use crate::util::now_epoch;
-use log::info;
 
 /// 会话引擎，负责连接管理与命令分发。
 pub struct Engine {
@@ -52,9 +53,15 @@ impl Engine {
         let created_at = now_epoch();
         let (tx, rx) = mpsc::unbounded_channel();
 
-        info!(
-            "ssh_connect_start profile_id={} host={} user={}",
-            profile.id, profile.host, profile.username
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ssh.connect.start",
+            None,
+            json!({
+                "profileId": profile.id.clone(),
+                "host": profile.host.clone(),
+                "user": profile.username.clone(),
+            }),
         );
         on_event(crate::types::EngineEvent::SessionStatus {
             session_id: session_id.clone(),

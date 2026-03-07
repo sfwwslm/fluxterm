@@ -5,20 +5,27 @@ use std::sync::Arc;
 use russh::MethodKind;
 use russh::client::{self, AuthResult};
 use russh::keys::{self, PrivateKeyWithHashAlg};
+use serde_json::json;
 
 use crate::error::EngineError;
 use crate::session::ClientHandler;
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{AuthType, HostProfile};
-use log::{info, warn};
 
 /// 执行 SSH 认证流程。
 pub async fn authenticate(
     session: &mut client::Handle<ClientHandler>,
     profile: &HostProfile,
 ) -> Result<(), EngineError> {
-    info!(
-        "ssh_auth_start profile_id={} user={} auth_type={:?}",
-        profile.id, profile.username, profile.auth_type
+    log_telemetry(
+        TelemetryLevel::Info,
+        "ssh.auth.start",
+        None,
+        json!({
+            "profileId": profile.id,
+            "user": profile.username,
+            "authType": format!("{:?}", profile.auth_type),
+        }),
     );
     let authenticated = match profile.auth_type {
         AuthType::Password => {
@@ -75,16 +82,33 @@ pub async fn authenticate(
     };
 
     if !authenticated.success() {
-        warn!(
-            "ssh_auth_failed profile_id={} user={} auth_type={:?}",
-            profile.id, profile.username, profile.auth_type
+        log_telemetry(
+            TelemetryLevel::Warn,
+            "ssh.auth.failed",
+            None,
+            json!({
+                "profileId": profile.id,
+                "user": profile.username,
+                "authType": format!("{:?}", profile.auth_type),
+                "error": {
+                    "code": "ssh_auth_failed",
+                    "message": "认证未成功",
+                    "detail": Option::<String>::None,
+                }
+            }),
         );
         return Err(EngineError::new("ssh_auth_failed", "认证未成功"));
     }
 
-    info!(
-        "ssh_auth_success profile_id={} user={} auth_type={:?}",
-        profile.id, profile.username, profile.auth_type
+    log_telemetry(
+        TelemetryLevel::Info,
+        "ssh.auth.success",
+        None,
+        json!({
+            "profileId": profile.id,
+            "user": profile.username,
+            "authType": format!("{:?}", profile.auth_type),
+        }),
     );
     Ok(())
 }

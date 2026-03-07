@@ -2,9 +2,11 @@
 use std::path::Path;
 
 use engine::EngineError;
-use log::warn;
+use serde_json::json;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
+
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 /// 使用默认编辑器或系统默认程序打开本地文件。
 #[tauri::command]
@@ -28,16 +30,36 @@ pub fn file_open(
             match app.opener().open_path(&file_path, Some(&editor_path)) {
                 Ok(()) => return Ok(()),
                 Err(error) => {
-                    warn!(
-                        "{{\"event\":\"file:open-editor-fallback\",\"filePath\":\"{}\",\"editorPath\":\"{}\",\"message\":\"{}\"}}",
-                        file_path, editor_path, error
+                    log_telemetry(
+                        TelemetryLevel::Warn,
+                        "file.open.fallback",
+                        None,
+                        json!({
+                            "filePath": file_path.clone(),
+                            "editorPath": editor_path.clone(),
+                            "error": {
+                                "code": "file_open_editor_failed",
+                                "message": "使用默认编辑器打开失败，回退系统打开方式",
+                                "detail": error.to_string(),
+                            }
+                        }),
                     );
                 }
             }
         } else {
-            warn!(
-                "{{\"event\":\"file:open-editor-invalid\",\"filePath\":\"{}\",\"editorPath\":\"{}\"}}",
-                file_path, editor_path
+            log_telemetry(
+                TelemetryLevel::Warn,
+                "file.open.failed",
+                None,
+                json!({
+                    "filePath": file_path.clone(),
+                    "editorPath": editor_path.clone(),
+                    "error": {
+                        "code": "file_open_editor_invalid",
+                        "message": "默认编辑器路径无效",
+                        "detail": Option::<String>::None,
+                    }
+                }),
             );
         }
     }

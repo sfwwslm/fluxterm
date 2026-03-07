@@ -8,9 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex as StdMutex, MutexGuard};
 use std::time::Duration;
 
-use log::{info, warn};
 use russh::client;
 use russh::keys::{self, PublicKeyBase64};
+use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex, RwLock, mpsc};
@@ -23,6 +23,7 @@ use crate::sftp::{
     next_transfer_id, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
     sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
 };
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, SessionState, SftpEntry, SshTunnelKind,
     SshTunnelRuntime, SshTunnelSpec, SshTunnelStatus, TerminalSize,
@@ -301,15 +302,19 @@ async fn open_local_or_dynamic_tunnel(
     on_event: EventCallback,
 ) -> Result<TunnelHandle, EngineError> {
     let tunnel_id = Uuid::new_v4().to_string();
-    info!(
-        "ssh_tunnel_open_start session_id={} tunnel_id={} kind={:?} bind={}:{} target={:?}:{:?}",
-        session_id,
-        tunnel_id,
-        spec.kind,
-        spec.bind_host,
-        spec.bind_port,
-        spec.target_host,
-        spec.target_port
+    log_telemetry(
+        TelemetryLevel::Info,
+        "ssh.tunnel.open.start",
+        None,
+        json!({
+            "sessionId": session_id.clone(),
+            "tunnelId": tunnel_id.clone(),
+            "kind": format!("{:?}", spec.kind),
+            "bindHost": spec.bind_host.clone(),
+            "bindPort": spec.bind_port,
+            "targetHost": spec.target_host.clone(),
+            "targetPort": spec.target_port,
+        }),
     );
     let runtime = Arc::new(Mutex::new(build_tunnel_runtime(
         &session_id,
@@ -321,9 +326,18 @@ async fn open_local_or_dynamic_tunnel(
     let listener = TcpListener::bind(format!("{}:{}", spec.bind_host, spec.bind_port))
         .await
         .map_err(|err| {
-            warn!(
-                "ssh_tunnel_bind_failed tunnel_id={} detail={}",
-                tunnel_id, err
+            log_telemetry(
+                TelemetryLevel::Warn,
+                "ssh.tunnel.open.failed",
+                None,
+                json!({
+                    "tunnelId": tunnel_id.clone(),
+                    "error": {
+                        "code": "ssh_tunnel_bind_failed",
+                        "message": "隧道端口监听失败",
+                        "detail": err.to_string(),
+                    }
+                }),
             );
             EngineError::with_detail(
                 "ssh_tunnel_bind_failed",
@@ -419,7 +433,14 @@ async fn open_local_or_dynamic_tunnel(
         let mut g = runtime_clone.lock().await;
         g.status = SshTunnelStatus::Stopped;
         g.active_connections = 0;
-        info!("ssh_tunnel_stopped tunnel_id={}", g.tunnel_id);
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ssh.tunnel.close.success",
+            None,
+            json!({
+                "tunnelId": g.tunnel_id.clone(),
+            }),
+        );
         emit_tunnel_update(&on_event, &g.clone());
     });
 
@@ -437,15 +458,19 @@ async fn open_remote_tunnel(
     on_event: EventCallback,
 ) -> Result<TunnelHandle, EngineError> {
     let tunnel_id = Uuid::new_v4().to_string();
-    info!(
-        "ssh_tunnel_open_start session_id={} tunnel_id={} kind={:?} bind={}:{} target={:?}:{:?}",
-        session_id,
-        tunnel_id,
-        spec.kind,
-        spec.bind_host,
-        spec.bind_port,
-        spec.target_host,
-        spec.target_port
+    log_telemetry(
+        TelemetryLevel::Info,
+        "ssh.tunnel.open.start",
+        None,
+        json!({
+            "sessionId": session_id.clone(),
+            "tunnelId": tunnel_id.clone(),
+            "kind": format!("{:?}", spec.kind),
+            "bindHost": spec.bind_host.clone(),
+            "bindPort": spec.bind_port,
+            "targetHost": spec.target_host.clone(),
+            "targetPort": spec.target_port,
+        }),
     );
     let runtime = Arc::new(Mutex::new(build_tunnel_runtime(
         &session_id,
@@ -460,9 +485,18 @@ async fn open_remote_tunnel(
         .tcpip_forward(spec.bind_host.clone(), spec.bind_port as u32)
         .await
         .map_err(|err| {
-            warn!(
-                "ssh_tunnel_open_failed tunnel_id={} detail={}",
-                tunnel_id, err
+            log_telemetry(
+                TelemetryLevel::Warn,
+                "ssh.tunnel.open.failed",
+                None,
+                json!({
+                    "tunnelId": tunnel_id.clone(),
+                    "error": {
+                        "code": "ssh_tunnel_open_failed",
+                        "message": "无法创建远程转发",
+                        "detail": err.to_string(),
+                    }
+                }),
             );
             EngineError::with_detail(
                 "ssh_tunnel_open_failed",
@@ -503,7 +537,14 @@ async fn open_remote_tunnel(
         remote_routes.write().await.remove(&bind_port);
         let mut g = runtime_clone.lock().await;
         g.status = SshTunnelStatus::Stopped;
-        info!("ssh_tunnel_stopped tunnel_id={}", g.tunnel_id);
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ssh.tunnel.close.success",
+            None,
+            json!({
+                "tunnelId": g.tunnel_id.clone(),
+            }),
+        );
         emit_tunnel_update(&on_event, &g.clone());
     });
 

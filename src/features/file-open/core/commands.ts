@@ -12,7 +12,7 @@ import {
   stat,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { info, warn } from "@tauri-apps/plugin-log";
+import { info, warn } from "@/shared/logging/telemetry";
 import { callTauri } from "@/shared/tauri/commands";
 import {
   getRemoteFileCacheDir as resolveRemoteFileCacheDir,

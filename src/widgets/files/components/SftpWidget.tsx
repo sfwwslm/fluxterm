@@ -3,7 +3,7 @@
  * 负责目录浏览、文件操作和文件组件上下文菜单。
  */
 import { useEffect, useRef, useState } from "react";
-import { error as logError, warn as logWarn } from "@tauri-apps/plugin-log";
+import { error as logError, warn as logWarn } from "@/shared/logging/telemetry";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";

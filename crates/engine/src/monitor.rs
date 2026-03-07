@@ -2,14 +2,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use log::warn;
 use regex::Regex;
 use russh::client;
+use serde_json::json;
 use tokio::sync::watch;
 
 use crate::auth::authenticate;
 use crate::error::EngineError;
 use crate::session::{ClientHandler, ExpectedHostKey};
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
     EngineEvent, EventCallback, HostProfile, ResourceCpuSnapshot, ResourceMemorySnapshot,
     ResourceMonitorStatus, ResourceMonitorUnsupportedReason, SessionResourceSnapshot,
@@ -102,12 +103,18 @@ pub async fn run_ssh_resource_monitor(
                         break;
                     }
                     Err(error) => {
-                        warn!(
-                            "resource_monitor_ssh_sample_failed session_id={} code={} message={} detail={}",
-                            session_id,
-                            error.code,
-                            error.message,
-                            error.detail.unwrap_or_default()
+                        log_telemetry(
+                            TelemetryLevel::Warn,
+                            "resource.monitor.ssh.sample.failed",
+                            None,
+                            json!({
+                                "sessionId": session_id,
+                                "error": {
+                                    "code": error.code,
+                                    "message": error.message,
+                                    "detail": error.detail,
+                                }
+                            }),
                         );
                     }
                 }

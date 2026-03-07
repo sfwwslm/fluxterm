@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { warn } from "@tauri-apps/plugin-log";
+import { warn } from "@/shared/logging/telemetry";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { IDecoration, IMarker, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";

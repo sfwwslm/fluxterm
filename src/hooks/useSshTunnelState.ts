@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { info as logInfo, warn as logWarn } from "@tauri-apps/plugin-log";
+import { info as logInfo, warn as logWarn } from "@/shared/logging/telemetry";
 import {
   closeAllSshTunnels,
   closeSshTunnel,

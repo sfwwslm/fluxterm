@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { warn } from "@tauri-apps/plugin-log";
+import { warn } from "@/shared/logging/telemetry";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
   LogLevel,

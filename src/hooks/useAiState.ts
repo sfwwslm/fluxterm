@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { info as logInfo } from "@tauri-apps/plugin-log";
+import { info as logInfo } from "@/shared/logging/telemetry";
 import {
   aiExplainSelection,
   aiSessionChatStreamCancel,

@@ -10,7 +10,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { warn } from "@tauri-apps/plugin-log";
+import { warn } from "@/shared/logging/telemetry";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import type {
   CommandHistoryBucket,

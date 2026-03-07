@@ -3,7 +3,7 @@
  * 职责：维护会话状态机、连接生命周期、日志与事件处理。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { error as logError, info as logInfo } from "@tauri-apps/plugin-log";
+import { error as logError, info as logInfo } from "@/shared/logging/telemetry";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
   DisconnectReason,

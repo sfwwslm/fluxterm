@@ -10,7 +10,7 @@ import type {
   Session,
   SessionStateUi,
 } from "@/types";
-import { warn as logWarn } from "@tauri-apps/plugin-log";
+import { warn as logWarn } from "@/shared/logging/telemetry";
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 

@@ -6,7 +6,7 @@ import {
   PredefinedMenuItem,
   Submenu,
 } from "@tauri-apps/api/menu";
-import { error as logError } from "@tauri-apps/plugin-log";
+import { error as logError } from "@/shared/logging/telemetry";
 import type { Translate } from "@/i18n";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import { isMacOS } from "@/utils/platform";

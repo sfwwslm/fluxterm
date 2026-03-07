@@ -194,7 +194,7 @@ pub async fn proxy_close_all(
     let engine: Arc<Engine> = Arc::clone(&state.engine);
     log_telemetry(
         TelemetryLevel::Debug,
-        "proxy.closeAll.start",
+        "proxy.close.all.start",
         trace_id.as_deref(),
         json!({}),
     );
@@ -214,7 +214,7 @@ pub async fn proxy_close_all(
         Ok(()) => {
             log_telemetry(
                 TelemetryLevel::Debug,
-                "proxy.closeAll.success",
+                "proxy.close.all.success",
                 trace_id.as_deref(),
                 json!({}),
             );
@@ -223,7 +223,7 @@ pub async fn proxy_close_all(
         Err(err) => {
             log_telemetry(
                 TelemetryLevel::Warn,
-                "proxy.closeAll.failed",
+                "proxy.close.all.failed",
                 trace_id.as_deref(),
                 json!({
                     "error": {

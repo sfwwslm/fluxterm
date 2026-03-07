@@ -4,13 +4,14 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 
 use engine::EngineError;
-use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::AppHandle;
 
 use crate::config_paths::resolve_ai_settings_path;
 use crate::profile_store::{ProfileStore, read_profiles};
 use crate::security::{CryptoService, SecretStore};
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::utils::write_atomic;
 
 const DEFAULT_SELECTION_MAX_CHARS: usize = 1_500;
@@ -165,7 +166,14 @@ pub enum SecretFieldUpdate {
 pub fn read_ai_settings(app: &AppHandle) -> Result<AiSettings, EngineError> {
     let path = resolve_ai_settings_path(app)?;
     if !path.exists() {
-        debug!("read_ai_settings skip reason=not_found");
+        log_telemetry(
+            TelemetryLevel::Debug,
+            "ai.settings.read.skipped",
+            None,
+            json!({
+                "reason": "notFound",
+            }),
+        );
         return Ok(default_ai_settings());
     }
     let content = fs::read_to_string(&path).map_err(|err| {

@@ -6,7 +6,7 @@
  * 3. 采用“内存态缓存 + 防抖异步落盘”模式。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { debug, info, warn } from "@tauri-apps/plugin-log";
+import { debug, info, warn } from "@/shared/logging/telemetry";
 import {
   aiProviderTest,
   aiSettingsGet,

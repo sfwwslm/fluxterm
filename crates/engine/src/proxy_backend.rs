@@ -192,7 +192,7 @@ impl ProxyBackend for BuiltinProxyBackend {
             .collect::<HashMap<String, ProxyHandle>>();
         log_telemetry(
             TelemetryLevel::Info,
-            "proxy.closeAll.start",
+            "proxy.close.all.start",
             trace_id,
             json!({
                 "count": handles.len(),
@@ -210,7 +210,7 @@ impl ProxyBackend for BuiltinProxyBackend {
         }
         log_telemetry(
             TelemetryLevel::Info,
-            "proxy.closeAll.success",
+            "proxy.close.all.success",
             trace_id,
             json!({}),
         );

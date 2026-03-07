@@ -2,8 +2,10 @@
 use std::path::PathBuf;
 
 use engine::EngineError;
-use log::{debug, warn};
+use serde_json::json;
 use tauri::{AppHandle, Manager};
+
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 const CONFIG_DIR_ENV_KEY: &str = "FLUXTERM_CONFIG_DIR";
 const DEFAULT_CONFIG_DIR_NAME: &str = ".vust/fluxterm";
@@ -53,13 +55,30 @@ pub fn resolve_config_root_dir(app: &AppHandle) -> Result<PathBuf, EngineError> 
                 // 相对路径统一锚定到用户主目录，避免受当前工作目录影响。
                 home.join(path)
             };
-            debug!(
-                "config_dir_resolved source=env path={}",
-                resolved.to_string_lossy()
+            log_telemetry(
+                TelemetryLevel::Debug,
+                "config.path.resolve.success",
+                None,
+                json!({
+                    "sourceType": "env",
+                    "path": resolved.to_string_lossy(),
+                }),
             );
             return Ok(resolved);
         }
-        warn!("config_dir_env_ignored reason=empty");
+        log_telemetry(
+            TelemetryLevel::Warn,
+            "config.path.resolve.failed",
+            None,
+            json!({
+                "sourceType": "env",
+                "error": {
+                    "code": "config_dir_env_empty",
+                    "message": "环境变量配置目录为空，已忽略",
+                    "detail": Option::<String>::None,
+                }
+            }),
+        );
     }
 
     Ok(home.join(DEFAULT_CONFIG_DIR_NAME))

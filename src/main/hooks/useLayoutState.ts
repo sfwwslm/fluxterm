@@ -12,7 +12,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { debug, warn } from "@tauri-apps/plugin-log";
+import { debug, warn } from "@/shared/logging/telemetry";
 import {
   defaultWidgetLayout,
   increaseSideSlots,

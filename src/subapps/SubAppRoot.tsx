@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "@/App.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { warn } from "@tauri-apps/plugin-log";
+import { warn } from "@/shared/logging/telemetry";
 import useAppSettings, {
   DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA,
   MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
