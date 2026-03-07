@@ -36,6 +36,8 @@ const READ_TIMEOUT_SEC: u64 = 120;
 const WRITE_TIMEOUT_SEC: u64 = 30;
 const CLOSE_GRACE_TIMEOUT_MS: u64 = 1500;
 const CLOSE_FORCE_ABORT_WAIT_MS: u64 = 500;
+/// 流量上报节流间隔，避免高吞吐时事件风暴导致 UI 抖动与日志噪音。
+const TRAFFIC_UPDATE_INTERVAL_MS: u64 = 200;
 
 #[derive(Clone)]
 struct ProxyTelemetryCtx {
@@ -243,20 +245,18 @@ pub async fn open_proxy(
                             _ = stop_rx_for_conn.changed() => {
                                 Err(EngineError::new(PROXY_SHUTDOWN_TIMEOUT, "代理关闭中，连接已终止"))
                             }
-                            result = handle_client(stream, &spec_for_conn, &conn_log_ctx) => result,
+                            result = handle_client(
+                                stream,
+                                &spec_for_conn,
+                                &runtime_for_conn,
+                                &on_event_for_conn,
+                                &conn_log_ctx,
+                            ) => result,
                         };
                         match handled {
                             Ok((bytes_out, bytes_in)) => {
-                                add_traffic(
-                                    &runtime_for_conn,
-                                    &on_event_for_conn,
-                                    &conn_log_ctx,
-                                    bytes_out,
-                                    bytes_in,
-                                )
-                                .await;
                                 log_telemetry(
-                                    TelemetryLevel::Info,
+                                    TelemetryLevel::Debug,
                                     "proxy.connection.success",
                                     conn_log_ctx.proxy.trace_id.as_deref(),
                                     json!({
@@ -276,6 +276,20 @@ pub async fn open_proxy(
                                 let err_code = err.code.clone();
                                 let err_message = err.message.clone();
                                 let err_detail = err.detail.clone();
+                                let peer_addr = conn_log_ctx
+                                    .peer_addr
+                                    .clone()
+                                    .unwrap_or_else(|| "unknown".to_string());
+                                let mut detail_segments = vec![
+                                    format!("peerAddr={peer_addr}"),
+                                    format!("connectionId={}", conn_log_ctx.connection_id),
+                                ];
+                                if let Some(detail) = err_detail.clone()
+                                    && !detail.trim().is_empty()
+                                {
+                                    detail_segments.push(detail);
+                                }
+                                let enriched_detail = detail_segments.join("; ");
                                 log_telemetry(
                                     TelemetryLevel::Warn,
                                     "proxy.connection.failed",
@@ -296,7 +310,11 @@ pub async fn open_proxy(
                                     }),
                                 );
                                 let mut guard = runtime_for_conn.lock().await;
-                                guard.last_error = Some(err);
+                                guard.last_error = Some(EngineError::with_detail(
+                                    err.code,
+                                    err.message,
+                                    enriched_detail,
+                                ));
                                 drop(guard);
                                 emit_proxy_update(&on_event_for_conn, &runtime_for_conn).await;
                             }
@@ -389,7 +407,7 @@ async fn on_conn_open(
         let mut guard = runtime.lock().await;
         guard.active_connections = guard.active_connections.saturating_add(1);
         log_telemetry(
-            TelemetryLevel::Info,
+            TelemetryLevel::Debug,
             "proxy.connection.open",
             conn.proxy.trace_id.as_deref(),
             json!({
@@ -415,7 +433,7 @@ async fn on_conn_close(
         let mut guard = runtime.lock().await;
         guard.active_connections = guard.active_connections.saturating_sub(1);
         log_telemetry(
-            TelemetryLevel::Info,
+            TelemetryLevel::Debug,
             "proxy.connection.close",
             conn.proxy.trace_id.as_deref(),
             json!({
@@ -444,7 +462,7 @@ async fn add_traffic(
         guard.bytes_out = guard.bytes_out.saturating_add(bytes_out);
         guard.bytes_in = guard.bytes_in.saturating_add(bytes_in);
         log_telemetry(
-            TelemetryLevel::Info,
+            TelemetryLevel::Debug,
             "proxy.runtime.update",
             conn.proxy.trace_id.as_deref(),
             json!({
@@ -464,6 +482,22 @@ async fn add_traffic(
 
 async fn emit_proxy_update(on_event: &EventCallback, runtime: &Arc<Mutex<ProxyRuntime>>) {
     on_event(EngineEvent::ProxyUpdate(runtime.lock().await.clone()));
+}
+
+/// 成功建立新连接后清理历史错误，避免旧错误在 UI 中滞留。
+async fn clear_last_error_if_any(runtime: &Arc<Mutex<ProxyRuntime>>, on_event: &EventCallback) {
+    let cleared = {
+        let mut guard = runtime.lock().await;
+        if guard.last_error.is_some() {
+            guard.last_error = None;
+            true
+        } else {
+            false
+        }
+    };
+    if cleared {
+        emit_proxy_update(on_event, runtime).await;
+    }
 }
 
 async fn reap_finished_tasks(tasks: &Arc<Mutex<HashMap<String, JoinHandle<()>>>>) {
@@ -500,21 +534,29 @@ async fn reap_finished_tasks(tasks: &Arc<Mutex<HashMap<String, JoinHandle<()>>>>
 async fn handle_client(
     stream: TcpStream,
     spec: &ProxySpec,
+    runtime: &Arc<Mutex<ProxyRuntime>>,
+    on_event: &EventCallback,
     conn: &ConnTelemetryCtx,
 ) -> Result<(u64, u64), EngineError> {
     match spec.protocol {
-        ProxyProtocol::Socks5 => handle_socks5_client(stream, spec.auth.as_ref(), conn).await,
-        ProxyProtocol::Http => handle_http_client(stream, spec.auth.as_ref(), conn).await,
+        ProxyProtocol::Socks5 => {
+            handle_socks5_client(stream, spec.auth.as_ref(), runtime, on_event, conn).await
+        }
+        ProxyProtocol::Http => {
+            handle_http_client(stream, spec.auth.as_ref(), runtime, on_event, conn).await
+        }
     }
 }
 
 async fn handle_socks5_client(
     stream: TcpStream,
     auth: Option<&ProxyAuth>,
+    runtime: &Arc<Mutex<ProxyRuntime>>,
+    on_event: &EventCallback,
     conn: &ConnTelemetryCtx,
 ) -> Result<(u64, u64), EngineError> {
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "proxy.handshake.start",
         conn.proxy.trace_id.as_deref(),
         json!({
@@ -536,7 +578,7 @@ async fn handle_socks5_client(
     let handshake = match handshake {
         Ok(result) => {
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "proxy.handshake.success",
                 conn.proxy.trace_id.as_deref(),
                 json!({
@@ -566,11 +608,16 @@ async fn handle_socks5_client(
             return Err(err);
         }
     };
-    relay_with_timeouts(handshake.client, handshake.upstream)
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(PROXY_TRANSFER_FAILED, "代理转发失败", err.to_string())
-        })
+    clear_last_error_if_any(runtime, on_event).await;
+    relay_with_timeouts(
+        handshake.client,
+        handshake.upstream,
+        runtime,
+        on_event,
+        conn,
+    )
+    .await
+    .map_err(|err| EngineError::with_detail(PROXY_TRANSFER_FAILED, "代理转发失败", err.to_string()))
 }
 
 struct Socks5HandshakeResult {
@@ -887,10 +934,12 @@ async fn validate_socks5_username_password(
 async fn handle_http_client(
     client: TcpStream,
     auth: Option<&ProxyAuth>,
+    runtime: &Arc<Mutex<ProxyRuntime>>,
+    on_event: &EventCallback,
     conn: &ConnTelemetryCtx,
 ) -> Result<(u64, u64), EngineError> {
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "proxy.handshake.start",
         conn.proxy.trace_id.as_deref(),
         json!({
@@ -912,7 +961,7 @@ async fn handle_http_client(
     let handshake = match handshake {
         Ok(result) => {
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "proxy.handshake.success",
                 conn.proxy.trace_id.as_deref(),
                 json!({
@@ -942,11 +991,21 @@ async fn handle_http_client(
             return Err(err);
         }
     };
-    let (body_out, body_in) = relay_with_timeouts(handshake.client, handshake.upstream)
-        .await
-        .map_err(|err| {
-            EngineError::with_detail(PROXY_TRANSFER_FAILED, "代理转发失败", err.to_string())
-        })?;
+    clear_last_error_if_any(runtime, on_event).await;
+    if handshake.initial_bytes_out > 0 {
+        add_traffic(runtime, on_event, conn, handshake.initial_bytes_out, 0).await;
+    }
+    let (body_out, body_in) = relay_with_timeouts(
+        handshake.client,
+        handshake.upstream,
+        runtime,
+        on_event,
+        conn,
+    )
+    .await
+    .map_err(|err| {
+        EngineError::with_detail(PROXY_TRANSFER_FAILED, "代理转发失败", err.to_string())
+    })?;
     Ok((handshake.initial_bytes_out + body_out, body_in))
 }
 
@@ -977,7 +1036,15 @@ async fn handle_http_handshake(
         .map_err(|err| {
             EngineError::with_detail(PROXY_AUTH_FAILED, "发送认证失败响应失败", err.to_string())
         })?;
-        return Err(EngineError::new(PROXY_AUTH_FAILED, "HTTP 代理认证失败"));
+        let target_hint = parsed
+            .host_header
+            .clone()
+            .unwrap_or_else(|| parsed.target.clone());
+        return Err(EngineError::with_detail(
+            PROXY_AUTH_FAILED,
+            "HTTP 代理认证失败",
+            format!("target={target_hint}"),
+        ));
     }
 
     if parsed.method.eq_ignore_ascii_case("CONNECT") {
@@ -1194,13 +1261,49 @@ async fn write_all_with_timeout(
     .map_err(|err| EngineError::with_detail(code, message, err.to_string()))
 }
 
-async fn relay_with_timeouts(left: TcpStream, right: TcpStream) -> Result<(u64, u64), EngineError> {
+#[derive(Copy, Clone)]
+enum TrafficDirection {
+    Out,
+    In,
+}
+
+async fn relay_with_timeouts(
+    left: TcpStream,
+    right: TcpStream,
+    runtime: &Arc<Mutex<ProxyRuntime>>,
+    on_event: &EventCallback,
+    conn: &ConnTelemetryCtx,
+) -> Result<(u64, u64), EngineError> {
     let (left_read, left_write) = left.into_split();
     let (right_read, right_write) = right.into_split();
-    let mut left_to_right =
-        tokio::spawn(async move { relay_one_way_with_timeout(left_read, right_write).await });
-    let mut right_to_left =
-        tokio::spawn(async move { relay_one_way_with_timeout(right_read, left_write).await });
+    let runtime_for_out = Arc::clone(runtime);
+    let runtime_for_in = Arc::clone(runtime);
+    let on_event_for_out = Arc::clone(on_event);
+    let on_event_for_in = Arc::clone(on_event);
+    let conn_for_out = conn.clone();
+    let conn_for_in = conn.clone();
+    let mut left_to_right = tokio::spawn(async move {
+        relay_one_way_with_timeout(
+            left_read,
+            right_write,
+            &runtime_for_out,
+            &on_event_for_out,
+            &conn_for_out,
+            TrafficDirection::Out,
+        )
+        .await
+    });
+    let mut right_to_left = tokio::spawn(async move {
+        relay_one_way_with_timeout(
+            right_read,
+            left_write,
+            &runtime_for_in,
+            &on_event_for_in,
+            &conn_for_in,
+            TrafficDirection::In,
+        )
+        .await
+    });
     tokio::select! {
         left_res = &mut left_to_right => {
             let bytes_out = match unwrap_relay_result(left_res) {
@@ -1255,36 +1358,94 @@ fn unwrap_relay_result(
     }
 }
 
-async fn relay_one_way_with_timeout<R, W>(mut reader: R, mut writer: W) -> Result<u64, EngineError>
+async fn relay_one_way_with_timeout<R, W>(
+    mut reader: R,
+    mut writer: W,
+    runtime: &Arc<Mutex<ProxyRuntime>>,
+    on_event: &EventCallback,
+    conn: &ConnTelemetryCtx,
+    direction: TrafficDirection,
+) -> Result<u64, EngineError>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
     let mut total = 0u64;
+    let mut pending = 0u64;
+    let mut last_emit = Instant::now();
     let mut buffer = [0u8; 16 * 1024];
     loop {
-        let read = timeout(
+        let read_result = timeout(
             Duration::from_secs(READ_TIMEOUT_SEC),
             reader.read(&mut buffer),
         )
-        .await
-        .map_err(|_| EngineError::new(PROXY_IO_READ_TIMEOUT, "读取超时"))?
-        .map_err(|err| {
-            EngineError::with_detail(PROXY_TRANSFER_FAILED, "代理读取失败", err.to_string())
-        })?;
+        .await;
+        let read = match read_result {
+            Ok(Ok(read)) => read,
+            Ok(Err(err)) => {
+                flush_pending_traffic(runtime, on_event, conn, direction, pending).await;
+                return Err(EngineError::with_detail(
+                    PROXY_TRANSFER_FAILED,
+                    "代理读取失败",
+                    err.to_string(),
+                ));
+            }
+            Err(_) => {
+                flush_pending_traffic(runtime, on_event, conn, direction, pending).await;
+                return Err(EngineError::new(PROXY_IO_READ_TIMEOUT, "读取超时"));
+            }
+        };
         if read == 0 {
+            flush_pending_traffic(runtime, on_event, conn, direction, pending).await;
             return Ok(total);
         }
-        timeout(
+        let write_result = timeout(
             Duration::from_secs(WRITE_TIMEOUT_SEC),
             writer.write_all(&buffer[..read]),
         )
-        .await
-        .map_err(|_| EngineError::new(PROXY_IO_WRITE_TIMEOUT, "写入超时"))?
-        .map_err(|err| {
-            EngineError::with_detail(PROXY_TRANSFER_FAILED, "代理写入失败", err.to_string())
-        })?;
-        total = total.saturating_add(read as u64);
+        .await;
+        match write_result {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                flush_pending_traffic(runtime, on_event, conn, direction, pending).await;
+                return Err(EngineError::with_detail(
+                    PROXY_TRANSFER_FAILED,
+                    "代理写入失败",
+                    err.to_string(),
+                ));
+            }
+            Err(_) => {
+                flush_pending_traffic(runtime, on_event, conn, direction, pending).await;
+                return Err(EngineError::new(PROXY_IO_WRITE_TIMEOUT, "写入超时"));
+            }
+        }
+        let delta = read as u64;
+        total = total.saturating_add(delta);
+        pending = pending.saturating_add(delta);
+        if pending > 0 && last_emit.elapsed() >= Duration::from_millis(TRAFFIC_UPDATE_INTERVAL_MS) {
+            match direction {
+                TrafficDirection::Out => add_traffic(runtime, on_event, conn, pending, 0).await,
+                TrafficDirection::In => add_traffic(runtime, on_event, conn, 0, pending).await,
+            }
+            pending = 0;
+            last_emit = Instant::now();
+        }
+    }
+}
+
+async fn flush_pending_traffic(
+    runtime: &Arc<Mutex<ProxyRuntime>>,
+    on_event: &EventCallback,
+    conn: &ConnTelemetryCtx,
+    direction: TrafficDirection,
+    pending: u64,
+) {
+    if pending == 0 {
+        return;
+    }
+    match direction {
+        TrafficDirection::Out => add_traffic(runtime, on_event, conn, pending, 0).await,
+        TrafficDirection::In => add_traffic(runtime, on_event, conn, 0, pending).await,
     }
 }
 

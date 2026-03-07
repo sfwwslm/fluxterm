@@ -59,7 +59,7 @@ export default function useProxyState() {
         event: "proxy.list.success",
         message: `list=${list.length}`,
       });
-      logTelemetry("info", "proxy.list.success", {
+      logTelemetry("debug", "proxy.list.success", {
         count: list.length,
       }).catch(() => {});
     } catch (error) {
@@ -85,7 +85,7 @@ export default function useProxyState() {
     let disposed = false;
     let unlisten: (() => void) | null = null;
     registerProxyListeners((payload) => {
-      logTelemetry("info", "proxy.runtime.update", {
+      logTelemetry("debug", "proxy.runtime.update", {
         proxyId: payload.proxyId,
         protocol: payload.protocol,
         status: payload.status,
@@ -143,7 +143,7 @@ export default function useProxyState() {
 
   const create = useCallback(async (spec: ProxySpec) => {
     const traceId = createTraceId();
-    logTelemetry("info", "proxy.create.start", {
+    logTelemetry("debug", "proxy.create.start", {
       traceId,
       protocol: spec.protocol,
       bindHost: spec.bindHost,
@@ -157,7 +157,7 @@ export default function useProxyState() {
         event: "proxy.create.success",
         message: `${spec.protocol} ${spec.bindHost}:${spec.bindPort}`,
       });
-      logTelemetry("info", "proxy.create.success", {
+      logTelemetry("debug", "proxy.create.success", {
         traceId,
         protocol: spec.protocol,
         bindHost: spec.bindHost,
@@ -186,7 +186,7 @@ export default function useProxyState() {
 
   const close = useCallback(async (proxyId: string) => {
     const traceId = createTraceId();
-    logTelemetry("info", "proxy.close.start", {
+    logTelemetry("debug", "proxy.close.start", {
       traceId,
       proxyId,
     }).catch(() => {});
@@ -198,7 +198,7 @@ export default function useProxyState() {
         proxyId,
         message: proxyId,
       });
-      logTelemetry("info", "proxy.close.success", {
+      logTelemetry("debug", "proxy.close.success", {
         traceId,
         proxyId,
       }).catch(() => {});
@@ -224,7 +224,7 @@ export default function useProxyState() {
 
   const closeAll = useCallback(async () => {
     const traceId = createTraceId();
-    logTelemetry("info", "proxy.closeAll.start", {
+    logTelemetry("debug", "proxy.closeAll.start", {
       traceId,
     }).catch(() => {});
     try {
@@ -234,7 +234,7 @@ export default function useProxyState() {
         event: "proxy.closeAll.success",
         message: "close all",
       });
-      logTelemetry("info", "proxy.closeAll.success", {
+      logTelemetry("debug", "proxy.closeAll.success", {
         traceId,
       }).catch(() => {});
     } catch (error) {

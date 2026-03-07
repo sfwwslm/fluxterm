@@ -315,7 +315,6 @@ export const zh = {
   "proxy.actions.refresh": "刷新列表",
   "proxy.actions.close": "关闭",
   "proxy.actions.closeAll": "全部关闭",
-  "proxy.summary.instances": "实例 {count}",
   "proxy.summary.connections": "连接 {count}",
   "proxy.summary.in": "入站 {value}",
   "proxy.summary.out": "出站 {value}",

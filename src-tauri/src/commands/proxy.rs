@@ -20,7 +20,7 @@ pub async fn proxy_open(
     let engine: Arc<Engine> = Arc::clone(&state.engine);
     let on_event = build_event_bridge(app);
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "proxy.create.start",
         trace_id.as_deref(),
         json!({
@@ -46,7 +46,7 @@ pub async fn proxy_open(
     match result {
         Ok(runtime) => {
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "proxy.create.success",
                 trace_id.as_deref(),
                 json!({
@@ -88,7 +88,7 @@ pub async fn proxy_close(
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "proxy.close.start",
         trace_id.as_deref(),
         json!({
@@ -111,7 +111,7 @@ pub async fn proxy_close(
     match result {
         Ok(()) => {
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "proxy.close.success",
                 trace_id.as_deref(),
                 json!({
@@ -158,7 +158,7 @@ pub async fn proxy_list(
     match result {
         Ok(list) => {
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "proxy.list.success",
                 trace_id.as_deref(),
                 json!({
@@ -193,7 +193,7 @@ pub async fn proxy_close_all(
 ) -> Result<(), EngineError> {
     let engine: Arc<Engine> = Arc::clone(&state.engine);
     log_telemetry(
-        TelemetryLevel::Info,
+        TelemetryLevel::Debug,
         "proxy.closeAll.start",
         trace_id.as_deref(),
         json!({}),
@@ -213,7 +213,7 @@ pub async fn proxy_close_all(
     match result {
         Ok(()) => {
             log_telemetry(
-                TelemetryLevel::Info,
+                TelemetryLevel::Debug,
                 "proxy.closeAll.success",
                 trace_id.as_deref(),
                 json!({}),

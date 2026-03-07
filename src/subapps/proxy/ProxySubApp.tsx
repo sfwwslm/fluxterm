@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  FiArrowDownLeft,
+  FiArrowUpRight,
+  FiLink2,
+  FiPieChart,
+  FiServer,
+} from "react-icons/fi";
 import type { Locale, Translate } from "@/i18n";
 import type { ProxyProtocol } from "@/types";
 import type { SubAppId } from "@/subapps/types";
@@ -43,26 +50,18 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
   );
   const [bytesInRate, setBytesInRate] = useState(0);
   const [bytesOutRate, setBytesOutRate] = useState(0);
-  const [updatedAtById, setUpdatedAtById] = useState<Record<string, number>>(
-    {},
-  );
+  const totalsRef = useRef<{ bytesIn: number; bytesOut: number }>({
+    bytesIn: 0,
+    bytesOut: 0,
+  });
   const prevTotalsRef = useRef<{
     at: number;
     bytesIn: number;
     bytesOut: number;
   } | null>(null);
 
-  const {
-    proxies,
-    loading,
-    totals,
-    timeline,
-    errorBuckets,
-    refresh,
-    create,
-    close,
-    closeAll,
-  } = useProxyState();
+  const { proxies, loading, totals, refresh, create, close, closeAll } =
+    useProxyState();
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
@@ -118,50 +117,46 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
   }, [id, windowLabel]);
 
   const totalTraffic = totals.bytesIn + totals.bytesOut;
-  const unhealthyCount = useMemo(
-    () =>
-      proxies.filter(
-        (item) => item.status === "failed" || Boolean(item.lastError?.message),
-      ).length,
-    [proxies],
-  );
+  useEffect(() => {
+    // 通过 ref 持有最新累计流量，避免 totals 变化触发定时器重建。
+    totalsRef.current = {
+      bytesIn: totals.bytesIn,
+      bytesOut: totals.bytesOut,
+    };
+  }, [totals.bytesIn, totals.bytesOut]);
 
   useEffect(() => {
-    const now = Date.now();
-    setUpdatedAtById((prev) => {
-      const next: Record<string, number> = {};
-      proxies.forEach((item) => {
-        next[item.proxyId] = prev[item.proxyId] ?? now;
-      });
-      return next;
-    });
-  }, [proxies]);
-
-  useEffect(() => {
+    // 固定 1s 采样窗口计算速率，降低瞬时突发带来的抖动。
+    prevTotalsRef.current = {
+      at: Date.now(),
+      bytesIn: totalsRef.current.bytesIn,
+      bytesOut: totalsRef.current.bytesOut,
+    };
     const timer = window.setInterval(() => {
       const now = Date.now();
       const prev = prevTotalsRef.current;
       if (!prev) {
         prevTotalsRef.current = {
           at: now,
-          bytesIn: totals.bytesIn,
-          bytesOut: totals.bytesOut,
+          bytesIn: totalsRef.current.bytesIn,
+          bytesOut: totalsRef.current.bytesOut,
         };
         return;
       }
+      const current = totalsRef.current;
       const seconds = Math.max((now - prev.at) / 1000, 0.001);
-      const deltaIn = Math.max(0, totals.bytesIn - prev.bytesIn);
-      const deltaOut = Math.max(0, totals.bytesOut - prev.bytesOut);
+      const deltaIn = Math.max(0, current.bytesIn - prev.bytesIn);
+      const deltaOut = Math.max(0, current.bytesOut - prev.bytesOut);
       setBytesInRate(deltaIn / seconds);
       setBytesOutRate(deltaOut / seconds);
       prevTotalsRef.current = {
         at: now,
-        bytesIn: totals.bytesIn,
-        bytesOut: totals.bytesOut,
+        bytesIn: current.bytesIn,
+        bytesOut: current.bytesOut,
       };
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [totals.bytesIn, totals.bytesOut]);
+  }, []);
 
   const filteredSortedProxies = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -200,28 +195,6 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
     if (status === "stopping" || status === "starting") return "warn";
     if (status === "running") return "good";
     return "muted";
-  }
-
-  function updatedAgoText(proxyId: string) {
-    const ts = updatedAtById[proxyId];
-    if (!ts) return locale === "zh-CN" ? "刚刚" : "just now";
-    const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-    if (sec < 5) return locale === "zh-CN" ? "刚刚" : "just now";
-    if (sec < 60) return locale === "zh-CN" ? `${sec}秒前` : `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return locale === "zh-CN" ? `${min}分钟前` : `${min}m ago`;
-    const hour = Math.floor(min / 60);
-    return locale === "zh-CN" ? `${hour}小时前` : `${hour}h ago`;
-  }
-
-  function eventAgoText(ts: number) {
-    const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-    if (sec < 5) return locale === "zh-CN" ? "刚刚" : "just now";
-    if (sec < 60) return locale === "zh-CN" ? `${sec}秒前` : `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return locale === "zh-CN" ? `${min}分钟前` : `${min}m ago`;
-    const hour = Math.floor(min / 60);
-    return locale === "zh-CN" ? `${hour}小时前` : `${hour}h ago`;
   }
 
   async function handleCreateProxy() {
@@ -293,13 +266,15 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
             <h2>{t("subapp.proxy.heading")}</h2>
             <div className="proxy-actions">
               <Button
-                variant="primary"
+                className="proxy-action-button"
+                variant="ghost"
                 onClick={() => handleCreateProxy().catch(() => {})}
                 disabled={busy}
               >
                 {t("proxy.actions.create")}
               </Button>
               <Button
+                className="proxy-action-button"
                 variant="ghost"
                 onClick={() => refresh().catch(() => {})}
                 disabled={busy || loading}
@@ -307,7 +282,8 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
                 {t("proxy.actions.refresh")}
               </Button>
               <Button
-                variant="danger"
+                className="proxy-action-button"
+                variant="ghost"
                 onClick={() => handleCloseAll().catch(() => {})}
                 disabled={busy || proxies.length === 0}
               >
@@ -317,54 +293,60 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
           </div>
           <div className="proxy-kpi-grid">
             <div className="proxy-kpi-card">
-              <span>
-                {t("proxy.summary.instances", { count: proxies.length })}
-              </span>
+              <div className="proxy-kpi-title">
+                <span className="proxy-kpi-icon">
+                  <FiServer />
+                </span>
+                <span className="proxy-kpi-label">
+                  {locale === "zh-CN" ? "实例" : "Instances"}
+                </span>
+              </div>
               <strong>{proxies.length}</strong>
             </div>
             <div className="proxy-kpi-card">
-              <span>
-                {t("proxy.summary.connections", {
-                  count: totals.activeConnections,
-                })}
-              </span>
+              <div className="proxy-kpi-title">
+                <span className="proxy-kpi-icon">
+                  <FiLink2 />
+                </span>
+                <span className="proxy-kpi-label">
+                  {locale === "zh-CN" ? "连接" : "Connections"}
+                </span>
+              </div>
               <strong>{totals.activeConnections}</strong>
             </div>
             <div className="proxy-kpi-card">
-              <span>
-                {locale === "zh-CN"
-                  ? "当前上行/下行速率"
-                  : "Current Up/Down Rate"}
-              </span>
-              <strong>
-                {formatBytes(bytesOutRate)}/s · {formatBytes(bytesInRate)}/s
-              </strong>
+              <div className="proxy-kpi-title">
+                <span className="proxy-kpi-icon">
+                  <FiArrowUpRight />
+                </span>
+                <span className="proxy-kpi-label">
+                  {locale === "zh-CN" ? "上行速率" : "Up Rate"}
+                </span>
+              </div>
+              <strong>{formatBytes(bytesOutRate)}/s</strong>
             </div>
             <div className="proxy-kpi-card">
-              <span>
-                {locale === "zh-CN" ? "异常实例" : "Unhealthy Instances"}
-              </span>
-              <strong>{unhealthyCount}</strong>
+              <div className="proxy-kpi-title">
+                <span className="proxy-kpi-icon">
+                  <FiArrowDownLeft />
+                </span>
+                <span className="proxy-kpi-label">
+                  {locale === "zh-CN" ? "下行速率" : "Down Rate"}
+                </span>
+              </div>
+              <strong>{formatBytes(bytesInRate)}/s</strong>
             </div>
-          </div>
-          <div className="proxy-summary-row">
-            <span>
-              {t("proxy.summary.instances", { count: proxies.length })}
-            </span>
-            <span>
-              {t("proxy.summary.connections", {
-                count: totals.activeConnections,
-              })}
-            </span>
-            <span>
-              {t("proxy.summary.in", { value: formatBytes(totals.bytesIn) })}
-            </span>
-            <span>
-              {t("proxy.summary.out", { value: formatBytes(totals.bytesOut) })}
-            </span>
-            <span>
-              {t("proxy.summary.total", { value: formatBytes(totalTraffic) })}
-            </span>
+            <div className="proxy-kpi-card">
+              <div className="proxy-kpi-title">
+                <span className="proxy-kpi-icon">
+                  <FiPieChart />
+                </span>
+                <span className="proxy-kpi-label">
+                  {locale === "zh-CN" ? "总流量" : "Total Traffic"}
+                </span>
+              </div>
+              <strong>{formatBytes(totalTraffic)}</strong>
+            </div>
           </div>
           <div className="proxy-toolbar">
             <label className="proxy-search">
@@ -538,10 +520,6 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
                     >
                       {t(`proxy.status.${item.status}` as never)}
                     </span>
-                    <span className="proxy-updated-at">
-                      {locale === "zh-CN" ? "更新于" : "Updated"}{" "}
-                      {updatedAgoText(item.proxyId)}
-                    </span>
                   </div>
                   <div className="proxy-item-meta">
                     <span>
@@ -579,73 +557,14 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
                   {item.lastError?.message ? (
                     <div className="proxy-item-error">
                       {item.lastError.message}
-                      {item.lastError.detail
-                        ? `: ${item.lastError.detail}`
+                      {(item.lastError.detail ?? item.lastError.details)
+                        ? `: ${item.lastError.detail ?? item.lastError.details}`
                         : ""}
                     </div>
                   ) : null}
                 </div>
               ))
             )}
-          </div>
-
-          <div className="proxy-observability-grid">
-            <section className="proxy-ob-card">
-              <h3>
-                {locale === "zh-CN" ? "错误码聚合" : "Error Code Aggregation"}
-              </h3>
-              {errorBuckets.length === 0 ? (
-                <div className="proxy-empty">
-                  {locale === "zh-CN" ? "暂无错误事件" : "No error events yet"}
-                </div>
-              ) : (
-                <div className="proxy-error-buckets">
-                  {errorBuckets.slice(0, 8).map((bucket) => (
-                    <div key={bucket.code} className="proxy-error-bucket">
-                      <strong>{bucket.code}</strong>
-                      <span>
-                        {locale === "zh-CN"
-                          ? `次数 ${bucket.count}`
-                          : `count ${bucket.count}`}
-                      </span>
-                      <span>{eventAgoText(bucket.lastAt)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="proxy-ob-card proxy-ob-card-timeline">
-              <h3>{locale === "zh-CN" ? "最近事件" : "Recent Events"}</h3>
-              {timeline.length === 0 ? (
-                <div className="proxy-empty">
-                  {locale === "zh-CN" ? "暂无事件" : "No events yet"}
-                </div>
-              ) : (
-                <div className="proxy-timeline">
-                  {timeline.slice(0, 16).map((entry) => (
-                    <div key={entry.id} className="proxy-timeline-item">
-                      <span
-                        className={`proxy-level proxy-level-${entry.level}`}
-                      >
-                        {entry.level.toUpperCase()}
-                      </span>
-                      <span className="proxy-timeline-event">
-                        {entry.event}
-                      </span>
-                      {entry.proxyId ? (
-                        <span className="proxy-timeline-proxy">
-                          {entry.proxyId.slice(0, 8)}
-                        </span>
-                      ) : null}
-                      <span className="proxy-timeline-time">
-                        {eventAgoText(entry.at)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
           </div>
         </article>
       </main>

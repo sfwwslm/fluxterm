@@ -334,7 +334,6 @@ export const en = {
   "proxy.actions.refresh": "Refresh",
   "proxy.actions.close": "Close",
   "proxy.actions.closeAll": "Close All",
-  "proxy.summary.instances": "{count} instances",
   "proxy.summary.connections": "{count} connections",
   "proxy.summary.in": "Inbound {value}",
   "proxy.summary.out": "Outbound {value}",
