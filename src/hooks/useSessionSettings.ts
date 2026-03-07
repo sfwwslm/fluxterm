@@ -55,6 +55,9 @@ type UseSessionSettingsResult = {
   setResourceMonitorIntervalSec: React.Dispatch<React.SetStateAction<number>>;
   setHostKeyPolicy: React.Dispatch<React.SetStateAction<HostKeyPolicy>>;
   sessionSettingsLoaded: boolean;
+  saveState: "idle" | "saving" | "saved" | "error";
+  saveError: string | null;
+  retrySave: () => void;
 };
 
 /** 终端回滚行数阈值：100 - 50,000。 */
@@ -128,6 +131,11 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     defaultSessionSettings.hostKeyPolicy,
   );
   const [sessionSettingsLoaded, setSessionSettingsLoaded] = useState(false);
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRetryToken, setSaveRetryToken] = useState(0);
 
   // 引用守卫：loadedRef 标记初始数据已就绪，saveTimerRef 控制防抖，lastSavedConfigRef 进行脏检查。
   const loadedRef = useRef(false);
@@ -241,6 +249,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
+    setSaveState("saving");
+    setSaveError(null);
 
     debug(
       JSON.stringify({
@@ -253,8 +263,11 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       try {
         await saveSessionSettings(currentConfig);
         lastSavedConfigRef.current = configStr;
+        setSaveState("saved");
         debug(JSON.stringify({ event: "session-settings:persisted" }));
       } catch (error) {
+        setSaveState("error");
+        setSaveError(extractErrorMessage(error));
         warn(
           JSON.stringify({
             event: "session-settings:save-failed",
@@ -278,7 +291,13 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     resourceMonitorEnabled,
     resourceMonitorIntervalSec,
     hostKeyPolicy,
+    saveRetryToken,
   ]);
+
+  /** 手动触发一次会话设置重试保存。 */
+  function retrySave() {
+    setSaveRetryToken((current) => current + 1);
+  }
 
   return {
     webLinksEnabled,
@@ -300,5 +319,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     setResourceMonitorIntervalSec,
     setHostKeyPolicy,
     sessionSettingsLoaded,
+    saveState,
+    saveError,
+    retrySave,
   };
 }

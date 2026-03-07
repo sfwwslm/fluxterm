@@ -251,6 +251,9 @@ export default function AppShell() {
     setBackgroundImageSurfaceAlpha,
     availableShells,
     settingsLoaded,
+    saveState: appSaveState,
+    saveError: appSaveError,
+    retrySave: retryAppSave,
   } = useAppSettings({
     themeIds,
     defaultThemeId: "dark",
@@ -276,6 +279,9 @@ export default function AppShell() {
     testOpenAiConnection,
     replaceOpenaiApiKey,
     clearOpenaiApiKey,
+    saveState: aiSaveState,
+    saveError: aiSaveError,
+    retrySave: retryAiSave,
   } = useAiSettings();
   // 会话设置属于终端域全局配置，统一写入 session.json 并作用于所有终端会话。
   const {
@@ -295,6 +301,9 @@ export default function AppShell() {
     setResourceMonitorEnabled,
     setResourceMonitorIntervalSec,
     setHostKeyPolicy,
+    saveState: sessionSaveState,
+    saveError: sessionSaveError,
+    retrySave: retrySessionSave,
   } = useSessionSettings();
   const activeThemePreset = themePresets[themeId];
   const isBackgroundImageRequested =
@@ -2587,6 +2596,15 @@ export default function AppShell() {
         onResourceMonitorEnabledChange={setResourceMonitorEnabled}
         onResourceMonitorIntervalSecChange={setResourceMonitorIntervalSec}
         onHostKeyPolicyChange={setHostKeyPolicy}
+        appSaveState={appSaveState}
+        appSaveError={appSaveError}
+        onAppSaveRetry={retryAppSave}
+        aiSaveState={aiSaveState}
+        aiSaveError={aiSaveError}
+        onAiSaveRetry={retryAiSave}
+        sessionSaveState={sessionSaveState}
+        sessionSaveError={sessionSaveError}
+        onSessionSaveRetry={retrySessionSave}
         onClose={() => setConfigModalOpen(false)}
         onSectionChange={setActiveConfigSection}
         t={t}

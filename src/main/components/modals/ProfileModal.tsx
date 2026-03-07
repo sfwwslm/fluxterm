@@ -38,6 +38,7 @@ export default function ProfileModal({
   t,
 }: ProfileModalProps) {
   const autoFilledRef = useRef(false);
+  const initialDraftRef = useRef<string>("");
   const [profileType, setProfileType] = useState<ProfileModalType>("ssh");
   const [activeSection, setActiveSection] =
     useState<ProfileModalSection>("session");
@@ -46,6 +47,7 @@ export default function ProfileModal({
   useEffect(() => {
     if (open) {
       autoFilledRef.current = false;
+      initialDraftRef.current = JSON.stringify(draft);
       setProfileType("ssh");
       setActiveSection("session");
       setNameError(null);
@@ -107,6 +109,19 @@ export default function ProfileModal({
 
   /** 当前版本只支持保存 SSH 会话，shell 页签先作为后续本地配置壳层。 */
   const canSubmit = profileType === "ssh";
+  const hasUnsavedChanges =
+    open && JSON.stringify(draft) !== initialDraftRef.current;
+
+  /** 统一处理关闭请求：有未保存草稿时给出放弃确认。 */
+  function handleRequestClose() {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm(t("profile.unsavedChangesConfirm"))
+    ) {
+      return;
+    }
+    onClose();
+  }
 
   /** 恢复当前类型对应的默认配置，避免未来选项增多后需要逐项手工回填。 */
   function handleRestoreDefaults() {
@@ -353,14 +368,18 @@ export default function ProfileModal({
       }
       bodyClassName="profile-modal-body"
       closeLabel={t("actions.close")}
-      onClose={onClose}
+      onClose={handleRequestClose}
       actions={
         <div className="profile-modal-footer">
           <Button variant="ghost" onClick={handleRestoreDefaults}>
             {t("profile.actions.restoreDefaults")}
           </Button>
           <div className="profile-modal-footer-actions">
-            <Button className="ghost" variant="ghost" onClick={onClose}>
+            <Button
+              className="ghost"
+              variant="ghost"
+              onClick={handleRequestClose}
+            >
               {t("actions.cancel")}
             </Button>
             <Button

@@ -59,6 +59,9 @@ type UseAppSettingsResult = {
   setBackgroundImageSurfaceAlpha: React.Dispatch<React.SetStateAction<number>>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
+  saveState: "idle" | "saving" | "saved" | "error";
+  saveError: string | null;
+  retrySave: () => void;
 };
 
 /** 限制背景图透明度范围。 */
@@ -106,6 +109,11 @@ export default function useAppSettings({
   const [backgroundImageSurfaceAlpha, setBackgroundImageSurfaceAlpha] =
     useState(DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRetryToken, setSaveRetryToken] = useState(0);
 
   // 持久化辅助引用。
   const loadedRef = useRef(false);
@@ -255,6 +263,8 @@ export default function useAppSettings({
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
+    setSaveState("saving");
+    setSaveError(null);
 
     debug(
       JSON.stringify({
@@ -267,8 +277,11 @@ export default function useAppSettings({
       try {
         await saveSettings(currentSettings);
         lastSavedConfigRef.current = settingsStr;
+        setSaveState("saved");
         debug(JSON.stringify({ event: "settings:persisted" }));
       } catch (error) {
+        setSaveState("error");
+        setSaveError(extractErrorMessage(error));
         warn(
           JSON.stringify({
             event: "settings:save-failed",
@@ -293,7 +306,13 @@ export default function useAppSettings({
     backgroundImageAsset,
     backgroundImageSurfaceAlpha,
     settingsLoaded,
+    saveRetryToken,
   ]);
+
+  /** 手动触发一次设置重试保存。 */
+  function retrySave() {
+    setSaveRetryToken((current) => current + 1);
+  }
 
   return {
     locale,
@@ -314,5 +333,8 @@ export default function useAppSettings({
     setBackgroundImageSurfaceAlpha,
     availableShells,
     settingsLoaded,
+    saveState,
+    saveError,
+    retrySave,
   };
 }

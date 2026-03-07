@@ -42,6 +42,8 @@ export type ConfigSectionItem = {
   label: string;
 };
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
 function getErrorMessage(error: unknown) {
   return extractErrorMessage(error);
 }
@@ -96,6 +98,15 @@ type ConfigModalProps = {
   onResourceMonitorEnabledChange?: (enabled: boolean) => void;
   onResourceMonitorIntervalSecChange?: (value: number) => void;
   onHostKeyPolicyChange?: (value: HostKeyPolicy) => void;
+  appSaveState?: SaveState;
+  appSaveError?: string | null;
+  onAppSaveRetry?: () => void;
+  aiSaveState?: SaveState;
+  aiSaveError?: string | null;
+  onAiSaveRetry?: () => void;
+  sessionSaveState?: SaveState;
+  sessionSaveError?: string | null;
+  onSessionSaveRetry?: () => void;
   onClose: () => void;
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
@@ -173,6 +184,15 @@ export default function ConfigModal({
   onResourceMonitorEnabledChange,
   onResourceMonitorIntervalSecChange,
   onHostKeyPolicyChange,
+  appSaveState = "idle",
+  appSaveError = null,
+  onAppSaveRetry,
+  aiSaveState = "idle",
+  aiSaveError = null,
+  onAiSaveRetry,
+  sessionSaveState = "idle",
+  sessionSaveError = null,
+  onSessionSaveRetry,
   onClose,
   onSectionChange,
   t,
@@ -218,6 +238,23 @@ export default function ConfigModal({
   const effectiveModalSurfaceAlpha = isBackgroundImageModeActive
     ? backgroundImageSurfaceAlpha
     : 0.76;
+  const isDefaultEditorPathDirty =
+    defaultEditorPathDraft.trim() !== fileDefaultEditorPath.trim();
+  const isOpenAiNameDirty =
+    !!selectedOpenAiConfig &&
+    aiOpenAiNameDraft.trim() !== (selectedOpenAiConfig.name ?? "").trim();
+  const isOpenAiBaseUrlDirty =
+    !!selectedOpenAiConfig &&
+    aiOpenAiBaseUrlDraft.trim() !== (selectedOpenAiConfig.baseUrl ?? "").trim();
+  const isOpenAiModelDirty =
+    !!selectedOpenAiConfig &&
+    aiOpenAiModelDraft.trim() !== (selectedOpenAiConfig.model ?? "").trim();
+  const hasUnsavedHighRiskChanges =
+    isDefaultEditorPathDirty ||
+    isOpenAiNameDirty ||
+    isOpenAiBaseUrlDirty ||
+    isOpenAiModelDirty ||
+    !!aiOpenAiApiKeyDraft.trim();
 
   useEffect(() => {
     if (!open || activeSection !== "config-directory") return;
@@ -433,16 +470,68 @@ export default function ConfigModal({
     setAiOpenAiApiKeyDraft("");
   }
 
+  /** 渲染统一的配置持久化状态提示。 */
+  function renderSaveStatus(
+    state: SaveState,
+    error: string | null,
+    onRetry?: () => void,
+  ) {
+    if (state === "idle") return null;
+    return (
+      <div className={`config-save-status is-${state}`}>
+        <span>
+          {state === "saving" && t("config.saveState.saving")}
+          {state === "saved" && t("config.saveState.saved")}
+          {state === "error" && t("config.saveState.failed")}
+        </span>
+        {state === "error" ? (
+          <div className="config-save-status-error">
+            {error || t("config.saveState.failed")}
+          </div>
+        ) : null}
+        {state === "error" && onRetry ? (
+          <Button variant="ghost" size="sm" onClick={onRetry}>
+            {t("config.saveState.retry")}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  /** 按当前分区选择对应的状态源，保证不同设置域文案一致。 */
+  function renderActiveSectionSaveStatus() {
+    if (activeSection === "app-settings") {
+      return renderSaveStatus(appSaveState, appSaveError, onAppSaveRetry);
+    }
+    if (activeSection === "session-settings") {
+      return renderSaveStatus(
+        sessionSaveState,
+        sessionSaveError,
+        onSessionSaveRetry,
+      );
+    }
+    if (
+      activeSection === "ai-settings" ||
+      activeSection === "openai-manage" ||
+      activeSection === "openai-settings"
+    ) {
+      return renderSaveStatus(aiSaveState, aiSaveError, onAiSaveRetry);
+    }
+    return null;
+  }
+
   function handleClose() {
-    // 关闭模态框前统一提交当前草稿，保证当前分区的修改能进入设置状态。
-    commitDefaultEditorPathDraft();
+    // 低风险数值项在关闭前提交，高风险字段改为显式保存并在离开时确认是否丢弃草稿。
     commitAiSelectionMaxCharsDraft();
     commitAiSessionRecentOutputMaxCharsDraft();
-    commitAiOpenAiNameDraft();
-    commitAiOpenAiBaseUrlDraft();
-    commitAiOpenAiModelDraft();
     commitScrollbackDraft();
     commitResourceMonitorIntervalDraft();
+    if (
+      hasUnsavedHighRiskChanges &&
+      !window.confirm(t("config.unsavedChangesConfirm"))
+    ) {
+      return;
+    }
     onClose();
   }
 
@@ -452,6 +541,7 @@ export default function ConfigModal({
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.appSettings")}</h3>
+          {renderActiveSectionSaveStatus()}
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
@@ -500,7 +590,6 @@ export default function ConfigModal({
                     });
                     if (!selected || Array.isArray(selected)) return;
                     setDefaultEditorPathDraft(selected);
-                    onFileDefaultEditorPathChange?.(selected);
                   }}
                 >
                   {t("config.app.pickEditor")}
@@ -511,10 +600,17 @@ export default function ConfigModal({
                   disabled={!defaultEditorPathDraft}
                   onClick={() => {
                     setDefaultEditorPathDraft("");
-                    onFileDefaultEditorPathChange?.("");
                   }}
                 >
                   {t("actions.clear")}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={!isDefaultEditorPathDirty}
+                  onClick={commitDefaultEditorPathDraft}
+                >
+                  {t("actions.save")}
                 </Button>
               </div>
             </div>
@@ -612,6 +708,7 @@ export default function ConfigModal({
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.aiSettings")}</h3>
+          {renderActiveSectionSaveStatus()}
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">
@@ -710,6 +807,7 @@ export default function ConfigModal({
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.openaiManage")}</h3>
+          {renderActiveSectionSaveStatus()}
           <p>{t("config.openai.manageHint")}</p>
           <div className="config-file-picker-actions">
             <Button
@@ -787,6 +885,7 @@ export default function ConfigModal({
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.openaiSettings")}</h3>
+          {renderActiveSectionSaveStatus()}
           {!selectedOpenAiConfig && (
             <div className="config-empty-state">
               {t("config.openai.manageEmpty")}
@@ -806,7 +905,6 @@ export default function ConfigModal({
               className="config-text-input"
               value={aiOpenAiNameDraft}
               onChange={(event) => setAiOpenAiNameDraft(event.target.value)}
-              onBlur={commitAiOpenAiNameDraft}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
@@ -814,6 +912,16 @@ export default function ConfigModal({
               }}
               disabled={!selectedOpenAiConfig}
             />
+            <div className="config-file-picker-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!selectedOpenAiConfig || !isOpenAiNameDirty}
+                onClick={commitAiOpenAiNameDraft}
+              >
+                {t("actions.save")}
+              </Button>
+            </div>
           </div>
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
@@ -829,7 +937,6 @@ export default function ConfigModal({
               className="config-text-input"
               value={aiOpenAiBaseUrlDraft}
               onChange={(event) => setAiOpenAiBaseUrlDraft(event.target.value)}
-              onBlur={commitAiOpenAiBaseUrlDraft}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
@@ -837,6 +944,16 @@ export default function ConfigModal({
               }}
               disabled={!selectedOpenAiConfig}
             />
+            <div className="config-file-picker-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!selectedOpenAiConfig || !isOpenAiBaseUrlDirty}
+                onClick={commitAiOpenAiBaseUrlDraft}
+              >
+                {t("actions.save")}
+              </Button>
+            </div>
           </div>
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
@@ -853,7 +970,6 @@ export default function ConfigModal({
               value={aiOpenAiModelDraft}
               placeholder={t("config.openai.modelPlaceholder")}
               onChange={(event) => setAiOpenAiModelDraft(event.target.value)}
-              onBlur={commitAiOpenAiModelDraft}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
@@ -861,6 +977,16 @@ export default function ConfigModal({
               }}
               disabled={!selectedOpenAiConfig}
             />
+            <div className="config-file-picker-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!selectedOpenAiConfig || !isOpenAiModelDirty}
+                onClick={commitAiOpenAiModelDraft}
+              >
+                {t("actions.save")}
+              </Button>
+            </div>
           </div>
           <div className="config-toggle-card config-feature-group">
             <div className="config-toggle-copy">
@@ -990,6 +1116,7 @@ export default function ConfigModal({
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
           <h3>{t("config.section.sessionSettings")}</h3>
+          {renderActiveSectionSaveStatus()}
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
               <span className="config-toggle-title">

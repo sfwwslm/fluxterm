@@ -90,6 +90,37 @@
   line-height: 1.6;
 }
 
+.config-save-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-menu) 70%, transparent);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.config-save-status.is-saving {
+  color: var(--text-primary);
+}
+
+.config-save-status.is-saved {
+  color: var(--success, #2f9e44);
+}
+
+.config-save-status.is-error {
+  color: var(--danger, #d9480f);
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.config-save-status-error {
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
 .config-dir-card {
   display: flex;
   flex-direction: column;

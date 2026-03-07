@@ -101,6 +101,11 @@ export const zh = {
   "config.openai.test": "测试当前接入",
   "config.openai.testing": "测试中...",
   "config.openai.testSuccess": "OpenAI 接入测试成功",
+  "config.saveState.saving": "保存中...",
+  "config.saveState.saved": "已保存",
+  "config.saveState.failed": "保存失败",
+  "config.saveState.retry": "重试",
+  "config.unsavedChangesConfirm": "当前有未保存的修改，确认放弃并关闭吗？",
   "config.session.webLinksEnabled": "启用 Web Links",
   "config.session.webLinksEnabledHint":
     "关闭后，终端中的 URL 点击菜单将不再生效。",
@@ -311,6 +316,7 @@ export const zh = {
   "profile.shell.windowTodo":
     "本地 shell 的窗口行为配置将在后续版本开放，例如插入符样式和分词符。",
   "profile.shell.saveDisabled": "当前版本暂未开放本地 shell 配置保存",
+  "profile.unsavedChangesConfirm": "当前有未保存的会话修改，确认放弃并关闭吗？",
   "actions.cancel": "取消",
   "actions.save": "保存",
   "actions.close": "关闭",

@@ -107,6 +107,12 @@ export const en = {
   "config.openai.test": "Test Connection",
   "config.openai.testing": "Testing...",
   "config.openai.testSuccess": "OpenAI connection test succeeded",
+  "config.saveState.saving": "Saving...",
+  "config.saveState.saved": "Saved",
+  "config.saveState.failed": "Save failed",
+  "config.saveState.retry": "Retry",
+  "config.unsavedChangesConfirm":
+    "You have unsaved changes. Discard them and close?",
   "config.session.webLinksEnabled": "Enable Web Links",
   "config.session.webLinksEnabledHint":
     "When disabled, the URL click menu in the terminal will no longer respond.",
@@ -326,6 +332,8 @@ export const en = {
     "Window behavior settings for local shell will be added in a later version, such as cursor style and word separators.",
   "profile.shell.saveDisabled":
     "Saving local shell configuration is not available in this version",
+  "profile.unsavedChangesConfirm":
+    "You have unsaved session changes. Discard them and close?",
   "actions.cancel": "Cancel",
   "actions.save": "Save",
   "actions.close": "Close",

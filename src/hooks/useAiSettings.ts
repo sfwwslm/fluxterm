@@ -45,6 +45,9 @@ type UseAiSettingsResult = {
   testOpenAiConnection: (configId?: string) => Promise<void>;
   replaceOpenaiApiKey: (configId: string, value: string) => Promise<void>;
   clearOpenaiApiKey: (configId: string) => Promise<void>;
+  saveState: "idle" | "saving" | "saved" | "error";
+  saveError: string | null;
+  retrySave: () => void;
 };
 
 /** AI 文本上下文阈值限制。 */
@@ -142,6 +145,11 @@ export default function useAiSettings(): UseAiSettingsResult {
     DEFAULT_AI_SETTINGS.openaiConfigs,
   );
   const [aiSettingsLoaded, setAiSettingsLoaded] = useState(false);
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRetryToken, setSaveRetryToken] = useState(0);
 
   // 持久化与状态追踪。
   const loadedRef = useRef(false);
@@ -234,6 +242,8 @@ export default function useAiSettings(): UseAiSettingsResult {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
+    setSaveState("saving");
+    setSaveError(null);
 
     debug(
       JSON.stringify({
@@ -247,8 +257,11 @@ export default function useAiSettings(): UseAiSettingsResult {
         const saved = await aiSettingsSave(nextSaveInput);
         lastLoadedViewRef.current = saved;
         lastSavedConfigRef.current = configStr;
+        setSaveState("saved");
         debug(JSON.stringify({ event: "ai-settings:persisted" }));
       } catch (error) {
+        setSaveState("error");
+        setSaveError(extractErrorMessage(error));
         warn(
           JSON.stringify({
             event: "ai-settings:save-failed",
@@ -269,6 +282,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     debugLoggingEnabled,
     activeOpenaiConfigId,
     openaiConfigs,
+    saveRetryToken,
   ]);
 
   // 日志记录。
@@ -333,6 +347,8 @@ export default function useAiSettings(): UseAiSettingsResult {
     savingSecretRef.current = true;
     try {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      setSaveState("saving");
+      setSaveError(null);
 
       const nextSaveInput = buildSaveInput(
         {
@@ -357,10 +373,20 @@ export default function useAiSettings(): UseAiSettingsResult {
       lastSavedConfigRef.current = JSON.stringify(nextSaveInput);
       setOpenaiConfigs(saved.openaiConfigs);
       setActiveOpenaiConfigId(saved.activeOpenaiConfigId);
+      setSaveState("saved");
       debug(JSON.stringify({ event: "ai-settings:forced-save-ok" }));
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(extractErrorMessage(error));
+      throw error;
     } finally {
       savingSecretRef.current = false;
     }
+  }
+
+  /** 手动触发一次 AI 设置重试保存。 */
+  function retrySave() {
+    setSaveRetryToken((current) => current + 1);
   }
 
   /** 新增 OpenAI 配置。 */
@@ -475,5 +501,8 @@ export default function useAiSettings(): UseAiSettingsResult {
     testOpenAiConnection,
     replaceOpenaiApiKey,
     clearOpenaiApiKey,
+    saveState,
+    saveError,
+    retrySave,
   };
 }
