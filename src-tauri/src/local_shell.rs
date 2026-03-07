@@ -152,14 +152,29 @@ fn collect_shells() -> Vec<LocalShellProfile> {
             .and_then(|name| name.to_str())
             .unwrap_or("shell")
             .to_string();
+        let args = resolve_login_shell_args(&shell);
         shells.push(LocalShellProfile {
             id: "shell".to_string(),
             label,
             path: shell,
-            args: Vec::new(),
+            args,
         });
         shells
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+/// 根据 shell 可执行文件名推断 login shell 参数，确保 GUI 启动时也能加载用户环境。
+fn resolve_login_shell_args(shell_path: &str) -> Vec<String> {
+    let shell_name = PathBuf::from(shell_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_ascii_lowercase())
+        .unwrap_or_default();
+    if shell_name.contains("fish") {
+        return vec!["--login".to_string()];
+    }
+    vec!["-l".to_string()]
 }
 
 fn default_shell_id(shells: &[LocalShellProfile]) -> Option<String> {
