@@ -206,6 +206,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.config-select-control {
+  width: 220px;
+  max-width: 100%;
+  flex: none;
+}
+
 .config-toggle-copy {
   display: flex;
   flex-direction: column;

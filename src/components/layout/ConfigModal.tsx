@@ -3,9 +3,10 @@ import { error as logError } from "@tauri-apps/plugin-log";
 import { open as openDialogFile } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, mkdir, readFile } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
-import type { Translate } from "@/i18n";
+import type { Locale, Translate } from "@/i18n";
 import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
+import Select from "@/components/ui/select";
 import { useNotices } from "@/hooks/useNotices";
 import {
   getAppConfigDir,
@@ -26,15 +27,18 @@ import {
   MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/useAppSettings";
+import type { ThemeId } from "@/types";
 import "@/components/layout/ConfigModal.css";
 import { extractErrorMessage } from "@/shared/errors/appError";
 
 export type ConfigSectionKey =
   | "app-settings"
+  | "app-appearance"
   | "ai-settings"
   | "openai-manage"
   | "openai-settings"
   | "session-settings"
+  | "session-shell"
   | "config-directory";
 
 export type ConfigSectionItem = {
@@ -52,6 +56,11 @@ type ConfigModalProps = {
   open: boolean;
   activeSection: ConfigSectionKey;
   sections: ConfigSectionItem[];
+  locale: Locale;
+  themeId: ThemeId;
+  shellId: string | null;
+  availableShells: Array<{ id: string; label: string }>;
+  themes: Record<ThemeId, { label: Record<Locale, string> }>;
   sftpEnabled?: boolean;
   fileDefaultEditorPath?: string;
   backgroundImageEnabled?: boolean;
@@ -71,6 +80,9 @@ type ConfigModalProps = {
   resourceMonitorIntervalSec?: number;
   hostKeyPolicy?: HostKeyPolicy;
   onSftpEnabledChange?: (enabled: boolean) => void;
+  onLocaleChange?: (locale: Locale) => void;
+  onThemeChange?: (themeId: ThemeId) => void;
+  onShellChange?: (shellId: string | null) => void;
   onFileDefaultEditorPathChange?: (value: string) => void;
   onBackgroundImageEnabledChange?: (enabled: boolean) => void;
   onBackgroundImageAssetChange?: (value: string) => void;
@@ -141,6 +153,11 @@ export default function ConfigModal({
   open,
   activeSection,
   sections,
+  locale,
+  themeId,
+  shellId,
+  availableShells,
+  themes,
   sftpEnabled = true,
   fileDefaultEditorPath = "",
   backgroundImageEnabled = false,
@@ -160,6 +177,9 @@ export default function ConfigModal({
   resourceMonitorIntervalSec = DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   hostKeyPolicy = "ask",
   onSftpEnabledChange,
+  onLocaleChange,
+  onThemeChange,
+  onShellChange,
   onFileDefaultEditorPathChange,
   onBackgroundImageEnabledChange,
   onBackgroundImageAssetChange,
@@ -500,10 +520,16 @@ export default function ConfigModal({
 
   /** 按当前分区选择对应的状态源，保证不同设置域文案一致。 */
   function renderActiveSectionSaveStatus() {
-    if (activeSection === "app-settings") {
+    if (
+      activeSection === "app-settings" ||
+      activeSection === "app-appearance"
+    ) {
       return renderSaveStatus(appSaveState, appSaveError, onAppSaveRetry);
     }
-    if (activeSection === "session-settings") {
+    if (
+      activeSection === "session-settings" ||
+      activeSection === "session-shell"
+    ) {
       return renderSaveStatus(
         sessionSaveState,
         sessionSaveError,
@@ -701,6 +727,48 @@ export default function ConfigModal({
               </div>
             </div>
           </div>
+        </div>
+      );
+    }
+    if (activeSection === "app-appearance") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.appAppearance")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("settings.language")}
+              </span>
+            </div>
+            <div className="config-select-control">
+              <Select
+                value={locale}
+                options={[
+                  { value: "zh-CN", label: t("language.zh-CN") },
+                  { value: "en-US", label: t("language.en-US") },
+                ]}
+                onChange={(value) => onLocaleChange?.(value as Locale)}
+                aria-label={t("settings.language")}
+              />
+            </div>
+          </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">{t("settings.theme")}</span>
+            </div>
+            <div className="config-select-control">
+              <Select
+                value={themeId}
+                options={Object.entries(themes).map(([key, theme]) => ({
+                  value: key,
+                  label: theme.label[locale],
+                }))}
+                onChange={(value) => onThemeChange?.(value as ThemeId)}
+                aria-label={t("settings.theme")}
+              />
+            </div>
+          </label>
         </div>
       );
     }
@@ -1285,6 +1353,37 @@ export default function ConfigModal({
                 {t("config.session.hostKeyPolicy.off")}
               </option>
             </select>
+          </label>
+        </div>
+      );
+    }
+    if (activeSection === "session-shell") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.sessionShell")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">{t("settings.shell")}</span>
+              {!availableShells.length ? (
+                <span className="config-toggle-desc">
+                  {t("menu.app.shellEmpty")}
+                </span>
+              ) : null}
+            </div>
+            <div className="config-select-control">
+              <Select
+                value={shellId ?? ""}
+                disabled={!availableShells.length}
+                options={availableShells.map((shell) => ({
+                  value: shell.id,
+                  label: shell.label,
+                }))}
+                placeholder={t("menu.app.shellEmpty")}
+                onChange={(value) => onShellChange?.(value || null)}
+                aria-label={t("settings.shell")}
+              />
+            </div>
           </label>
         </div>
       );

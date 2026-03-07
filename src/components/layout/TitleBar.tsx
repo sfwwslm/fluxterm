@@ -2,9 +2,8 @@
 import { useCallback } from "react";
 import type React from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { Locale, Translate } from "@/i18n";
+import type { Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
-import type { ThemeId } from "@/types";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import Menus from "./Menus";
@@ -20,14 +19,6 @@ type TitleBarProps = {
   layoutDisabled?: boolean;
   onBrandContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
   showMenus?: boolean;
-  locale: Locale;
-  themeId: ThemeId;
-  shellId: string | null;
-  availableShells: Array<{ id: string; label: string }>;
-  themes: Record<ThemeId, { label: Record<Locale, string> }>;
-  onLocaleChange: (locale: Locale) => void;
-  onShellChange: (shellId: string | null) => void;
-  onThemeChange: (themeId: ThemeId) => void;
   subApps?: Array<{
     id: SubAppId;
     label: string;
@@ -49,14 +40,6 @@ export default function TitleBar({
   layoutDisabled,
   onBrandContextMenu,
   showMenus = true,
-  locale,
-  themeId,
-  shellId,
-  availableShells,
-  themes,
-  onLocaleChange,
-  onShellChange,
-  onThemeChange,
   subApps = [],
   onLaunchSubApp,
   onFocusSubApp,
@@ -93,14 +76,6 @@ export default function TitleBar({
           footerVisibility={footerVisibility}
           onToggleFooterPart={onToggleFooterPart}
           layoutDisabled={layoutDisabled}
-          locale={locale}
-          themeId={themeId}
-          shellId={shellId}
-          availableShells={availableShells}
-          themes={themes}
-          onLocaleChange={onLocaleChange}
-          onShellChange={onShellChange}
-          onThemeChange={onThemeChange}
           subApps={subApps}
           onLaunchSubApp={onLaunchSubApp}
           onFocusSubApp={onFocusSubApp}

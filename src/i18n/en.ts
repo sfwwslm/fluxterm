@@ -37,10 +37,12 @@ export const en = {
   "menu.help.title": "Help",
   "menu.help.about": "About FluxTerm",
   "config.section.appSettings": "Settings",
+  "config.section.appAppearance": "Language & Theme",
   "config.section.aiSettings": "AI Assistant",
   "config.section.openaiManage": "Access Manager",
   "config.section.openaiSettings": "OpenAI",
   "config.section.sessionSettings": "Session Settings",
+  "config.section.sessionShell": "Default Shell",
   "config.section.configDirectory": "Config Directory",
   "config.app.sftpEnabled": "Enable SFTP",
   "config.app.sftpEnabledHint":

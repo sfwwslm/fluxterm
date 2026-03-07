@@ -37,10 +37,12 @@ export const zh = {
   "menu.help.title": "帮助",
   "menu.help.about": "关于 FluxTerm",
   "config.section.appSettings": "设置",
+  "config.section.appAppearance": "语言与主题",
   "config.section.aiSettings": "AI助手",
   "config.section.openaiManage": "接入管理",
   "config.section.openaiSettings": "OpenAI",
   "config.section.sessionSettings": "会话设置",
+  "config.section.sessionShell": "默认 Shell",
   "config.section.configDirectory": "配置文件目录",
   "config.app.sftpEnabled": "启用 SFTP",
   "config.app.sftpEnabledHint":

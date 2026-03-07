@@ -1,12 +1,10 @@
 /** 顶部菜单栏组件，用于布局折叠与个性化入口，支持下拉子菜单与全局点击关闭。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import type { Locale, Translate } from "@/i18n";
+import type { Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
-import type { ThemeId } from "@/types";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import Button from "@/components/ui/button";
-import Select from "@/components/ui/select";
 
 type MenuAction = {
   type?: "action";
@@ -57,14 +55,6 @@ type MenusProps = {
   footerVisibility?: { quickbar: boolean; statusbar: boolean };
   onToggleFooterPart?: (part: "quickbar" | "statusbar") => void;
   layoutDisabled?: boolean;
-  locale: Locale;
-  themeId: ThemeId;
-  shellId: string | null;
-  availableShells: Array<{ id: string; label: string }>;
-  themes: Record<ThemeId, { label: Record<Locale, string> }>;
-  onLocaleChange: (locale: Locale) => void;
-  onShellChange: (shellId: string | null) => void;
-  onThemeChange: (themeId: ThemeId) => void;
   subApps?: Array<{
     id: SubAppId;
     label: string;
@@ -84,14 +74,6 @@ export default function Menus({
   footerVisibility = { quickbar: true, statusbar: true },
   onToggleFooterPart,
   layoutDisabled,
-  locale,
-  themeId,
-  shellId,
-  availableShells,
-  themes,
-  onLocaleChange,
-  onShellChange,
-  onThemeChange,
   subApps = [],
   onLaunchSubApp,
   onFocusSubApp,
@@ -197,65 +179,6 @@ export default function Menus({
         ],
       },
       {
-        id: "personalize",
-        label: t("menu.personalize"),
-        actions: [
-          {
-            id: "language",
-            render: (
-              <label className="menu-field">
-                <span>{t("settings.language")}</span>
-                <Select
-                  value={locale}
-                  options={[
-                    { value: "zh-CN", label: t("language.zh-CN") },
-                    { value: "en-US", label: t("language.en-US") },
-                  ]}
-                  onChange={(next) => onLocaleChange(next as Locale)}
-                  aria-label={t("settings.language")}
-                />
-              </label>
-            ),
-          },
-          {
-            id: "shell",
-            render: (
-              <label className="menu-field">
-                <span>{t("settings.shell")}</span>
-                <Select
-                  value={shellId}
-                  options={availableShells.map((shell) => ({
-                    value: shell.id,
-                    label: shell.label,
-                  }))}
-                  placeholder={t("menu.app.shellEmpty")}
-                  disabled={!availableShells.length}
-                  onChange={(next) => onShellChange(next || null)}
-                  aria-label={t("settings.shell")}
-                />
-              </label>
-            ),
-          },
-          {
-            id: "theme",
-            render: (
-              <label className="menu-field">
-                <span>{t("settings.theme")}</span>
-                <Select
-                  value={themeId}
-                  options={Object.entries(themes).map(([key, theme]) => ({
-                    value: key,
-                    label: theme.label[locale],
-                  }))}
-                  onChange={(next) => onThemeChange(next as ThemeId)}
-                  aria-label={t("settings.theme")}
-                />
-              </label>
-            ),
-          },
-        ],
-      },
-      {
         id: "about",
         label: t("menu.about"),
         onClick: onOpenAbout,
@@ -326,14 +249,6 @@ export default function Menus({
     footerVisibility.quickbar,
     footerVisibility.statusbar,
     layoutDisabled,
-    locale,
-    themeId,
-    shellId,
-    availableShells,
-    themes,
-    onLocaleChange,
-    onShellChange,
-    onThemeChange,
     subApps,
     onLaunchSubApp,
     onFocusSubApp,

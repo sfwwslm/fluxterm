@@ -1,7 +1,7 @@
 import type React from "react";
-import type { Locale, Translate } from "@/i18n";
+import type { Translate } from "@/i18n";
 import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
-import type { WidgetKey, ThemeId } from "@/types";
+import type { WidgetKey } from "@/types";
 import type { WidgetSide } from "@/layout/types";
 import TitleBar from "@/components/layout/TitleBar";
 import AboutModal from "@/main/components/modals/AboutModal";
@@ -19,14 +19,6 @@ type FloatingShellProps = {
   onCloseAbout: () => void;
   onOpenDevtools: () => void;
   onOpenConfigSection: (section: ConfigSectionKey) => void;
-  locale: Locale;
-  themeId: ThemeId;
-  shellId: string | null;
-  availableShells: Array<{ id: string; label: string }>;
-  themes: Record<ThemeId, { label: Record<Locale, string> }>;
-  onLocaleChange: (locale: Locale) => void;
-  onShellChange: (shellId: string | null) => void;
-  onThemeChange: (themeId: ThemeId) => void;
   t: Translate;
 };
 
@@ -43,14 +35,6 @@ export default function FloatingShell({
   onCloseAbout,
   onOpenDevtools,
   onOpenConfigSection,
-  locale,
-  themeId,
-  shellId,
-  availableShells,
-  themes,
-  onLocaleChange,
-  onShellChange,
-  onThemeChange,
   t,
 }: FloatingShellProps) {
   const isMac = isMacOS();
@@ -65,14 +49,6 @@ export default function FloatingShell({
           onOpenAbout={onOpenAbout}
           layoutDisabled={layoutMenuDisabled}
           showMenus={false}
-          locale={locale}
-          themeId={themeId}
-          shellId={shellId}
-          availableShells={availableShells}
-          themes={themes}
-          onLocaleChange={onLocaleChange}
-          onShellChange={onShellChange}
-          onThemeChange={onThemeChange}
           t={t}
         />
       )}

@@ -525,10 +525,12 @@ export default function AppShell() {
   const configSectionLabels = useMemo(
     () => ({
       "app-settings": t("config.section.appSettings"),
+      "app-appearance": t("config.section.appAppearance"),
       "ai-settings": t("config.section.aiSettings"),
       "openai-manage": t("config.section.openaiManage"),
       "openai-settings": t("config.section.openaiSettings"),
       "session-settings": t("config.section.sessionSettings"),
+      "session-shell": t("config.section.sessionShell"),
       "config-directory": t("config.section.configDirectory"),
     }),
     [t],
@@ -542,6 +544,20 @@ export default function AppShell() {
         {
           key: "app-settings",
           label: configSectionLabels["app-settings"],
+        },
+        {
+          key: "app-appearance",
+          label: configSectionLabels["app-appearance"],
+        },
+      ],
+      "app-appearance": [
+        {
+          key: "app-settings",
+          label: configSectionLabels["app-settings"],
+        },
+        {
+          key: "app-appearance",
+          label: configSectionLabels["app-appearance"],
         },
       ],
       "ai-settings": [
@@ -590,6 +606,20 @@ export default function AppShell() {
         {
           key: "session-settings",
           label: configSectionLabels["session-settings"],
+        },
+        {
+          key: "session-shell",
+          label: configSectionLabels["session-shell"],
+        },
+      ],
+      "session-shell": [
+        {
+          key: "session-settings",
+          label: configSectionLabels["session-settings"],
+        },
+        {
+          key: "session-shell",
+          label: configSectionLabels["session-shell"],
         },
       ],
       "config-directory": [
@@ -1681,19 +1711,12 @@ export default function AppShell() {
   });
 
   useMacAppMenu({
-    locale,
-    themeId,
-    shellId,
-    availableShells,
     layoutCollapsed,
     onToggleCollapsed: handleToggleCollapsed,
     footerVisibility,
     onToggleFooterPart: (part) =>
       setFooterVisibility((prev) => ({ ...prev, [part]: !prev[part] })),
     onOpenConfigSection: openConfigSection,
-    setLocale,
-    setThemeId,
-    setShellId,
     subApps,
     onLaunchSubApp: (id) => {
       launchSubApp(id).catch(() => {});
@@ -2361,14 +2384,6 @@ export default function AppShell() {
           onCloseAbout={() => setAboutOpen(false)}
           onOpenDevtools={handleOpenDevtools}
           onOpenConfigSection={openConfigSection}
-          locale={locale}
-          themeId={themeId}
-          shellId={shellId}
-          availableShells={availableShells}
-          themes={themePresets}
-          onLocaleChange={(next) => setLocale(next)}
-          onShellChange={(next) => setShellId(next)}
-          onThemeChange={(next) => setThemeId(next)}
           t={t}
         />
       ) : (
@@ -2387,14 +2402,6 @@ export default function AppShell() {
                 }))
               }
               layoutDisabled={layoutMenuDisabled}
-              locale={locale}
-              themeId={themeId}
-              shellId={shellId}
-              availableShells={availableShells}
-              themes={themePresets}
-              onLocaleChange={(next) => setLocale(next)}
-              onShellChange={(next) => setShellId(next)}
-              onThemeChange={(next) => setThemeId(next)}
               subApps={subApps}
               onLaunchSubApp={(id) => {
                 launchSubApp(id).catch(() => {});
@@ -2553,6 +2560,11 @@ export default function AppShell() {
         open={configModalOpen}
         activeSection={activeConfigSection}
         sections={configModalSections}
+        locale={locale}
+        themeId={themeId}
+        shellId={shellId}
+        availableShells={availableShells}
+        themes={themePresets}
         sftpEnabled={sftpEnabled}
         fileDefaultEditorPath={fileDefaultEditorPath}
         backgroundImageEnabled={backgroundImageEnabled}
@@ -2572,6 +2584,9 @@ export default function AppShell() {
         resourceMonitorIntervalSec={resourceMonitorIntervalSec}
         hostKeyPolicy={hostKeyPolicy}
         onSftpEnabledChange={setSftpEnabled}
+        onLocaleChange={setLocale}
+        onThemeChange={setThemeId}
+        onShellChange={setShellId}
         onFileDefaultEditorPathChange={setFileDefaultEditorPath}
         onBackgroundImageEnabledChange={setBackgroundImageEnabled}
         onBackgroundImageAssetChange={setBackgroundImageAsset}
