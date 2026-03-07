@@ -508,7 +508,7 @@ export const en = {
   "ai.inputPlaceholder": "Ask about the current session",
   "ai.send": "Send",
   "ai.stop": "Stop",
-  "ai.generating": "Waiting for response",
+  "ai.generating": "Thinking...",
   "ai.streaming": "Generating",
   "ai.message.user": "Input",
   "ai.message.assistant": "Output",

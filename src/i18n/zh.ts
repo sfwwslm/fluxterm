@@ -481,7 +481,7 @@ export const zh = {
   "ai.inputPlaceholder": "询问当前会话问题",
   "ai.send": "发送",
   "ai.stop": "停止生成",
-  "ai.generating": "正在等待响应",
+  "ai.generating": "正在思考中...",
   "ai.streaming": "正在生成",
   "ai.message.user": "输入",
   "ai.message.assistant": "输出",
