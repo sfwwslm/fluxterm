@@ -20,6 +20,20 @@ import type { LocalShellProfile, ThemeId } from "@/types";
 import { getGlobalConfigDir, getSettingsPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
+import {
+  clampBackgroundVideoReplayIntervalSec,
+  DEFAULT_BACKGROUND_MEDIA_TYPE,
+  DEFAULT_BACKGROUND_RENDER_MODE,
+  DEFAULT_BACKGROUND_VIDEO_REPLAY_MODE,
+  DEFAULT_BACKGROUND_VIDEO_REPLAY_INTERVAL_SEC,
+  inferBackgroundMediaTypeFromAsset,
+  normalizeBackgroundMediaType,
+  normalizeBackgroundRenderMode,
+  normalizeBackgroundVideoReplayMode,
+  type BackgroundMediaType,
+  type BackgroundRenderMode,
+  type BackgroundVideoReplayMode,
+} from "@/constants/backgroundMedia";
 
 /** 应用全局配置结构。 */
 type AppSettings = {
@@ -32,6 +46,10 @@ type AppSettings = {
   backgroundImageEnabled?: boolean;
   backgroundImageAsset?: string | null;
   backgroundImageSurfaceAlpha?: number;
+  backgroundMediaType?: BackgroundMediaType;
+  backgroundRenderMode?: BackgroundRenderMode;
+  backgroundVideoReplayMode?: BackgroundVideoReplayMode;
+  backgroundVideoReplayIntervalSec?: number;
 };
 
 /** 背景图表面透明度阈值。 */
@@ -57,6 +75,22 @@ type UseAppSettingsResult = {
   setBackgroundImageAsset: React.Dispatch<React.SetStateAction<string>>;
   backgroundImageSurfaceAlpha: number;
   setBackgroundImageSurfaceAlpha: React.Dispatch<React.SetStateAction<number>>;
+  backgroundMediaType: BackgroundMediaType;
+  setBackgroundMediaType: React.Dispatch<
+    React.SetStateAction<BackgroundMediaType>
+  >;
+  backgroundRenderMode: BackgroundRenderMode;
+  setBackgroundRenderMode: React.Dispatch<
+    React.SetStateAction<BackgroundRenderMode>
+  >;
+  backgroundVideoReplayMode: BackgroundVideoReplayMode;
+  setBackgroundVideoReplayMode: React.Dispatch<
+    React.SetStateAction<BackgroundVideoReplayMode>
+  >;
+  backgroundVideoReplayIntervalSec: number;
+  setBackgroundVideoReplayIntervalSec: React.Dispatch<
+    React.SetStateAction<number>
+  >;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
   saveState: "idle" | "saving" | "saved" | "error";
@@ -108,6 +142,19 @@ export default function useAppSettings({
   const [backgroundImageAsset, setBackgroundImageAsset] = useState("");
   const [backgroundImageSurfaceAlpha, setBackgroundImageSurfaceAlpha] =
     useState(DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA);
+  const [backgroundMediaType, setBackgroundMediaType] = useState(
+    DEFAULT_BACKGROUND_MEDIA_TYPE,
+  );
+  const [backgroundRenderMode, setBackgroundRenderMode] = useState(
+    DEFAULT_BACKGROUND_RENDER_MODE,
+  );
+  const [backgroundVideoReplayMode, setBackgroundVideoReplayMode] = useState(
+    DEFAULT_BACKGROUND_VIDEO_REPLAY_MODE,
+  );
+  const [
+    backgroundVideoReplayIntervalSec,
+    setBackgroundVideoReplayIntervalSec,
+  ] = useState(DEFAULT_BACKGROUND_VIDEO_REPLAY_INTERVAL_SEC);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -161,10 +208,37 @@ export default function useAppSettings({
       }
       if (typeof parsed?.backgroundImageAsset === "string") {
         setBackgroundImageAsset(parsed.backgroundImageAsset);
+        if (!parsed?.backgroundMediaType) {
+          setBackgroundMediaType(
+            inferBackgroundMediaTypeFromAsset(parsed.backgroundImageAsset),
+          );
+        }
       }
       if (typeof parsed?.backgroundImageSurfaceAlpha === "number") {
         setBackgroundImageSurfaceAlpha(
           clampBackgroundImageSurfaceAlpha(parsed.backgroundImageSurfaceAlpha),
+        );
+      }
+      if (typeof parsed?.backgroundMediaType === "string") {
+        setBackgroundMediaType(
+          normalizeBackgroundMediaType(parsed.backgroundMediaType),
+        );
+      }
+      if (typeof parsed?.backgroundRenderMode === "string") {
+        setBackgroundRenderMode(
+          normalizeBackgroundRenderMode(parsed.backgroundRenderMode),
+        );
+      }
+      if (typeof parsed?.backgroundVideoReplayMode === "string") {
+        setBackgroundVideoReplayMode(
+          normalizeBackgroundVideoReplayMode(parsed.backgroundVideoReplayMode),
+        );
+      }
+      if (typeof parsed?.backgroundVideoReplayIntervalSec === "number") {
+        setBackgroundVideoReplayIntervalSec(
+          clampBackgroundVideoReplayIntervalSec(
+            parsed.backgroundVideoReplayIntervalSec,
+          ),
         );
       }
       const normalizedThemeId = normalizeThemeId(parsed?.themeId);
@@ -252,6 +326,14 @@ export default function useAppSettings({
       backgroundImageSurfaceAlpha: clampBackgroundImageSurfaceAlpha(
         backgroundImageSurfaceAlpha,
       ),
+      backgroundMediaType: normalizeBackgroundMediaType(backgroundMediaType),
+      backgroundRenderMode: normalizeBackgroundRenderMode(backgroundRenderMode),
+      backgroundVideoReplayMode: normalizeBackgroundVideoReplayMode(
+        backgroundVideoReplayMode,
+      ),
+      backgroundVideoReplayIntervalSec: clampBackgroundVideoReplayIntervalSec(
+        backgroundVideoReplayIntervalSec,
+      ),
     };
 
     const settingsStr = JSON.stringify(currentSettings);
@@ -305,6 +387,10 @@ export default function useAppSettings({
     backgroundImageEnabled,
     backgroundImageAsset,
     backgroundImageSurfaceAlpha,
+    backgroundMediaType,
+    backgroundRenderMode,
+    backgroundVideoReplayMode,
+    backgroundVideoReplayIntervalSec,
     settingsLoaded,
     saveRetryToken,
   ]);
@@ -331,6 +417,14 @@ export default function useAppSettings({
     setBackgroundImageAsset,
     backgroundImageSurfaceAlpha,
     setBackgroundImageSurfaceAlpha,
+    backgroundMediaType,
+    setBackgroundMediaType,
+    backgroundRenderMode,
+    setBackgroundRenderMode,
+    backgroundVideoReplayMode,
+    setBackgroundVideoReplayMode,
+    backgroundVideoReplayIntervalSec,
+    setBackgroundVideoReplayIntervalSec,
     availableShells,
     settingsLoaded,
     saveState,

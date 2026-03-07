@@ -17,6 +17,15 @@ import { extractErrorMessage } from "@/shared/errors/appError";
 import { themePresets } from "@/main/theme/themePresets";
 import { buildThemeCssVars } from "@/main/theme/buildThemeCssVars";
 import {
+  clampBackgroundVideoReplayIntervalSec,
+  normalizeBackgroundMediaType,
+  normalizeBackgroundRenderMode,
+  normalizeBackgroundVideoReplayMode,
+  type BackgroundMediaType,
+  type BackgroundRenderMode,
+  type BackgroundVideoReplayMode,
+} from "@/constants/backgroundMedia";
+import {
   SUBAPP_LIFECYCLE_CHANNEL,
   createSubAppWindowLabel,
   parseSubAppIdFromHash,
@@ -25,6 +34,28 @@ import {
 import ProxySubApp from "@/subapps/proxy/ProxySubApp";
 import "@/subapps/SubAppShell.css";
 import "@/subapps/proxy/ProxySubApp.css";
+
+function resolveBackgroundImageStyle(mode: BackgroundRenderMode) {
+  if (mode === "contain") {
+    return {
+      size: "contain",
+      repeat: "no-repeat",
+      position: "center center",
+    };
+  }
+  if (mode === "tile") {
+    return {
+      size: "auto",
+      repeat: "repeat",
+      position: "left top",
+    };
+  }
+  return {
+    size: "cover",
+    repeat: "no-repeat",
+    position: "center center",
+  };
+}
 
 function formatMessage(
   message: string,
@@ -57,6 +88,10 @@ export default function SubAppRoot() {
     backgroundImageEnabled,
     backgroundImageAsset,
     backgroundImageSurfaceAlpha,
+    backgroundMediaType,
+    backgroundRenderMode,
+    backgroundVideoReplayMode,
+    backgroundVideoReplayIntervalSec,
     settingsLoaded,
   } = useAppSettings({
     themeIds,
@@ -72,10 +107,19 @@ export default function SubAppRoot() {
     backgroundImageEnabled: boolean;
     backgroundImageAsset: string;
     backgroundImageSurfaceAlpha: number;
+    backgroundMediaType: BackgroundMediaType;
+    backgroundRenderMode: BackgroundRenderMode;
+    backgroundVideoReplayMode: BackgroundVideoReplayMode;
+    backgroundVideoReplayIntervalSec: number;
   } | null>(null);
   const [subAppWindowAppearanceReady, setSubAppWindowAppearanceReady] =
     useState(false);
   const subAppWindowShownRef = useRef(false);
+  const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
+  const backgroundVideoReplayTimerRef = useRef<number | null>(null);
+  const [backgroundMediaBlobUrl, setBackgroundMediaBlobUrl] = useState("");
+  const [activeBackgroundMediaType, setActiveBackgroundMediaType] =
+    useState<BackgroundMediaType>("image");
 
   useEffect(() => {
     if (!subAppId) return () => {};
@@ -97,6 +141,11 @@ export default function SubAppRoot() {
         backgroundImageEnabled: payload.backgroundImageEnabled,
         backgroundImageAsset: payload.backgroundImageAsset,
         backgroundImageSurfaceAlpha: payload.backgroundImageSurfaceAlpha,
+        backgroundMediaType: payload.backgroundMediaType,
+        backgroundRenderMode: payload.backgroundRenderMode,
+        backgroundVideoReplayMode: payload.backgroundVideoReplayMode,
+        backgroundVideoReplayIntervalSec:
+          payload.backgroundVideoReplayIntervalSec,
       });
     };
     return () => {
@@ -112,6 +161,15 @@ export default function SubAppRoot() {
     appearanceSync?.backgroundImageAsset ?? backgroundImageAsset;
   const effectiveBackgroundImageSurfaceAlpha =
     appearanceSync?.backgroundImageSurfaceAlpha ?? backgroundImageSurfaceAlpha;
+  const effectiveBackgroundMediaType =
+    appearanceSync?.backgroundMediaType ?? backgroundMediaType;
+  const effectiveBackgroundRenderMode =
+    appearanceSync?.backgroundRenderMode ?? backgroundRenderMode;
+  const effectiveBackgroundVideoReplayMode =
+    appearanceSync?.backgroundVideoReplayMode ?? backgroundVideoReplayMode;
+  const effectiveBackgroundVideoReplayIntervalSec =
+    appearanceSync?.backgroundVideoReplayIntervalSec ??
+    backgroundVideoReplayIntervalSec;
   const t: Translate = useMemo(
     () => (key, vars) =>
       formatMessage(translations[effectiveLocale][key] ?? key, vars),
@@ -124,6 +182,35 @@ export default function SubAppRoot() {
       clampBackgroundImageSurfaceAlpha(effectiveBackgroundImageSurfaceAlpha),
     [effectiveBackgroundImageSurfaceAlpha],
   );
+  const normalizedBackgroundMediaType = useMemo(
+    () => normalizeBackgroundMediaType(effectiveBackgroundMediaType),
+    [effectiveBackgroundMediaType],
+  );
+  const normalizedBackgroundRenderMode = useMemo(
+    () => normalizeBackgroundRenderMode(effectiveBackgroundRenderMode),
+    [effectiveBackgroundRenderMode],
+  );
+  const normalizedBackgroundVideoReplayMode = useMemo(
+    () =>
+      normalizeBackgroundVideoReplayMode(effectiveBackgroundVideoReplayMode),
+    [effectiveBackgroundVideoReplayMode],
+  );
+  const normalizedBackgroundVideoReplayIntervalSec = useMemo(
+    () =>
+      clampBackgroundVideoReplayIntervalSec(
+        effectiveBackgroundVideoReplayIntervalSec,
+      ),
+    [effectiveBackgroundVideoReplayIntervalSec],
+  );
+  const effectiveBackgroundVideoRenderMode = useMemo(() => {
+    if (
+      normalizedBackgroundMediaType === "video" &&
+      normalizedBackgroundRenderMode === "tile"
+    ) {
+      return "cover";
+    }
+    return normalizedBackgroundRenderMode;
+  }, [normalizedBackgroundMediaType, normalizedBackgroundRenderMode]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -156,6 +243,11 @@ export default function SubAppRoot() {
     const applyDefaultBackground = () => {
       root.style.setProperty("--app-bg-image", "none");
       root.style.setProperty("--app-bg-overlay", "none");
+      root.style.setProperty("--app-bg-image-size", "cover");
+      root.style.setProperty("--app-bg-image-repeat", "no-repeat");
+      root.style.setProperty("--app-bg-image-position", "center center");
+      setBackgroundMediaBlobUrl("");
+      setActiveBackgroundMediaType("image");
       applyBackgroundImageMode(false);
     };
 
@@ -186,7 +278,21 @@ export default function SubAppRoot() {
           URL.revokeObjectURL(blobUrl);
           return;
         }
-        root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
+        const style = resolveBackgroundImageStyle(
+          effectiveBackgroundVideoRenderMode,
+        );
+        root.style.setProperty("--app-bg-image-size", style.size);
+        root.style.setProperty("--app-bg-image-repeat", style.repeat);
+        root.style.setProperty("--app-bg-image-position", style.position);
+        if (normalizedBackgroundMediaType === "video") {
+          root.style.setProperty("--app-bg-image", "none");
+          setBackgroundMediaBlobUrl(blobUrl);
+          setActiveBackgroundMediaType("video");
+        } else {
+          root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
+          setBackgroundMediaBlobUrl("");
+          setActiveBackgroundMediaType("image");
+        }
         applyBackgroundImageMode(true);
         setSubAppWindowAppearanceReady(true);
       } catch (error) {
@@ -211,9 +317,63 @@ export default function SubAppRoot() {
   }, [
     effectiveBackgroundImageEnabled,
     effectiveBackgroundImageAsset,
+    effectiveBackgroundVideoRenderMode,
+    normalizedBackgroundMediaType,
     effectiveThemeId,
     settingsLoaded,
   ]);
+
+  useEffect(() => {
+    const video = backgroundVideoRef.current;
+    if (!video || !backgroundMediaBlobUrl) return;
+    backgroundVideoReplayTimerRef.current = null;
+    const syncVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        video.pause();
+        return;
+      }
+      void video.play().catch(() => {});
+    };
+    syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", syncVisibility);
+      if (backgroundVideoReplayTimerRef.current) {
+        window.clearTimeout(backgroundVideoReplayTimerRef.current);
+        backgroundVideoReplayTimerRef.current = null;
+      }
+    };
+  }, [backgroundMediaBlobUrl]);
+
+  useEffect(() => {
+    if (!backgroundVideoReplayTimerRef.current) return;
+    window.clearTimeout(backgroundVideoReplayTimerRef.current);
+    backgroundVideoReplayTimerRef.current = null;
+  }, [
+    normalizedBackgroundVideoReplayMode,
+    normalizedBackgroundVideoReplayIntervalSec,
+  ]);
+
+  function handleBackgroundVideoEnded() {
+    const video = backgroundVideoRef.current;
+    if (!video) return;
+    if (normalizedBackgroundVideoReplayMode === "single") return;
+    if (normalizedBackgroundVideoReplayMode === "loop") {
+      video.currentTime = 0;
+      void video.play().catch(() => {});
+      return;
+    }
+    if (backgroundVideoReplayTimerRef.current) {
+      window.clearTimeout(backgroundVideoReplayTimerRef.current);
+      backgroundVideoReplayTimerRef.current = null;
+    }
+    backgroundVideoReplayTimerRef.current = window.setTimeout(() => {
+      const currentVideo = backgroundVideoRef.current;
+      if (!currentVideo) return;
+      currentVideo.currentTime = 0;
+      void currentVideo.play().catch(() => {});
+    }, normalizedBackgroundVideoReplayIntervalSec * 1000);
+  }
 
   useLayoutEffect(() => {
     document.body.style.visibility = subAppWindowAppearanceReady
@@ -235,18 +395,36 @@ export default function SubAppRoot() {
       .catch(() => {});
   }, [subAppWindowAppearanceReady]);
 
-  if (subAppId === "proxy") {
-    return <ProxySubApp id={subAppId} locale={effectiveLocale} t={t} />;
-  }
-
   return (
-    <div className="subapp-shell">
-      <main className="subapp-content">
-        <article className="subapp-card">
-          <h2>{t("subapp.unknown.title")}</h2>
-          <p>{t("subapp.unknown.description")}</p>
-        </article>
-      </main>
-    </div>
+    <>
+      {activeBackgroundMediaType === "video" && backgroundMediaBlobUrl ? (
+        <div className="app-background-media-layer" aria-hidden="true">
+          <video
+            ref={backgroundVideoRef}
+            key={backgroundMediaBlobUrl}
+            className={`app-background-video mode-${effectiveBackgroundVideoRenderMode}`}
+            src={backgroundMediaBlobUrl}
+            muted
+            playsInline
+            autoPlay
+            preload="auto"
+            onEnded={handleBackgroundVideoEnded}
+          />
+          <div className="app-background-media-overlay" />
+        </div>
+      ) : null}
+      {subAppId === "proxy" ? (
+        <ProxySubApp id={subAppId} locale={effectiveLocale} t={t} />
+      ) : (
+        <div className="subapp-shell">
+          <main className="subapp-content">
+            <article className="subapp-card">
+              <h2>{t("subapp.unknown.title")}</h2>
+              <p>{t("subapp.unknown.description")}</p>
+            </article>
+          </main>
+        </div>
+      )}
+    </>
   );
 }

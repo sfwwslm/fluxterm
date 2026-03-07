@@ -22,6 +22,9 @@ body,
     linear-gradient(140deg, #0b0f14 0%, #141b24 55%, #10151f 100%);
   --app-bg-image: none;
   --app-bg-overlay: none;
+  --app-bg-image-size: cover;
+  --app-bg-image-repeat: no-repeat;
+  --app-bg-image-position: center center;
   --text-primary: #ecf3ff;
   --text-secondary: #cbd6e8;
   --text-muted: #8fa7c8;
@@ -301,13 +304,39 @@ body {
   background:
     var(--app-bg-overlay), var(--app-bg-image), var(--app-bg-gradient);
   background-color: var(--app-bg-base, #0b0f14);
-  background-size: cover, cover, cover;
-  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-size: cover, var(--app-bg-image-size), cover;
+  background-repeat: no-repeat, var(--app-bg-image-repeat), no-repeat;
   background-position:
     center center,
-    center center,
+    var(--app-bg-image-position),
     center center;
   height: 100%;
+}
+
+.app-background-media-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.app-background-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-background-video.mode-contain {
+  object-fit: contain;
+}
+
+.app-background-media-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--app-bg-overlay);
 }
 
 button,
@@ -330,6 +359,8 @@ select {
 }
 
 .app-shell {
+  position: relative;
+  z-index: 1;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -835,6 +866,8 @@ input[type="number"] {
 }
 
 .floating-shell {
+  position: relative;
+  z-index: 1;
   height: 100%;
   display: flex;
   flex-direction: column;

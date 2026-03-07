@@ -55,8 +55,7 @@ export const zh = {
   "config.app.fileDefaultEditorUnset": "未设置默认编辑器",
   "config.app.pickEditor": "选择程序",
   "config.app.backgroundImage": "自定义背景图",
-  "config.app.backgroundImageHint":
-    "选择本地图片后会复制到配置目录（$HOME）并按内容去重；清空只解绑当前配置，不删除文件。",
+  "config.app.backgroundImageHint": "选择本地图片后即可作为背景使用。",
   "config.app.backgroundImagePlaceholder": "未设置背景图",
   "config.app.pickBackgroundImage": "选择图片",
   "config.app.deleteBackgroundImage": "删除图片",
@@ -64,6 +63,24 @@ export const zh = {
     "仅支持 png/jpg/jpeg/webp 格式的图片",
   "config.app.backgroundImagePermissionDenied":
     "读取或复制图片被系统权限拦截，请检查 Tauri fs scope 配置和图片路径权限。",
+  "config.app.backgroundMedia": "自定义壁纸",
+  "config.app.backgroundMediaHint": "支持图片与视频。",
+  "config.app.backgroundMediaPlaceholder": "未设置壁纸",
+  "config.app.pickBackgroundMedia": "选择媒体",
+  "config.app.deleteBackgroundMedia": "删除媒体",
+  "config.app.backgroundMediaUnsupported":
+    "仅支持 png/jpg/jpeg/webp/mp4/webm/ogv/mov/m4v",
+  "config.app.backgroundMediaPermissionDenied":
+    "读取或复制媒体被系统权限拦截，请检查 Tauri fs scope 配置和文件路径权限。",
+  "config.app.backgroundRenderMode": "展示方式",
+  "config.app.backgroundRenderMode.cover": "裁剪填充",
+  "config.app.backgroundRenderMode.contain": "完整显示",
+  "config.app.backgroundRenderMode.tile": "平铺",
+  "config.app.backgroundVideoReplayMode": "视频重播",
+  "config.app.backgroundVideoReplayMode.loop": "循环播放",
+  "config.app.backgroundVideoReplayMode.single": "单次播放",
+  "config.app.backgroundVideoReplayMode.interval": "间隔重播",
+  "config.app.backgroundVideoReplayIntervalSec": "重播间隔（秒）",
   "config.app.backgroundImageSurfaceAlpha": "背景覆盖层透明度",
   "config.app.backgroundImageSurfaceAlphaHint":
     "控制标题栏、组件区、终端区和底栏的统一透明度，范围 20% 到 90%。",

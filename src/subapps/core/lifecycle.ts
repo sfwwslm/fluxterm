@@ -1,6 +1,11 @@
 import type { SubAppId } from "@/subapps/types";
 import type { Locale } from "@/i18n";
 import type { ThemeId } from "@/types";
+import type {
+  BackgroundMediaType,
+  BackgroundRenderMode,
+  BackgroundVideoReplayMode,
+} from "@/constants/backgroundMedia";
 
 /** 主窗口与子应用窗口共享的生命周期通道名。 */
 export const SUBAPP_LIFECYCLE_CHANNEL = "fluxterm-subapp-lifecycle";
@@ -72,4 +77,8 @@ export type SubAppLifecycleMessage =
       backgroundImageEnabled: boolean;
       backgroundImageAsset: string;
       backgroundImageSurfaceAlpha: number;
+      backgroundMediaType: BackgroundMediaType;
+      backgroundRenderMode: BackgroundRenderMode;
+      backgroundVideoReplayMode: BackgroundVideoReplayMode;
+      backgroundVideoReplayIntervalSec: number;
     };

@@ -109,6 +109,14 @@ import { subscribeTauri } from "@/shared/tauri/events";
 import { callTauri } from "@/shared/tauri/commands";
 import { getBackgroundImageAssetPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import {
+  clampBackgroundVideoReplayIntervalSec,
+  normalizeBackgroundMediaType,
+  normalizeBackgroundRenderMode,
+  normalizeBackgroundVideoReplayMode,
+  type BackgroundMediaType,
+  type BackgroundRenderMode,
+} from "@/constants/backgroundMedia";
 
 const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   profiles: "widget.profiles",
@@ -120,6 +128,28 @@ const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   tunnels: "widget.tunnels",
 };
 const BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA = 0;
+
+function resolveBackgroundImageStyle(mode: BackgroundRenderMode) {
+  if (mode === "contain") {
+    return {
+      size: "contain",
+      repeat: "no-repeat",
+      position: "center center",
+    };
+  }
+  if (mode === "tile") {
+    return {
+      size: "auto",
+      repeat: "repeat",
+      position: "left top",
+    };
+  }
+  return {
+    size: "cover",
+    repeat: "no-repeat",
+    position: "center center",
+  };
+}
 
 function clampBackgroundImageSurfaceAlpha(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA;
@@ -250,6 +280,14 @@ export default function AppShell() {
     setBackgroundImageAsset,
     backgroundImageSurfaceAlpha,
     setBackgroundImageSurfaceAlpha,
+    backgroundMediaType,
+    setBackgroundMediaType,
+    backgroundRenderMode,
+    setBackgroundRenderMode,
+    backgroundVideoReplayMode,
+    setBackgroundVideoReplayMode,
+    backgroundVideoReplayIntervalSec,
+    setBackgroundVideoReplayIntervalSec,
     availableShells,
     settingsLoaded,
     saveState: appSaveState,
@@ -303,8 +341,34 @@ export default function AppShell() {
     retrySave: retrySessionSave,
   } = useSessionSettings();
   const activeThemePreset = themePresets[themeId];
-  const isBackgroundImageRequested =
+  const isBackgroundMediaRequested =
     backgroundImageEnabled && !!backgroundImageAsset;
+  const normalizedBackgroundMediaType = useMemo(
+    () => normalizeBackgroundMediaType(backgroundMediaType),
+    [backgroundMediaType],
+  );
+  const normalizedBackgroundRenderMode = useMemo(
+    () => normalizeBackgroundRenderMode(backgroundRenderMode),
+    [backgroundRenderMode],
+  );
+  const normalizedBackgroundVideoReplayMode = useMemo(
+    () => normalizeBackgroundVideoReplayMode(backgroundVideoReplayMode),
+    [backgroundVideoReplayMode],
+  );
+  const normalizedBackgroundVideoReplayIntervalSec = useMemo(
+    () =>
+      clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
+    [backgroundVideoReplayIntervalSec],
+  );
+  const effectiveBackgroundRenderMode = useMemo(() => {
+    if (
+      normalizedBackgroundMediaType === "video" &&
+      normalizedBackgroundRenderMode === "tile"
+    ) {
+      return "cover";
+    }
+    return normalizedBackgroundRenderMode;
+  }, [normalizedBackgroundMediaType, normalizedBackgroundRenderMode]);
   const normalizedBackgroundImageSurfaceAlpha = useMemo(
     () => clampBackgroundImageSurfaceAlpha(backgroundImageSurfaceAlpha),
     [backgroundImageSurfaceAlpha],
@@ -312,13 +376,13 @@ export default function AppShell() {
   const activeTerminalTheme = useMemo(
     () =>
       buildTerminalTheme(activeThemePreset, {
-        translucentBackground: isBackgroundImageRequested,
+        translucentBackground: isBackgroundMediaRequested,
         // 终端外层 pane 已承担主要半透明层，xterm 画布只保留极轻底色避免双层叠深。
         translucentBackgroundAlpha: BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA,
         // 终端会话区在背景图模式下改用语义 surface 基色，避免与其它面板出现色相割裂。
         translucentBackgroundBase: activeThemePreset.semantic.surface.strong,
       }),
-    [activeThemePreset, isBackgroundImageRequested],
+    [activeThemePreset, isBackgroundMediaRequested],
   );
   const {
     profiles,
@@ -391,6 +455,11 @@ export default function AppShell() {
   const [floatingWindowAppearanceReady, setFloatingWindowAppearanceReady] =
     useState(!shouldDeferFloatingWindowReveal);
   const floatingWindowShownRef = useRef(false);
+  const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
+  const backgroundVideoReplayTimerRef = useRef<number | null>(null);
+  const [backgroundMediaBlobUrl, setBackgroundMediaBlobUrl] = useState("");
+  const [activeBackgroundMediaType, setActiveBackgroundMediaType] =
+    useState<BackgroundMediaType>("image");
   const terminalSizeRef = useRef({ cols: 80, rows: 24 });
   const activeResourceMonitorSessionIdRef = useRef<string | null>(null);
   const activeResourceMonitorKeyRef = useRef("");
@@ -454,6 +523,11 @@ export default function AppShell() {
     const applyDefaultBackground = () => {
       root.style.setProperty("--app-bg-image", "none");
       root.style.setProperty("--app-bg-overlay", "none");
+      root.style.setProperty("--app-bg-image-size", "cover");
+      root.style.setProperty("--app-bg-image-repeat", "no-repeat");
+      root.style.setProperty("--app-bg-image-position", "center center");
+      setBackgroundMediaBlobUrl("");
+      setActiveBackgroundMediaType("image");
       applyBackgroundImageMode(false);
     };
 
@@ -461,7 +535,7 @@ export default function AppShell() {
       return;
     }
 
-    if (!backgroundImageEnabled || !backgroundImageAsset) {
+    if (!isBackgroundMediaRequested) {
       applyDefaultBackground();
       if (shouldDeferFloatingWindowReveal) {
         setFloatingWindowAppearanceReady(true);
@@ -485,7 +559,21 @@ export default function AppShell() {
           URL.revokeObjectURL(blobUrl);
           return;
         }
-        root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
+        const style = resolveBackgroundImageStyle(
+          effectiveBackgroundRenderMode,
+        );
+        root.style.setProperty("--app-bg-image-size", style.size);
+        root.style.setProperty("--app-bg-image-repeat", style.repeat);
+        root.style.setProperty("--app-bg-image-position", style.position);
+        if (normalizedBackgroundMediaType === "video") {
+          root.style.setProperty("--app-bg-image", "none");
+          setBackgroundMediaBlobUrl(blobUrl);
+          setActiveBackgroundMediaType("video");
+        } else {
+          root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
+          setBackgroundMediaBlobUrl("");
+          setActiveBackgroundMediaType("image");
+        }
         // 仅在背景图真正可读后启用语义层半透明模式，避免加载失败时界面过透。
         applyBackgroundImageMode(true);
         if (shouldDeferFloatingWindowReveal) {
@@ -513,12 +601,66 @@ export default function AppShell() {
       URL.revokeObjectURL(blobUrl);
     };
   }, [
-    backgroundImageEnabled,
+    isBackgroundMediaRequested,
     backgroundImageAsset,
+    effectiveBackgroundRenderMode,
+    normalizedBackgroundMediaType,
     settingsLoaded,
     shouldDeferFloatingWindowReveal,
     themeId,
   ]);
+
+  useEffect(() => {
+    const video = backgroundVideoRef.current;
+    if (!video || !backgroundMediaBlobUrl) return;
+    backgroundVideoReplayTimerRef.current = null;
+    const syncVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        video.pause();
+        return;
+      }
+      void video.play().catch(() => {});
+    };
+    syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", syncVisibility);
+      if (backgroundVideoReplayTimerRef.current) {
+        window.clearTimeout(backgroundVideoReplayTimerRef.current);
+        backgroundVideoReplayTimerRef.current = null;
+      }
+    };
+  }, [backgroundMediaBlobUrl]);
+
+  useEffect(() => {
+    if (!backgroundVideoReplayTimerRef.current) return;
+    window.clearTimeout(backgroundVideoReplayTimerRef.current);
+    backgroundVideoReplayTimerRef.current = null;
+  }, [
+    normalizedBackgroundVideoReplayMode,
+    normalizedBackgroundVideoReplayIntervalSec,
+  ]);
+
+  function handleBackgroundVideoEnded() {
+    const video = backgroundVideoRef.current;
+    if (!video) return;
+    if (normalizedBackgroundVideoReplayMode === "single") return;
+    if (normalizedBackgroundVideoReplayMode === "loop") {
+      video.currentTime = 0;
+      void video.play().catch(() => {});
+      return;
+    }
+    if (backgroundVideoReplayTimerRef.current) {
+      window.clearTimeout(backgroundVideoReplayTimerRef.current);
+      backgroundVideoReplayTimerRef.current = null;
+    }
+    backgroundVideoReplayTimerRef.current = window.setTimeout(() => {
+      const currentVideo = backgroundVideoRef.current;
+      if (!currentVideo) return;
+      currentVideo.currentTime = 0;
+      void currentVideo.play().catch(() => {});
+    }, normalizedBackgroundVideoReplayIntervalSec * 1000);
+  }
 
   useLayoutEffect(() => {
     if (!shouldDeferFloatingWindowReveal) return;
@@ -908,6 +1050,11 @@ export default function AppShell() {
       backgroundImageEnabled,
       backgroundImageAsset,
       backgroundImageSurfaceAlpha: normalizedBackgroundImageSurfaceAlpha,
+      backgroundMediaType: normalizedBackgroundMediaType,
+      backgroundRenderMode: normalizedBackgroundRenderMode,
+      backgroundVideoReplayMode: normalizedBackgroundVideoReplayMode,
+      backgroundVideoReplayIntervalSec:
+        normalizedBackgroundVideoReplayIntervalSec,
     },
   });
 
@@ -2434,6 +2581,22 @@ export default function AppShell() {
 
   return (
     <>
+      {activeBackgroundMediaType === "video" && backgroundMediaBlobUrl ? (
+        <div className="app-background-media-layer" aria-hidden="true">
+          <video
+            ref={backgroundVideoRef}
+            key={backgroundMediaBlobUrl}
+            className={`app-background-video mode-${effectiveBackgroundRenderMode}`}
+            src={backgroundMediaBlobUrl}
+            muted
+            playsInline
+            autoPlay
+            preload="auto"
+            onEnded={handleBackgroundVideoEnded}
+          />
+          <div className="app-background-media-overlay" />
+        </div>
+      ) : null}
       {floatingWidgetKey ? (
         <FloatingShell
           floatingWidgetKey={floatingWidgetKey}
@@ -2633,6 +2796,12 @@ export default function AppShell() {
         backgroundImageEnabled={backgroundImageEnabled}
         backgroundImageAsset={backgroundImageAsset}
         backgroundImageSurfaceAlpha={normalizedBackgroundImageSurfaceAlpha}
+        backgroundMediaType={normalizedBackgroundMediaType}
+        backgroundRenderMode={normalizedBackgroundRenderMode}
+        backgroundVideoReplayMode={normalizedBackgroundVideoReplayMode}
+        backgroundVideoReplayIntervalSec={
+          normalizedBackgroundVideoReplayIntervalSec
+        }
         aiSelectionMaxChars={aiSelectionMaxChars}
         aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
         aiDebugLoggingEnabled={aiDebugLoggingEnabled}
@@ -2654,6 +2823,12 @@ export default function AppShell() {
         onBackgroundImageEnabledChange={setBackgroundImageEnabled}
         onBackgroundImageAssetChange={setBackgroundImageAsset}
         onBackgroundImageSurfaceAlphaChange={setBackgroundImageSurfaceAlpha}
+        onBackgroundMediaTypeChange={setBackgroundMediaType}
+        onBackgroundRenderModeChange={setBackgroundRenderMode}
+        onBackgroundVideoReplayModeChange={setBackgroundVideoReplayMode}
+        onBackgroundVideoReplayIntervalSecChange={
+          setBackgroundVideoReplayIntervalSec
+        }
         onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
         onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
         onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}

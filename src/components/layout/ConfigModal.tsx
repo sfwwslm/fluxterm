@@ -34,6 +34,18 @@ import {
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/useAppSettings";
 import type { ThemeId } from "@/types";
+import {
+  BACKGROUND_IMAGE_EXTENSIONS,
+  BACKGROUND_MEDIA_EXTENSIONS,
+  BACKGROUND_VIDEO_EXTENSIONS,
+  clampBackgroundVideoReplayIntervalSec,
+  normalizeBackgroundMediaType,
+  normalizeBackgroundRenderMode,
+  normalizeBackgroundVideoReplayMode,
+  type BackgroundMediaType,
+  type BackgroundRenderMode,
+  type BackgroundVideoReplayMode,
+} from "@/constants/backgroundMedia";
 import "@/components/layout/ConfigModal.css";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import {
@@ -85,6 +97,10 @@ type ConfigModalProps = {
   backgroundImageEnabled?: boolean;
   backgroundImageAsset?: string;
   backgroundImageSurfaceAlpha?: number;
+  backgroundMediaType?: BackgroundMediaType;
+  backgroundRenderMode?: BackgroundRenderMode;
+  backgroundVideoReplayMode?: BackgroundVideoReplayMode;
+  backgroundVideoReplayIntervalSec?: number;
   aiSelectionMaxChars?: number;
   aiSessionRecentOutputMaxChars?: number;
   aiDebugLoggingEnabled?: boolean;
@@ -106,6 +122,12 @@ type ConfigModalProps = {
   onBackgroundImageEnabledChange?: (enabled: boolean) => void;
   onBackgroundImageAssetChange?: (value: string) => void;
   onBackgroundImageSurfaceAlphaChange?: (value: number) => void;
+  onBackgroundMediaTypeChange?: (value: BackgroundMediaType) => void;
+  onBackgroundRenderModeChange?: (value: BackgroundRenderMode) => void;
+  onBackgroundVideoReplayModeChange?: (
+    value: BackgroundVideoReplayMode,
+  ) => void;
+  onBackgroundVideoReplayIntervalSecChange?: (value: number) => void;
   onAiSelectionMaxCharsChange?: (value: number) => void;
   onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
   onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
@@ -185,6 +207,10 @@ export default function ConfigModal({
   backgroundImageEnabled = false,
   backgroundImageAsset = "",
   backgroundImageSurfaceAlpha = 0.52,
+  backgroundMediaType = "image",
+  backgroundRenderMode = "cover",
+  backgroundVideoReplayMode = "loop",
+  backgroundVideoReplayIntervalSec = 8,
   aiSelectionMaxChars = 1500,
   aiSessionRecentOutputMaxChars = 1200,
   aiDebugLoggingEnabled = true,
@@ -205,6 +231,11 @@ export default function ConfigModal({
   onFileDefaultEditorPathChange,
   onBackgroundImageEnabledChange,
   onBackgroundImageAssetChange,
+  onBackgroundImageSurfaceAlphaChange,
+  onBackgroundMediaTypeChange,
+  onBackgroundRenderModeChange,
+  onBackgroundVideoReplayModeChange,
+  onBackgroundVideoReplayIntervalSecChange,
   onAiSelectionMaxCharsChange,
   onAiSessionRecentOutputMaxCharsChange,
   onAiDebugLoggingEnabledChange,
@@ -253,6 +284,14 @@ export default function ConfigModal({
   );
   const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
     useState(() => String(resourceMonitorIntervalSec));
+  const [
+    backgroundVideoReplayIntervalDraft,
+    setBackgroundVideoReplayIntervalDraft,
+  ] = useState(() =>
+    String(
+      clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
+    ),
+  );
   const [selectedProviderId, setSelectedProviderId] = useState(
     aiActiveProviderId || aiProviders[0]?.id || "",
   );
@@ -271,6 +310,15 @@ export default function ConfigModal({
   const [compatibleCreating, setCompatibleCreating] = useState(false);
   const [testingProviderId, setTestingProviderId] = useState("");
   const isDeveloperMode = import.meta.env.DEV;
+  const normalizedBackgroundMediaType =
+    normalizeBackgroundMediaType(backgroundMediaType);
+  const normalizedBackgroundRenderMode =
+    normalizeBackgroundRenderMode(backgroundRenderMode);
+  const normalizedBackgroundVideoReplayMode =
+    normalizeBackgroundVideoReplayMode(backgroundVideoReplayMode);
+  const normalizedBackgroundVideoReplayIntervalSec =
+    clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec);
+  const isBackgroundVideoMode = normalizedBackgroundMediaType === "video";
   const isBackgroundImageModeActive =
     backgroundImageEnabled && !!backgroundImageAsset;
   const effectiveModalSurfaceAlpha = isBackgroundImageModeActive
@@ -317,6 +365,12 @@ export default function ConfigModal({
   }, [scrollback]);
 
   useEffect(() => {
+    setBackgroundVideoReplayIntervalDraft(
+      String(normalizedBackgroundVideoReplayIntervalSec),
+    );
+  }, [normalizedBackgroundVideoReplayIntervalSec]);
+
+  useEffect(() => {
     setResourceMonitorIntervalDraft(String(resourceMonitorIntervalSec));
   }, [resourceMonitorIntervalSec]);
 
@@ -335,25 +389,33 @@ export default function ConfigModal({
     setQuickPresetModelDraft(preset?.models[0] ?? "");
   }, [quickPresetVendorDraft]);
 
-  async function pickBackgroundImage() {
+  async function pickBackgroundMedia() {
     try {
       const selected = await openDialogFile({
         multiple: false,
         directory: false,
         filters: [
           {
+            name: "Media",
+            extensions: BACKGROUND_MEDIA_EXTENSIONS,
+          },
+          {
             name: "Images",
-            extensions: ["png", "jpg", "jpeg", "webp"],
+            extensions: BACKGROUND_IMAGE_EXTENSIONS,
+          },
+          {
+            name: "Videos",
+            extensions: BACKGROUND_VIDEO_EXTENSIONS,
           },
         ],
       });
       if (!selected || Array.isArray(selected)) return;
       const extMatch = selected.match(/\.([A-Za-z0-9]+)$/);
       const ext = extMatch?.[1]?.toLowerCase();
-      if (!ext || !["png", "jpg", "jpeg", "webp"].includes(ext)) {
+      if (!ext || !BACKGROUND_MEDIA_EXTENSIONS.includes(ext)) {
         pushToast({
           level: "error",
-          message: t("config.app.backgroundImageUnsupported"),
+          message: t("config.app.backgroundMediaUnsupported"),
         });
         return;
       }
@@ -372,6 +434,9 @@ export default function ConfigModal({
 
       onBackgroundImageAssetChange?.(toBackgroundImageAsset(fileName));
       onBackgroundImageEnabledChange?.(true);
+      onBackgroundMediaTypeChange?.(
+        BACKGROUND_VIDEO_EXTENSIONS.includes(ext) ? "video" : "image",
+      );
     } catch (error) {
       const message = getErrorMessage(error);
       const normalized = message.toLowerCase();
@@ -384,7 +449,7 @@ export default function ConfigModal({
         level: "error",
         durationMs: 9000,
         message: likelyPermissionDenied
-          ? `${t("config.app.backgroundImagePermissionDenied")}\n${message}`
+          ? `${t("config.app.backgroundMediaPermissionDenied")}\n${message}`
           : message,
       });
     }
@@ -417,6 +482,19 @@ export default function ConfigModal({
       return;
     }
     onResourceMonitorIntervalSecChange?.(next);
+  }
+
+  function commitBackgroundVideoReplayIntervalDraft() {
+    const value = backgroundVideoReplayIntervalDraft.trim();
+    if (!value) {
+      setBackgroundVideoReplayIntervalDraft(
+        String(normalizedBackgroundVideoReplayIntervalSec),
+      );
+      return;
+    }
+    const next = clampBackgroundVideoReplayIntervalSec(Number(value));
+    setBackgroundVideoReplayIntervalDraft(String(next));
+    onBackgroundVideoReplayIntervalSecChange?.(next);
   }
 
   function commitDefaultEditorPathDraft() {
@@ -600,6 +678,7 @@ export default function ConfigModal({
     commitAiSessionRecentOutputMaxCharsDraft();
     commitScrollbackDraft();
     commitResourceMonitorIntervalDraft();
+    commitBackgroundVideoReplayIntervalDraft();
     if (
       hasUnsavedHighRiskChanges &&
       !window.confirm(t("config.unsavedChangesConfirm"))
@@ -699,7 +778,10 @@ export default function ConfigModal({
             <label className="config-toggle-head">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
-                  {t("config.app.backgroundImage")}
+                  {t("config.app.backgroundMedia")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.app.backgroundMediaHint")}
                 </span>
               </div>
               <input
@@ -711,14 +793,124 @@ export default function ConfigModal({
                 }
               />
             </label>
+            <div
+              className={`config-file-picker-path config-file-picker-path-single-line ${
+                backgroundImageAsset ? "" : "empty"
+              }`.trim()}
+              title={
+                backgroundImageAsset ||
+                t("config.app.backgroundMediaPlaceholder")
+              }
+            >
+              {backgroundImageAsset ||
+                t("config.app.backgroundMediaPlaceholder")}
+            </div>
+            <label className="config-subsetting">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.backgroundRenderMode")}
+                </span>
+              </div>
+              <div className="config-select-control">
+                <Select
+                  value={normalizedBackgroundRenderMode}
+                  options={[
+                    {
+                      value: "cover",
+                      label: t("config.app.backgroundRenderMode.cover"),
+                    },
+                    {
+                      value: "contain",
+                      label: t("config.app.backgroundRenderMode.contain"),
+                    },
+                    {
+                      value: "tile",
+                      label: t("config.app.backgroundRenderMode.tile"),
+                    },
+                  ]}
+                  onChange={(value) =>
+                    onBackgroundRenderModeChange?.(
+                      value as BackgroundRenderMode,
+                    )
+                  }
+                  aria-label={t("config.app.backgroundRenderMode")}
+                />
+              </div>
+            </label>
+            {isBackgroundVideoMode ? (
+              <>
+                <label className="config-subsetting">
+                  <div className="config-toggle-copy">
+                    <span className="config-toggle-title">
+                      {t("config.app.backgroundVideoReplayMode")}
+                    </span>
+                  </div>
+                  <div className="config-select-control">
+                    <Select
+                      value={normalizedBackgroundVideoReplayMode}
+                      options={[
+                        {
+                          value: "loop",
+                          label: t("config.app.backgroundVideoReplayMode.loop"),
+                        },
+                        {
+                          value: "single",
+                          label: t(
+                            "config.app.backgroundVideoReplayMode.single",
+                          ),
+                        },
+                        {
+                          value: "interval",
+                          label: t(
+                            "config.app.backgroundVideoReplayMode.interval",
+                          ),
+                        },
+                      ]}
+                      onChange={(value) =>
+                        onBackgroundVideoReplayModeChange?.(
+                          value as BackgroundVideoReplayMode,
+                        )
+                      }
+                      aria-label={t("config.app.backgroundVideoReplayMode")}
+                    />
+                  </div>
+                </label>
+                {normalizedBackgroundVideoReplayMode === "interval" ? (
+                  <label className="config-subsetting">
+                    <div className="config-toggle-copy">
+                      <span className="config-toggle-title">
+                        {t("config.app.backgroundVideoReplayIntervalSec")}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="config-number-input"
+                      value={backgroundVideoReplayIntervalDraft}
+                      onChange={(event) =>
+                        setBackgroundVideoReplayIntervalDraft(
+                          event.target.value,
+                        )
+                      }
+                      onBlur={commitBackgroundVideoReplayIntervalDraft}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        commitBackgroundVideoReplayIntervalDraft();
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
             <div className="config-file-picker-actions">
               <Button
                 variant="primary"
                 size="sm"
                 className="config-bg-image-action-button"
-                onClick={pickBackgroundImage}
+                onClick={pickBackgroundMedia}
               >
-                {t("config.app.pickBackgroundImage")}
+                {t("config.app.pickBackgroundMedia")}
               </Button>
               <Button
                 variant="primary"
@@ -745,7 +937,7 @@ export default function ConfigModal({
                   }
                 }}
               >
-                {t("config.app.deleteBackgroundImage")}
+                {t("config.app.deleteBackgroundMedia")}
               </Button>
             </div>
           </div>
@@ -790,6 +982,43 @@ export default function ConfigModal({
                 aria-label={t("settings.theme")}
               />
             </div>
+          </label>
+          <label className="config-toggle-card config-range-setting">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.app.backgroundImageSurfaceAlpha")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.app.backgroundImageSurfaceAlphaHint")}
+              </span>
+            </div>
+            <span className="config-range-control">
+              <input
+                type="range"
+                min={MIN_BACKGROUND_IMAGE_SURFACE_ALPHA}
+                max={MAX_BACKGROUND_IMAGE_SURFACE_ALPHA}
+                step={0.01}
+                value={clampBackgroundImageSurfaceAlpha(
+                  backgroundImageSurfaceAlpha,
+                )}
+                onChange={(event) =>
+                  onBackgroundImageSurfaceAlphaChange?.(
+                    clampBackgroundImageSurfaceAlpha(
+                      Number(event.currentTarget.value),
+                    ),
+                  )
+                }
+                aria-label={t("config.app.backgroundImageSurfaceAlpha")}
+              />
+              <span className="config-range-value">
+                {Math.round(
+                  clampBackgroundImageSurfaceAlpha(
+                    backgroundImageSurfaceAlpha,
+                  ) * 100,
+                )}
+                %
+              </span>
+            </span>
           </label>
         </div>
       );

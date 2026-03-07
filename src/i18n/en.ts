@@ -57,7 +57,7 @@ export const en = {
   "config.app.pickEditor": "Choose App",
   "config.app.backgroundImage": "Custom Background Image",
   "config.app.backgroundImageHint":
-    "Selected images are copied into config storage under $HOME with content dedupe; clear only unbinds current setting and keeps files.",
+    "Select a local image to use as the background.",
   "config.app.backgroundImagePlaceholder": "No background image selected",
   "config.app.pickBackgroundImage": "Choose Image",
   "config.app.deleteBackgroundImage": "Delete Image",
@@ -65,6 +65,24 @@ export const en = {
     "Only png/jpg/jpeg/webp image formats are supported",
   "config.app.backgroundImagePermissionDenied":
     "Image read/copy was blocked by system permissions. Check Tauri fs scope and source path access.",
+  "config.app.backgroundMedia": "Custom Wallpaper",
+  "config.app.backgroundMediaHint": "Supports image and video.",
+  "config.app.backgroundMediaPlaceholder": "No wallpaper selected",
+  "config.app.pickBackgroundMedia": "Choose Media",
+  "config.app.deleteBackgroundMedia": "Delete Media",
+  "config.app.backgroundMediaUnsupported":
+    "Only png/jpg/jpeg/webp/mp4/webm/ogv/mov/m4v are supported",
+  "config.app.backgroundMediaPermissionDenied":
+    "Media read/copy was blocked by system permissions. Check Tauri fs scope and source path access.",
+  "config.app.backgroundRenderMode": "Display Mode",
+  "config.app.backgroundRenderMode.cover": "Crop Fill",
+  "config.app.backgroundRenderMode.contain": "Contain",
+  "config.app.backgroundRenderMode.tile": "Tile",
+  "config.app.backgroundVideoReplayMode": "Video Replay",
+  "config.app.backgroundVideoReplayMode.loop": "Loop",
+  "config.app.backgroundVideoReplayMode.single": "Single Play",
+  "config.app.backgroundVideoReplayMode.interval": "Replay After Delay",
+  "config.app.backgroundVideoReplayIntervalSec": "Replay Interval (sec)",
   "config.app.backgroundImageSurfaceAlpha": "Background Surface Opacity",
   "config.app.backgroundImageSurfaceAlphaHint":
     "Controls unified opacity for title bar, widgets, terminal, and footer surfaces, from 20% to 90%.",

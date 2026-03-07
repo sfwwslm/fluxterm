@@ -10,6 +10,11 @@ import {
 } from "@/subapps/core/lifecycle";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import type { ThemeId } from "@/types";
+import type {
+  BackgroundMediaType,
+  BackgroundRenderMode,
+  BackgroundVideoReplayMode,
+} from "@/constants/backgroundMedia";
 
 type SubAppDefinition = {
   id: SubAppId;
@@ -31,6 +36,10 @@ type UseSubAppsOptions = {
     backgroundImageEnabled: boolean;
     backgroundImageAsset: string;
     backgroundImageSurfaceAlpha: number;
+    backgroundMediaType: BackgroundMediaType;
+    backgroundRenderMode: BackgroundRenderMode;
+    backgroundVideoReplayMode: BackgroundVideoReplayMode;
+    backgroundVideoReplayIntervalSec: number;
   };
 };
 
@@ -82,6 +91,11 @@ export default function useSubApps({
         backgroundImageEnabled: appearance.backgroundImageEnabled,
         backgroundImageAsset: appearance.backgroundImageAsset,
         backgroundImageSurfaceAlpha: appearance.backgroundImageSurfaceAlpha,
+        backgroundMediaType: appearance.backgroundMediaType,
+        backgroundRenderMode: appearance.backgroundRenderMode,
+        backgroundVideoReplayMode: appearance.backgroundVideoReplayMode,
+        backgroundVideoReplayIntervalSec:
+          appearance.backgroundVideoReplayIntervalSec,
       });
     },
     [appearance, postLifecycleMessage],
