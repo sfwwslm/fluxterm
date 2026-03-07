@@ -44,7 +44,7 @@ export const en = {
   "config.section.aiProviderCompat": "OpenAI",
   "config.section.sessionSettings": "Session Settings",
   "config.section.sessionShell": "Default Shell",
-  "config.section.configDirectory": "Config Directory",
+  "config.section.configDirectory": "App Directories",
   "config.app.sftpEnabled": "Enable SFTP",
   "config.app.sftpEnabledHint":
     "Enable file browsing, upload, and download for remote hosts in the file widget.",

@@ -44,7 +44,7 @@ export const zh = {
   "config.section.aiProviderCompat": "OpenAI",
   "config.section.sessionSettings": "会话设置",
   "config.section.sessionShell": "默认 Shell",
-  "config.section.configDirectory": "配置文件目录",
+  "config.section.configDirectory": "应用目录",
   "config.app.sftpEnabled": "启用 SFTP",
   "config.app.sftpEnabledHint": "开启后可在文件面板浏览、上传和下载远端文件。",
   "config.app.fileDefaultEditorPath": "默认编辑器",
