@@ -12,6 +12,12 @@
           "path": "$HOME"
         },
         {
+          "path": "$HOME/.vust"
+        },
+        {
+          "path": "$HOME/.vust/**"
+        },
+        {
           "path": "$HOME/**"
         }
       ]
@@ -47,4 +53,3 @@
     }
   ]
 }
-
