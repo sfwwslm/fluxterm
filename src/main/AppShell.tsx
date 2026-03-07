@@ -939,25 +939,15 @@ export default function AppShell() {
   }
 
   const availableWidgets = useMemo(() => {
-    // 主窗口里只有“当前真正可见”的组件才占用实例；
-    // 收起区域虽然保留布局配置，但不应阻止其他可见区域再次添加该组件。
-    // floating 中的组件仍然是独立可见实例，因此始终占用。
+    // 允许把已在主窗口某个槽位中的组件“移到”当前槽位，
+    // 因此这里不再按主窗口占用情况过滤候选项。
+    // floating 中的组件仍然是独立可见实例，因此继续占用。
     const occupied = new Set<WidgetKey>();
-    Object.entries(slotGroups).forEach(([slot, group]) => {
-      if (!isMainSlotVisible(slot as LayoutWidgetSlot)) return;
-      if (group.active) occupied.add(group.active);
-    });
     Object.keys(floatingOrigins).forEach((widget) => {
       occupied.add(widget as WidgetKey);
     });
     return widgetKeys.filter((widget) => !occupied.has(widget));
-  }, [
-    floatingOrigins,
-    layoutCollapsed.bottom,
-    layoutCollapsed.left,
-    layoutCollapsed.right,
-    slotGroups,
-  ]);
+  }, [floatingOrigins]);
   const filesWidgetVisible = useMemo(() => {
     if (floatingWidgetKey === "files") return true;
     if (floatingWidgets.files) return true;
