@@ -257,7 +257,9 @@ export default function SubAppRoot() {
 
     if (!effectiveBackgroundImageEnabled || !effectiveBackgroundImageAsset) {
       applyDefaultBackground();
-      setSubAppWindowAppearanceReady(true);
+      queueMicrotask(() => {
+        setSubAppWindowAppearanceReady(true);
+      });
       return;
     }
 
@@ -267,7 +269,7 @@ export default function SubAppRoot() {
         : "linear-gradient(0deg, rgba(7, 10, 14, 0.42), rgba(7, 10, 14, 0.42))";
     root.style.setProperty("--app-bg-overlay", overlay);
 
-    (async () => {
+    void (async () => {
       try {
         const filePath = await getBackgroundImageAssetPath(
           effectiveBackgroundImageAsset,
@@ -299,7 +301,7 @@ export default function SubAppRoot() {
         if (disposed) return;
         applyDefaultBackground();
         setSubAppWindowAppearanceReady(true);
-        warn(
+        void warn(
           JSON.stringify({
             event: "subapp:background-image-load-failed",
             asset: effectiveBackgroundImageAsset,

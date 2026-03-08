@@ -38,21 +38,23 @@ export default function ProfileModal({
   t,
 }: ProfileModalProps) {
   const autoFilledRef = useRef(false);
-  const initialDraftRef = useRef<string>("");
   const [profileType, setProfileType] = useState<ProfileModalType>("ssh");
   const [activeSection, setActiveSection] =
     useState<ProfileModalSection>("session");
   const [nameError, setNameError] = useState<string | null>(null);
+  const [initialDraftSnapshot, setInitialDraftSnapshot] = useState("");
 
   useEffect(() => {
     if (open) {
       autoFilledRef.current = false;
-      initialDraftRef.current = JSON.stringify(draft);
-      setProfileType("ssh");
-      setActiveSection("session");
-      setNameError(null);
+      queueMicrotask(() => {
+        setInitialDraftSnapshot(JSON.stringify(draft));
+        setProfileType("ssh");
+        setActiveSection("session");
+        setNameError(null);
+      });
     }
-  }, [open]);
+  }, [open, draft]);
 
   useEffect(() => {
     if (draft.authType !== "privateKey") return;
@@ -110,7 +112,7 @@ export default function ProfileModal({
   /** 当前版本允许 shell/ssh 都提交；shell 保存到本地启动配置，ssh 保存到 profile。 */
   const canSubmit = true;
   const hasUnsavedChanges =
-    open && JSON.stringify(draft) !== initialDraftRef.current;
+    open && JSON.stringify(draft) !== initialDraftSnapshot;
 
   /** 统一处理关闭请求：有未保存草稿时给出放弃确认。 */
   function handleRequestClose() {
@@ -380,7 +382,9 @@ export default function ProfileModal({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handlePickPrivateKey}
+                    onClick={() => {
+                      void handlePickPrivateKey();
+                    }}
                   >
                     {t("profile.actions.pickKey")}
                   </Button>

@@ -6,7 +6,7 @@
  * 3. 负责本地 Shell 列表的初始拉取。
  * 4. 采用“内存态缓存 + 防抖异步落盘”模式。
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   exists,
@@ -199,11 +199,11 @@ export default function useAppSettings({
   }
 
   /** 从磁盘读取全量设置并反填内存状态。 */
-  async function loadSettings() {
+  const loadSettings = useCallback(async () => {
     try {
       const path = await getSettingsPath();
       if (!(await exists(path))) {
-        debug(
+        void debug(
           JSON.stringify({
             event: "settings:load-skip",
             reason: "file-not-exists",
@@ -319,16 +319,16 @@ export default function useAppSettings({
       if (normalizedThemeId && themeIds.includes(normalizedThemeId)) {
         setThemeId(normalizedThemeId);
       }
-      debug(JSON.stringify({ event: "settings:loaded", payload: parsed }));
+      void debug(JSON.stringify({ event: "settings:loaded", payload: parsed }));
     } catch (error) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "settings:load-failed",
           error: extractErrorMessage(error),
         }),
       );
     }
-  }
+  }, [themeIds]);
 
   /** 将最新设置写入磁盘。 */
   async function saveSettings(payload: AppSettings) {
@@ -346,7 +346,7 @@ export default function useAppSettings({
   // 启动流水线：加载设置 -> 拉取 Shell 列表 -> 完成就绪标记。
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         await loadSettings();
         const shells = await invoke<LocalShellProfile[]>("local_shell_list");
@@ -359,7 +359,7 @@ export default function useAppSettings({
         const selected = (preferredAvailable ? preferred : fallbackId) ?? null;
         setShellId(selected);
 
-        debug(
+        void debug(
           JSON.stringify({
             event: "settings:init-shell",
             savedShellId: preferred ?? null,
@@ -372,7 +372,7 @@ export default function useAppSettings({
         if (!active) return;
         setAvailableShells([]);
         setShellId(null);
-        warn(JSON.stringify({ event: "settings:init-shell-failed" }));
+        void warn(JSON.stringify({ event: "settings:init-shell-failed" }));
       } finally {
         if (!active) return;
         loadedRef.current = true;
@@ -382,7 +382,7 @@ export default function useAppSettings({
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadSettings]);
 
   // 自动防抖异步保存。
   useEffect(() => {
@@ -424,29 +424,31 @@ export default function useAppSettings({
     setSaveState("saving");
     setSaveError(null);
 
-    debug(
+    void debug(
       JSON.stringify({
         event: "settings:save-scheduled",
         debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
       }),
     );
 
-    saveTimerRef.current = window.setTimeout(async () => {
-      try {
-        await saveSettings(currentSettings);
-        lastSavedConfigRef.current = settingsStr;
-        setSaveState("saved");
-        debug(JSON.stringify({ event: "settings:persisted" }));
-      } catch (error) {
-        setSaveState("error");
-        setSaveError(extractErrorMessage(error));
-        warn(
-          JSON.stringify({
-            event: "settings:save-failed",
-            error: extractErrorMessage(error),
-          }),
-        );
-      }
+    saveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await saveSettings(currentSettings);
+          lastSavedConfigRef.current = settingsStr;
+          setSaveState("saved");
+          void debug(JSON.stringify({ event: "settings:persisted" }));
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(extractErrorMessage(error));
+          void warn(
+            JSON.stringify({
+              event: "settings:save-failed",
+              error: extractErrorMessage(error),
+            }),
+          );
+        }
+      })();
     }, PERSISTENCE_SAVE_DEBOUNCE_MS);
 
     return () => {

@@ -101,7 +101,7 @@ export async function loadCommandHistoryStore() {
     }
     return normalizeCommandHistoryStore(JSON.parse(raw));
   } catch (error) {
-    warn(
+    void warn(
       JSON.stringify({
         event: "history:load-failed",
         error: extractErrorMessage(error),
@@ -122,7 +122,7 @@ export async function saveCommandHistoryStore(store: CommandHistoryStore) {
     const path = await getCommandHistoryPath();
     await writeTextFile(path, JSON.stringify(store, null, 2));
   } catch (error) {
-    warn(
+    void warn(
       JSON.stringify({
         event: "history:save-failed",
         error: extractErrorMessage(error),

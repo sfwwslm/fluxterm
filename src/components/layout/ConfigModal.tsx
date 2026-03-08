@@ -739,13 +739,15 @@ export default function ConfigModal({
                   variant="primary"
                   size="sm"
                   className="config-bg-image-action-button"
-                  onClick={async () => {
-                    const selected = await openDialogFile({
-                      multiple: false,
-                      directory: false,
-                    });
-                    if (!selected || Array.isArray(selected)) return;
-                    setDefaultEditorPathDraft(selected);
+                  onClick={() => {
+                    void (async () => {
+                      const selected = await openDialogFile({
+                        multiple: false,
+                        directory: false,
+                      });
+                      if (!selected || Array.isArray(selected)) return;
+                      setDefaultEditorPathDraft(selected);
+                    })();
                   }}
                 >
                   {t("config.app.pickEditor")}
@@ -908,7 +910,9 @@ export default function ConfigModal({
                 variant="primary"
                 size="sm"
                 className="config-bg-image-action-button"
-                onClick={pickBackgroundMedia}
+                onClick={() => {
+                  void pickBackgroundMedia();
+                }}
               >
                 {t("config.app.pickBackgroundMedia")}
               </Button>
@@ -917,24 +921,26 @@ export default function ConfigModal({
                 size="sm"
                 className="config-bg-image-action-button"
                 disabled={!backgroundImageAsset}
-                onClick={async () => {
-                  try {
-                    const assetToDelete = backgroundImageAsset;
-                    if (assetToDelete) {
-                      const targetPath =
-                        await getBackgroundImageAssetPath(assetToDelete);
-                      if (await exists(targetPath)) {
-                        await remove(targetPath);
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const assetToDelete = backgroundImageAsset;
+                      if (assetToDelete) {
+                        const targetPath =
+                          await getBackgroundImageAssetPath(assetToDelete);
+                        if (await exists(targetPath)) {
+                          await remove(targetPath);
+                        }
                       }
+                      onBackgroundImageAssetChange?.("");
+                      onBackgroundImageEnabledChange?.(false);
+                    } catch (error) {
+                      pushToast({
+                        level: "error",
+                        message: getErrorMessage(error),
+                      });
                     }
-                    onBackgroundImageAssetChange?.("");
-                    onBackgroundImageEnabledChange?.(false);
-                  } catch (error) {
-                    pushToast({
-                      level: "error",
-                      message: getErrorMessage(error),
-                    });
-                  }
+                  })();
                 }}
               >
                 {t("config.app.deleteBackgroundMedia")}
@@ -1059,23 +1065,25 @@ export default function ConfigModal({
                   disabled={
                     !activeProvider || testingProviderId === activeProvider.id
                   }
-                  onClick={async () => {
-                    try {
-                      if (!activeProvider) return;
-                      setTestingProviderId(activeProvider.id);
-                      await onAiProviderTest?.(activeProvider.id);
-                      pushToast({
-                        level: "success",
-                        message: t("config.ai.providerTestSuccess"),
-                      });
-                    } catch (error) {
-                      pushToast({
-                        level: "error",
-                        message: getErrorMessage(error),
-                      });
-                    } finally {
-                      setTestingProviderId("");
-                    }
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        if (!activeProvider) return;
+                        setTestingProviderId(activeProvider.id);
+                        await onAiProviderTest?.(activeProvider.id);
+                        pushToast({
+                          level: "success",
+                          message: t("config.ai.providerTestSuccess"),
+                        });
+                      } catch (error) {
+                        pushToast({
+                          level: "error",
+                          message: getErrorMessage(error),
+                        });
+                      } finally {
+                        setTestingProviderId("");
+                      }
+                    })();
                   }}
                 >
                   {activeProvider && testingProviderId === activeProvider.id
@@ -1658,23 +1666,25 @@ export default function ConfigModal({
             variant="primary"
             size="sm"
             disabled={!configDir}
-            onClick={async () => {
-              if (!configDir) return;
-              try {
-                await openPath(configDir);
-              } catch (error) {
-                pushToast({
-                  level: "error",
-                  message: t("config.directory.configOpenFailed"),
-                });
-                void logError(
-                  JSON.stringify({
-                    event: "config-directory:open-failed",
-                    path: configDir,
-                    message: extractErrorMessage(error),
-                  }),
-                );
-              }
+            onClick={() => {
+              void (async () => {
+                if (!configDir) return;
+                try {
+                  await openPath(configDir);
+                } catch (error) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.directory.configOpenFailed"),
+                  });
+                  void logError(
+                    JSON.stringify({
+                      event: "config-directory:open-failed",
+                      path: configDir,
+                      message: extractErrorMessage(error),
+                    }),
+                  );
+                }
+              })();
             }}
           >
             {t("config.directory.openConfig")}
@@ -1693,23 +1703,25 @@ export default function ConfigModal({
             variant="primary"
             size="sm"
             disabled={!dataDir}
-            onClick={async () => {
-              if (!dataDir) return;
-              try {
-                await openPath(dataDir);
-              } catch (error) {
-                pushToast({
-                  level: "error",
-                  message: t("config.directory.dataOpenFailed"),
-                });
-                void logError(
-                  JSON.stringify({
-                    event: "data-directory:open-failed",
-                    path: dataDir,
-                    message: extractErrorMessage(error),
-                  }),
-                );
-              }
+            onClick={() => {
+              void (async () => {
+                if (!dataDir) return;
+                try {
+                  await openPath(dataDir);
+                } catch (error) {
+                  pushToast({
+                    level: "error",
+                    message: t("config.directory.dataOpenFailed"),
+                  });
+                  void logError(
+                    JSON.stringify({
+                      event: "data-directory:open-failed",
+                      path: dataDir,
+                      message: extractErrorMessage(error),
+                    }),
+                  );
+                }
+              })();
             }}
           >
             {t("config.directory.openData")}

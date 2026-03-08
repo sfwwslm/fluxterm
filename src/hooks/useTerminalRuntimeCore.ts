@@ -394,6 +394,13 @@ export default function useTerminalRuntime({
     onCommandCaptureChange,
     onCommandCommit,
   });
+  const parseWorkingDirectoryFromPromptRef = useRef(parseWorkingDirectoryFromPrompt);
+  const appendSessionBufferRef = useRef(appendSessionBuffer);
+  const scheduleCommandCaptureRefreshRef = useRef(scheduleCommandCaptureRefresh);
+  const ensureTerminalRef = useRef(ensureTerminal);
+  const observeTerminalContainerRef = useRef(observeTerminalContainer);
+  const finalizeTerminalMountRef = useRef(finalizeTerminalMount);
+  const disposeTerminalRef = useRef(disposeTerminal);
 
   const getTerminalSize = useMemo(
     () => () => {
@@ -481,6 +488,16 @@ export default function useTerminalRuntime({
     onCommandCommit,
     writeToSession,
   ]);
+
+  useEffect(() => {
+    parseWorkingDirectoryFromPromptRef.current = parseWorkingDirectoryFromPrompt;
+    appendSessionBufferRef.current = appendSessionBuffer;
+    scheduleCommandCaptureRefreshRef.current = scheduleCommandCaptureRefresh;
+    ensureTerminalRef.current = ensureTerminal;
+    observeTerminalContainerRef.current = observeTerminalContainer;
+    finalizeTerminalMountRef.current = finalizeTerminalMount;
+    disposeTerminalRef.current = disposeTerminal;
+  });
 
   useEffect(() => {
     activeAutocompleteRef.current = activeAutocomplete;
@@ -858,7 +875,7 @@ export default function useTerminalRuntime({
     if (disabledPromptParsingRef.current[sessionId]) return;
     disabledPromptParsingRef.current[sessionId] = true;
     handlersRef.current.onPathSyncSupportChange?.(sessionId, "unsupported");
-    warn(
+    void warn(
       JSON.stringify({
         event: "terminal:cwd-sync-unsupported-prompt",
         sessionId,
@@ -1216,7 +1233,7 @@ export default function useTerminalRuntime({
           const text = term.getSelection();
           if (!text) return;
           writeText(text).catch((error) => {
-            warn(
+            void warn(
               JSON.stringify({
                 event: "terminal:selection-auto-copy-failed",
                 sessionId,
@@ -1291,24 +1308,26 @@ export default function useTerminalRuntime({
     });
   }
 
+  // 依赖的工具函数会在运行时按会话状态重建，这里保持注册回调稳定避免反复重绑容器。
   const registerTerminalContainer = useCallback(
     (sessionId: string, element: HTMLDivElement | null) => {
       containersRef.current[sessionId] = element;
       if (element) {
-        ensureTerminal(sessionId, element).catch(() => {});
-        observeTerminalContainer(element, sessionId);
+        ensureTerminalRef.current(sessionId, element).catch(() => {});
+        observeTerminalContainerRef.current(element, sessionId);
       } else {
         const observedContainer = observedContainersRef.current.get(sessionId);
         if (observedContainer && resizeObserverRef.current) {
           resizeObserverRef.current.unobserve(observedContainer);
         }
         observedContainersRef.current.delete(sessionId);
-        disposeTerminal(sessionId);
+        disposeTerminalRef.current(sessionId);
       }
     },
     [],
   );
 
+  // 终端输出监听需要维持单次注册，避免因函数 identity 变化而重复订阅。
   useEffect(() => {
     let cancelled = false;
     let teardown: (() => void) | null = null;
@@ -1316,17 +1335,21 @@ export default function useTerminalRuntime({
     const registerListeners = async () => {
       const outputUnlisten = await registerTerminalOutputListener(
         ({ sessionId, data }) => {
-          parseWorkingDirectoryFromPrompt(sessionId, data);
-          appendSessionBuffer(sessionId, data);
+          parseWorkingDirectoryFromPromptRef.current(sessionId, data);
+          appendSessionBufferRef.current(sessionId, data);
           const bundle = terminalsRef.current[sessionId];
           if (bundle) {
             writeToBundle(bundle, data);
-            scheduleCommandCaptureRefresh(sessionId);
+            scheduleCommandCaptureRefreshRef.current(sessionId);
           }
         },
       );
       if (cancelled) {
-        outputUnlisten();
+        try {
+          outputUnlisten();
+        } catch {
+          // ignore listener teardown race
+        }
         return;
       }
       teardown = outputUnlisten;
@@ -1336,10 +1359,17 @@ export default function useTerminalRuntime({
 
     return () => {
       cancelled = true;
-      teardown?.();
+      if (teardown) {
+        try {
+          teardown();
+        } catch {
+          // ignore listener teardown race
+        }
+      }
     };
-  }, [sessionBuffersRef]);
+  }, []);
 
+  // 会话切换时需要立即观察并挂载活动终端，依赖按会话数据驱动即可。
   useEffect(() => {
     Object.values(terminalsRef.current).forEach((bundle) => {
       bundle.terminal.options.theme = theme;
@@ -1353,6 +1383,7 @@ export default function useTerminalRuntime({
     });
   }, [theme]);
 
+  // 清理失效会话终端，避免随着 disposeTerminal identity 变化重复清理扫描。
   useEffect(() => {
     Object.values(terminalsRef.current).forEach((bundle) => {
       bundle.terminal.options.scrollback = scrollback;
@@ -1361,11 +1392,11 @@ export default function useTerminalRuntime({
 
   useEffect(() => {
     if (!activeSessionId || !activeSession) return;
-    observeTerminalContainer(
+    observeTerminalContainerRef.current(
       terminalsRef.current[activeSessionId]?.container ?? null,
       activeSessionId,
     );
-    finalizeTerminalMount(activeSessionId);
+    finalizeTerminalMountRef.current(activeSessionId);
     const bundle = terminalsRef.current[activeSessionId];
     if (!bundle) return;
     onSizeChange?.({
@@ -1378,7 +1409,7 @@ export default function useTerminalRuntime({
     const activeIds = new Set(sessions.map((item) => item.sessionId));
     Object.keys(terminalsRef.current).forEach((sessionId) => {
       if (!activeIds.has(sessionId)) {
-        disposeTerminal(sessionId);
+        disposeTerminalRef.current(sessionId);
       }
     });
   }, [sessions]);
@@ -1491,7 +1522,7 @@ export default function useTerminalRuntime({
       await writeText(text);
       return true;
     } catch (error) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "terminal:focused-line-copy-failed",
           sessionId,
@@ -1613,7 +1644,7 @@ export default function useTerminalRuntime({
     if (!bundle || !sessionId || !value) return false;
 
     if (!bundle.searchAddon) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "terminal:search-addon-missing",
           sessionId,
@@ -1629,7 +1660,7 @@ export default function useTerminalRuntime({
         ? bundle.searchAddon.findNext(value, options)
         : bundle.searchAddon.findPrevious(value, options);
     } catch (error) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "terminal:search-addon-failed",
           sessionId,

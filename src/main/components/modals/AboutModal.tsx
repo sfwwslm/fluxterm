@@ -98,7 +98,12 @@ export default function AboutModal({
               {t("about.openConsole")}
             </Button>
           )}
-          <Button variant="ghost" onClick={handleCopyDiagnostics}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              void handleCopyDiagnostics();
+            }}
+          >
             <FiCopy size={14} />
             {copyState === "done"
               ? t("about.copyDiagnosticsDone")

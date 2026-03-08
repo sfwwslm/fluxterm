@@ -299,37 +299,47 @@ export default function BottomArea({
 
   useEffect(() => {
     if (!groupDialogMode) {
-      setGroupDialogError(null);
+      queueMicrotask(() => {
+        setGroupDialogError(null);
+      });
     }
   }, [groupDialogMode]);
 
   useEffect(() => {
     if (!managerOpen) return;
     if (!sortedGroups.length) {
-      setSelectedGroupId(null);
-      setSelectedCommandId(null);
+      queueMicrotask(() => {
+        setSelectedGroupId(null);
+        setSelectedCommandId(null);
+      });
       return;
     }
     const focusCommand = pendingFocusCommandId
       ? (commands.find((item) => item.id === pendingFocusCommandId) ?? null)
       : null;
     if (focusCommand) {
-      setSelectedGroupId(focusCommand.groupId);
-      setSelectedCommandId(focusCommand.id);
-      setPendingFocusCommandId(null);
+      queueMicrotask(() => {
+        setSelectedGroupId(focusCommand.groupId);
+        setSelectedCommandId(focusCommand.id);
+        setPendingFocusCommandId(null);
+      });
       return;
     }
     const nextGroupId =
       selectedGroupId && sortedGroups.some((g) => g.id === selectedGroupId)
         ? selectedGroupId
         : sortedGroups[0].id;
-    setSelectedGroupId(nextGroupId);
+    queueMicrotask(() => {
+      setSelectedGroupId(nextGroupId);
+    });
     const nextCommands = commands.filter(
       (item) => item.groupId === nextGroupId,
     );
-    setSelectedCommandId((prev) => {
-      if (prev && nextCommands.some((item) => item.id === prev)) return prev;
-      return nextCommands[0]?.id ?? null;
+    queueMicrotask(() => {
+      setSelectedCommandId((prev) => {
+        if (prev && nextCommands.some((item) => item.id === prev)) return prev;
+        return nextCommands[0]?.id ?? null;
+      });
     });
   }, [
     managerOpen,
@@ -342,7 +352,9 @@ export default function BottomArea({
   useEffect(() => {
     if (!selectedGroupId) return;
     if (groupCommands.some((item) => item.id === selectedCommandId)) return;
-    setSelectedCommandId(groupCommands[0]?.id ?? null);
+    queueMicrotask(() => {
+      setSelectedCommandId(groupCommands[0]?.id ?? null);
+    });
   }, [selectedGroupId, groupCommands, selectedCommandId]);
 
   function handleAddGroup() {
@@ -384,18 +396,6 @@ export default function BottomArea({
     });
   }
 
-  if (!visibility.quickbar && !visibility.statusbar) {
-    return null;
-  }
-
-  const showResourceStatus = resourceMonitorEnabled;
-  const resourceStatus = resourceMonitorStatus;
-  const resourceCpu = resourceSnapshot?.cpu ?? null;
-  const resourceMemory = resourceSnapshot?.memory ?? null;
-  const resourceUnsupportedMessage = resolveResourceUnsupportedMessage(
-    t,
-    resourceSnapshot?.unsupportedReason,
-  );
   const transferHint = useMemo(() => {
     // 仅统计运行中的上传/下载任务，用于状态栏常驻指示器与点击行为控制。
     const progresses = Object.values(sftpProgressBySession);
@@ -411,6 +411,19 @@ export default function BottomArea({
       hasTransfer: runningUploads > 0 || runningDownloads > 0,
     };
   }, [sftpProgressBySession]);
+
+  if (!visibility.quickbar && !visibility.statusbar) {
+    return null;
+  }
+
+  const showResourceStatus = resourceMonitorEnabled;
+  const resourceStatus = resourceMonitorStatus;
+  const resourceCpu = resourceSnapshot?.cpu ?? null;
+  const resourceMemory = resourceSnapshot?.memory ?? null;
+  const resourceUnsupportedMessage = resolveResourceUnsupportedMessage(
+    t,
+    resourceSnapshot?.unsupportedReason,
+  );
 
   return (
     <>

@@ -350,7 +350,7 @@ export default function useMacAppMenu({
       }
     };
 
-    applyMenu();
+    void applyMenu();
 
     return () => {
       cancelled = true;

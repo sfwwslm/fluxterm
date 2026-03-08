@@ -114,7 +114,7 @@ export default function useLayoutState({
       }
       if (!raw) {
         layoutLoadedRef.current = true;
-        debug(
+        void debug(
           JSON.stringify({
             event: "layout:load-skip",
             reason: "empty-or-not-found",
@@ -147,9 +147,9 @@ export default function useLayoutState({
       setSlotGroups(normalized.slots);
       setFloatingOrigins(normalized.floating);
       setwidgetSizes(normalized.sizes);
-      debug(JSON.stringify({ event: "layout:loaded", payload: normalized }));
+      void debug(JSON.stringify({ event: "layout:loaded", payload: normalized }));
     } catch (error) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "layout:load-failed",
           error: extractErrorMessage(error),
@@ -362,26 +362,28 @@ export default function useLayoutState({
 
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
 
-    debug(
+    void debug(
       JSON.stringify({
         event: "layout:save-scheduled",
         debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
       }),
     );
 
-    saveTimerRef.current = window.setTimeout(async () => {
-      try {
-        await saveLayoutConfig(currentLayout);
-        lastSavedConfigRef.current = layoutStr;
-        debug(JSON.stringify({ event: "layout:persisted" }));
-      } catch (error) {
-        warn(
-          JSON.stringify({
-            event: "layout:save-failed",
-            error: extractErrorMessage(error),
-          }),
-        );
-      }
+    saveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await saveLayoutConfig(currentLayout);
+          lastSavedConfigRef.current = layoutStr;
+          void debug(JSON.stringify({ event: "layout:persisted" }));
+        } catch (error) {
+          void warn(
+            JSON.stringify({
+              event: "layout:save-failed",
+              error: extractErrorMessage(error),
+            }),
+          );
+        }
+      })();
     }, PERSISTENCE_SAVE_DEBOUNCE_MS);
 
     return () => {

@@ -223,10 +223,10 @@ export default function useSubApps({
           source: "main",
         });
         syncAppearance({ id, label });
-        win.once("tauri://destroyed", () => {
+        void win.once("tauri://destroyed", () => {
           clearWindowRuntime(id);
         });
-        win.once("tauri://error", () => {
+        void win.once("tauri://error", () => {
           clearWindowRuntime(id);
         });
       } catch {
@@ -244,11 +244,12 @@ export default function useSubApps({
     ],
   );
 
-  const notifyMainShutdown = useCallback(async () => {
+  const notifyMainShutdown = useCallback(() => {
     postLifecycleMessage({
       type: "subapp:main-shutdown",
       source: "main",
     });
+    return Promise.resolve();
   }, [postLifecycleMessage]);
 
   const subApps = useMemo<SubAppRuntimeInfo[]>(

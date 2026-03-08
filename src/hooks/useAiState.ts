@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { debug as logDebug } from "@/shared/logging/telemetry";
 import {
   aiExplainSelection,
@@ -118,6 +118,59 @@ export default function useAiState({
   const pendingRequestIdRef = useRef<string | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
 
+  const handleChunk = useCallback((payload: AiChatChunkPayload) => {
+    if (payload.requestId !== pendingRequestIdRef.current) return;
+    // 首包到达后退出“等待首包”态，并把增量文本追加到最后一个 assistant 消息。
+    setWaitingFirstChunk(false);
+    setMessages((prev) => {
+      if (!prev.length) return prev;
+      const next = prev.slice();
+      const last = next[next.length - 1];
+      if (last?.role !== "assistant") return prev;
+      next[next.length - 1] = {
+        ...last,
+        content: `${last.content}${payload.content}`,
+      };
+      return next;
+    });
+  }, []);
+
+  const handleDone = useCallback((payload: AiChatDonePayload) => {
+    if (payload.requestId !== pendingRequestIdRef.current) return;
+    // done 事件是流式请求的唯一正常收口点：清理 requestId 并复位 pending 状态。
+    pendingRequestIdRef.current = null;
+    setPending(false);
+    setWaitingFirstChunk(false);
+  }, []);
+
+  const handleError = useCallback(
+    (payload: AiChatErrorPayload) => {
+      if (payload.requestId !== pendingRequestIdRef.current) return;
+      pendingRequestIdRef.current = null;
+      setPending(false);
+      setWaitingFirstChunk(false);
+      setErrorMessage(payload.error.message);
+      setMessages((prev) => {
+        // 错误场景移除末尾 assistant 占位，避免空消息残留。
+        const next = prev.slice();
+        if (next[next.length - 1]?.role === "assistant") {
+          next.pop();
+        }
+        return next;
+      });
+      if (debugLoggingEnabled) {
+        void logDebug(
+          JSON.stringify({
+            event: "ai.session-chat.error",
+            sessionId: payload.sessionId,
+            error: payload.error.message,
+          }),
+        );
+      }
+    },
+    [debugLoggingEnabled],
+  );
+
   useEffect(() => {
     if (!enabled) return;
     let disposed = false;
@@ -127,21 +180,21 @@ export default function useAiState({
 
     // 流式事件订阅入口：chunk/done/error 三类事件共同驱动 pending 状态机。
     // Tauri 事件订阅是异步返回 unlisten 的，组件快速卸载时要立即回收晚到的订阅句柄。
-    onAiChatChunk(handleChunk).then((unlisten) => {
+    void onAiChatChunk(handleChunk).then((unlisten) => {
       if (disposed) {
         unlisten();
         return;
       }
       unlistenChunk = unlisten;
     });
-    onAiChatDone(handleDone).then((unlisten) => {
+    void onAiChatDone(handleDone).then((unlisten) => {
       if (disposed) {
         unlisten();
         return;
       }
       unlistenDone = unlisten;
     });
-    onAiChatError(handleError).then((unlisten) => {
+    void onAiChatError(handleError).then((unlisten) => {
       if (disposed) {
         unlisten();
         return;
@@ -156,7 +209,7 @@ export default function useAiState({
       unlistenDone?.();
       unlistenError?.();
     };
-  }, [enabled]);
+  }, [enabled, handleChunk, handleDone, handleError]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -218,56 +271,6 @@ export default function useAiState({
       state,
     } satisfies AiSessionSyncPayload);
   }, [activeSessionId, draft, enabled, errorMessage, messages]);
-
-  function handleChunk(payload: AiChatChunkPayload) {
-    if (payload.requestId !== pendingRequestIdRef.current) return;
-    // 首包到达后退出“等待首包”态，并把增量文本追加到最后一个 assistant 消息。
-    setWaitingFirstChunk(false);
-    setMessages((prev) => {
-      if (!prev.length) return prev;
-      const next = prev.slice();
-      const last = next[next.length - 1];
-      if (last?.role !== "assistant") return prev;
-      next[next.length - 1] = {
-        ...last,
-        content: `${last.content}${payload.content}`,
-      };
-      return next;
-    });
-  }
-
-  function handleDone(payload: AiChatDonePayload) {
-    if (payload.requestId !== pendingRequestIdRef.current) return;
-    // done 事件是流式请求的唯一正常收口点：清理 requestId 并复位 pending 状态。
-    pendingRequestIdRef.current = null;
-    setPending(false);
-    setWaitingFirstChunk(false);
-  }
-
-  function handleError(payload: AiChatErrorPayload) {
-    if (payload.requestId !== pendingRequestIdRef.current) return;
-    pendingRequestIdRef.current = null;
-    setPending(false);
-    setWaitingFirstChunk(false);
-    setErrorMessage(payload.error.message);
-    setMessages((prev) => {
-      // 错误场景移除末尾 assistant 占位，避免空消息残留。
-      const next = prev.slice();
-      if (next[next.length - 1]?.role === "assistant") {
-        next.pop();
-      }
-      return next;
-    });
-    if (debugLoggingEnabled) {
-      void logDebug(
-        JSON.stringify({
-          event: "ai.session-chat.error",
-          sessionId: payload.sessionId,
-          error: payload.error.message,
-        }),
-      );
-    }
-  }
 
   function cancelPendingRequest() {
     const requestId = pendingRequestIdRef.current;

@@ -11,6 +11,7 @@ import type {
   Session,
   SessionStateUi,
 } from "@/types";
+import { extractErrorMessage } from "@/shared/errors/appError";
 import { warn as logWarn } from "@/shared/logging/telemetry";
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
@@ -86,15 +87,22 @@ export async function connectProfileCommand({
       delete next[result.sessionId];
       return next;
     });
-  } catch (err: any) {
-    const code = err?.code ?? "";
+  } catch (err: unknown) {
+    const code =
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      typeof (err as { code?: unknown }).code === "string"
+        ? (err as { code: string }).code
+        : "";
+    const errorMessage = extractErrorMessage(err);
     if (code === "ssh_host_key_unknown" || code === "ssh_host_key_mismatch") {
-      logWarn(
+      void logWarn(
         JSON.stringify({
           event: "ssh.connect.pending-host-key-confirmation",
           profileId: profile.id,
           host: profile.host,
-          error: err?.message ?? String(err),
+          error: errorMessage,
         }),
       );
       throw err;
@@ -104,12 +112,12 @@ export async function connectProfileCommand({
         event: "ssh.connect.failed",
         profileId: profile.id,
         host: profile.host,
-        error: err?.message ?? String(err),
+        error: errorMessage,
       }),
     );
     openDialog({
       title: t("dialog.sshErrorTitle"),
-      message: err?.message ?? t("dialog.sshErrorBody"),
+      message: errorMessage || t("dialog.sshErrorBody"),
       confirmLabel: t("actions.close"),
     });
     throw err;

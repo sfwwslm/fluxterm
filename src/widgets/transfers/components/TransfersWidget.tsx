@@ -87,16 +87,22 @@ export default function TransfersWidget({
 
   useEffect(() => {
     if (!progress) {
-      setActiveTransferId(null);
-      setProgressStartedAt(null);
+      queueMicrotask(() => {
+        setActiveTransferId(null);
+        setProgressStartedAt(null);
+      });
       return;
     }
     if (progress.transferId !== activeTransferId) {
-      setActiveTransferId(progress.transferId);
-      setProgressStartedAt(Date.now());
+      queueMicrotask(() => {
+        setActiveTransferId(progress.transferId);
+        setProgressStartedAt(Date.now());
+      });
       return;
     }
-    setProgressStartedAt((prev) => prev ?? Date.now());
+    queueMicrotask(() => {
+      setProgressStartedAt((prev) => prev ?? Date.now());
+    });
   }, [activeTransferId, progress]);
 
   return (

@@ -6,7 +6,7 @@
  * 3. 管理具体的命令项（新增、更新、删除）。
  * 4. 提供当前活动会话可见的命令视图。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   exists,
   mkdir,
@@ -228,13 +228,13 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
   const lastSavedConfigRef = useRef<string>("");
 
   /** 执行配置文件加载。 */
-  async function loadConfig() {
+  const loadConfig = useCallback(async () => {
     try {
       const path = await getQuickbarPath();
       const existsFile = await exists(path);
       if (!existsFile) {
         loadedRef.current = true;
-        debug(
+        void debug(
           JSON.stringify({
             event: "quickbar:load-skip",
             reason: "file-not-exists",
@@ -252,7 +252,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
       setShowGroupTitle(normalized.showGroupTitle ?? true);
       setGroups(normalized.groups);
       setCommands(normalized.commands);
-      debug(
+      void debug(
         JSON.stringify({
           event: "quickbar:loaded",
           groups: normalized.groups.length,
@@ -260,7 +260,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
         }),
       );
     } catch (error) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "quickbar:load-failed",
           error: extractErrorMessage(error),
@@ -269,7 +269,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     } finally {
       loadedRef.current = true;
     }
-  }
+  }, [t]);
 
   /** 将最新配置落盘。 */
   async function saveConfig(payload: QuickBarConfig) {
@@ -282,7 +282,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
   // 启动加载与语言跟随。
   useEffect(() => {
     loadConfig().catch(() => {});
-  }, [t]);
+  }, [loadConfig]);
 
   useEffect(() => {
     // 默认分组名称始终跟随当前语言切换。
@@ -315,26 +315,28 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
       window.clearTimeout(saveTimerRef.current);
     }
 
-    debug(
+    void debug(
       JSON.stringify({
         event: "quickbar:save-scheduled",
         debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
       }),
     );
 
-    saveTimerRef.current = window.setTimeout(async () => {
-      try {
-        await saveConfig(currentConfig);
-        lastSavedConfigRef.current = configStr;
-        debug(JSON.stringify({ event: "quickbar:persisted" }));
-      } catch (error) {
-        warn(
-          JSON.stringify({
-            event: "quickbar:save-failed",
-            error: extractErrorMessage(error),
-          }),
-        );
-      }
+    saveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await saveConfig(currentConfig);
+          lastSavedConfigRef.current = configStr;
+          void debug(JSON.stringify({ event: "quickbar:persisted" }));
+        } catch (error) {
+          void warn(
+            JSON.stringify({
+              event: "quickbar:save-failed",
+              error: extractErrorMessage(error),
+            }),
+          );
+        }
+      })();
     }, PERSISTENCE_SAVE_DEBOUNCE_MS);
 
     return () => {

@@ -79,12 +79,12 @@ export default function useProxyState() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pushTimeline]);
 
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
-    registerProxyListeners((payload) => {
+    void registerProxyListeners((payload) => {
       logTelemetry("debug", "proxy.runtime.update", {
         proxyId: payload.proxyId,
         protocol: payload.protocol,
@@ -123,7 +123,7 @@ export default function useProxyState() {
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [pushTimeline]);
 
   useEffect(() => {
     refresh().catch(() => {});
@@ -141,86 +141,92 @@ export default function useProxyState() {
     );
   }, [proxies]);
 
-  const create = useCallback(async (spec: ProxySpec) => {
-    const traceId = createTraceId();
-    logTelemetry("debug", "proxy.create.start", {
-      traceId,
-      protocol: spec.protocol,
-      bindHost: spec.bindHost,
-      bindPort: spec.bindPort,
-      authEnabled: Boolean(spec.auth),
-    }).catch(() => {});
-    try {
-      await openProxy(spec, traceId);
-      pushTimeline({
-        level: "info",
-        event: "proxy.create.success",
-        message: `${spec.protocol} ${spec.bindHost}:${spec.bindPort}`,
-      });
-      logTelemetry("debug", "proxy.create.success", {
+  const create = useCallback(
+    async (spec: ProxySpec) => {
+      const traceId = createTraceId();
+      logTelemetry("debug", "proxy.create.start", {
         traceId,
         protocol: spec.protocol,
         bindHost: spec.bindHost,
         bindPort: spec.bindPort,
+        authEnabled: Boolean(spec.auth),
       }).catch(() => {});
-    } catch (error) {
-      pushTimeline({
-        level: "warn",
-        event: "proxy.create.failed",
-        message: error instanceof Error ? error.message : String(error),
-        code: "proxy_create_failed",
-      });
-      logTelemetry("warn", "proxy.create.failed", {
-        traceId,
-        protocol: spec.protocol,
-        bindHost: spec.bindHost,
-        bindPort: spec.bindPort,
-        error: {
+      try {
+        await openProxy(spec, traceId);
+        pushTimeline({
+          level: "info",
+          event: "proxy.create.success",
+          message: `${spec.protocol} ${spec.bindHost}:${spec.bindPort}`,
+        });
+        logTelemetry("debug", "proxy.create.success", {
+          traceId,
+          protocol: spec.protocol,
+          bindHost: spec.bindHost,
+          bindPort: spec.bindPort,
+        }).catch(() => {});
+      } catch (error) {
+        pushTimeline({
+          level: "warn",
+          event: "proxy.create.failed",
+          message: error instanceof Error ? error.message : String(error),
           code: "proxy_create_failed",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      }).catch(() => {});
-      throw error;
-    }
-  }, []);
+        });
+        logTelemetry("warn", "proxy.create.failed", {
+          traceId,
+          protocol: spec.protocol,
+          bindHost: spec.bindHost,
+          bindPort: spec.bindPort,
+          error: {
+            code: "proxy_create_failed",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }).catch(() => {});
+        throw error;
+      }
+    },
+    [pushTimeline],
+  );
 
-  const close = useCallback(async (proxyId: string) => {
-    const traceId = createTraceId();
-    logTelemetry("debug", "proxy.close.start", {
-      traceId,
-      proxyId,
-    }).catch(() => {});
-    try {
-      await closeProxy(proxyId, traceId);
-      pushTimeline({
-        level: "info",
-        event: "proxy.close.success",
-        proxyId,
-        message: proxyId,
-      });
-      logTelemetry("debug", "proxy.close.success", {
+  const close = useCallback(
+    async (proxyId: string) => {
+      const traceId = createTraceId();
+      logTelemetry("debug", "proxy.close.start", {
         traceId,
         proxyId,
       }).catch(() => {});
-    } catch (error) {
-      pushTimeline({
-        level: "warn",
-        event: "proxy.close.failed",
-        proxyId,
-        message: error instanceof Error ? error.message : String(error),
-        code: "proxy_close_failed",
-      });
-      logTelemetry("warn", "proxy.close.failed", {
-        traceId,
-        proxyId,
-        error: {
-          code: "proxy_close_failed",
+      try {
+        await closeProxy(proxyId, traceId);
+        pushTimeline({
+          level: "info",
+          event: "proxy.close.success",
+          proxyId,
+          message: proxyId,
+        });
+        logTelemetry("debug", "proxy.close.success", {
+          traceId,
+          proxyId,
+        }).catch(() => {});
+      } catch (error) {
+        pushTimeline({
+          level: "warn",
+          event: "proxy.close.failed",
+          proxyId,
           message: error instanceof Error ? error.message : String(error),
-        },
-      }).catch(() => {});
-      throw error;
-    }
-  }, []);
+          code: "proxy_close_failed",
+        });
+        logTelemetry("warn", "proxy.close.failed", {
+          traceId,
+          proxyId,
+          error: {
+            code: "proxy_close_failed",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }).catch(() => {});
+        throw error;
+      }
+    },
+    [pushTimeline],
+  );
 
   const closeAll = useCallback(async () => {
     const traceId = createTraceId();
@@ -253,7 +259,7 @@ export default function useProxyState() {
       }).catch(() => {});
       throw error;
     }
-  }, []);
+  }, [pushTimeline]);
 
   const errorBuckets = useMemo<ProxyErrorBucket[]>(() => {
     const map = new Map<string, ProxyErrorBucket>();

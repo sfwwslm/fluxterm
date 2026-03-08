@@ -270,7 +270,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
               <Button
                 className="proxy-action-button"
                 variant="ghost"
-                onClick={() => handleCreateProxy().catch(() => {})}
+                onClick={() => {
+                  void handleCreateProxy().catch(() => {});
+                }}
                 disabled={busy}
               >
                 {t("proxy.actions.create")}
@@ -278,7 +280,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
               <Button
                 className="proxy-action-button"
                 variant="ghost"
-                onClick={() => refresh().catch(() => {})}
+                onClick={() => {
+                  void refresh().catch(() => {});
+                }}
                 disabled={busy || loading}
               >
                 {t("proxy.actions.refresh")}
@@ -286,7 +290,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
               <Button
                 className="proxy-action-button"
                 variant="ghost"
-                onClick={() => handleCloseAll().catch(() => {})}
+                onClick={() => {
+                  void handleCloseAll().catch(() => {});
+                }}
                 disabled={busy || proxies.length === 0}
               >
                 {t("proxy.actions.closeAll")}
@@ -548,9 +554,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
                       className="proxy-item-close-inline"
                       variant="ghost"
                       size="sm"
-                      onClick={() =>
-                        handleCloseProxy(item.proxyId).catch(() => {})
-                      }
+                      onClick={() => {
+                        void handleCloseProxy(item.proxyId).catch(() => {});
+                      }}
                       disabled={busy}
                     >
                       {t("proxy.actions.close")}

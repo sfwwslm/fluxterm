@@ -37,7 +37,9 @@ export default function ContextMenu({
   const [position, setPosition] = useState({ x, y });
 
   useLayoutEffect(() => {
-    setPosition({ x, y });
+    queueMicrotask(() => {
+      setPosition({ x, y });
+    });
   }, [x, y]);
 
   useLayoutEffect(() => {

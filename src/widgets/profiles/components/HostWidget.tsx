@@ -2,7 +2,7 @@
  * 主机面板。
  * 负责 SSH 主机、本地 Shell 和分组树展示，并提供主机相关右键菜单操作。
  */
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   FiEdit2,
   FiEye,
@@ -142,27 +142,36 @@ export default function HostWidget({
   const normalizedQuery = query.trim().toLowerCase();
   const queryActive = normalizedQuery.length > 0;
   /** 判断某个 SSH 主机是否命中搜索条件。 */
-  const matchesProfile = (profile: HostProfile) => {
-    if (!queryActive) return true;
-    const text =
-      `${profile.name} ${profile.host} ${profile.username}`.toLowerCase();
-    return text.includes(normalizedQuery);
-  };
+  const matchesProfile = useCallback(
+    (profile: HostProfile) => {
+      if (!queryActive) return true;
+      const text =
+        `${profile.name} ${profile.host} ${profile.username}`.toLowerCase();
+      return text.includes(normalizedQuery);
+    },
+    [normalizedQuery, queryActive],
+  );
   /** 判断分组标题是否命中搜索条件。 */
-  const matchesGroup = (group: string) =>
-    queryActive && group.toLowerCase().includes(normalizedQuery);
+  const matchesGroup = useCallback(
+    (group: string) =>
+      queryActive && group.toLowerCase().includes(normalizedQuery),
+    [normalizedQuery, queryActive],
+  );
   /** 判断本地 Shell 是否命中搜索条件。 */
-  const matchesShell = (shell: LocalShellProfile) => {
-    if (!queryActive) return true;
-    const text = `${shell.label} ${shell.path}`.toLowerCase();
-    return text.includes(normalizedQuery);
-  };
+  const matchesShell = useCallback(
+    (shell: LocalShellProfile) => {
+      if (!queryActive) return true;
+      const text = `${shell.label} ${shell.path}`.toLowerCase();
+      return text.includes(normalizedQuery);
+    },
+    [normalizedQuery, queryActive],
+  );
 
   const filteredLocalShells = useMemo(() => {
     if (!queryActive) return localShells;
     if (matchesGroup(localShellLabel)) return localShells;
     return localShells.filter(matchesShell);
-  }, [localShells, queryActive, normalizedQuery, localShellLabel]);
+  }, [localShellLabel, localShells, matchesGroup, matchesShell, queryActive]);
 
   // 搜索时优先保留命中的整组；如果只命中了组内部分主机，则收缩成过滤后的结果。
   const filteredGroups = useMemo(() => {
@@ -186,7 +195,7 @@ export default function HostWidget({
           items: HostProfile[];
         } => item !== null,
       );
-  }, [customGroups, queryActive, normalizedQuery]);
+  }, [customGroups, matchesGroup, matchesProfile, queryActive]);
 
   const showLocalShellGroup =
     !queryActive ||
@@ -195,7 +204,7 @@ export default function HostWidget({
   const filteredRootProfiles = useMemo(() => {
     if (!queryActive) return rootProfiles;
     return rootProfiles.filter(matchesProfile);
-  }, [rootProfiles, queryActive, normalizedQuery]);
+  }, [matchesProfile, queryActive, rootProfiles]);
 
   // 移动主机时的目标分组选项，根级通过保留值映射为“未分组”。
   const moveGroupOptions = useMemo(

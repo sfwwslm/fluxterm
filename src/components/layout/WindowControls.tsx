@@ -28,7 +28,7 @@ export default function WindowControls({ disabled }: WindowControlsProps) {
 
   const handleMinimize = useCallback(() => {
     if (isDisabled) return;
-    getCurrentWindow().minimize();
+    void getCurrentWindow().minimize();
   }, [isDisabled]);
 
   const handleToggleMaximize = useCallback(async () => {
@@ -40,16 +40,20 @@ export default function WindowControls({ disabled }: WindowControlsProps) {
 
   const handleClose = useCallback(() => {
     if (isDisabled) return;
-    getCurrentWindow().close();
+    void getCurrentWindow().close();
   }, [isDisabled]);
 
   useEffect(() => {
     if (!hasTauriRuntime) return;
-    refreshMaximized().catch(() => {});
+    queueMicrotask(() => {
+      void refreshMaximized().catch(() => {});
+    });
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
       .onResized(() => {
-        refreshMaximized().catch(() => {});
+        queueMicrotask(() => {
+          void refreshMaximized().catch(() => {});
+        });
       })
       .then((stop) => {
         unlisten = stop;
@@ -78,7 +82,9 @@ export default function WindowControls({ disabled }: WindowControlsProps) {
         variant="ghost"
         size="icon"
         data-tauri-drag-region="false"
-        onClick={handleToggleMaximize}
+        onClick={() => {
+          void handleToggleMaximize();
+        }}
         disabled={isDisabled}
         aria-label={isMaximized ? "Restore window" : "Maximize window"}
       >

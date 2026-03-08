@@ -27,43 +27,45 @@ export default function useSftpDropUpload({
     let unlisten: (() => void) | null = null;
 
     const register = async () => {
-      unlisten = await getCurrentWindow().onDragDropEvent(async (event) => {
-        if (cancelled) return;
-        if (!enabled) {
-          setDropState("idle");
-          return;
-        }
-        const widget = widgetRef.current;
-        if (!widget) {
-          setDropState("idle");
-          return;
-        }
-        if (event.payload.type === "leave") {
-          setDropState("idle");
-          return;
-        }
-        const scale = window.devicePixelRatio || 1;
-        const x = event.payload.position.x / scale;
-        const y = event.payload.position.y / scale;
-        const rect = widget.getBoundingClientRect();
-        const inside =
-          x >= rect.left &&
-          x <= rect.right &&
-          y >= rect.top &&
-          y <= rect.bottom;
-        if (event.payload.type === "over") {
-          setDropState(inside ? "accept" : "idle");
-          return;
-        }
-        if (event.payload.type === "enter") {
-          setDropState(inside ? "accept" : "idle");
-          return;
-        }
-        if (event.payload.type === "drop") {
-          setDropState("idle");
-          if (!inside || !event.payload.paths.length) return;
-          await onDropPaths(event.payload.paths);
-        }
+      unlisten = await getCurrentWindow().onDragDropEvent((event) => {
+        void (async () => {
+          if (cancelled) return;
+          if (!enabled) {
+            setDropState("idle");
+            return;
+          }
+          const widget = widgetRef.current;
+          if (!widget) {
+            setDropState("idle");
+            return;
+          }
+          if (event.payload.type === "leave") {
+            setDropState("idle");
+            return;
+          }
+          const scale = window.devicePixelRatio || 1;
+          const x = event.payload.position.x / scale;
+          const y = event.payload.position.y / scale;
+          const rect = widget.getBoundingClientRect();
+          const inside =
+            x >= rect.left &&
+            x <= rect.right &&
+            y >= rect.top &&
+            y <= rect.bottom;
+          if (event.payload.type === "over") {
+            setDropState(inside ? "accept" : "idle");
+            return;
+          }
+          if (event.payload.type === "enter") {
+            setDropState(inside ? "accept" : "idle");
+            return;
+          }
+          if (event.payload.type === "drop") {
+            setDropState("idle");
+            if (!inside || !event.payload.paths.length) return;
+            await onDropPaths(event.payload.paths);
+          }
+        })();
       });
     };
 

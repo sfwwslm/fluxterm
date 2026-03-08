@@ -66,7 +66,9 @@ export default function AiWidget({
   useEffect(() => {
     if (keepLocalDraftBuffer && isComposing) return;
     // 外部草稿变化回灌到本地输入缓存；中文输入法组合态期间避免覆盖用户输入。
-    setLocalDraft(draft);
+    queueMicrotask(() => {
+      setLocalDraft(draft);
+    });
   }, [draft, isComposing, keepLocalDraftBuffer]);
 
   useEffect(() => {

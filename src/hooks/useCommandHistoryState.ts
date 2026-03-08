@@ -127,7 +127,7 @@ export default function useCommandHistoryState({
   const loadedRef = useRef(false);
 
   useEffect(() => {
-    loadCommandHistoryStore()
+    void loadCommandHistoryStore()
       .then((nextStore) => {
         setStore(nextStore);
       })
@@ -154,7 +154,9 @@ export default function useCommandHistoryState({
   }, [store]);
 
   useEffect(() => {
-    setSearchQuery("");
+    queueMicrotask(() => {
+      setSearchQuery("");
+    });
   }, [activeSessionId]);
 
   const activeItems = useMemo(() => {

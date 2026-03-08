@@ -127,7 +127,7 @@ function parseJsonStringMessage(value: string): string | null {
     return null;
   }
   try {
-    const parsed = JSON.parse(trimmed);
+    const parsed: unknown = JSON.parse(trimmed);
     if (!isRecord(parsed)) return null;
     return pickString(
       parsed.message,

@@ -92,6 +92,10 @@ export default function useSftpState({
   >({});
   const unsupportedLoggedRef = useRef<Record<string, boolean>>({});
   const progressBySessionRef = useRef<Record<string, SftpProgress>>({});
+  const clearFileViewRef = useRef<(sessionId: string) => void>(() => {});
+  const loadHomePathRef = useRef<
+    (sessionId?: string | null) => Promise<void>
+  >(async () => {});
 
   const activeFileView = useMemo(() => {
     if (!activeSessionId) return null;
@@ -282,6 +286,11 @@ export default function useSftpState({
       throw error;
     }
   }
+
+  useEffect(() => {
+    clearFileViewRef.current = clearFileView;
+    loadHomePathRef.current = loadHomePath;
+  });
 
   async function openRemoteDir(path: string) {
     if (!activeSessionId) return;
@@ -481,13 +490,14 @@ export default function useSftpState({
   useEffect(() => {
     if (!activeSessionId) return;
     if ((!enabled || !active) && !activeSessionIsLocal) {
-      setSessionAvailability(activeSessionId, "disabled");
-      clearFileView(activeSessionId);
+      queueMicrotask(() => {
+        setSessionAvailability(activeSessionId, "disabled");
+        clearFileViewRef.current(activeSessionId);
+      });
       return;
     }
-    // 这里不能把 isLocalSession 函数引用直接作为初始化触发条件，
-    // 否则上层 render 时函数 identity 变化会让目录初始化 effect 反复重跑。
-    loadHomePath(activeSessionId).catch(() => {});
+    // 初始化只由会话/连接状态驱动；避免函数 identity 变化导致重复触发。
+    loadHomePathRef.current(activeSessionId).catch(() => {});
   }, [
     active,
     activeSessionId,

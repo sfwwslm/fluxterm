@@ -83,7 +83,9 @@ export default function Select({
       selectedIndex >= 0 && !options[selectedIndex]?.disabled
         ? selectedIndex
         : findFirstEnabledIndex(options);
-    setActiveIndex(targetIndex);
+    queueMicrotask(() => {
+      setActiveIndex(targetIndex);
+    });
   }, [open, options, selectedIndex]);
 
   useEffect(() => {

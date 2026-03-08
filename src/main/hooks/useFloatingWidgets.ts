@@ -342,7 +342,7 @@ export default function useFloatingWidgets({
         });
         floatingWindowRef.current[widget] = win;
         // 正常关闭路径以下层窗口销毁为唯一事实源。
-        win.once("tauri://error", () => {
+        void win.once("tauri://error", () => {
           cleanupFloatingRuntime(widget);
           setFloatingOrigins((prev) => {
             if (!prev[widget]) return prev;
@@ -361,7 +361,7 @@ export default function useFloatingWidgets({
             };
           });
         });
-        win.once("tauri://destroyed", () => {
+        void win.once("tauri://destroyed", () => {
           if (shuttingDownRef.current) {
             cleanupFloatingRuntime(widget);
             return;

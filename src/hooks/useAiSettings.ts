@@ -229,13 +229,13 @@ export default function useAiSettings(): UseAiSettingsResult {
             settings,
           ),
         );
-        debug(
+        void debug(
           JSON.stringify({ event: "ai-settings:loaded", payload: settings }),
         );
       })
       .catch((error) => {
         if (!active) return;
-        warn(
+        void warn(
           JSON.stringify({
             event: "ai-settings:load-failed",
             error: extractErrorMessage(error),
@@ -274,30 +274,32 @@ export default function useAiSettings(): UseAiSettingsResult {
     setSaveState("saving");
     setSaveError(null);
 
-    debug(
+    void debug(
       JSON.stringify({
         event: "ai-settings:save-scheduled",
         debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
       }),
     );
 
-    saveTimerRef.current = window.setTimeout(async () => {
-      try {
-        const saved = await aiSettingsSave(nextSaveInput);
-        lastLoadedViewRef.current = saved;
-        lastSavedConfigRef.current = configStr;
-        setSaveState("saved");
-        debug(JSON.stringify({ event: "ai-settings:persisted" }));
-      } catch (error) {
-        setSaveState("error");
-        setSaveError(extractErrorMessage(error));
-        warn(
-          JSON.stringify({
-            event: "ai-settings:save-failed",
-            error: extractErrorMessage(error),
-          }),
-        ).catch(() => {});
-      }
+    saveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const saved = await aiSettingsSave(nextSaveInput);
+          lastLoadedViewRef.current = saved;
+          lastSavedConfigRef.current = configStr;
+          setSaveState("saved");
+          void debug(JSON.stringify({ event: "ai-settings:persisted" }));
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(extractErrorMessage(error));
+          void warn(
+            JSON.stringify({
+              event: "ai-settings:save-failed",
+              error: extractErrorMessage(error),
+            }),
+          );
+        }
+      })();
     }, PERSISTENCE_SAVE_DEBOUNCE_MS);
 
     return () => {

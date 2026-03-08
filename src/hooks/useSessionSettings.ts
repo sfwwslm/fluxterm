@@ -147,7 +147,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     try {
       const path = await getSessionSettingsPath();
       if (!(await exists(path))) {
-        debug(
+        void debug(
           JSON.stringify({
             event: "session-settings:load-skip",
             reason: "file-not-exists",
@@ -190,11 +190,11 @@ export default function useSessionSettings(): UseSessionSettingsResult {
           ),
         );
       }
-      debug(
+      void debug(
         JSON.stringify({ event: "session-settings:loaded", payload: parsed }),
       );
     } catch (error) {
-      warn(
+      void warn(
         JSON.stringify({
           event: "session-settings:load-failed",
           error: extractErrorMessage(error),
@@ -252,29 +252,31 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     setSaveState("saving");
     setSaveError(null);
 
-    debug(
+    void debug(
       JSON.stringify({
         event: "session-settings:save-scheduled",
         debounce: PERSISTENCE_SAVE_DEBOUNCE_MS,
       }),
     );
 
-    saveTimerRef.current = window.setTimeout(async () => {
-      try {
-        await saveSessionSettings(currentConfig);
-        lastSavedConfigRef.current = configStr;
-        setSaveState("saved");
-        debug(JSON.stringify({ event: "session-settings:persisted" }));
-      } catch (error) {
-        setSaveState("error");
-        setSaveError(extractErrorMessage(error));
-        warn(
-          JSON.stringify({
-            event: "session-settings:save-failed",
-            error: extractErrorMessage(error),
-          }),
-        );
-      }
+    saveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await saveSessionSettings(currentConfig);
+          lastSavedConfigRef.current = configStr;
+          setSaveState("saved");
+          void debug(JSON.stringify({ event: "session-settings:persisted" }));
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(extractErrorMessage(error));
+          void warn(
+            JSON.stringify({
+              event: "session-settings:save-failed",
+              error: extractErrorMessage(error),
+            }),
+          );
+        }
+      })();
     }, PERSISTENCE_SAVE_DEBOUNCE_MS);
 
     return () => {

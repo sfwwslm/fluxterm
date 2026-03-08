@@ -18,7 +18,7 @@ export default function useSshTunnelState(activeSessionId: string | null) {
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
-    registerTunnelListeners((payload) => {
+    void registerTunnelListeners((payload) => {
       if (disposed) return;
       logInfo(
         JSON.stringify({
@@ -173,7 +173,9 @@ export default function useSshTunnelState(activeSessionId: string | null) {
 
   useEffect(() => {
     if (!activeSessionId) return;
-    refresh().catch(() => {});
+    queueMicrotask(() => {
+      void refresh().catch(() => {});
+    });
   }, [activeSessionId, refresh]);
 
   const activeTunnels = useMemo(

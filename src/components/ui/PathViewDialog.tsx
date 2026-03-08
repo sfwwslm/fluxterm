@@ -39,10 +39,12 @@ export default function PathViewDialog({
         <Button
           variant="ghost"
           size="sm"
-          onClick={async () => {
-            if (!path) return;
-            await writeText(path).catch(() => {});
-            setCopied(true);
+          onClick={() => {
+            void (async () => {
+              if (!path) return;
+              await writeText(path).catch(() => {});
+              setCopied(true);
+            })();
           }}
         >
           {copied ? copiedText : copyText}

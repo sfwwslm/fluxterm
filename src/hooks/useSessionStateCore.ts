@@ -2,7 +2,7 @@
  * 会话状态核心 Hook。
  * 职责：维护会话状态机、连接生命周期、日志与事件处理。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { error as logError, info as logInfo } from "@/shared/logging/telemetry";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
@@ -195,6 +195,15 @@ export default function useSessionState({
   const localShellStartedRef = useRef(false);
   const localSessionMetaRef = useRef<Record<string, LocalSessionMeta>>({});
   const profilesRef = useRef<HostProfile[]>([]);
+  const connectProfileRef = useRef<(profile: HostProfile) => Promise<void>>(
+    async () => {},
+  );
+  const disconnectSessionRef = useRef<(sessionId: string) => Promise<void>>(
+    async () => {},
+  );
+  const reconnectSessionRef = useRef<(sessionId: string) => Promise<void>>(
+    async () => {},
+  );
   // Tauri 事件监听需要尽量保持单次注册，否则在 React 重渲染时频繁 unlisten/listen，
   // 容易让 Rust 侧的异步事件打到已经失效的 callback，出现 "Couldn't find callback id" 警告。
   // 这里用 ref 持有“最新的事件处理函数”，把监听器生命周期与 React 渲染解耦。
@@ -239,18 +248,24 @@ export default function useSessionState({
     ? (reconnectInfoBySession[activeSessionId] ?? null)
     : null;
 
+  const localSessionIdSet = useMemo(
+    () => new Set(Object.keys(localSessionMeta)),
+    [localSessionMeta],
+  );
+  const activeSessionIsLocal =
+    !!activeSession && localSessionIdSet.has(activeSession.sessionId);
+
   const activeSessionProfile =
-    activeSession && !isLocalSession(activeSession.sessionId)
+    activeSession && !activeSessionIsLocal
       ? (profiles.find((item) => item.id === activeSession.profileId) ?? null)
       : null;
 
-  const isRemoteSession =
-    !!activeSession && !isLocalSession(activeSession.sessionId);
+  const isRemoteSession = !!activeSession && !activeSessionIsLocal;
 
   const isRemoteConnected =
     !!activeSession &&
     activeSessionState === "connected" &&
-    !isLocalSession(activeSession.sessionId);
+    !activeSessionIsLocal;
 
   const canReconnect =
     !!activeSessionProfile &&
@@ -342,7 +357,7 @@ export default function useSessionState({
 
   async function createSshSession(profile: HostProfile) {
     const { cols, rows } = getTerminalSize();
-    logInfo(
+    void logInfo(
       JSON.stringify({
         event: "ssh.connect.invoke",
         profileId: profile.id,
@@ -356,21 +371,24 @@ export default function useSessionState({
     });
   }
 
-  async function createLocalShellSession(
-    shellOverride: string | null = null,
-    launchConfig?: LocalShellLaunchConfig,
-  ) {
-    const { cols, rows } = getTerminalSize();
-    const payload: Record<string, unknown> = { size: { cols, rows } };
-    const resolvedShell = shellOverride ?? shellId;
-    if (resolvedShell) {
-      payload.shellId = resolvedShell;
-    }
-    if (launchConfig) {
-      payload.launchConfig = launchConfig;
-    }
-    return await callTauri<Session>("local_shell_connect", payload);
-  }
+  const createLocalShellSession = useCallback(
+    async (
+      shellOverride: string | null = null,
+      launchConfig?: LocalShellLaunchConfig,
+    ) => {
+      const { cols, rows } = getTerminalSize();
+      const payload: Record<string, unknown> = { size: { cols, rows } };
+      const resolvedShell = shellOverride ?? shellId;
+      if (resolvedShell) {
+        payload.shellId = resolvedShell;
+      }
+      if (launchConfig) {
+        payload.launchConfig = launchConfig;
+      }
+      return await callTauri<Session>("local_shell_connect", payload);
+    },
+    [getTerminalSize, shellId],
+  );
 
   function sessionCommand(
     sessionId: string,
@@ -499,7 +517,7 @@ export default function useSessionState({
             },
             "error",
           );
-          logError(
+          void logError(
             JSON.stringify({
               event: "ssh.session.error",
               sessionId: payload.sessionId,
@@ -507,7 +525,7 @@ export default function useSessionState({
             }),
           );
           if (!isLocalSession(payload.sessionId)) {
-            disconnectSession(payload.sessionId).catch(() => {});
+            disconnectSessionRef.current(payload.sessionId).catch(() => {});
           }
           if (!errorDialogShownRef.current[payload.sessionId]) {
             errorDialogShownRef.current[payload.sessionId] = true;
@@ -520,7 +538,7 @@ export default function useSessionState({
         }
         if (payload.state === "connected") {
           appendLog("log.event.connected", { name: label }, "success");
-          logInfo(
+          void logInfo(
             JSON.stringify({
               event: "ssh.session.connected",
               sessionId: payload.sessionId,
@@ -528,7 +546,7 @@ export default function useSessionState({
           );
         }
         if (payload.state === "connecting") {
-          logInfo(
+          void logInfo(
             JSON.stringify({
               event: "ssh.session.connecting",
               sessionId: payload.sessionId,
@@ -582,10 +600,10 @@ export default function useSessionState({
                 if (reconnectTargetSessionId) {
                   // 确认后继续当前重连会话。
                   clearReconnectState(reconnectTargetSessionId);
-                  await reconnectSession(reconnectTargetSessionId);
+                  await reconnectSessionRef.current(reconnectTargetSessionId);
                   return;
                 }
-                await connectProfile(profile);
+                await connectProfileRef.current(profile);
               })
               .catch(() => {
                 clearPendingHostKeyForProfile(payload.profileId);
@@ -634,41 +652,52 @@ export default function useSessionState({
       setSessionStates,
       setSessionReasons,
       t,
-      logInfo,
-      logError,
+      logInfo: (message) => {
+        void logInfo(message);
+      },
+      logError: (message) => {
+        void logError(message);
+      },
       openDialog,
     });
   }
 
-  async function connectLocalShell(
-    shellProfile: LocalShellProfile | null,
-    activate = false,
-  ) {
-    const resolvedShellId = shellProfile?.id ?? shellId ?? null;
-    const launchConfig =
-      (resolvedShellId ? localShellByShellId[resolvedShellId] : undefined) ??
-      localShellLaunchConfig;
-    await connectLocalShellCommand({
-      shellProfile,
-      activate,
+  const connectLocalShell = useCallback(
+    async (shellProfile: LocalShellProfile | null, activate = false) => {
+      const resolvedShellId = shellProfile?.id ?? shellId ?? null;
+      const launchConfig =
+        (resolvedShellId ? localShellByShellId[resolvedShellId] : undefined) ??
+        localShellLaunchConfig;
+      await connectLocalShellCommand({
+        shellProfile,
+        activate,
+        createLocalShellSession,
+        localSessionIdsRef,
+        setLocalSessionMeta,
+        setSessions,
+        attachSessionToWorkspace: (sessionId, nextActivate = activate) =>
+          sessionWorkspace.attachSession(
+            sessionId,
+            nextActivate,
+            sessionWorkspace.workspace.root
+              ? { paneId: sessionWorkspace.getActivePaneId() ?? undefined }
+              : undefined,
+          ),
+        setSessionStates,
+        setSessionReasons,
+        t,
+        launchConfig,
+      });
+    },
+    [
       createLocalShellSession,
-      localSessionIdsRef,
-      setLocalSessionMeta,
-      setSessions,
-      attachSessionToWorkspace: (sessionId, nextActivate = activate) =>
-        sessionWorkspace.attachSession(
-          sessionId,
-          nextActivate,
-          sessionWorkspace.workspace.root
-            ? { paneId: sessionWorkspace.getActivePaneId() ?? undefined }
-            : undefined,
-        ),
-      setSessionStates,
-      setSessionReasons,
+      localShellByShellId,
+      localShellLaunchConfig,
+      sessionWorkspace,
+      shellId,
       t,
-      launchConfig,
-    });
-  }
+    ],
+  );
 
   async function disconnectSession(sessionId: string) {
     const state = sessionStatesRef.current[sessionId];
@@ -713,6 +742,12 @@ export default function useSessionState({
       t,
     });
   }
+
+  useEffect(() => {
+    connectProfileRef.current = connectProfile;
+    disconnectSessionRef.current = disconnectSession;
+    reconnectSessionRef.current = reconnectSession;
+  });
 
   function switchSession(sessionId: string) {
     sessionWorkspace.activateSession(sessionId);

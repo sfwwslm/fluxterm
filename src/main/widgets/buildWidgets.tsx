@@ -194,7 +194,9 @@ export function buildWidgets(
         activeProfileId={activeProfileId}
         connectingProfileId={connectingProfileId}
         onPick={pickProfile}
-        onConnectProfile={onConnectProfile}
+        onConnectProfile={(profile) => {
+          void onConnectProfile(profile);
+        }}
         onOpenNewProfile={onOpenNewProfile}
         onImportOpenSshConfig={onImportOpenSshConfig}
         onOpenEditProfile={onOpenEditProfile}
@@ -226,15 +228,31 @@ export function buildWidgets(
         sftpAvailability={sftpAvailability}
         terminalPathSyncStatus={terminalPathSyncStatus}
         entries={entries}
-        onRefresh={onRefreshList}
-        onOpen={onOpenRemoteDir}
+        onRefresh={(path) => {
+          void onRefreshList(path);
+        }}
+        onOpen={(path) => {
+          void onOpenRemoteDir(path);
+        }}
         onOpenFile={onOpenFile}
-        onUpload={onUploadFile}
-        onDropUpload={onUploadDroppedPaths}
-        onDownload={onDownloadFile}
-        onMkdir={onCreateFolder}
-        onRename={onRenameEntry}
-        onRemove={onRemoveEntry}
+        onUpload={() => {
+          void onUploadFile();
+        }}
+        onDropUpload={(paths) => {
+          return onUploadDroppedPaths(paths);
+        }}
+        onDownload={(entry) => {
+          void onDownloadFile(entry);
+        }}
+        onMkdir={(name) => {
+          void onCreateFolder(name);
+        }}
+        onRename={(entry, name) => {
+          void onRenameEntry(entry, name);
+        }}
+        onRemove={(entry) => {
+          return onRemoveEntry(entry);
+        }}
         locale={locale}
         t={t}
       />

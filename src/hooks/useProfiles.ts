@@ -298,7 +298,9 @@ export default function useProfiles(): UseProfilesResult {
 
   useEffect(() => {
     // 初始仅加载数据，不再默认选中第一个主机，避免列表在进入时出现预设高亮。
-    loadProfiles().catch(() => {});
+    queueMicrotask(() => {
+      void loadProfiles().catch(() => {});
+    });
   }, []);
 
   return {

@@ -88,5 +88,14 @@ export function useFloatingWidgetSnapshotSync<Message>({
 
     channel.close();
     return undefined;
-  }, [channelName, floatingWidgetKey, isFloatingWidget, ...deps]);
+  }, [
+    channelName,
+    floatingWidgetKey,
+    isFloatingWidget,
+    broadcastSnapshot,
+    onMainWindowMessage,
+    onFloatingWindowMessage,
+    requestSnapshot,
+    deps,
+  ]);
 }

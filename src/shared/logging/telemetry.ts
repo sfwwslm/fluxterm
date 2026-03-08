@@ -37,7 +37,7 @@ export async function logTelemetry(
     source: "frontend",
     level,
     traceId:
-      typeof fields?.traceId === "string" ? (fields.traceId as string) : null,
+      typeof fields?.traceId === "string" ? fields.traceId : null,
     ...(fields ?? {}),
   };
   const line = JSON.stringify(payload);

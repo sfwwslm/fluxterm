@@ -96,8 +96,14 @@ export async function attemptSessionReconnect({
   try {
     const result = await createSshSession(profile);
     replaceSessionConnection(sessionId, result);
-  } catch (error: any) {
-    const code = error?.code ?? "";
+  } catch (error: unknown) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : "";
     if (code === "ssh_host_key_unknown" || code === "ssh_host_key_mismatch") {
       setSessionStates((prev) => ({
         ...prev,

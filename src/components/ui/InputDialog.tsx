@@ -39,7 +39,9 @@ export default function InputDialog({
 
   useEffect(() => {
     if (!open) return;
-    setValue(initialValue);
+    queueMicrotask(() => {
+      setValue(initialValue);
+    });
   }, [open, initialValue]);
 
   return (

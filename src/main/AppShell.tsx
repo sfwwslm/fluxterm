@@ -2,7 +2,14 @@
  * 应用编排层。
  * 职责：聚合 settings/profiles/layout/session/terminal/sftp 等领域能力并组装主界面。
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import "@/components/ui/base-input.css";
@@ -553,7 +560,7 @@ export default function AppShell() {
         : "linear-gradient(0deg, rgba(7, 10, 14, 0.42), rgba(7, 10, 14, 0.42))";
     root.style.setProperty("--app-bg-overlay", overlay);
 
-    (async () => {
+    void (async () => {
       try {
         const filePath =
           await getBackgroundImageAssetPath(backgroundImageAsset);
@@ -589,7 +596,7 @@ export default function AppShell() {
         if (shouldDeferFloatingWindowReveal) {
           setFloatingWindowAppearanceReady(true);
         }
-        warn(
+        void warn(
           JSON.stringify({
             event: "settings:background-image-load-failed",
             asset: backgroundImageAsset,
@@ -688,7 +695,7 @@ export default function AppShell() {
       .catch(() => {});
   }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
 
-  function openNewProfile() {
+  const openNewProfile = useCallback(() => {
     const shellScopedConfig = shellId
       ? localShellByShellId[shellId]
       : undefined;
@@ -702,7 +709,7 @@ export default function AppShell() {
       charset: effectiveShellLaunchConfig.charset ?? "utf-8",
     });
     setProfileModalOpen(true);
-  }
+  }, [defaultProfile, localShellByShellId, localShellLaunchConfig, shellId]);
 
   function closeProfileModal() {
     setProfileModalOpen(false);
@@ -1125,12 +1132,15 @@ export default function AppShell() {
     openAllDevtools();
   }
 
-  function isMainSlotVisible(slot: LayoutWidgetSlot) {
-    if (slot === "bottom") return !layoutCollapsed.bottom;
-    return slot.startsWith("left:")
-      ? !layoutCollapsed.left
-      : !layoutCollapsed.right;
-  }
+  const isMainSlotVisible = useCallback(
+    (slot: LayoutWidgetSlot) => {
+      if (slot === "bottom") return !layoutCollapsed.bottom;
+      return slot.startsWith("left:")
+        ? !layoutCollapsed.left
+        : !layoutCollapsed.right;
+    },
+    [layoutCollapsed.bottom, layoutCollapsed.left, layoutCollapsed.right],
+  );
 
   const availableWidgets = useMemo(() => {
     // 允许把已在主窗口某个槽位中的组件“移到”当前槽位，
@@ -1149,14 +1159,7 @@ export default function AppShell() {
       ([slot, group]) =>
         isMainSlotVisible(slot as LayoutWidgetSlot) && group.active === "files",
     );
-  }, [
-    floatingWidgetKey,
-    floatingWidgets.files,
-    layoutCollapsed.bottom,
-    layoutCollapsed.left,
-    layoutCollapsed.right,
-    slotGroups,
-  ]);
+  }, [floatingWidgetKey, floatingWidgets.files, isMainSlotVisible, slotGroups]);
 
   const { sftpState, sftpActions } = useSftpController({
     enabled: sftpEnabled,
@@ -1405,6 +1408,7 @@ export default function AppShell() {
     sessionState.activeSessionId,
     sessionState.activeSessionProfile,
     sessionState.activeSessionState,
+    sessionActions,
     sessionActions.isLocalSession,
   ]);
 
@@ -1444,7 +1448,7 @@ export default function AppShell() {
           ...prev,
           [activeSessionId]: "paused-mismatch",
         }));
-        warn(
+        void warn(
           JSON.stringify({
             event: "terminal:cwd-sync-paused-user-mismatch",
             sessionId: activeSessionId,
@@ -1505,7 +1509,7 @@ export default function AppShell() {
     // 终端 cwd 只在“路径发生新变化”时单向驱动文件管理器，
     // 避免文件管理器手动浏览后又被旧的终端路径持续覆盖。
     openRemoteDir(resolvedPath).catch((error) => {
-      warn(
+      void warn(
         JSON.stringify({
           event: "sftp:sync-terminal-path-failed",
           sessionId: activeSessionId,
@@ -1761,6 +1765,26 @@ export default function AppShell() {
     ],
   });
 
+  const handleExecuteHistoryItem = useCallback(
+    (command: string) => {
+      historyState
+        .executeHistoryItem({
+          sessionId: sessionState.activeSessionId,
+          command,
+        })
+        .then((executed) => {
+          if (!executed || !sessionState.activeSessionId) return;
+          historyState.recordCommand({
+            sessionId: sessionState.activeSessionId,
+            command,
+            source: "history",
+          });
+        })
+        .catch(() => {});
+    },
+    [historyState, sessionState.activeSessionId],
+  );
+
   useFloatingWidgetSnapshotSync<FloatingHistoryMessage>({
     channelName: WIDGET_HISTORY_CHANNEL,
     floatingWidgetKey,
@@ -2008,53 +2032,39 @@ export default function AppShell() {
     sessionActions.writeToSession(sessionId, normalized).catch(() => {});
   }
 
-  function handleExecuteHistoryItem(command: string) {
-    historyState
-      .executeHistoryItem({
-        sessionId: sessionState.activeSessionId,
-        command,
-      })
-      .then((executed) => {
-        if (!executed || !sessionState.activeSessionId) return;
-        historyState.recordCommand({
-          sessionId: sessionState.activeSessionId,
-          command,
-          source: "history",
-        });
-      })
-      .catch(() => {});
-  }
-
-  async function handleConnectProfile(profileInput: HostProfile) {
-    // 连接流程允许并发触发；用递增 requestId 防止旧请求回写覆盖新状态。
-    const requestId = latestConnectRequestIdRef.current + 1;
-    latestConnectRequestIdRef.current = requestId;
-    if (!profileInput.host || !profileInput.username) {
-      sessionActions.setBusyMessage(t("messages.missingHostUser"));
-      return;
-    }
-    if (profileInput.id) {
-      pickProfile(profileInput.id);
-      setConnectingProfileId(profileInput.id);
-    }
-    sessionActions.setBusyMessage(t("messages.connecting"));
-    try {
-      const profile = profileInput.id
-        ? profileInput
-        : await saveProfile(profileInput);
-      setConnectingProfileId(profile.id);
-      await sessionActions.connectProfile(profile);
-      sessionActions.setBusyMessage(null);
-    } catch (error: any) {
-      sessionActions.setBusyMessage(
-        error?.message ?? t("messages.connectFailed"),
-      );
-    } finally {
-      if (requestId === latestConnectRequestIdRef.current) {
-        setConnectingProfileId(null);
+  const handleConnectProfile = useCallback(
+    async (profileInput: HostProfile) => {
+      // 连接流程允许并发触发；用递增 requestId 防止旧请求回写覆盖新状态。
+      const requestId = latestConnectRequestIdRef.current + 1;
+      latestConnectRequestIdRef.current = requestId;
+      if (!profileInput.host || !profileInput.username) {
+        sessionActions.setBusyMessage(t("messages.missingHostUser"));
+        return;
       }
-    }
-  }
+      if (profileInput.id) {
+        pickProfile(profileInput.id);
+        setConnectingProfileId(profileInput.id);
+      }
+      sessionActions.setBusyMessage(t("messages.connecting"));
+      try {
+        const profile = profileInput.id
+          ? profileInput
+          : await saveProfile(profileInput);
+        setConnectingProfileId(profile.id);
+        await sessionActions.connectProfile(profile);
+        sessionActions.setBusyMessage(null);
+      } catch (error: unknown) {
+        sessionActions.setBusyMessage(
+          extractErrorMessage(error) || t("messages.connectFailed"),
+        );
+      } finally {
+        if (requestId === latestConnectRequestIdRef.current) {
+          setConnectingProfileId(null);
+        }
+      }
+    },
+    [pickProfile, saveProfile, sessionActions, t],
+  );
 
   async function handleSaveSessionBuffer(sessionId: string) {
     const session = sessionState.sessions.find(
@@ -2169,42 +2179,51 @@ export default function AppShell() {
     () =>
       isFloatingFilesWidget
         ? {
-            refreshList: async (path?: string) => {
+            refreshList: (path?: string) => {
               postFloatingFilesMessage({ type: "files:refresh", path });
+              return Promise.resolve();
             },
-            openRemoteDir: async (path: string) => {
+            openRemoteDir: (path: string) => {
               postFloatingFilesMessage({ type: "files:open", path });
+              return Promise.resolve();
             },
-            openFile: async (
+            openFile: (
               entry: (typeof filesWidgetState.entries)[number],
             ) => {
               postFloatingFilesMessage({ type: "files:open-file", entry });
+              return Promise.resolve();
             },
-            uploadFile: async () => {
+            uploadFile: () => {
               postFloatingFilesMessage({ type: "files:upload" });
+              return Promise.resolve();
             },
-            uploadDroppedPaths: async (paths: string[]) => {
+            uploadDroppedPaths: (paths: string[]) => {
               postFloatingFilesMessage({ type: "files:upload-paths", paths });
+              return Promise.resolve();
             },
-            downloadFile: async (
+            downloadFile: (
               entry: (typeof filesWidgetState.entries)[number],
             ) => {
               postFloatingFilesMessage({ type: "files:download", entry });
+              return Promise.resolve();
             },
-            cancelTransfer: async () => {},
-            createFolder: async (name: string) => {
+            cancelTransfer: () => Promise.resolve(),
+            createFolder: (name: string) => {
               postFloatingFilesMessage({ type: "files:mkdir", name });
+              return Promise.resolve();
             },
-            rename: async (
+            rename: (
               entry: (typeof filesWidgetState.entries)[number],
               name: string,
             ) => {
               postFloatingFilesMessage({ type: "files:rename", entry, name });
+              return Promise.resolve();
             },
-            remove: async (
+            remove: (
               entry: (typeof filesWidgetState.entries)[number],
             ) => {
               postFloatingFilesMessage({ type: "files:remove", entry });
+              return Promise.resolve();
             },
           }
         : {
@@ -2235,14 +2254,18 @@ export default function AppShell() {
             remove: removeEntry,
           },
     [
+      fileDefaultEditorPath,
       createFolder,
       downloadFile,
-      filesWidgetState.entries,
+      filesWidgetState,
       isFloatingFilesWidget,
       openRemoteDir,
+      postFloatingFilesMessage,
       refreshList,
       removeEntry,
       renameEntry,
+      sessionState.activeSessionId,
+      sessionState.isRemoteConnected,
       uploadFile,
       uploadDroppedPaths,
       cancelTransfer,
@@ -2253,8 +2276,9 @@ export default function AppShell() {
     () =>
       isFloatingTransfersWidget
         ? {
-            cancel: async () => {
+            cancel: () => {
               postFloatingTransfersMessage({ type: "transfers:cancel" });
+              return Promise.resolve();
             },
           }
         : {
@@ -2339,6 +2363,7 @@ export default function AppShell() {
       handleExecuteHistoryItem,
       historyState.setSearchQuery,
       isFloatingHistoryWidget,
+      postFloatingHistoryMessage,
     ],
   );
 
@@ -2387,8 +2412,9 @@ export default function AppShell() {
             setDraft: (value: string) => {
               postFloatingAiMessage({ type: "ai:set-draft", draft: value });
             },
-            send: async () => {
+            send: () => {
               postFloatingAiMessage({ type: "ai:send" });
+              return Promise.resolve();
             },
             cancel: () => {
               postFloatingAiMessage({ type: "ai:cancel" });
@@ -2409,6 +2435,7 @@ export default function AppShell() {
       aiState.sendMessage,
       aiState.setDraft,
       isFloatingAiWidget,
+      postFloatingAiMessage,
     ],
   );
 
@@ -2444,7 +2471,7 @@ export default function AppShell() {
       sessionState.activeSessionId,
       sessionState.isRemoteSession,
       sessionState.activeSessionState,
-      tunnelState.activeTunnels,
+      tunnelState,
     ],
   );
 
@@ -2452,14 +2479,17 @@ export default function AppShell() {
     () =>
       isFloatingTunnelsWidget
         ? {
-            open: async (spec: Parameters<typeof tunnelState.open>[0]) => {
+            open: (spec: Parameters<typeof tunnelState.open>[0]) => {
               postFloatingTunnelsMessage({ type: "tunnels:open", spec });
+              return Promise.resolve();
             },
-            close: async (tunnelId: string) => {
+            close: (tunnelId: string) => {
               postFloatingTunnelsMessage({ type: "tunnels:close", tunnelId });
+              return Promise.resolve();
             },
-            closeAll: async () => {
+            closeAll: () => {
               postFloatingTunnelsMessage({ type: "tunnels:close-all" });
+              return Promise.resolve();
             },
           }
         : {
@@ -2469,13 +2499,7 @@ export default function AppShell() {
             close: tunnelState.close,
             closeAll: tunnelState.closeAll,
           },
-    [
-      isFloatingTunnelsWidget,
-      postFloatingTunnelsMessage,
-      tunnelState.close,
-      tunnelState.closeAll,
-      tunnelState.open,
-    ],
+    [isFloatingTunnelsWidget, postFloatingTunnelsMessage, tunnelState],
   );
 
   const widgets = useMemo(
@@ -2533,7 +2557,9 @@ export default function AppShell() {
             });
         },
         onOpenEditProfile: openEditProfile,
-        onRemoveProfile: (profile) => removeProfile(profile.id),
+        onRemoveProfile: (profile) => {
+          void removeProfile(profile.id);
+        },
         onHistorySearchQueryChange: historyWidgetActions.setSearchQuery,
         onExecuteHistoryItem: historyWidgetActions.execute,
         onAiDraftChange: AiWidgetActions.setDraft,
@@ -2597,6 +2623,10 @@ export default function AppShell() {
       renameGroup,
       removeGroup,
       moveProfileToGroup,
+      handleConnectProfile,
+      openNewProfile,
+      removeProfile,
+      sessionActions,
       filesWidgetActions,
       TunnelsWidgetActions,
       TunnelsWidgetState,
@@ -2777,7 +2807,9 @@ export default function AppShell() {
             rightVisible={rightVisible}
             bottomVisible={bottomVisible}
             onReplace={handleSlotReplace}
-            onFloat={handleFloat}
+            onFloat={(slot) => {
+              void handleFloat(slot);
+            }}
             onCloseWidget={handleCloseSlot}
             onToggleSplit={handleToggleSplit}
             onStartResize={startResize}
@@ -2827,7 +2859,9 @@ export default function AppShell() {
         sshGroups={sshGroups}
         onDraftChange={setProfileDraft}
         onClose={closeProfileModal}
-        onSubmit={submitProfile}
+        onSubmit={(profileType) => {
+          void submitProfile(profileType);
+        }}
         t={t}
       />
       <ConfigModal
