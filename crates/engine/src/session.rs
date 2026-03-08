@@ -792,16 +792,25 @@ pub async fn run_session_loop(
                         let _ = channel.window_change(cols as u32, rows as u32, 0, 0).await;
                     }
                     SessionCommand::SftpList { path, respond_to } => {
-                        let guard = session.lock().await;
-                        let _ = respond_to.send(sftp_list(&guard, &path).await);
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_list(&guard, &path).await);
+                        });
                     }
                     SessionCommand::SftpHome { respond_to } => {
-                        let guard = session.lock().await;
-                        let _ = respond_to.send(sftp_home(&guard).await);
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_home(&guard).await);
+                        });
                     }
                     SessionCommand::SftpResolvePath { path, respond_to } => {
-                        let guard = session.lock().await;
-                        let _ = respond_to.send(sftp_resolve_path(&guard, &path).await);
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_resolve_path(&guard, &path).await);
+                        });
                     }
                     SessionCommand::SftpUpload { local_path, remote_path, respond_to } => {
                         let transfer_id = next_transfer_id();
@@ -912,16 +921,25 @@ pub async fn run_session_loop(
                         let _ = respond_to.send(result.map(|_| ()));
                     }
                     SessionCommand::SftpRename { from, to, respond_to } => {
-                        let guard = session.lock().await;
-                        let _ = respond_to.send(sftp_rename(&guard, &from, &to).await);
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_rename(&guard, &from, &to).await);
+                        });
                     }
                     SessionCommand::SftpRemove { path, respond_to } => {
-                        let guard = session.lock().await;
-                        let _ = respond_to.send(sftp_remove(&guard, &path).await);
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_remove(&guard, &path).await);
+                        });
                     }
                     SessionCommand::SftpMkdir { path, respond_to } => {
-                        let guard = session.lock().await;
-                        let _ = respond_to.send(sftp_mkdir(&guard, &path).await);
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_mkdir(&guard, &path).await);
+                        });
                     }
                     SessionCommand::TunnelOpen { spec, respond_to } => {
                         let open_result = match spec.kind {

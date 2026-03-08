@@ -22,6 +22,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tokio::task::JoinSet;
+use tokio::time::{Duration, timeout};
 
 use crate::error::EngineError;
 use crate::telemetry::{TelemetryLevel, log_telemetry};
@@ -126,6 +127,8 @@ struct PipelineEmitContext {
 
 /// 批量任务 worker 并发数。
 const BATCH_WORKER_COUNT: usize = 8;
+/// SFTP 初始化单阶段超时，避免不支持服务端长时间阻塞会话命令分发。
+const SFTP_INIT_STAGE_TIMEOUT_MS: u64 = 1200;
 /// 单文件上传分块并发写窗口。
 const UPLOAD_WRITE_WINDOW: usize = 8;
 /// 单文件下载分块并发读窗口。
@@ -1415,7 +1418,7 @@ async fn download_pipeline_worker(
                 {
                     Ok(perf) => {
                         log_telemetry(
-                            TelemetryLevel::Warn,
+                            TelemetryLevel::Debug,
                             "sftp.download.pipeline.file.summary",
                             None,
                             json!({
@@ -2246,7 +2249,7 @@ async fn download_remote_file_to_local_pipelined(
         EngineError::with_detail("sftp_download_failed", "无法关闭远端文件", err.to_string())
     })?;
     log_telemetry(
-        TelemetryLevel::Warn,
+        TelemetryLevel::Debug,
         "sftp.download.pipeline.file.perf",
         None,
         json!({
@@ -2567,7 +2570,7 @@ fn log_sftp_perf(stats: SftpPerfStats) {
         ((stats.transferred_bytes as u128 * 1000) / stats.elapsed_ms) as u64
     };
     log_telemetry(
-        TelemetryLevel::Warn,
+        TelemetryLevel::Debug,
         "sftp.perf.update",
         None,
         json!({
@@ -2690,41 +2693,140 @@ fn log_sftp_pair_failure(
     );
 }
 
+/// 记录 SFTP 初始化阶段超时，便于分析服务端兼容性。
+fn log_sftp_init_timeout(stage: &str, mode: &str) {
+    log_telemetry(
+        TelemetryLevel::Info,
+        "sftp.init.timeout",
+        None,
+        json!({
+            "stage": stage,
+            "mode": mode,
+            "timeoutMs": SFTP_INIT_STAGE_TIMEOUT_MS,
+        }),
+    );
+}
+
 /// 打开 SFTP 子系统会话。
 async fn open_sftp(
     session: &client::Handle<super::session::ClientHandler>,
 ) -> Result<SftpSession, EngineError> {
-    let channel = session.channel_open_session().await.map_err(|err| {
+    let channel = timeout(
+        Duration::from_millis(SFTP_INIT_STAGE_TIMEOUT_MS),
+        session.channel_open_session(),
+    )
+    .await
+    .map_err(|_| {
+        log_sftp_init_timeout("channel_open_session", "session");
+        EngineError::with_detail(
+            "sftp_init_failed",
+            "无法打开 SFTP 通道（超时）",
+            format!(
+                "stage=channel_open_session timeout={}ms",
+                SFTP_INIT_STAGE_TIMEOUT_MS
+            ),
+        )
+    })?
+    .map_err(|err| {
         EngineError::with_detail("sftp_init_failed", "无法打开 SFTP 通道", err.to_string())
     })?;
-    channel
-        .request_subsystem(true, "sftp")
-        .await
-        .map_err(|err| {
-            EngineError::with_detail("sftp_init_failed", "无法请求 SFTP 子系统", err.to_string())
-        })?;
+    timeout(
+        Duration::from_millis(SFTP_INIT_STAGE_TIMEOUT_MS),
+        channel.request_subsystem(true, "sftp"),
+    )
+    .await
+    .map_err(|_| {
+        log_sftp_init_timeout("request_subsystem", "session");
+        EngineError::with_detail(
+            "sftp_init_failed",
+            "无法请求 SFTP 子系统（超时）",
+            format!(
+                "stage=request_subsystem timeout={}ms",
+                SFTP_INIT_STAGE_TIMEOUT_MS
+            ),
+        )
+    })?
+    .map_err(|err| {
+        EngineError::with_detail("sftp_init_failed", "无法请求 SFTP 子系统", err.to_string())
+    })?;
     let stream = channel.into_stream();
-    SftpSession::new(stream).await.map_err(|err| {
-        EngineError::with_detail("sftp_init_failed", "无法初始化 SFTP", err.to_string())
-    })
+    timeout(
+        Duration::from_millis(SFTP_INIT_STAGE_TIMEOUT_MS),
+        SftpSession::new(stream),
+    )
+    .await
+    .map_err(|_| {
+        log_sftp_init_timeout("sftp_session_new", "session");
+        EngineError::with_detail(
+            "sftp_init_failed",
+            "无法初始化 SFTP（超时）",
+            format!(
+                "stage=sftp_session_new timeout={}ms",
+                SFTP_INIT_STAGE_TIMEOUT_MS
+            ),
+        )
+    })?
+    .map_err(|err| EngineError::with_detail("sftp_init_failed", "无法初始化 SFTP", err.to_string()))
 }
 
 /// 打开 SFTP 原始会话并返回读写长度限制。
 async fn open_raw_sftp(
     session: &client::Handle<super::session::ClientHandler>,
 ) -> Result<(Arc<RawSftpSession>, RawSftpLimits), EngineError> {
-    let channel = session.channel_open_session().await.map_err(|err| {
+    let channel = timeout(
+        Duration::from_millis(SFTP_INIT_STAGE_TIMEOUT_MS),
+        session.channel_open_session(),
+    )
+    .await
+    .map_err(|_| {
+        log_sftp_init_timeout("channel_open_session", "raw");
+        EngineError::with_detail(
+            "sftp_init_failed",
+            "无法打开 SFTP 通道（超时）",
+            format!(
+                "stage=channel_open_session timeout={}ms",
+                SFTP_INIT_STAGE_TIMEOUT_MS
+            ),
+        )
+    })?
+    .map_err(|err| {
         EngineError::with_detail("sftp_init_failed", "无法打开 SFTP 通道", err.to_string())
     })?;
-    channel
-        .request_subsystem(true, "sftp")
-        .await
-        .map_err(|err| {
-            EngineError::with_detail("sftp_init_failed", "无法请求 SFTP 子系统", err.to_string())
-        })?;
+    timeout(
+        Duration::from_millis(SFTP_INIT_STAGE_TIMEOUT_MS),
+        channel.request_subsystem(true, "sftp"),
+    )
+    .await
+    .map_err(|_| {
+        log_sftp_init_timeout("request_subsystem", "raw");
+        EngineError::with_detail(
+            "sftp_init_failed",
+            "无法请求 SFTP 子系统（超时）",
+            format!(
+                "stage=request_subsystem timeout={}ms",
+                SFTP_INIT_STAGE_TIMEOUT_MS
+            ),
+        )
+    })?
+    .map_err(|err| {
+        EngineError::with_detail("sftp_init_failed", "无法请求 SFTP 子系统", err.to_string())
+    })?;
     let stream = channel.into_stream();
     let mut raw = RawSftpSession::new(stream);
-    let version = raw.init().await.map_err(|err| {
+    let version = timeout(
+        Duration::from_millis(SFTP_INIT_STAGE_TIMEOUT_MS),
+        raw.init(),
+    )
+    .await
+    .map_err(|_| {
+        log_sftp_init_timeout("raw_init", "raw");
+        EngineError::with_detail(
+            "sftp_init_failed",
+            "无法初始化 SFTP（超时）",
+            format!("stage=raw_init timeout={}ms", SFTP_INIT_STAGE_TIMEOUT_MS),
+        )
+    })?
+    .map_err(|err| {
         EngineError::with_detail("sftp_init_failed", "无法初始化 SFTP", err.to_string())
     })?;
     let mut limits_snapshot = RawSftpLimits::default();

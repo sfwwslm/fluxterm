@@ -4,9 +4,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { warn } from "@/shared/logging/telemetry";
+import { info } from "@/shared/logging/telemetry";
 import type { Translate, TranslationKey } from "@/i18n";
 import type {
+  HostProfile,
   LogLevel,
   SftpAvailability,
   SftpEntry,
@@ -37,6 +38,7 @@ type UseSftpStateProps = {
   active: boolean;
   activeSessionId: string | null;
   activeSession: Session | null;
+  activeSessionProfile: HostProfile | null;
   activeSessionState: SessionStateUi | null;
   sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
   isLocalSession: (sessionId: string | null) => boolean;
@@ -71,6 +73,7 @@ export default function useSftpState({
   active,
   activeSessionId,
   activeSession,
+  activeSessionProfile,
   activeSessionState,
   sessionStatesRef,
   isLocalSession,
@@ -170,10 +173,13 @@ export default function useSftpState({
     if (!unsupportedLoggedRef.current[sessionId]) {
       unsupportedLoggedRef.current[sessionId] = true;
       appendLog("log.event.sftpUnsupported");
-      warn(
+      info(
         JSON.stringify({
           event: "sftp:unsupported",
           sessionId,
+          profileId: activeSessionProfile?.id ?? null,
+          host: activeSessionProfile?.host ?? null,
+          port: activeSessionProfile?.port ?? null,
           error:
             typeof error === "object" && error !== null
               ? {

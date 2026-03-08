@@ -1163,6 +1163,7 @@ export default function AppShell() {
     active: filesWidgetVisible,
     activeSessionId: sessionState.activeSessionId,
     activeSession: sessionState.activeSession,
+    activeSessionProfile: sessionState.activeSessionProfile,
     activeSessionState: sessionState.activeSessionState,
     sessionStatesRef: sessionRefs.sessionStatesRef,
     isLocalSession: sessionActions.isLocalSession,
