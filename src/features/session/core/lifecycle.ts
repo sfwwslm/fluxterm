@@ -2,15 +2,21 @@
  * 会话生命周期状态迁移模块。
  * 职责：处理会话连接替换时的状态迁移与本地会话元数据同步。
  */
-import type { Session, SessionStateUi } from "@/types";
+import type { LocalShellLaunchConfig, Session, SessionStateUi } from "@/types";
 
 type Setter<T> = (updater: (prev: T) => T) => void;
+
+type LocalSessionMeta = {
+  shellId: string | null;
+  label: string;
+  launchConfig?: LocalShellLaunchConfig;
+};
 
 export type ReplaceSessionConnectionParams = {
   oldSessionId: string;
   nextSession: Session;
   nextState?: SessionStateUi;
-  nextLocalMeta?: { shellId: string | null; label: string };
+  nextLocalMeta?: LocalSessionMeta;
   localSessionIdsRef: React.RefObject<Set<string>>;
   clearReconnectState: (sessionId: string) => void;
   replaceWorkspaceSession: (
@@ -23,9 +29,7 @@ export type ReplaceSessionConnectionParams = {
   setReconnectInfoBySession: Setter<
     Record<string, { attempt: number; delayMs: number }>
   >;
-  setLocalSessionMeta: Setter<
-    Record<string, { shellId: string | null; label: string }>
-  >;
+  setLocalSessionMeta: Setter<Record<string, LocalSessionMeta>>;
   sessionCloseHandledRef: React.RefObject<Record<string, boolean>>;
 };
 

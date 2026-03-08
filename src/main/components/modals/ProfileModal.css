@@ -96,32 +96,60 @@
 }
 
 .host-editor {
+  --profile-form-label-width: 96px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
 .form-row {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: var(--profile-form-label-width) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
   gap: 6px;
 }
 
+.form-label {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.form-label::after {
+  content: "：";
+}
+
+.form-row > input,
+.form-row > .select-menu,
+.form-row > .form-file,
+.form-row > textarea {
+  min-width: 0;
+}
+
+.form-row.form-row-textarea {
+  align-items: start;
+}
+
 .profile-form-error {
+  grid-column: 2;
   color: var(--danger);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .form-row.split {
-  flex-direction: row;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.form-row.split > div {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.form-inline-field {
+  display: grid;
+  grid-template-columns: var(--profile-form-label-width) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
   gap: 6px;
   min-width: 0;
 }
@@ -174,6 +202,37 @@
 
   .profile-modal-content {
     min-height: 0;
+  }
+
+  .host-editor {
+    --profile-form-label-width: 100%;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .form-label {
+    min-height: auto;
+  }
+
+  .form-label::after {
+    content: "";
+  }
+
+  .profile-form-error {
+    grid-column: 1;
+  }
+
+  .form-row.split {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .form-inline-field {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .profile-modal-footer {

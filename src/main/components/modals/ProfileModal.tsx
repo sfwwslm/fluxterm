@@ -19,7 +19,7 @@ type ProfileModalProps = {
   sshGroups: string[];
   onDraftChange: (draft: HostProfile) => void;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: (profileType: ProfileModalType) => void;
   t: Translate;
 };
 
@@ -107,8 +107,8 @@ export default function ProfileModal({
     return null;
   }
 
-  /** 当前版本只支持保存 SSH 会话，shell 页签先作为后续本地配置壳层。 */
-  const canSubmit = profileType === "ssh";
+  /** 当前版本允许 shell/ssh 都提交；shell 保存到本地启动配置，ssh 保存到 profile。 */
+  const canSubmit = true;
   const hasUnsavedChanges =
     open && JSON.stringify(draft) !== initialDraftRef.current;
 
@@ -126,7 +126,16 @@ export default function ProfileModal({
   /** 恢复当前类型对应的默认配置，避免未来选项增多后需要逐项手工回填。 */
   function handleRestoreDefaults() {
     setActiveSection("session");
-    if (profileType !== "ssh") return;
+    if (profileType !== "ssh") {
+      onDraftChange({
+        ...draft,
+        terminalType: "xterm-256color",
+        targetSystem: "auto",
+        charset: "utf-8",
+        description: "",
+      });
+      return;
+    }
     onDraftChange({
       id: draft.id,
       name: "",
@@ -139,18 +148,116 @@ export default function ProfileModal({
       passwordRef: null,
       knownHost: null,
       tags: null,
+      terminalType: null,
+      targetSystem: null,
+      charset: null,
+      description: null,
     });
   }
 
   function renderSectionContent() {
+    const terminalOptions = [
+      { value: "xterm-256color", label: "xterm-256color" },
+      { value: "xterm", label: "xterm" },
+      { value: "screen-256color", label: "screen-256color" },
+      { value: "tmux-256color", label: "tmux-256color" },
+      { value: "vt100", label: "vt100" },
+    ];
+    const systemOptions = [
+      { value: "auto", label: "Auto" },
+      { value: "linux", label: "Linux" },
+      { value: "macos", label: "macOS" },
+      { value: "windows", label: "Windows" },
+    ];
+    const charsetOptions = [
+      { value: "utf-8", label: "UTF-8" },
+      { value: "gbk", label: "GBK" },
+      { value: "gb18030", label: "GB18030" },
+    ];
+
+    const nameRow = (
+      <div className="form-row">
+        <label className="form-label">{t("profile.form.name")}</label>
+        <input
+          value={draft.name}
+          maxLength={PROFILE_NAME_MAX_LENGTH}
+          onChange={(event) => {
+            onDraftChange({ ...draft, name: event.target.value });
+            if (nameError) {
+              setNameError(null);
+            }
+          }}
+          placeholder={t("profile.placeholder.name")}
+        />
+        {nameError ? (
+          <div className="profile-form-error">{nameError}</div>
+        ) : null}
+      </div>
+    );
+
+    const extraSessionRows = (
+      <>
+        <div className="form-row">
+          <label className="form-label">
+            {t("profile.sessionTab.terminal")}
+          </label>
+          <Select
+            value={draft.terminalType ?? "xterm-256color"}
+            options={terminalOptions}
+            onChange={(value) =>
+              onDraftChange({ ...draft, terminalType: value })
+            }
+            aria-label={t("profile.sessionTab.terminal")}
+          />
+        </div>
+        {profileType === "ssh" ? (
+          <div className="form-row">
+            <label className="form-label">
+              {t("profile.sessionTab.system")}
+            </label>
+            <Select
+              value={draft.targetSystem ?? "auto"}
+              options={systemOptions}
+              onChange={(value) =>
+                onDraftChange({ ...draft, targetSystem: value })
+              }
+              aria-label={t("profile.sessionTab.system")}
+            />
+          </div>
+        ) : null}
+        {profileType === "shell" ? (
+          <div className="form-row">
+            <label className="form-label">
+              {t("profile.sessionTab.charset")}
+            </label>
+            <Select
+              value={draft.charset ?? "utf-8"}
+              options={charsetOptions}
+              onChange={(value) => onDraftChange({ ...draft, charset: value })}
+              aria-label={t("profile.sessionTab.charset")}
+            />
+          </div>
+        ) : null}
+        {/* 当前产品策略：shell 暂不展示 system，ssh 暂不展示 charset。
+            字段仍保留在数据模型中，后续打通运行时能力时可直接放开。 */}
+        <div className="form-row form-row-textarea">
+          <label className="form-label">
+            {t("profile.sessionTab.description")}
+          </label>
+          <textarea
+            rows={4}
+            value={draft.description ?? ""}
+            onChange={(event) =>
+              onDraftChange({ ...draft, description: event.target.value })
+            }
+          />
+        </div>
+      </>
+    );
+
     if (profileType === "shell") {
       if (activeSection === "session") {
-        return (
-          <div className="profile-modal-placeholder">
-            <h4>{t("profile.section.session")}</h4>
-            <p>{t("profile.shell.todo")}</p>
-          </div>
-        );
+        return <div className="host-editor">{extraSessionRows}</div>;
       }
       if (activeSection === "terminal") {
         return (
@@ -171,25 +278,9 @@ export default function ProfileModal({
     if (activeSection === "session") {
       return (
         <div className="host-editor">
+          {nameRow}
           <div className="form-row">
-            <label>{t("profile.form.name")}</label>
-            <input
-              value={draft.name}
-              maxLength={PROFILE_NAME_MAX_LENGTH}
-              onChange={(event) => {
-                onDraftChange({ ...draft, name: event.target.value });
-                if (nameError) {
-                  setNameError(null);
-                }
-              }}
-              placeholder={t("profile.placeholder.name")}
-            />
-            {nameError ? (
-              <div className="profile-form-error">{nameError}</div>
-            ) : null}
-          </div>
-          <div className="form-row">
-            <label>{t("profile.form.group")}</label>
+            <label className="form-label">{t("profile.form.group")}</label>
             <Select
               value={draft.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE}
               options={[
@@ -212,7 +303,7 @@ export default function ProfileModal({
             />
           </div>
           <div className="form-row">
-            <label>{t("profile.form.host")}</label>
+            <label className="form-label">{t("profile.form.host")}</label>
             <input
               value={draft.host}
               onChange={(event) =>
@@ -222,8 +313,8 @@ export default function ProfileModal({
             />
           </div>
           <div className="form-row split">
-            <div>
-              <label>{t("profile.form.port")}</label>
+            <div className="form-inline-field">
+              <label className="form-label">{t("profile.form.port")}</label>
               <input
                 type="number"
                 value={draft.port}
@@ -235,8 +326,8 @@ export default function ProfileModal({
                 }
               />
             </div>
-            <div>
-              <label>{t("profile.form.username")}</label>
+            <div className="form-inline-field">
+              <label className="form-label">{t("profile.form.username")}</label>
               <input
                 value={draft.username}
                 onChange={(event) =>
@@ -246,7 +337,7 @@ export default function ProfileModal({
             </div>
           </div>
           <div className="form-row">
-            <label>{t("profile.form.authType")}</label>
+            <label className="form-label">{t("profile.form.authType")}</label>
             <Select
               value={draft.authType}
               options={[
@@ -264,7 +355,7 @@ export default function ProfileModal({
           </div>
           {draft.authType === "password" && (
             <div className="form-row">
-              <label>{t("profile.form.password")}</label>
+              <label className="form-label">{t("profile.form.password")}</label>
               <input
                 type="password"
                 value={draft.passwordRef ?? ""}
@@ -277,7 +368,9 @@ export default function ProfileModal({
           {draft.authType === "privateKey" && (
             <>
               <div className="form-row">
-                <label>{t("profile.form.privateKeyPath")}</label>
+                <label className="form-label">
+                  {t("profile.form.privateKeyPath")}
+                </label>
                 <div className="form-file">
                   <input
                     value={draft.privateKeyPath ?? ""}
@@ -294,7 +387,9 @@ export default function ProfileModal({
                 </div>
               </div>
               <div className="form-row">
-                <label>{t("profile.form.privateKeyPassphrase")}</label>
+                <label className="form-label">
+                  {t("profile.form.privateKeyPassphrase")}
+                </label>
                 <input
                   type="password"
                   value={draft.privateKeyPassphraseRef ?? ""}
@@ -308,6 +403,7 @@ export default function ProfileModal({
               </div>
             </>
           )}
+          {extraSessionRows}
         </div>
       );
     }
@@ -386,13 +482,15 @@ export default function ProfileModal({
               className="primary"
               variant="primary"
               onClick={() => {
-                const errorText = validateProfileName(draft.name);
-                if (errorText) {
-                  setNameError(errorText);
-                  return;
+                if (profileType === "ssh") {
+                  const errorText = validateProfileName(draft.name);
+                  if (errorText) {
+                    setNameError(errorText);
+                    return;
+                  }
                 }
                 setNameError(null);
-                onSubmit();
+                onSubmit(profileType);
               }}
               disabled={!canSubmit}
               title={canSubmit ? undefined : t("profile.shell.saveDisabled")}

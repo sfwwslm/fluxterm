@@ -270,6 +270,10 @@ export default function AppShell() {
     setThemeId,
     shellId,
     setShellId,
+    localShellLaunchConfig,
+    setLocalShellLaunchConfig,
+    localShellByShellId,
+    setLocalShellByShellId,
     sftpEnabled,
     setSftpEnabled,
     fileDefaultEditorPath,
@@ -685,8 +689,18 @@ export default function AppShell() {
   }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
 
   function openNewProfile() {
+    const shellScopedConfig = shellId
+      ? localShellByShellId[shellId]
+      : undefined;
+    const effectiveShellLaunchConfig =
+      shellScopedConfig ?? localShellLaunchConfig;
     setProfileModalMode("new");
-    setProfileDraft({ ...defaultProfile, id: "" });
+    setProfileDraft({
+      ...defaultProfile,
+      id: "",
+      terminalType: effectiveShellLaunchConfig.terminalType ?? "xterm-256color",
+      charset: effectiveShellLaunchConfig.charset ?? "utf-8",
+    });
     setProfileModalOpen(true);
   }
 
@@ -701,7 +715,38 @@ export default function AppShell() {
     setProfileModalOpen(true);
   }
 
-  async function submitProfile() {
+  async function submitProfile(profileType: "shell" | "ssh") {
+    if (profileType === "shell") {
+      const normalizedTerminalType =
+        profileDraft.terminalType === "xterm-256color" ||
+        profileDraft.terminalType === "xterm" ||
+        profileDraft.terminalType === "screen-256color" ||
+        profileDraft.terminalType === "tmux-256color" ||
+        profileDraft.terminalType === "vt100"
+          ? profileDraft.terminalType
+          : "xterm-256color";
+      const normalizedCharset =
+        profileDraft.charset === "utf-8" ||
+        profileDraft.charset === "gbk" ||
+        profileDraft.charset === "gb18030"
+          ? profileDraft.charset
+          : "utf-8";
+      setLocalShellLaunchConfig({
+        terminalType: normalizedTerminalType,
+        charset: normalizedCharset,
+      });
+      if (shellId) {
+        setLocalShellByShellId((prev) => ({
+          ...prev,
+          [shellId]: {
+            terminalType: normalizedTerminalType,
+            charset: normalizedCharset,
+          },
+        }));
+      }
+      setProfileModalOpen(false);
+      return;
+    }
     await saveProfile(profileDraft);
     setProfileModalOpen(false);
   }
@@ -866,6 +911,8 @@ export default function AppShell() {
     profiles,
     t,
     shellId,
+    localShellLaunchConfig,
+    localShellByShellId,
     availableShells,
     settingsLoaded,
     getTerminalSize: () => terminalSizeRef.current,

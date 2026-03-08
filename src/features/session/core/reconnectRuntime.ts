@@ -6,7 +6,18 @@ import {
   computeReconnectDelayMs,
   maxReconnectAttempts,
 } from "@/features/session/core/reconnectPolicy";
-import type { HostProfile, Session, SessionStateUi } from "@/types";
+import type {
+  HostProfile,
+  LocalShellLaunchConfig,
+  Session,
+  SessionStateUi,
+} from "@/types";
+
+type LocalSessionMeta = {
+  shellId: string | null;
+  label: string;
+  launchConfig?: LocalShellLaunchConfig;
+};
 
 type Setter<T> = (updater: (prev: T) => T) => void;
 
@@ -51,7 +62,7 @@ type AttemptSessionReconnectParams = {
     oldSessionId: string,
     nextSession: Session,
     nextState?: SessionStateUi,
-    nextLocalMeta?: { shellId: string | null; label: string },
+    nextLocalMeta?: LocalSessionMeta,
   ) => void;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
 };

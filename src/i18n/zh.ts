@@ -364,6 +364,18 @@ export const zh = {
     "这里预留窗口相关配置，例如插入符样式、分词符和选择行为等。",
   "profile.section.modemHint":
     "这里预留拖拽上传下载相关配置，后续会补齐 X/Y/Z Modem 选项。",
+  "profile.sessionTab.terminal": "终端",
+  "profile.sessionTab.system": "系统",
+  "profile.sessionTab.charset": "字符集",
+  "profile.sessionTab.description": "描述",
+  "profile.sessionTab.terminalHint":
+    "这里展示终端相关配置，当前版本先保留兼容结构。",
+  "profile.sessionTab.systemHint":
+    "这里预留目标系统相关配置，后续将逐步开放系统级选项。",
+  "profile.sessionTab.charsetHint":
+    "这里预留字符集相关配置，后续将支持编码与转换策略。",
+  "profile.sessionTab.descriptionHint":
+    "这里预留会话描述相关配置，后续将支持备注与说明字段。",
   "profile.form.name": "名称",
   "profile.form.host": "地址",
   "profile.form.port": "端口",

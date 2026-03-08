@@ -32,6 +32,10 @@ pub struct HostProfile {
     pub password_ref: Option<String>,
     pub known_host: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub terminal_type: Option<String>,
+    pub target_system: Option<String>,
+    pub charset: Option<String>,
+    pub description: Option<String>,
 }
 
 /// 会话状态。

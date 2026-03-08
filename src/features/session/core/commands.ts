@@ -6,6 +6,7 @@ import type { Translate } from "@/i18n";
 import type {
   DisconnectReason,
   HostProfile,
+  LocalShellLaunchConfig,
   LocalShellProfile,
   Session,
   SessionStateUi,
@@ -13,6 +14,11 @@ import type {
 import { warn as logWarn } from "@/shared/logging/telemetry";
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
+type LocalSessionMeta = {
+  shellId: string | null;
+  label: string;
+  launchConfig?: LocalShellLaunchConfig;
+};
 
 type ConnectProfileCommandParams = {
   profile: HostProfile;
@@ -113,11 +119,13 @@ export async function connectProfileCommand({
 type ConnectLocalShellCommandParams = {
   shellProfile: LocalShellProfile | null;
   activate?: boolean;
-  createLocalShellSession: (shellOverride?: string | null) => Promise<Session>;
+  launchConfig?: LocalShellLaunchConfig;
+  createLocalShellSession: (
+    shellOverride?: string | null,
+    launchConfig?: LocalShellLaunchConfig,
+  ) => Promise<Session>;
   localSessionIdsRef: React.RefObject<Set<string>>;
-  setLocalSessionMeta: Setter<
-    Record<string, { shellId: string | null; label: string }>
-  >;
+  setLocalSessionMeta: Setter<Record<string, LocalSessionMeta>>;
   setSessions: Setter<Session[]>;
   attachSessionToWorkspace: (sessionId: string, activate?: boolean) => void;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
@@ -129,6 +137,7 @@ type ConnectLocalShellCommandParams = {
 export async function connectLocalShellCommand({
   shellProfile,
   activate = false,
+  launchConfig,
   createLocalShellSession,
   localSessionIdsRef,
   setLocalSessionMeta,
@@ -138,13 +147,17 @@ export async function connectLocalShellCommand({
   setSessionReasons,
   t,
 }: ConnectLocalShellCommandParams) {
-  const session = await createLocalShellSession(shellProfile?.id ?? null);
+  const session = await createLocalShellSession(
+    shellProfile?.id ?? null,
+    launchConfig,
+  );
   localSessionIdsRef.current.add(session.sessionId);
   setLocalSessionMeta((prev) => ({
     ...prev,
     [session.sessionId]: {
       shellId: shellProfile?.id ?? null,
       label: shellProfile?.label ?? t("session.local"),
+      launchConfig,
     },
   }));
   setSessions((prev) => prev.concat(session));
@@ -164,9 +177,7 @@ type DisconnectSessionCommandParams = {
   sendDisconnect: (sessionId: string, localSession: boolean) => Promise<void>;
   detachSessionFromWorkspace: (sessionId: string) => void;
   localSessionIdsRef: React.RefObject<Set<string>>;
-  setLocalSessionMeta: Setter<
-    Record<string, { shellId: string | null; label: string }>
-  >;
+  setLocalSessionMeta: Setter<Record<string, LocalSessionMeta>>;
   setSessions: Setter<Session[]>;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
   setSessionReasons: Setter<Record<string, DisconnectReason>>;
@@ -233,16 +244,17 @@ export async function disconnectSessionCommand({
 
 type ReconnectLocalShellCommandParams = {
   sessionId: string;
-  createLocalShellSession: (shellOverride?: string | null) => Promise<Session>;
-  localSessionMetaRef: React.RefObject<
-    Record<string, { shellId: string | null; label: string }>
-  >;
+  createLocalShellSession: (
+    shellOverride?: string | null,
+    launchConfig?: LocalShellLaunchConfig,
+  ) => Promise<Session>;
+  localSessionMetaRef: React.RefObject<Record<string, LocalSessionMeta>>;
   setSessionStates: Setter<Record<string, SessionStateUi>>;
   replaceSessionConnection: (
     oldSessionId: string,
     nextSession: Session,
     nextState?: SessionStateUi,
-    nextLocalMeta?: { shellId: string | null; label: string },
+    nextLocalMeta?: LocalSessionMeta,
   ) => void;
   t: Translate;
 };
@@ -262,10 +274,14 @@ export async function reconnectLocalShellCommand({
   }));
   try {
     const meta = localSessionMetaRef.current[sessionId];
-    const result = await createLocalShellSession(meta?.shellId ?? null);
+    const result = await createLocalShellSession(
+      meta?.shellId ?? null,
+      meta?.launchConfig,
+    );
     replaceSessionConnection(sessionId, result, "connected", {
       shellId: meta?.shellId ?? null,
       label: meta?.label ?? t("session.local"),
+      launchConfig: meta?.launchConfig,
     });
   } catch {
     setSessionStates((prev) => ({

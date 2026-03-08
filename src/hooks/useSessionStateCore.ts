@@ -8,6 +8,7 @@ import type { Translate, TranslationKey } from "@/i18n";
 import type {
   DisconnectReason,
   HostProfile,
+  LocalShellLaunchConfig,
   LocalShellProfile,
   LogEntry,
   LogLevel,
@@ -43,9 +44,17 @@ type UseSessionStateProps = {
   profiles: HostProfile[];
   t: Translate;
   shellId: string | null;
+  localShellLaunchConfig: LocalShellLaunchConfig;
+  localShellByShellId: Record<string, LocalShellLaunchConfig>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
   getTerminalSize: () => TerminalSize;
+};
+
+type LocalSessionMeta = {
+  shellId: string | null;
+  label: string;
+  launchConfig?: LocalShellLaunchConfig;
 };
 
 type UseSessionStateResult = {
@@ -54,7 +63,7 @@ type UseSessionStateResult = {
   activeSessionId: string | null;
   sessionStates: Record<string, SessionStateUi>;
   sessionReasons: Record<string, DisconnectReason>;
-  localSessionMeta: Record<string, { shellId: string | null; label: string }>;
+  localSessionMeta: Record<string, LocalSessionMeta>;
   reconnectInfoBySession: Record<string, { attempt: number; delayMs: number }>;
   logEntries: LogEntry[];
   busyMessage: string | null;
@@ -71,9 +80,7 @@ type UseSessionStateResult = {
   sessionStatesRef: React.RefObject<Record<string, SessionStateUi>>;
   sessionReasonsRef: React.RefObject<Record<string, DisconnectReason>>;
   sessionBuffersRef: React.RefObject<Record<string, string>>;
-  localSessionMetaRef: React.RefObject<
-    Record<string, { shellId: string | null; label: string }>
-  >;
+  localSessionMetaRef: React.RefObject<Record<string, LocalSessionMeta>>;
   localSessionIdsRef: React.RefObject<Set<string>>;
   activeSessionIdRef: React.RefObject<string | null>;
   appendLog: (
@@ -124,6 +131,8 @@ export default function useSessionState({
   profiles,
   t,
   shellId,
+  localShellLaunchConfig,
+  localShellByShellId,
   availableShells,
   settingsLoaded,
   getTerminalSize,
@@ -138,7 +147,7 @@ export default function useSessionState({
     Record<string, DisconnectReason>
   >({});
   const [localSessionMeta, setLocalSessionMeta] = useState<
-    Record<string, { shellId: string | null; label: string }>
+    Record<string, LocalSessionMeta>
   >({});
   const [reconnectInfoBySession, setReconnectInfoBySession] = useState<
     Record<string, { attempt: number; delayMs: number }>
@@ -184,9 +193,7 @@ export default function useSessionState({
   const pendingHostKeyDialogProfilesRef = useRef<Record<string, boolean>>({});
   const localSessionIdsRef = useRef<Set<string>>(new Set());
   const localShellStartedRef = useRef(false);
-  const localSessionMetaRef = useRef<
-    Record<string, { shellId: string | null; label: string }>
-  >({});
+  const localSessionMetaRef = useRef<Record<string, LocalSessionMeta>>({});
   const profilesRef = useRef<HostProfile[]>([]);
   // Tauri 事件监听需要尽量保持单次注册，否则在 React 重渲染时频繁 unlisten/listen，
   // 容易让 Rust 侧的异步事件打到已经失效的 callback，出现 "Couldn't find callback id" 警告。
@@ -314,7 +321,7 @@ export default function useSessionState({
     oldSessionId: string,
     nextSession: Session,
     nextState: SessionStateUi = "connecting",
-    nextLocalMeta?: { shellId: string | null; label: string },
+    nextLocalMeta?: LocalSessionMeta,
   ) {
     replaceSessionConnectionState({
       oldSessionId,
@@ -349,12 +356,18 @@ export default function useSessionState({
     });
   }
 
-  async function createLocalShellSession(shellOverride: string | null = null) {
+  async function createLocalShellSession(
+    shellOverride: string | null = null,
+    launchConfig?: LocalShellLaunchConfig,
+  ) {
     const { cols, rows } = getTerminalSize();
     const payload: Record<string, unknown> = { size: { cols, rows } };
     const resolvedShell = shellOverride ?? shellId;
     if (resolvedShell) {
       payload.shellId = resolvedShell;
+    }
+    if (launchConfig) {
+      payload.launchConfig = launchConfig;
     }
     return await callTauri<Session>("local_shell_connect", payload);
   }
@@ -631,6 +644,10 @@ export default function useSessionState({
     shellProfile: LocalShellProfile | null,
     activate = false,
   ) {
+    const resolvedShellId = shellProfile?.id ?? shellId ?? null;
+    const launchConfig =
+      (resolvedShellId ? localShellByShellId[resolvedShellId] : undefined) ??
+      localShellLaunchConfig;
     await connectLocalShellCommand({
       shellProfile,
       activate,
@@ -649,6 +666,7 @@ export default function useSessionState({
       setSessionStates,
       setSessionReasons,
       t,
+      launchConfig,
     });
   }
 

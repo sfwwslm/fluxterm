@@ -14,6 +14,10 @@ export type HostProfile = {
   passwordRef?: string | null;
   knownHost?: string | null;
   tags?: string[] | null;
+  terminalType?: string | null;
+  targetSystem?: string | null;
+  charset?: string | null;
+  description?: string | null;
 };
 
 /** SSH 会话元数据。 */
@@ -327,6 +331,17 @@ export type LocalShellProfile = {
   label: string;
   path: string;
   args: string[];
+};
+
+/** 本地 Shell 启动参数。 */
+export type LocalShellLaunchConfig = {
+  terminalType?:
+    | "xterm-256color"
+    | "xterm"
+    | "screen-256color"
+    | "tmux-256color"
+    | "vt100";
+  charset?: "utf-8" | "gbk" | "gb18030";
 };
 
 /** 快捷命令分组。 */

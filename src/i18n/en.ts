@@ -385,6 +385,18 @@ export const en = {
     "Window-related settings such as cursor style, word separators, and selection behavior will be added here later.",
   "profile.section.modemHint":
     "Drag upload and download settings will be added here later, including X/Y/Z Modem options.",
+  "profile.sessionTab.terminal": "Terminal",
+  "profile.sessionTab.system": "System",
+  "profile.sessionTab.charset": "Charset",
+  "profile.sessionTab.description": "Description",
+  "profile.sessionTab.terminalHint":
+    "Terminal-related configuration is shown here. This version keeps a compatible structure first.",
+  "profile.sessionTab.systemHint":
+    "Target system configuration is reserved here and will be added incrementally.",
+  "profile.sessionTab.charsetHint":
+    "Charset configuration is reserved here and encoding strategy options will be added later.",
+  "profile.sessionTab.descriptionHint":
+    "Session description configuration is reserved here and note fields will be added later.",
   "profile.form.name": "Name",
   "profile.form.host": "Host",
   "profile.form.port": "Port",

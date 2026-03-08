@@ -30,6 +30,14 @@ pub struct LocalShellProfile {
     pub args: Vec<String>,
 }
 
+/// 本地 Shell 启动参数。
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalShellLaunchConfig {
+    pub terminal_type: Option<String>,
+    pub charset: Option<String>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TerminalOutputPayload {
@@ -203,6 +211,27 @@ fn resolve_shell_profile(shell_id: Option<String>) -> Result<LocalShellProfile, 
         .ok_or_else(|| EngineError::new("local_shell_missing", "未发现可用 Shell"))
 }
 
+fn normalize_terminal_type(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "xterm-256color" => Some("xterm-256color"),
+        "xterm" => Some("xterm"),
+        "screen-256color" => Some("screen-256color"),
+        "tmux-256color" => Some("tmux-256color"),
+        "vt100" => Some("vt100"),
+        _ => None,
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn normalize_locale_for_charset(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "utf-8" => Some("en_US.UTF-8"),
+        "gbk" => Some("zh_CN.GBK"),
+        "gb18030" => Some("zh_CN.GB18030"),
+        _ => None,
+    }
+}
+
 /// 枚举本地可用 Shell 列表。
 pub fn list_local_shells() -> Vec<LocalShellProfile> {
     collect_shells()
@@ -213,6 +242,7 @@ pub fn start_local_shell(
     app: AppHandle,
     state: &LocalShellState,
     shell_id: Option<String>,
+    launch_config: Option<LocalShellLaunchConfig>,
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
     let session_id = Uuid::new_v4().to_string();
@@ -229,13 +259,24 @@ pub fn start_local_shell(
     })?;
 
     let mut command = CommandBuilder::new(&shell.path);
-    let term = env::var("TERM").unwrap_or_default();
-    if term.trim().is_empty() {
-        command.env("TERM", "xterm-256color");
-    }
+    let resolved_term = launch_config
+        .as_ref()
+        .and_then(|cfg| cfg.terminal_type.as_deref())
+        .and_then(normalize_terminal_type)
+        .unwrap_or("xterm-256color");
+    command.env("TERM", resolved_term);
     let colorterm = env::var("COLORTERM").unwrap_or_default();
     if colorterm.trim().is_empty() {
         command.env("COLORTERM", "truecolor");
+    }
+    #[cfg(not(target_os = "windows"))]
+    if let Some(locale) = launch_config
+        .as_ref()
+        .and_then(|cfg| cfg.charset.as_deref())
+        .and_then(normalize_locale_for_charset)
+    {
+        command.env("LC_CTYPE", locale);
+        command.env("LANG", locale);
     }
     for arg in &shell.args {
         command.arg(arg);

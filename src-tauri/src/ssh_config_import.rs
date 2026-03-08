@@ -254,6 +254,10 @@ fn map_host_block_to_profile(
         password_ref: None,
         known_host: None,
         tags: Some(vec![IMPORT_GROUP_NAME.to_string()]),
+        terminal_type: None,
+        target_system: None,
+        charset: None,
+        description: None,
     })
 }
 
@@ -423,6 +427,10 @@ mod tests {
             password_ref: None,
             known_host: None,
             tags: None,
+            terminal_type: None,
+            target_system: None,
+            charset: None,
+            description: None,
         }
     }
 

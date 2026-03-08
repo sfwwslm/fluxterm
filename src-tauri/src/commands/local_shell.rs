@@ -4,8 +4,8 @@ use tauri::{AppHandle, State};
 
 use crate::ai::{AiRuntimeState, register_local_session};
 use crate::local_shell::{
-    LocalShellProfile, LocalShellState, list_local_shells, resize_local_shell, start_local_shell,
-    stop_local_shell, write_local_shell,
+    LocalShellLaunchConfig, LocalShellProfile, LocalShellState, list_local_shells,
+    resize_local_shell, start_local_shell, stop_local_shell, write_local_shell,
 };
 use crate::resource_monitor::ResourceMonitorState;
 
@@ -22,9 +22,10 @@ pub fn local_shell_connect(
     state: State<LocalShellState>,
     ai_state: State<AiRuntimeState>,
     shell_id: Option<String>,
+    launch_config: Option<LocalShellLaunchConfig>,
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
-    let session = start_local_shell(app, &state, shell_id.clone(), size)?;
+    let session = start_local_shell(app, &state, shell_id.clone(), launch_config, size)?;
     let shells = list_local_shells();
     let selected_shell = shell_id
         .as_deref()
