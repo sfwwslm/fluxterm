@@ -50,16 +50,16 @@ jobs:
           echo "tag=$version" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      - name: Delete existing release
-        run: |
-          gh release delete ${{ steps.meta.outputs.tag }} --yes --cleanup-tag || true
-          sleep 1
-
       - name: Create release
         env:
           tag: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.name }}
         run: |
+          # 检查 Release 是否已存在，如果存在则报错停止构建
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "错误: Release $tag 已经存在。为防止意外修改已发布版本，构建将停止。"
+            exit 1
+          fi
           gh release create "$tag" --title "$name" --notes "See commit history for details." --prerelease
 
   publish-tauri:
