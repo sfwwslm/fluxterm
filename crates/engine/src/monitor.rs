@@ -7,7 +7,7 @@ use russh::client;
 use serde_json::json;
 use tokio::sync::watch;
 
-use crate::auth::authenticate;
+use crate::auth::{AuthPurpose, authenticate};
 use crate::error::EngineError;
 use crate::session::{ClientHandler, ExpectedHostKey};
 use crate::telemetry::{TelemetryLevel, log_telemetry};
@@ -70,7 +70,7 @@ pub async fn run_ssh_resource_monitor(
             )
         })?;
 
-    authenticate(&mut session, &profile).await?;
+    authenticate(&mut session, &profile, AuthPurpose::ResourceMonitor).await?;
 
     let mut previous_cpu: Option<CpuCounters> = None;
     let mut ticker = tokio::time::interval(Duration::from_secs(interval_sec.max(3)));

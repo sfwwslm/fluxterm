@@ -12,14 +12,45 @@ use crate::session::ClientHandler;
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{AuthType, HostProfile};
 
+/// SSH 认证用途，用于区分会话连接与资源监控等链路。
+#[derive(Clone, Copy)]
+pub enum AuthPurpose {
+    Session,
+    ResourceMonitor,
+}
+
+impl AuthPurpose {
+    fn start_event(self) -> &'static str {
+        match self {
+            AuthPurpose::Session => "ssh.session.auth.start",
+            AuthPurpose::ResourceMonitor => "ssh.resource_monitor.auth.start",
+        }
+    }
+
+    fn success_event(self) -> &'static str {
+        match self {
+            AuthPurpose::Session => "ssh.session.auth.success",
+            AuthPurpose::ResourceMonitor => "ssh.resource_monitor.auth.success",
+        }
+    }
+
+    fn failed_event(self) -> &'static str {
+        match self {
+            AuthPurpose::Session => "ssh.session.auth.failed",
+            AuthPurpose::ResourceMonitor => "ssh.resource_monitor.auth.failed",
+        }
+    }
+}
+
 /// 执行 SSH 认证流程。
 pub async fn authenticate(
     session: &mut client::Handle<ClientHandler>,
     profile: &HostProfile,
+    purpose: AuthPurpose,
 ) -> Result<(), EngineError> {
     log_telemetry(
         TelemetryLevel::Info,
-        "ssh.auth.start",
+        purpose.start_event(),
         None,
         json!({
             "profileId": profile.id,
@@ -84,7 +115,7 @@ pub async fn authenticate(
     if !authenticated.success() {
         log_telemetry(
             TelemetryLevel::Warn,
-            "ssh.auth.failed",
+            purpose.failed_event(),
             None,
             json!({
                 "profileId": profile.id,
@@ -102,7 +133,7 @@ pub async fn authenticate(
 
     log_telemetry(
         TelemetryLevel::Info,
-        "ssh.auth.success",
+        purpose.success_event(),
         None,
         json!({
             "profileId": profile.id,

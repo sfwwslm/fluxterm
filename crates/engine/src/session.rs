@@ -17,7 +17,7 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::time::timeout;
 use uuid::Uuid;
 
-use crate::auth::authenticate;
+use crate::auth::{AuthPurpose, authenticate};
 use crate::error::EngineError;
 use crate::sftp::{
     next_transfer_id, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
@@ -736,7 +736,7 @@ pub async fn run_session_loop(
         EngineError::with_detail("ssh_connect_failed", "无法连接到目标主机", err.to_string())
     })?;
 
-    authenticate(&mut session, &profile).await?;
+    authenticate(&mut session, &profile, AuthPurpose::Session).await?;
 
     let mut channel = session.channel_open_session().await.map_err(|err| {
         EngineError::with_detail(
