@@ -32,6 +32,7 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 Frontend (from repo root):
 
 - `pnpm dev` or `pnpm web:dev`: Start Vite dev server.
+- `pnpm check`: Run frontend checks (`type-check + lint`).
 - `pnpm web:build`: Type-check and build frontend (`tsc && vite build`).
 - `pnpm preview`: Preview the production Vite build.
 - `pnpm format`: Format frontend files in `src/` with Prettier.

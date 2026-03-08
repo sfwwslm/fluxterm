@@ -96,6 +96,7 @@ AI 能力层，负责：
 
 ```bash
 pnpm dev
+pnpm check
 pnpm web:build
 ```
 
