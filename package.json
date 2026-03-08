@@ -7,12 +7,17 @@
     "dev": "vite",
     "web:dev": "vite",
     "build": "tauri build",
-    "web:build": "tsc && vite build",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx --max-warnings=0",
+    "web:build": "pnpm type-check && vite build",
     "build:fast": "tauri build -- --profile fast-release",
     "preview": "vite preview",
     "prune": "ts-prune",
     "tauri": "tauri",
     "format": "prettier --write src/",
+    "format:all": "pnpm format && cargo fmt",
+    "check": "pnpm type-check && pnpm lint",
+    "check:all": "pnpm type-check && pnpm lint && cargo clippy --all-targets --all-features -- -D warnings",
     "code:stats": "node --experimental-strip-types scripts/count-code-lines.ts"
   },
   "dependencies": {
@@ -36,14 +41,21 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.10.0",
     "@types/node": "25.0.7",
     "@types/react": "19.2.8",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.2",
+    "eslint": "^10.0.3",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "jiti": "^2.6.1",
     "prettier": "3.7.4",
     "ts-prune": "0.10.3",
     "typescript": "5.9.3",
+    "typescript-eslint": "^8.56.1",
     "vite": "7.3.1"
   },
   "packageManager": "pnpm@10.28.0"
