@@ -7,6 +7,7 @@ import react from "@vitejs/plugin-react";
 const host = process.env.TAURI_DEV_HOST;
 
 let gitHash: string | undefined;
+let buildTime: string | undefined;
 const getGitHash = () => {
   if (gitHash !== undefined) return gitHash;
   try {
@@ -21,11 +22,18 @@ const getGitHash = () => {
   return gitHash;
 };
 
+const getBuildTime = () => {
+  if (buildTime !== undefined) return buildTime;
+  buildTime = new Date().toISOString();
+  return buildTime;
+};
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
   define: {
     "import.meta.env.VITE_GIT_HASH": JSON.stringify(getGitHash()),
+    "import.meta.env.VITE_BUILD_TIME": JSON.stringify(getBuildTime()),
   },
   resolve: {
     alias: {

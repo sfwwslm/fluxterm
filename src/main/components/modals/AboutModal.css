@@ -1,0 +1,29 @@
+.about-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.about-row strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.about-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.about-label svg {
+  color: var(--text-muted);
+}

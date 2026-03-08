@@ -887,23 +887,3 @@ input[type="number"] {
 .floating-header {
   gap: 10px;
 }
-
-.about-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.about-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.about-row strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}

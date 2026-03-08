@@ -5,6 +5,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { normalizeToAppError } from "@/shared/errors/appError";
 
+/** 系统信息结构。 */
+export type SystemInfo = {
+  osName: string;
+  osVersion: string;
+  kernelVersion: string;
+  arch: string;
+};
+
 /** 统一的 Tauri 命令调用入口。 */
 export async function callTauri<T>(
   command: string,
@@ -22,4 +30,9 @@ export async function callTauri<T>(
       },
     });
   }
+}
+
+/** 读取后端系统信息。 */
+export function getSystemInfo() {
+  return callTauri<SystemInfo>("get_system_info");
 }

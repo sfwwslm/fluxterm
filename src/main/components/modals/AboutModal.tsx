@@ -1,9 +1,28 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import {
+  FiClock,
+  FiCopy,
+  FiCpu,
+  FiGitCommit,
+  FiLayers,
+  FiMonitor,
+  FiTag,
+} from "react-icons/fi";
 import type { Translate } from "@/i18n";
 import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
-import { APP_VERSION, COMMIT_HASH, TOOLCHAIN_INFO } from "@/appInfo";
+import { getSystemInfo } from "@/shared/tauri/commands";
+import {
+  APP_VERSION,
+  BUILD_TIME,
+  COMMIT_HASH,
+  PLATFORM_ARCH,
+  RUNTIME_INFO,
+  TECH_STACK_INFO,
+} from "@/appInfo";
+import "./AboutModal.css";
 
 type AboutModalProps = {
   open: boolean;
@@ -20,7 +39,20 @@ export default function AboutModal({
   t,
 }: AboutModalProps) {
   const [version, setVersion] = useState(APP_VERSION);
+  const [platformArch, setPlatformArch] = useState(PLATFORM_ARCH);
+  const [copyState, setCopyState] = useState<"idle" | "done" | "failed">(
+    "idle",
+  );
+  const displayVersion = version.startsWith("v") ? version : `v${version}`;
   const canOpenDevtools = import.meta.env.DEV && !!onOpenDevtools;
+  const diagnosticInfo = [
+    `${t("about.version")}: ${displayVersion}`,
+    `${t("about.hash")}: ${COMMIT_HASH}`,
+    `${t("about.buildTime")}: ${BUILD_TIME}`,
+    `${t("about.platformArch")}: ${platformArch}`,
+    `${t("about.runtimeInfo")}: ${RUNTIME_INFO}`,
+    `${t("about.techStackInfo")}: ${TECH_STACK_INFO}`,
+  ].join("\n");
 
   useEffect(() => {
     const hasTauriRuntime =
@@ -29,7 +61,30 @@ export default function AboutModal({
     getVersion()
       .then((value) => setVersion(value))
       .catch(() => {});
+
+    getSystemInfo()
+      .then((value) =>
+        setPlatformArch(
+          `${value.osName} ${value.osVersion} (${value.arch})`.trim(),
+        ),
+      )
+      .catch(() => {});
   }, []);
+
+  const handleCopyDiagnostics = async () => {
+    try {
+      await writeText(diagnosticInfo);
+      setCopyState("done");
+    } catch {
+      try {
+        await navigator.clipboard.writeText(diagnosticInfo);
+        setCopyState("done");
+      } catch {
+        setCopyState("failed");
+      }
+    }
+    setTimeout(() => setCopyState("idle"), 1800);
+  };
 
   return (
     <Modal
@@ -37,26 +92,66 @@ export default function AboutModal({
       title={t("about.title")}
       closeLabel={t("actions.close")}
       actions={
-        canOpenDevtools ? (
-          <Button variant="ghost" onClick={onOpenDevtools}>
-            {t("about.openConsole")}
+        <>
+          {canOpenDevtools && (
+            <Button variant="ghost" onClick={onOpenDevtools}>
+              {t("about.openConsole")}
+            </Button>
+          )}
+          <Button variant="ghost" onClick={handleCopyDiagnostics}>
+            <FiCopy size={14} />
+            {copyState === "done"
+              ? t("about.copyDiagnosticsDone")
+              : copyState === "failed"
+                ? t("about.copyDiagnosticsFailed")
+                : t("about.copyDiagnostics")}
           </Button>
-        ) : undefined
+        </>
       }
       onClose={onClose}
     >
       <div className="about-list">
         <div className="about-row">
-          <span>{t("about.version")}</span>
-          <strong>{version}</strong>
+          <span className="about-label">
+            <FiTag size={14} />
+            {t("about.version")}
+          </span>
+          <strong>{displayVersion}</strong>
         </div>
         <div className="about-row">
-          <span>{t("about.commit")}</span>
+          <span className="about-label">
+            <FiGitCommit size={14} />
+            {t("about.hash")}
+          </span>
           <strong>{COMMIT_HASH}</strong>
         </div>
         <div className="about-row">
-          <span>{t("about.toolchain")}</span>
-          <strong>{TOOLCHAIN_INFO}</strong>
+          <span className="about-label">
+            <FiClock size={14} />
+            {t("about.buildTime")}
+          </span>
+          <strong>{BUILD_TIME}</strong>
+        </div>
+        <div className="about-row">
+          <span className="about-label">
+            <FiCpu size={14} />
+            {t("about.platformArch")}
+          </span>
+          <strong>{platformArch}</strong>
+        </div>
+        <div className="about-row">
+          <span className="about-label">
+            <FiMonitor size={14} />
+            {t("about.runtimeInfo")}
+          </span>
+          <strong>{RUNTIME_INFO}</strong>
+        </div>
+        <div className="about-row">
+          <span className="about-label">
+            <FiLayers size={14} />
+            {t("about.techStackInfo")}
+          </span>
+          <strong>{TECH_STACK_INFO}</strong>
         </div>
       </div>
     </Modal>

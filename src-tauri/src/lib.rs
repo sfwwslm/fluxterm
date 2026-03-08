@@ -49,7 +49,7 @@ use crate::commands::sftp::{
 use crate::commands::ssh::{
     ssh_connect, ssh_disconnect, ssh_host_key_confirm, ssh_resize, ssh_write,
 };
-use crate::commands::system::{app_config_dir, app_data_dir, open_devtools};
+use crate::commands::system::{app_config_dir, app_data_dir, get_system_info, open_devtools};
 use crate::commands::tunnel::{
     ssh_tunnel_close, ssh_tunnel_close_all, ssh_tunnel_list, ssh_tunnel_open,
 };
@@ -162,6 +162,7 @@ pub fn run() {
             resource_monitor_stop,
             app_config_dir,
             app_data_dir,
+            get_system_info,
             open_devtools,
             proxy_open,
             proxy_close,
