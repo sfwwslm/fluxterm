@@ -2187,9 +2187,7 @@ export default function AppShell() {
               postFloatingFilesMessage({ type: "files:open", path });
               return Promise.resolve();
             },
-            openFile: (
-              entry: (typeof filesWidgetState.entries)[number],
-            ) => {
+            openFile: (entry: (typeof filesWidgetState.entries)[number]) => {
               postFloatingFilesMessage({ type: "files:open-file", entry });
               return Promise.resolve();
             },
@@ -2219,9 +2217,7 @@ export default function AppShell() {
               postFloatingFilesMessage({ type: "files:rename", entry, name });
               return Promise.resolve();
             },
-            remove: (
-              entry: (typeof filesWidgetState.entries)[number],
-            ) => {
+            remove: (entry: (typeof filesWidgetState.entries)[number]) => {
               postFloatingFilesMessage({ type: "files:remove", entry });
               return Promise.resolve();
             },

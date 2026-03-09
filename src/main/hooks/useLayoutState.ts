@@ -147,7 +147,9 @@ export default function useLayoutState({
       setSlotGroups(normalized.slots);
       setFloatingOrigins(normalized.floating);
       setwidgetSizes(normalized.sizes);
-      void debug(JSON.stringify({ event: "layout:loaded", payload: normalized }));
+      void debug(
+        JSON.stringify({ event: "layout:loaded", payload: normalized }),
+      );
     } catch (error) {
       void warn(
         JSON.stringify({

@@ -394,9 +394,13 @@ export default function useTerminalRuntime({
     onCommandCaptureChange,
     onCommandCommit,
   });
-  const parseWorkingDirectoryFromPromptRef = useRef(parseWorkingDirectoryFromPrompt);
+  const parseWorkingDirectoryFromPromptRef = useRef(
+    parseWorkingDirectoryFromPrompt,
+  );
   const appendSessionBufferRef = useRef(appendSessionBuffer);
-  const scheduleCommandCaptureRefreshRef = useRef(scheduleCommandCaptureRefresh);
+  const scheduleCommandCaptureRefreshRef = useRef(
+    scheduleCommandCaptureRefresh,
+  );
   const ensureTerminalRef = useRef(ensureTerminal);
   const observeTerminalContainerRef = useRef(observeTerminalContainer);
   const finalizeTerminalMountRef = useRef(finalizeTerminalMount);
@@ -490,7 +494,8 @@ export default function useTerminalRuntime({
   ]);
 
   useEffect(() => {
-    parseWorkingDirectoryFromPromptRef.current = parseWorkingDirectoryFromPrompt;
+    parseWorkingDirectoryFromPromptRef.current =
+      parseWorkingDirectoryFromPrompt;
     appendSessionBufferRef.current = appendSessionBuffer;
     scheduleCommandCaptureRefreshRef.current = scheduleCommandCaptureRefresh;
     ensureTerminalRef.current = ensureTerminal;
@@ -1210,6 +1215,7 @@ export default function useTerminalRuntime({
           setActiveAutocomplete((prev) =>
             prev?.sessionId === sessionId ? null : prev,
           );
+          // Esc 既要关闭联想面板，也必须透传到 PTY，保证 vim 等 TUI 能正确退出插入模式。
           handlersRef.current.writeToSession(sessionId, data).catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
           return;

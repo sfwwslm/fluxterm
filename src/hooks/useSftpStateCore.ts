@@ -93,9 +93,9 @@ export default function useSftpState({
   const unsupportedLoggedRef = useRef<Record<string, boolean>>({});
   const progressBySessionRef = useRef<Record<string, SftpProgress>>({});
   const clearFileViewRef = useRef<(sessionId: string) => void>(() => {});
-  const loadHomePathRef = useRef<
-    (sessionId?: string | null) => Promise<void>
-  >(async () => {});
+  const loadHomePathRef = useRef<(sessionId?: string | null) => Promise<void>>(
+    async () => {},
+  );
 
   const activeFileView = useMemo(() => {
     if (!activeSessionId) return null;
