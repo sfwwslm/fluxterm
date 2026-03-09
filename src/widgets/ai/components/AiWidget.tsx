@@ -247,7 +247,7 @@ export default function AiWidget({
           />
           <div className="ai-widget-input-actions">
             <Button
-              variant={pending ? "ghost" : "primary"}
+              variant="ghost"
               size="sm"
               className={`ai-widget-send ${pending ? "secondary" : ""}`}
               onClick={() => {

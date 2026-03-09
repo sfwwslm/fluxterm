@@ -43,7 +43,7 @@ export default function NoticeHost() {
                 </Button>
               )}
               <Button
-                variant="primary"
+                variant="ghost"
                 size="sm"
                 onClick={() => {
                   activeDialog.onConfirm?.();

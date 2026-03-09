@@ -345,12 +345,6 @@ select {
   font-family: inherit;
 }
 
-.ui-button--primary,
-.modal-actions .ui-button.primary {
-  color: var(--accent-contrast);
-  font-weight: 600;
-}
-
 .select-menu.is-disabled .select-menu-button {
   opacity: 0.58;
   filter: saturate(0.72);

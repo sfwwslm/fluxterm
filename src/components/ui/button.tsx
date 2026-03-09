@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from "react";
 import "./button.css";
 
 /** 按钮支持的视觉变体。 */
-type ButtonVariant = "default" | "primary" | "ghost" | "danger";
+type ButtonVariant = "default" | "ghost" | "danger";
 /** 按钮支持的预设尺寸。 */
 type ButtonSize = "sm" | "md" | "icon";
 

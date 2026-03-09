@@ -56,7 +56,7 @@ export default function InputDialog({
             {cancelText}
           </Button>
           <Button
-            variant="primary"
+            variant="ghost"
             size="sm"
             onClick={() => {
               onConfirm(value.trim());

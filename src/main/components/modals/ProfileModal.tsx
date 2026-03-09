@@ -545,8 +545,8 @@ export default function ProfileModal({
               {t("actions.cancel")}
             </Button>
             <Button
-              className="primary"
-              variant="primary"
+              className="ghost"
+              variant="ghost"
               onClick={() => {
                 if (profileType === "ssh") {
                   const errorText = validateProfileName(draft.name);

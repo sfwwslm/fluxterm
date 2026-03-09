@@ -736,7 +736,7 @@ export default function ConfigModal({
               </div>
               <div className="config-file-picker-actions config-file-picker-actions-nowrap">
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   className="config-bg-image-action-button"
                   onClick={() => {
@@ -753,7 +753,7 @@ export default function ConfigModal({
                   {t("config.app.pickEditor")}
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   className="config-bg-image-action-button"
                   disabled={!defaultEditorPathDraft}
@@ -764,7 +764,7 @@ export default function ConfigModal({
                   {t("actions.clear")}
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   className="config-bg-image-action-button"
                   disabled={!isDefaultEditorPathDirty}
@@ -907,7 +907,7 @@ export default function ConfigModal({
             ) : null}
             <div className="config-file-picker-actions">
               <Button
-                variant="primary"
+                variant="ghost"
                 size="sm"
                 className="config-bg-image-action-button"
                 onClick={() => {
@@ -917,7 +917,7 @@ export default function ConfigModal({
                 {t("config.app.pickBackgroundMedia")}
               </Button>
               <Button
-                variant="primary"
+                variant="ghost"
                 size="sm"
                 className="config-bg-image-action-button"
                 disabled={!backgroundImageAsset}
@@ -1060,7 +1060,7 @@ export default function ConfigModal({
               </div>
               <div className="config-file-picker-actions">
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   disabled={
                     !activeProvider || testingProviderId === activeProvider.id
@@ -1248,7 +1248,7 @@ export default function ConfigModal({
           </div>
           <div className="config-file-picker-actions">
             <Button
-              variant="primary"
+              variant="ghost"
               size="sm"
               disabled={quickPresetCreating}
               onClick={() => {
@@ -1374,7 +1374,7 @@ export default function ConfigModal({
           </div>
           <div className="config-file-picker-actions">
             <Button
-              variant="primary"
+              variant="ghost"
               size="sm"
               disabled={compatibleCreating}
               onClick={() => {
@@ -1663,7 +1663,7 @@ export default function ConfigModal({
             {configDir || t("config.directory.configUnavailable")}
           </div>
           <Button
-            variant="primary"
+            variant="ghost"
             size="sm"
             disabled={!configDir}
             onClick={() => {
@@ -1700,7 +1700,7 @@ export default function ConfigModal({
             {dataDir || t("config.directory.dataUnavailable")}
           </div>
           <Button
-            variant="primary"
+            variant="ghost"
             size="sm"
             disabled={!dataDir}
             onClick={() => {

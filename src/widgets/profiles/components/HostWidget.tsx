@@ -770,7 +770,7 @@ export default function HostWidget({
                   {t("actions.cancel")}
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   onClick={() => {
                     onMoveProfileToGroup(
@@ -819,7 +819,7 @@ export default function HostWidget({
                   {t("actions.cancel")}
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
                   onClick={() => {
                     onRemoveGroup(removeGroupDialog.name)
