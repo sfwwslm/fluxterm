@@ -1210,6 +1210,7 @@ export default function useTerminalRuntime({
           setActiveAutocomplete((prev) =>
             prev?.sessionId === sessionId ? null : prev,
           );
+          handlersRef.current.writeToSession(sessionId, data).catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
           return;
         }
