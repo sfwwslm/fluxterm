@@ -30,6 +30,10 @@ import {
   MIN_SCROLLBACK,
 } from "@/hooks/useSessionSettings";
 import {
+  DEFAULT_TERMINAL_CURSOR_STYLE,
+  type TerminalCursorStyle,
+} from "@/constants/terminalCursorStyle";
+import {
   MAX_BACKGROUND_IMAGE_SURFACE_ALPHA,
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/useAppSettings";
@@ -61,6 +65,7 @@ export type ConfigSectionKey =
   | "ai-provider-quick"
   | "ai-provider-compat"
   | "session-settings"
+  | "session-window"
   | "session-shell"
   | "config-directory";
 
@@ -109,6 +114,7 @@ type ConfigModalProps = {
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  cursorStyle?: TerminalCursorStyle;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
   resourceMonitorEnabled?: boolean;
@@ -149,6 +155,7 @@ type ConfigModalProps = {
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
+  onCursorStyleChange?: (value: TerminalCursorStyle) => void;
   onScrollbackChange?: (value: number) => void;
   onTerminalPathSyncEnabledChange?: (enabled: boolean) => void;
   onResourceMonitorEnabledChange?: (enabled: boolean) => void;
@@ -219,6 +226,7 @@ export default function ConfigModal({
   webLinksEnabled = true,
   commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
+  cursorStyle = DEFAULT_TERMINAL_CURSOR_STYLE,
   scrollback = 3000,
   terminalPathSyncEnabled = true,
   resourceMonitorEnabled = false,
@@ -247,6 +255,7 @@ export default function ConfigModal({
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
+  onCursorStyleChange,
   onScrollbackChange,
   onTerminalPathSyncEnabledChange,
   onResourceMonitorEnabledChange,
@@ -650,6 +659,7 @@ export default function ConfigModal({
     }
     if (
       activeSection === "session-settings" ||
+      activeSection === "session-window" ||
       activeSection === "session-shell"
     ) {
       return renderSaveStatus(
@@ -1612,6 +1622,36 @@ export default function ConfigModal({
               </option>
               <option value="off">
                 {t("config.session.hostKeyPolicy.off")}
+              </option>
+            </select>
+          </label>
+        </div>
+      );
+    }
+    if (activeSection === "session-window") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.sessionWindow")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.cursorStyle")}
+              </span>
+            </div>
+            <select
+              className="config-select-input"
+              value={cursorStyle}
+              onChange={(event) =>
+                onCursorStyleChange?.(event.target.value as TerminalCursorStyle)
+              }
+            >
+              <option value="block">
+                {t("config.session.cursorStyle.block")}
+              </option>
+              <option value="bar">{t("config.session.cursorStyle.bar")}</option>
+              <option value="underline">
+                {t("config.session.cursorStyle.underline")}
               </option>
             </select>
           </label>

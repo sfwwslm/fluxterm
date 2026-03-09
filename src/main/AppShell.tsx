@@ -339,6 +339,7 @@ export default function AppShell() {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    cursorStyle,
     wordSeparators: sessionWordSeparators,
     scrollback,
     terminalPathSyncEnabled,
@@ -348,6 +349,7 @@ export default function AppShell() {
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
+    setCursorStyle,
     setScrollback,
     setTerminalPathSyncEnabled,
     setResourceMonitorEnabled,
@@ -796,6 +798,7 @@ export default function AppShell() {
       "ai-provider-quick": t("config.section.aiProviderQuick"),
       "ai-provider-compat": t("config.section.aiProviderCompat"),
       "session-settings": t("config.section.sessionSettings"),
+      "session-window": t("config.section.sessionWindow"),
       "session-shell": t("config.section.sessionShell"),
       "config-directory": t("config.section.configDirectory"),
     }),
@@ -904,6 +907,24 @@ export default function AppShell() {
           label: configSectionLabels["session-settings"],
         },
         {
+          key: "session-window",
+          label: configSectionLabels["session-window"],
+        },
+        {
+          key: "session-shell",
+          label: configSectionLabels["session-shell"],
+        },
+      ],
+      "session-window": [
+        {
+          key: "session-settings",
+          label: configSectionLabels["session-settings"],
+        },
+        {
+          key: "session-window",
+          label: configSectionLabels["session-window"],
+        },
+        {
           key: "session-shell",
           label: configSectionLabels["session-shell"],
         },
@@ -912,6 +933,10 @@ export default function AppShell() {
         {
           key: "session-settings",
           label: configSectionLabels["session-settings"],
+        },
+        {
+          key: "session-window",
+          label: configSectionLabels["session-window"],
         },
         {
           key: "session-shell",
@@ -1012,6 +1037,7 @@ export default function AppShell() {
     theme: activeTerminalTheme,
     webLinksEnabled,
     selectionAutoCopyEnabled,
+    cursorStyle,
     scrollback,
     activeSessionId: sessionState.activeSessionId,
     activeSession: sessionState.activeSession,
@@ -2941,6 +2967,7 @@ export default function AppShell() {
         webLinksEnabled={webLinksEnabled}
         commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
+        cursorStyle={cursorStyle}
         scrollback={scrollback}
         terminalPathSyncEnabled={terminalPathSyncEnabled}
         resourceMonitorEnabled={resourceMonitorEnabled}
@@ -2971,6 +2998,7 @@ export default function AppShell() {
         onWebLinksEnabledChange={setWebLinksEnabled}
         onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
+        onCursorStyleChange={setCursorStyle}
         onScrollbackChange={setScrollback}
         onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}
         onResourceMonitorEnabledChange={setResourceMonitorEnabled}

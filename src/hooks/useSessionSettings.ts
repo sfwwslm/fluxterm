@@ -23,6 +23,11 @@ import {
   DEFAULT_TERMINAL_WORD_SEPARATORS,
   normalizeTerminalWordSeparators,
 } from "@/constants/terminalWordSeparators";
+import {
+  DEFAULT_TERMINAL_CURSOR_STYLE,
+  normalizeTerminalCursorStyle,
+  type TerminalCursorStyle,
+} from "@/constants/terminalCursorStyle";
 
 /** 终端域全局配置结构。 */
 type SessionSettings = {
@@ -30,6 +35,7 @@ type SessionSettings = {
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  cursorStyle?: TerminalCursorStyle;
   wordSeparators?: string;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
@@ -46,6 +52,7 @@ type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
   commandAutocompleteEnabled: boolean;
   selectionAutoCopyEnabled: boolean;
+  cursorStyle: TerminalCursorStyle;
   wordSeparators: string;
   scrollback: number;
   terminalPathSyncEnabled: boolean;
@@ -55,6 +62,7 @@ type UseSessionSettingsResult = {
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setCommandAutocompleteEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setCursorStyle: React.Dispatch<React.SetStateAction<TerminalCursorStyle>>;
   setWordSeparators: React.Dispatch<React.SetStateAction<string>>;
   setScrollback: React.Dispatch<React.SetStateAction<number>>;
   setTerminalPathSyncEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -91,6 +99,7 @@ const defaultSessionSettings: Required<
     | "webLinksEnabled"
     | "commandAutocompleteEnabled"
     | "selectionAutoCopyEnabled"
+    | "cursorStyle"
     | "wordSeparators"
     | "scrollback"
     | "terminalPathSyncEnabled"
@@ -102,6 +111,7 @@ const defaultSessionSettings: Required<
   webLinksEnabled: true,
   commandAutocompleteEnabled: true,
   selectionAutoCopyEnabled: false,
+  cursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
   wordSeparators: DEFAULT_TERMINAL_WORD_SEPARATORS,
   scrollback: 3000,
   terminalPathSyncEnabled: true,
@@ -123,6 +133,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   );
   const [selectionAutoCopyEnabled, setSelectionAutoCopyEnabled] = useState(
     defaultSessionSettings.selectionAutoCopyEnabled,
+  );
+  const [cursorStyle, setCursorStyle] = useState<TerminalCursorStyle>(
+    defaultSessionSettings.cursorStyle,
   );
   const [wordSeparators, setWordSeparators] = useState(
     defaultSessionSettings.wordSeparators,
@@ -178,6 +191,14 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       }
       if (typeof parsed?.selectionAutoCopyEnabled === "boolean") {
         setSelectionAutoCopyEnabled(parsed.selectionAutoCopyEnabled);
+      }
+      {
+        const nextCursorStyle = normalizeTerminalCursorStyle(
+          parsed?.cursorStyle,
+        );
+        if (nextCursorStyle) {
+          setCursorStyle(nextCursorStyle);
+        }
       }
       if (typeof parsed?.wordSeparators === "string") {
         setWordSeparators(
@@ -249,6 +270,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       webLinksEnabled,
       commandAutocompleteEnabled,
       selectionAutoCopyEnabled,
+      cursorStyle:
+        normalizeTerminalCursorStyle(cursorStyle) ??
+        defaultSessionSettings.cursorStyle,
       wordSeparators:
         normalizeTerminalWordSeparators(wordSeparators) ??
         defaultSessionSettings.wordSeparators,
@@ -309,6 +333,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    cursorStyle,
     wordSeparators,
     scrollback,
     terminalPathSyncEnabled,
@@ -327,6 +352,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    cursorStyle:
+      normalizeTerminalCursorStyle(cursorStyle) ??
+      defaultSessionSettings.cursorStyle,
     wordSeparators:
       normalizeTerminalWordSeparators(wordSeparators) ??
       defaultSessionSettings.wordSeparators,
@@ -340,6 +368,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
+    setCursorStyle,
     setWordSeparators,
     setScrollback,
     setTerminalPathSyncEnabled,

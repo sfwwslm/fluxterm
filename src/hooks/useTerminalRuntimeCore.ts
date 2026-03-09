@@ -41,6 +41,11 @@ import {
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import { normalizeTerminalWordSeparators } from "@/constants/terminalWordSeparators";
+import {
+  DEFAULT_TERMINAL_CURSOR_STYLE,
+  normalizeTerminalCursorStyle,
+  type TerminalCursorStyle,
+} from "@/constants/terminalCursorStyle";
 
 type TerminalTheme = {
   background: string;
@@ -54,6 +59,7 @@ type UseTerminalRuntimeProps = {
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
+  cursorStyle?: TerminalCursorStyle;
   resolveWordSeparators?: (sessionId: string) => string | null | undefined;
   activeSessionId: string | null;
   activeSession: Session | null;
@@ -325,6 +331,7 @@ export default function useTerminalRuntime({
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
   scrollback = DEFAULT_TERMINAL_SCROLLBACK,
+  cursorStyle = DEFAULT_TERMINAL_CURSOR_STYLE,
   resolveWordSeparators,
   activeSessionId,
   activeSession,
@@ -1055,6 +1062,9 @@ export default function useTerminalRuntime({
     const sessionWordSeparator = normalizeTerminalWordSeparators(
       resolveWordSeparatorsRef.current?.(sessionId),
     );
+    const normalizedCursorStyle =
+      normalizeTerminalCursorStyle(cursorStyle) ??
+      DEFAULT_TERMINAL_CURSOR_STYLE;
     const term = new modules.Terminal({
       allowProposedApi: true,
       // 启用终端画布透明通道，使半透明主题背景可透出到底层应用背景图。
@@ -1063,6 +1073,7 @@ export default function useTerminalRuntime({
       fontFamily: '"JetBrains Mono", "Cascadia Mono", monospace',
       fontSize: 13,
       cursorBlink: true,
+      cursorStyle: normalizedCursorStyle,
       scrollback,
       theme: themeRef.current,
       ...(sessionWordSeparator ? { wordSeparator: sessionWordSeparator } : {}),
@@ -1408,6 +1419,15 @@ export default function useTerminalRuntime({
       bundle.terminal.options.scrollback = scrollback;
     });
   }, [scrollback]);
+
+  useEffect(() => {
+    const normalizedCursorStyle =
+      normalizeTerminalCursorStyle(cursorStyle) ??
+      DEFAULT_TERMINAL_CURSOR_STYLE;
+    Object.values(terminalsRef.current).forEach((bundle) => {
+      bundle.terminal.options.cursorStyle = normalizedCursorStyle;
+    });
+  }, [cursorStyle]);
 
   useEffect(() => {
     if (!activeSessionId || !activeSession) return;
