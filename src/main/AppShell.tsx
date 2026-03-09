@@ -2686,10 +2686,6 @@ export default function AppShell() {
           layoutCollapsed={layoutCollapsed}
           onToggleCollapsed={handleToggleCollapsed}
           layoutMenuDisabled={layoutMenuDisabled}
-          aboutOpen={aboutOpen}
-          onOpenAbout={() => setAboutOpen(true)}
-          onCloseAbout={handleCloseAbout}
-          onOpenDevtools={handleOpenDevtools}
           onOpenConfigSection={openConfigSection}
           t={t}
         />

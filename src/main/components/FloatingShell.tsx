@@ -4,7 +4,6 @@ import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import type { WidgetKey } from "@/types";
 import type { WidgetSide } from "@/layout/types";
 import TitleBar from "@/components/layout/TitleBar";
-import AboutModal from "@/main/components/modals/AboutModal";
 import { isMacOS } from "@/utils/platform";
 
 type FloatingShellProps = {
@@ -14,10 +13,6 @@ type FloatingShellProps = {
   layoutCollapsed: Record<WidgetSide | "bottom", boolean>;
   onToggleCollapsed: (side: WidgetSide | "bottom") => void;
   layoutMenuDisabled: boolean;
-  aboutOpen: boolean;
-  onOpenAbout: () => void;
-  onCloseAbout: () => void;
-  onOpenDevtools: () => void;
   onOpenConfigSection: (section: ConfigSectionKey) => void;
   t: Translate;
 };
@@ -30,10 +25,6 @@ export default function FloatingShell({
   layoutCollapsed,
   onToggleCollapsed,
   layoutMenuDisabled,
-  aboutOpen,
-  onOpenAbout,
-  onCloseAbout,
-  onOpenDevtools,
   onOpenConfigSection,
   t,
 }: FloatingShellProps) {
@@ -46,7 +37,7 @@ export default function FloatingShell({
           onOpenConfigSection={onOpenConfigSection}
           layoutCollapsed={layoutCollapsed}
           onToggleCollapsed={onToggleCollapsed}
-          onOpenAbout={onOpenAbout}
+          onOpenAbout={() => {}}
           layoutDisabled={layoutMenuDisabled}
           showMenus={false}
           t={t}
@@ -60,13 +51,6 @@ export default function FloatingShell({
           <div className="widget-body">{widgetBody}</div>
         </section>
       </div>
-      <AboutModal
-        open={aboutOpen}
-        onClose={onCloseAbout}
-        onOpenDevtools={onOpenDevtools}
-        showUpdateAction={false}
-        t={t}
-      />
     </div>
   );
 }
