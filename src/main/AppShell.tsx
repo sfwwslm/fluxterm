@@ -49,6 +49,7 @@ import {
   useFloatingWidgetSnapshotSync,
 } from "@/main/hooks/useFloatingWidgetSync";
 import useMacAppMenu from "@/main/hooks/useMacAppMenu";
+import useAppUpdater from "@/main/hooks/useAppUpdater";
 import useQuickBarState from "@/main/hooks/useQuickBarState";
 import useSubApps from "@/main/hooks/useSubApps";
 import { moveWidgetToSlot, widgetKeys } from "@/layout/model";
@@ -412,6 +413,12 @@ export default function AppShell() {
   } = useProfiles();
   const { pushToast } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
+  const appUpdater = useAppUpdater();
+
+  const handleCloseAbout = useCallback(() => {
+    setAboutOpen(false);
+    appUpdater.resetCheckState();
+  }, [appUpdater]);
   useDisableBrowserShortcuts();
   usePreventBrowserDefaults();
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
@@ -2681,7 +2688,7 @@ export default function AppShell() {
           layoutMenuDisabled={layoutMenuDisabled}
           aboutOpen={aboutOpen}
           onOpenAbout={() => setAboutOpen(true)}
-          onCloseAbout={() => setAboutOpen(false)}
+          onCloseAbout={handleCloseAbout}
           onOpenDevtools={handleOpenDevtools}
           onOpenConfigSection={openConfigSection}
           t={t}
@@ -2842,8 +2849,13 @@ export default function AppShell() {
 
           <AboutModal
             open={aboutOpen}
-            onClose={() => setAboutOpen(false)}
+            onClose={handleCloseAbout}
             onOpenDevtools={handleOpenDevtools}
+            onUpdateAction={appUpdater.triggerUpdateAction}
+            hasAvailableUpdate={appUpdater.hasAvailableUpdate}
+            updateIndicator={appUpdater.indicator}
+            downloadProgressPercent={appUpdater.downloadProgressPercent}
+            updateBusy={appUpdater.isChecking || appUpdater.isDownloading}
             t={t}
           />
         </div>

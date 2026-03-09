@@ -64,6 +64,7 @@ export default function FloatingShell({
         open={aboutOpen}
         onClose={onCloseAbout}
         onOpenDevtools={onOpenDevtools}
+        showUpdateAction={false}
         t={t}
       />
     </div>

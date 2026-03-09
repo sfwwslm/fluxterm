@@ -42,4 +42,5 @@ sysinfo = { version = "0.38.3" }
 russh = { workspace = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = { version = "2.10.0" }
 tauri-plugin-window-state = { version = "2.4.1" }

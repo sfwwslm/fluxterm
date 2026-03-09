@@ -3,6 +3,7 @@
   "platforms": ["macOS", "windows", "linux"],
   "windows": ["main", "widget-*", "subapp-*"],
   "permissions": [
+    "updater:default",
     "dialog:default",
     "window-state:default",
     {

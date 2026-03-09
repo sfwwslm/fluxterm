@@ -27,3 +27,22 @@
 .about-label svg {
   color: var(--text-muted);
 }
+
+.about-update-progress {
+  font-variant-numeric: tabular-nums;
+}
+
+.about-update-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.about-update-indicator--success {
+  background: #26b24b;
+}
+
+.about-update-indicator--error {
+  background: #d44949;
+}

@@ -13,6 +13,7 @@ import {
 import type { Translate } from "@/i18n";
 import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
+import type { AppUpdateIndicator } from "@/main/hooks/useAppUpdater";
 import { getSystemInfo } from "@/shared/tauri/commands";
 import {
   APP_VERSION,
@@ -28,6 +29,12 @@ type AboutModalProps = {
   open: boolean;
   onClose: () => void;
   onOpenDevtools?: () => void;
+  onUpdateAction?: () => Promise<void> | void;
+  hasAvailableUpdate?: boolean;
+  updateIndicator?: AppUpdateIndicator;
+  downloadProgressPercent?: number | null;
+  updateBusy?: boolean;
+  showUpdateAction?: boolean;
   t: Translate;
 };
 
@@ -36,6 +43,12 @@ export default function AboutModal({
   open,
   onClose,
   onOpenDevtools,
+  onUpdateAction,
+  hasAvailableUpdate = false,
+  updateIndicator = "none",
+  downloadProgressPercent = null,
+  updateBusy = false,
+  showUpdateAction = true,
   t,
 }: AboutModalProps) {
   const [version, setVersion] = useState(APP_VERSION);
@@ -45,6 +58,14 @@ export default function AboutModal({
   );
   const displayVersion = version.startsWith("v") ? version : `v${version}`;
   const canOpenDevtools = import.meta.env.DEV && !!onOpenDevtools;
+  const actionText =
+    updateBusy && typeof downloadProgressPercent === "number"
+      ? t("about.updating")
+      : updateBusy
+        ? t("about.checkingForUpdates")
+        : hasAvailableUpdate
+          ? t("about.updateNow")
+          : t("about.checkForUpdates");
   const diagnosticInfo = [
     `${t("about.version")}: ${displayVersion}`,
     `${t("about.hash")}: ${COMMIT_HASH}`,
@@ -96,6 +117,28 @@ export default function AboutModal({
           {canOpenDevtools && (
             <Button variant="ghost" onClick={onOpenDevtools}>
               {t("about.openConsole")}
+            </Button>
+          )}
+          {showUpdateAction && onUpdateAction && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void onUpdateAction();
+              }}
+              disabled={updateBusy}
+            >
+              {typeof downloadProgressPercent === "number" && (
+                <span className="about-update-progress">
+                  {downloadProgressPercent}%
+                </span>
+              )}
+              {updateIndicator !== "none" && (
+                <span
+                  className={`about-update-indicator about-update-indicator--${updateIndicator}`}
+                  aria-hidden="true"
+                />
+              )}
+              {actionText}
             </Button>
           )}
           <Button
