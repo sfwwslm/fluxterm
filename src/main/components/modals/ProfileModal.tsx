@@ -7,6 +7,11 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
+import {
+  DEFAULT_TERMINAL_WORD_SEPARATORS,
+  TERMINAL_WORD_SEPARATORS_PRESET_A,
+  TERMINAL_WORD_SEPARATORS_PRESET_B,
+} from "@/constants/terminalWordSeparators";
 import "@/main/components/modals/ProfileModal.css";
 
 // 与后端 profile_save 的名称校验保持一致，避免保存前后出现不同结果。
@@ -38,6 +43,7 @@ export default function ProfileModal({
   t,
 }: ProfileModalProps) {
   const autoFilledRef = useRef(false);
+  const wasOpenRef = useRef(false);
   const [profileType, setProfileType] = useState<ProfileModalType>("ssh");
   const [activeSection, setActiveSection] =
     useState<ProfileModalSection>("session");
@@ -45,7 +51,9 @@ export default function ProfileModal({
   const [initialDraftSnapshot, setInitialDraftSnapshot] = useState("");
 
   useEffect(() => {
-    if (open) {
+    const becameOpen = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (becameOpen) {
       autoFilledRef.current = false;
       queueMicrotask(() => {
         setInitialDraftSnapshot(JSON.stringify(draft));
@@ -134,6 +142,7 @@ export default function ProfileModal({
         terminalType: "xterm-256color",
         targetSystem: "auto",
         charset: "utf-8",
+        wordSeparators: null,
         description: "",
       });
       return;
@@ -153,6 +162,7 @@ export default function ProfileModal({
       terminalType: null,
       targetSystem: null,
       charset: null,
+      wordSeparators: null,
       description: null,
     });
   }
@@ -257,6 +267,60 @@ export default function ProfileModal({
       </>
     );
 
+    const windowRows = (
+      <div className="host-editor">
+        <div className="form-row">
+          <label className="form-label">
+            {t("profile.window.wordSeparators")}
+          </label>
+          <input
+            value={draft.wordSeparators ?? DEFAULT_TERMINAL_WORD_SEPARATORS}
+            onChange={(event) =>
+              onDraftChange({
+                ...draft,
+                wordSeparators: event.target.value,
+              })
+            }
+          />
+          <div className="profile-form-hint">
+            {t("profile.window.wordSeparatorsHint")}
+          </div>
+        </div>
+        <div className="form-row">
+          <label className="form-label">{t("profile.window.presets")}</label>
+          <div className="form-file profile-window-presets">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                onDraftChange({
+                  ...draft,
+                  wordSeparators: TERMINAL_WORD_SEPARATORS_PRESET_A,
+                })
+              }
+            >
+              {t("profile.window.presetA")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                onDraftChange({
+                  ...draft,
+                  wordSeparators: TERMINAL_WORD_SEPARATORS_PRESET_B,
+                })
+              }
+            >
+              {t("profile.window.presetB")}
+            </Button>
+          </div>
+          <div className="profile-form-hint">
+            {t("profile.window.applyHint")}
+          </div>
+        </div>
+      </div>
+    );
+
     if (profileType === "shell") {
       if (activeSection === "session") {
         return <div className="host-editor">{extraSessionRows}</div>;
@@ -268,6 +332,9 @@ export default function ProfileModal({
             <p>{t("profile.shell.terminalTodo")}</p>
           </div>
         );
+      }
+      if (activeSection === "window") {
+        return windowRows;
       }
       return (
         <div className="profile-modal-placeholder">
@@ -422,12 +489,7 @@ export default function ProfileModal({
     }
 
     if (activeSection === "window") {
-      return (
-        <div className="profile-modal-placeholder">
-          <h4>{t("profile.section.window")}</h4>
-          <p>{t("profile.section.windowHint")}</p>
-        </div>
-      );
+      return windowRows;
     }
 
     if (activeSection === "modem") {

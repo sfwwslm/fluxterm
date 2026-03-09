@@ -36,6 +36,7 @@ pub struct LocalShellProfile {
 pub struct LocalShellLaunchConfig {
     pub terminal_type: Option<String>,
     pub charset: Option<String>,
+    pub word_separators: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

@@ -391,8 +391,14 @@ export const en = {
     "This section is reserved for low-level SSH parameters such as charset, target system, proxy, key command, and host verification policy.",
   "profile.section.terminalHint":
     "Terminal-related settings such as keyboard behavior, bell, and encoding will be added here later.",
-  "profile.section.windowHint":
-    "Window-related settings such as cursor style, word separators, and selection behavior will be added here later.",
+  "profile.window.wordSeparators": "Word Separators",
+  "profile.window.wordSeparatorsHint":
+    "Characters in this set are treated as boundaries for double-click word selection.",
+  "profile.window.presets": "Presets",
+  "profile.window.presetA": "Preset A",
+  "profile.window.presetB": "Preset B",
+  "profile.window.applyHint":
+    "Only applies to newly created sessions; connected sessions are unchanged.",
   "profile.section.modemHint":
     "Drag upload and download settings will be added here later, including X/Y/Z Modem options.",
   "profile.sessionTab.terminal": "Terminal",

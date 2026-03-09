@@ -35,6 +35,7 @@ pub struct HostProfile {
     pub terminal_type: Option<String>,
     pub target_system: Option<String>,
     pub charset: Option<String>,
+    pub word_separators: Option<String>,
     pub description: Option<String>,
 }
 

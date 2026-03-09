@@ -370,8 +370,13 @@ export const zh = {
     "这里预留底层 SSH 参数配置，例如字符集、目标系统、代理、密钥指令和主机校验策略等。",
   "profile.section.terminalHint":
     "这里预留终端相关配置，例如键盘行为、Bell、编码等，后续会逐步补齐。",
-  "profile.section.windowHint":
-    "这里预留窗口相关配置，例如插入符样式、分词符和选择行为等。",
+  "profile.window.wordSeparators": "分词符",
+  "profile.window.wordSeparatorsHint":
+    "用于双击选词时的分隔符集合；命中的字符会被视作词边界。",
+  "profile.window.presets": "预设",
+  "profile.window.presetA": "预设 A",
+  "profile.window.presetB": "预设 B",
+  "profile.window.applyHint": "仅对新建会话生效，已连接会话不会立即变更。",
   "profile.section.modemHint":
     "这里预留拖拽上传下载相关配置，后续会补齐 X/Y/Z Modem 选项。",
   "profile.sessionTab.terminal": "终端",

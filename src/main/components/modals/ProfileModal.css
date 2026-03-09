@@ -140,6 +140,13 @@
   line-height: 1.4;
 }
 
+.profile-form-hint {
+  grid-column: 2;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .form-row.split {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -162,6 +169,10 @@
 
 .form-file input {
   flex: 1;
+}
+
+.profile-window-presets {
+  flex-wrap: wrap;
 }
 
 .profile-modal-placeholder {
@@ -222,6 +233,10 @@
   }
 
   .profile-form-error {
+    grid-column: 1;
+  }
+
+  .profile-form-hint {
     grid-column: 1;
   }
 

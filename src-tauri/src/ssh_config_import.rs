@@ -257,6 +257,7 @@ fn map_host_block_to_profile(
         terminal_type: None,
         target_system: None,
         charset: None,
+        word_separators: None,
         description: None,
     })
 }
@@ -430,6 +431,7 @@ mod tests {
             terminal_type: None,
             target_system: None,
             charset: None,
+            word_separators: None,
             description: None,
         }
     }

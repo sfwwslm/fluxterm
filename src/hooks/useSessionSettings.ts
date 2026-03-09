@@ -19,6 +19,10 @@ import {
   getSessionSettingsPath,
 } from "@/shared/config/paths";
 import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
+import {
+  DEFAULT_TERMINAL_WORD_SEPARATORS,
+  normalizeTerminalWordSeparators,
+} from "@/constants/terminalWordSeparators";
 
 /** 终端域全局配置结构。 */
 type SessionSettings = {
@@ -26,6 +30,7 @@ type SessionSettings = {
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  wordSeparators?: string;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
   resourceMonitorEnabled?: boolean;
@@ -41,6 +46,7 @@ type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
   commandAutocompleteEnabled: boolean;
   selectionAutoCopyEnabled: boolean;
+  wordSeparators: string;
   scrollback: number;
   terminalPathSyncEnabled: boolean;
   resourceMonitorEnabled: boolean;
@@ -49,6 +55,7 @@ type UseSessionSettingsResult = {
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setCommandAutocompleteEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setWordSeparators: React.Dispatch<React.SetStateAction<string>>;
   setScrollback: React.Dispatch<React.SetStateAction<number>>;
   setTerminalPathSyncEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setResourceMonitorEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -84,6 +91,7 @@ const defaultSessionSettings: Required<
     | "webLinksEnabled"
     | "commandAutocompleteEnabled"
     | "selectionAutoCopyEnabled"
+    | "wordSeparators"
     | "scrollback"
     | "terminalPathSyncEnabled"
     | "resourceMonitorEnabled"
@@ -94,6 +102,7 @@ const defaultSessionSettings: Required<
   webLinksEnabled: true,
   commandAutocompleteEnabled: true,
   selectionAutoCopyEnabled: false,
+  wordSeparators: DEFAULT_TERMINAL_WORD_SEPARATORS,
   scrollback: 3000,
   terminalPathSyncEnabled: true,
   resourceMonitorEnabled: false,
@@ -114,6 +123,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   );
   const [selectionAutoCopyEnabled, setSelectionAutoCopyEnabled] = useState(
     defaultSessionSettings.selectionAutoCopyEnabled,
+  );
+  const [wordSeparators, setWordSeparators] = useState(
+    defaultSessionSettings.wordSeparators,
   );
   const [scrollback, setScrollback] = useState(
     defaultSessionSettings.scrollback,
@@ -166,6 +178,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       }
       if (typeof parsed?.selectionAutoCopyEnabled === "boolean") {
         setSelectionAutoCopyEnabled(parsed.selectionAutoCopyEnabled);
+      }
+      if (typeof parsed?.wordSeparators === "string") {
+        setWordSeparators(
+          normalizeTerminalWordSeparators(parsed.wordSeparators) ??
+            defaultSessionSettings.wordSeparators,
+        );
       }
       if (typeof parsed?.terminalPathSyncEnabled === "boolean") {
         setTerminalPathSyncEnabled(parsed.terminalPathSyncEnabled);
@@ -231,6 +249,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       webLinksEnabled,
       commandAutocompleteEnabled,
       selectionAutoCopyEnabled,
+      wordSeparators:
+        normalizeTerminalWordSeparators(wordSeparators) ??
+        defaultSessionSettings.wordSeparators,
       terminalPathSyncEnabled,
       resourceMonitorEnabled,
       scrollback: normalizeScrollback(scrollback),
@@ -288,6 +309,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    wordSeparators,
     scrollback,
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
@@ -305,6 +327,9 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    wordSeparators:
+      normalizeTerminalWordSeparators(wordSeparators) ??
+      defaultSessionSettings.wordSeparators,
     scrollback: normalizeScrollback(scrollback),
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
@@ -315,6 +340,7 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
+    setWordSeparators,
     setScrollback,
     setTerminalPathSyncEnabled,
     setResourceMonitorEnabled,

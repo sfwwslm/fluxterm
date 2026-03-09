@@ -38,6 +38,7 @@ import {
   type BackgroundRenderMode,
   type BackgroundVideoReplayMode,
 } from "@/constants/backgroundMedia";
+import { normalizeTerminalWordSeparators } from "@/constants/terminalWordSeparators";
 
 /** 应用全局配置结构。 */
 type AppSettings = {
@@ -232,6 +233,12 @@ export default function useAppSettings({
         if (charset === "utf-8" || charset === "gbk" || charset === "gb18030") {
           nextConfig.charset = charset;
         }
+        const wordSeparators = normalizeTerminalWordSeparators(
+          parsed.localShellLaunchConfig?.wordSeparators,
+        );
+        if (wordSeparators) {
+          nextConfig.wordSeparators = wordSeparators;
+        }
         if (Object.keys(nextConfig).length) {
           setLocalShellLaunchConfig(nextConfig);
         }
@@ -261,6 +268,12 @@ export default function useAppSettings({
             charset === "gb18030"
           ) {
             nextConfig.charset = charset;
+          }
+          const wordSeparators = normalizeTerminalWordSeparators(
+            cfg.wordSeparators,
+          );
+          if (wordSeparators) {
+            nextConfig.wordSeparators = wordSeparators;
           }
           if (Object.keys(nextConfig).length) {
             nextByShellId[id] = nextConfig;

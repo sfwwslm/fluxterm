@@ -125,6 +125,10 @@ import {
   type BackgroundMediaType,
   type BackgroundRenderMode,
 } from "@/constants/backgroundMedia";
+import {
+  DEFAULT_TERMINAL_WORD_SEPARATORS,
+  normalizeTerminalWordSeparators,
+} from "@/constants/terminalWordSeparators";
 
 const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   profiles: "widget.profiles",
@@ -335,6 +339,7 @@ export default function AppShell() {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    wordSeparators: sessionWordSeparators,
     scrollback,
     terminalPathSyncEnabled,
     resourceMonitorEnabled,
@@ -714,9 +719,21 @@ export default function AppShell() {
       id: "",
       terminalType: effectiveShellLaunchConfig.terminalType ?? "xterm-256color",
       charset: effectiveShellLaunchConfig.charset ?? "utf-8",
+      wordSeparators:
+        normalizeTerminalWordSeparators(
+          effectiveShellLaunchConfig.wordSeparators,
+        ) ??
+        normalizeTerminalWordSeparators(sessionWordSeparators) ??
+        DEFAULT_TERMINAL_WORD_SEPARATORS,
     });
     setProfileModalOpen(true);
-  }, [defaultProfile, localShellByShellId, localShellLaunchConfig, shellId]);
+  }, [
+    defaultProfile,
+    localShellByShellId,
+    localShellLaunchConfig,
+    sessionWordSeparators,
+    shellId,
+  ]);
 
   function closeProfileModal() {
     setProfileModalOpen(false);
@@ -745,9 +762,13 @@ export default function AppShell() {
         profileDraft.charset === "gb18030"
           ? profileDraft.charset
           : "utf-8";
+      const normalizedWordSeparators =
+        normalizeTerminalWordSeparators(profileDraft.wordSeparators) ??
+        undefined;
       setLocalShellLaunchConfig({
         terminalType: normalizedTerminalType,
         charset: normalizedCharset,
+        wordSeparators: normalizedWordSeparators,
       });
       if (shellId) {
         setLocalShellByShellId((prev) => ({
@@ -755,6 +776,7 @@ export default function AppShell() {
           [shellId]: {
             terminalType: normalizedTerminalType,
             charset: normalizedCharset,
+            wordSeparators: normalizedWordSeparators,
           },
         }));
       }
@@ -1035,6 +1057,29 @@ export default function AppShell() {
     autocompleteProvider,
     onSizeChange: (size) => {
       terminalSizeRef.current = size;
+    },
+    resolveWordSeparators: (sessionId) => {
+      const fallbackWordSeparators =
+        normalizeTerminalWordSeparators(sessionWordSeparators) ??
+        DEFAULT_TERMINAL_WORD_SEPARATORS;
+      const localMeta = sessionState.localSessionMeta[sessionId];
+      if (localMeta) {
+        return (
+          normalizeTerminalWordSeparators(
+            localMeta.launchConfig?.wordSeparators,
+          ) ?? fallbackWordSeparators
+        );
+      }
+      const session = sessionState.sessions.find(
+        (item) => item.sessionId === sessionId,
+      );
+      if (!session) return fallbackWordSeparators;
+      const profile =
+        profiles.find((item) => item.id === session.profileId) ?? null;
+      return (
+        normalizeTerminalWordSeparators(profile?.wordSeparators) ??
+        fallbackWordSeparators
+      );
     },
   });
   focusActiveTerminalRef.current = terminalActions.focusActiveTerminal;

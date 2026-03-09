@@ -44,6 +44,7 @@ const defaultProfile: HostProfile = {
   passwordRef: null,
   knownHost: null,
   tags: null,
+  wordSeparators: null,
 };
 
 /** 统一清理分组名的首尾空白，避免分组展示与持久化出现幽灵差异。 */

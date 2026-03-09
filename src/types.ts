@@ -17,6 +17,7 @@ export type HostProfile = {
   terminalType?: string | null;
   targetSystem?: string | null;
   charset?: string | null;
+  wordSeparators?: string | null;
   description?: string | null;
 };
 
@@ -342,6 +343,7 @@ export type LocalShellLaunchConfig = {
     | "tmux-256color"
     | "vt100";
   charset?: "utf-8" | "gbk" | "gb18030";
+  wordSeparators?: string;
 };
 
 /** 快捷命令分组。 */

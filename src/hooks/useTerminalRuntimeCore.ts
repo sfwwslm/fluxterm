@@ -40,6 +40,7 @@ import {
 } from "@/features/terminal/core/constants";
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import { normalizeTerminalWordSeparators } from "@/constants/terminalWordSeparators";
 
 type TerminalTheme = {
   background: string;
@@ -53,6 +54,7 @@ type UseTerminalRuntimeProps = {
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
+  resolveWordSeparators?: (sessionId: string) => string | null | undefined;
   activeSessionId: string | null;
   activeSession: Session | null;
   sessions: Session[];
@@ -323,6 +325,7 @@ export default function useTerminalRuntime({
   webLinksEnabled = true,
   selectionAutoCopyEnabled = false,
   scrollback = DEFAULT_TERMINAL_SCROLLBACK,
+  resolveWordSeparators,
   activeSessionId,
   activeSession,
   sessions,
@@ -355,6 +358,7 @@ export default function useTerminalRuntime({
   const themeRef = useRef(theme);
   const webLinksEnabledRef = useRef(webLinksEnabled);
   const selectionAutoCopyEnabledRef = useRef(selectionAutoCopyEnabled);
+  const resolveWordSeparatorsRef = useRef(resolveWordSeparators);
   const [searchStatsBySession, setSearchStatsBySession] = useState<
     Record<string, SearchStats | null>
   >({});
@@ -458,6 +462,10 @@ export default function useTerminalRuntime({
   useEffect(() => {
     selectionAutoCopyEnabledRef.current = selectionAutoCopyEnabled;
   }, [selectionAutoCopyEnabled]);
+
+  useEffect(() => {
+    resolveWordSeparatorsRef.current = resolveWordSeparators;
+  }, [resolveWordSeparators]);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -1044,6 +1052,9 @@ export default function useTerminalRuntime({
     const modules = await loadXtermModules();
     if (terminalsRef.current[sessionId]) return;
     const { host } = buildTerminalLayout(container);
+    const sessionWordSeparator = normalizeTerminalWordSeparators(
+      resolveWordSeparatorsRef.current?.(sessionId),
+    );
     const term = new modules.Terminal({
       allowProposedApi: true,
       // 启用终端画布透明通道，使半透明主题背景可透出到底层应用背景图。
@@ -1054,6 +1065,7 @@ export default function useTerminalRuntime({
       cursorBlink: true,
       scrollback,
       theme: themeRef.current,
+      ...(sessionWordSeparator ? { wordSeparator: sessionWordSeparator } : {}),
     });
     const fit = new modules.FitAddon();
     term.loadAddon(fit);
