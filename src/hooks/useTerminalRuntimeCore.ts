@@ -1153,7 +1153,7 @@ export default function useTerminalRuntime({
             if (!prev || prev.sessionId !== sessionId || !prev.items.length) {
               return prev;
             }
-            let nextIndex = prev.selectedIndex;
+            let nextIndex: number;
             if (data === "\u001b[A") {
               nextIndex =
                 prev.selectedIndex < 0

@@ -374,9 +374,10 @@ export default function useAppSettings({
         setShellId(null);
         void warn(JSON.stringify({ event: "settings:init-shell-failed" }));
       } finally {
-        if (!active) return;
-        loadedRef.current = true;
-        setSettingsLoaded(true);
+        if (active) {
+          loadedRef.current = true;
+          setSettingsLoaded(true);
+        }
       }
     })();
     return () => {
