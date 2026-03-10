@@ -199,7 +199,11 @@ async function sha256Hex(bytes: Uint8Array) {
     .join("");
 }
 
-/** 配置模态框：承载顶部“配置”菜单的统一内容容器。 */
+/**
+ * 配置模态框：承载顶部“配置”菜单的统一内容容器。
+ * 约束：本组件内新增菜单项如果需要下拉选择，必须优先复用通用 `Select` 组件，
+ * 不要回退到原生 `<select>`，以保持样式、键盘导航与关闭行为一致。
+ */
 export default function ConfigModal({
   open,
   activeSection,
@@ -1607,23 +1611,29 @@ export default function ConfigModal({
                 {t("config.session.hostKeyPolicyHint")}
               </span>
             </div>
-            <select
-              className="config-select-input"
-              value={hostKeyPolicy}
-              onChange={(event) =>
-                onHostKeyPolicyChange?.(event.target.value as HostKeyPolicy)
-              }
-            >
-              <option value="ask">
-                {t("config.session.hostKeyPolicy.ask")}
-              </option>
-              <option value="strict">
-                {t("config.session.hostKeyPolicy.strict")}
-              </option>
-              <option value="off">
-                {t("config.session.hostKeyPolicy.off")}
-              </option>
-            </select>
+            <div className="config-select-control">
+              <Select
+                value={hostKeyPolicy}
+                options={[
+                  {
+                    value: "ask",
+                    label: t("config.session.hostKeyPolicy.ask"),
+                  },
+                  {
+                    value: "strict",
+                    label: t("config.session.hostKeyPolicy.strict"),
+                  },
+                  {
+                    value: "off",
+                    label: t("config.session.hostKeyPolicy.off"),
+                  },
+                ]}
+                onChange={(value) =>
+                  onHostKeyPolicyChange?.(value as HostKeyPolicy)
+                }
+                aria-label={t("config.session.hostKeyPolicy")}
+              />
+            </div>
           </label>
         </div>
       );
@@ -1639,21 +1649,29 @@ export default function ConfigModal({
                 {t("config.session.cursorStyle")}
               </span>
             </div>
-            <select
-              className="config-select-input"
-              value={cursorStyle}
-              onChange={(event) =>
-                onCursorStyleChange?.(event.target.value as TerminalCursorStyle)
-              }
-            >
-              <option value="block">
-                {t("config.session.cursorStyle.block")}
-              </option>
-              <option value="bar">{t("config.session.cursorStyle.bar")}</option>
-              <option value="underline">
-                {t("config.session.cursorStyle.underline")}
-              </option>
-            </select>
+            <div className="config-select-control">
+              <Select
+                value={cursorStyle}
+                options={[
+                  {
+                    value: "block",
+                    label: t("config.session.cursorStyle.block"),
+                  },
+                  {
+                    value: "bar",
+                    label: t("config.session.cursorStyle.bar"),
+                  },
+                  {
+                    value: "underline",
+                    label: t("config.session.cursorStyle.underline"),
+                  },
+                ]}
+                onChange={(value) =>
+                  onCursorStyleChange?.(value as TerminalCursorStyle)
+                }
+                aria-label={t("config.session.cursorStyle")}
+              />
+            </div>
           </label>
         </div>
       );

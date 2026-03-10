@@ -699,14 +699,6 @@ button:disabled {
   color: var(--text-soft);
 }
 
-.widget-header select {
-  background: var(--chrome-input-bg);
-  color: var(--text-primary);
-  border-radius: 8px;
-  border: 1px solid var(--border-input);
-  padding: 4px 8px;
-}
-
 .widget-body {
   padding: 16px;
   overflow: auto;
