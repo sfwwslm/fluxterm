@@ -1173,6 +1173,7 @@ export default function AppShell() {
     launchSubApp,
     focusSubApp,
     closeSubApp,
+    openAllDevtools: openAllSubAppDevtools,
     notifyMainShutdown,
   } = useSubApps({
     t,
@@ -1208,6 +1209,7 @@ export default function AppShell() {
   function handleOpenDevtools() {
     openCurrentDevtools();
     openAllDevtools();
+    openAllSubAppDevtools();
   }
 
   const isMainSlotVisible = useCallback(

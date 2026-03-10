@@ -34,6 +34,7 @@ import {
 import ProxySubApp from "@/subapps/proxy/ProxySubApp";
 import "@/subapps/SubAppShell.css";
 import "@/subapps/proxy/ProxySubApp.css";
+import { callTauri } from "@/shared/tauri/commands";
 
 function resolveBackgroundImageStyle(mode: BackgroundRenderMode) {
   if (mode === "contain") {
@@ -128,25 +129,32 @@ export default function SubAppRoot() {
     const label = createSubAppWindowLabel(subAppId);
     channel.onmessage = (event) => {
       const payload = event.data as SubAppLifecycleMessage | undefined;
-      if (!payload || payload.type !== "subapp:appearance-sync") return;
+      if (!payload) return;
       if (
+        "target" in payload &&
         payload.target &&
         (payload.target.id !== subAppId || payload.target.label !== label)
       ) {
         return;
       }
-      setAppearanceSync({
-        locale: payload.locale,
-        themeId: payload.themeId,
-        backgroundImageEnabled: payload.backgroundImageEnabled,
-        backgroundImageAsset: payload.backgroundImageAsset,
-        backgroundImageSurfaceAlpha: payload.backgroundImageSurfaceAlpha,
-        backgroundMediaType: payload.backgroundMediaType,
-        backgroundRenderMode: payload.backgroundRenderMode,
-        backgroundVideoReplayMode: payload.backgroundVideoReplayMode,
-        backgroundVideoReplayIntervalSec:
-          payload.backgroundVideoReplayIntervalSec,
-      });
+      if (payload.type === "subapp:appearance-sync") {
+        setAppearanceSync({
+          locale: payload.locale,
+          themeId: payload.themeId,
+          backgroundImageEnabled: payload.backgroundImageEnabled,
+          backgroundImageAsset: payload.backgroundImageAsset,
+          backgroundImageSurfaceAlpha: payload.backgroundImageSurfaceAlpha,
+          backgroundMediaType: payload.backgroundMediaType,
+          backgroundRenderMode: payload.backgroundRenderMode,
+          backgroundVideoReplayMode: payload.backgroundVideoReplayMode,
+          backgroundVideoReplayIntervalSec:
+            payload.backgroundVideoReplayIntervalSec,
+        });
+        return;
+      }
+      if (payload.type === "subapp:devtools-open") {
+        callTauri("open_devtools").catch(() => {});
+      }
     };
     return () => {
       channel.close();

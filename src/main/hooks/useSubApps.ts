@@ -49,6 +49,7 @@ type UseSubAppsState = {
   launchSubApp: (id: SubAppId) => Promise<void>;
   focusSubApp: (id: SubAppId) => Promise<void>;
   closeSubApp: (id: SubAppId) => Promise<void>;
+  openAllDevtools: () => void;
   notifyMainShutdown: () => Promise<void>;
 };
 
@@ -252,6 +253,25 @@ export default function useSubApps({
     return Promise.resolve();
   }, [postLifecycleMessage]);
 
+  /** 打开所有已创建子应用窗口的开发者工具，供主窗口 About 面板统一触发。 */
+  const openAllDevtools = useCallback(() => {
+    (
+      Object.entries(windowRef.current) as Array<
+        [SubAppId, WebviewWindow | undefined]
+      >
+    ).forEach(([id, win]) => {
+      if (!win) return;
+      postLifecycleMessage({
+        type: "subapp:devtools-open",
+        source: "main",
+        target: {
+          id,
+          label: createSubAppWindowLabel(id),
+        },
+      });
+    });
+  }, [postLifecycleMessage]);
+
   const subApps = useMemo<SubAppRuntimeInfo[]>(
     () =>
       defs.map((def) => ({
@@ -267,6 +287,7 @@ export default function useSubApps({
     launchSubApp,
     focusSubApp,
     closeSubApp,
+    openAllDevtools,
     notifyMainShutdown,
   };
 }

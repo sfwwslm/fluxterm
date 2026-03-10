@@ -66,6 +66,14 @@ export type SubAppLifecycleMessage =
       source: "main";
     }
   | {
+      type: "subapp:devtools-open";
+      source: "main";
+      target?: {
+        id: SubAppId;
+        label: string;
+      };
+    }
+  | {
       type: "subapp:appearance-sync";
       source: "main";
       target?: {
