@@ -19,6 +19,7 @@ type TitleBarProps = {
   layoutDisabled?: boolean;
   onBrandContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
   showMenus?: boolean;
+  compactWindowControls?: boolean;
   subApps?: Array<{
     id: SubAppId;
     label: string;
@@ -40,6 +41,7 @@ export default function TitleBar({
   layoutDisabled,
   onBrandContextMenu,
   showMenus = true,
+  compactWindowControls = false,
   subApps = [],
   onLaunchSubApp,
   onFocusSubApp,
@@ -57,7 +59,10 @@ export default function TitleBar({
   }, [hasTauriRuntime]);
 
   return (
-    <header className="titlebar" data-tauri-drag-region>
+    <header
+      className={`titlebar ${compactWindowControls ? "titlebar--tight-controls" : ""}`.trim()}
+      data-tauri-drag-region
+    >
       <div
         className="titlebar-brand"
         data-tauri-drag-region="false"

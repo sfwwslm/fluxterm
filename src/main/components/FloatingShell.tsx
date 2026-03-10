@@ -41,6 +41,7 @@ export default function FloatingShell({
           onOpenAbout={() => {}}
           layoutDisabled={layoutMenuDisabled}
           showMenus={false}
+          compactWindowControls
           t={t}
         />
       )}

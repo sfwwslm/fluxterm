@@ -80,7 +80,10 @@ export default function SubAppTitleBar({
   const normalizedMenus = useMemo(() => menus, [menus]);
 
   return (
-    <header className="titlebar subapp-titlebar" data-tauri-drag-region>
+    <header
+      className="titlebar subapp-titlebar titlebar--tight-controls"
+      data-tauri-drag-region
+    >
       <div
         className="titlebar-brand subapp-titlebar-brand"
         data-tauri-drag-region="false"

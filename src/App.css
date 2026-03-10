@@ -59,6 +59,10 @@ body,
   --shadow-strong: 0 16px 32px rgba(0, 0, 0, 0.35);
   --brand-glow: 0 0 12px rgba(248, 210, 84, 0.6);
   --chrome-titlebar-height: 40px;
+  --chrome-titlebar-gap: 16px;
+  --chrome-titlebar-inline-start: 12px;
+  --chrome-titlebar-inline-end: 12px;
+  --chrome-window-controls-gap: 6px;
   --ui-radius: 10px;
   --ui-ring: var(--accent-soft);
   --ui-border: var(--border-input);
@@ -379,14 +383,21 @@ select {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 16px;
+  gap: var(--chrome-titlebar-gap);
   height: var(--chrome-titlebar-height);
-  padding: 0 12px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: var(--chrome-titlebar-inline-start);
+  padding-right: var(--chrome-titlebar-inline-end);
   background: var(--chrome-titlebar-bg);
   border-bottom: 1px solid var(--border-weak);
   backdrop-filter: blur(16px);
   position: relative;
   z-index: 200;
+}
+
+.titlebar--tight-controls {
+  --chrome-titlebar-gap: 0px;
 }
 
 .titlebar-brand {
@@ -562,8 +573,10 @@ select {
 .window-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--chrome-window-controls-gap);
   justify-self: end;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .window-control {
