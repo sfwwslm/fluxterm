@@ -17,6 +17,7 @@ type WidgetTitleBarProps = {
   onSplit?: () => void;
   splitDisabled?: boolean;
   closeDisabled?: boolean;
+  titleOnly?: boolean;
   t: Translate;
 };
 
@@ -30,6 +31,7 @@ export default function WidgetTitleBar({
   onSplit,
   splitDisabled,
   closeDisabled,
+  titleOnly = false,
   t,
 }: WidgetTitleBarProps) {
   const MENU_GAP = 6;
@@ -111,100 +113,104 @@ export default function WidgetTitleBar({
   );
 
   return (
-    <div className="widget-titlebar">
+    <div
+      className={`widget-titlebar ${titleOnly ? "is-title-only" : ""}`.trim()}
+    >
       <div className="widget-title-name">{displayName}</div>
-      <div className="widget-title-actions">
-        <div className="widget-settings" ref={anchorRef}>
-          <Button
-            className="ghost mini icon-settings"
-            variant="ghost"
-            size="icon"
-            onClick={() => setMenuOpen((prev) => !prev)}
-            aria-label={t("actions.settings")}
-            title={t("actions.settings")}
-          >
-            <IoSettings />
-          </Button>
-          {menuOpen &&
-            createPortal(
-              <div
-                ref={menuRef}
-                className="widget-settings-menu"
-                style={{
-                  left: `${menuPosition.left}px`,
-                  top: `${menuPosition.top}px`,
-                  maxHeight: `${menuPosition.maxHeight}px`,
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="widget-settings-group">
-                  <div className="widget-settings-group-title">
-                    {t("widget.group.actions")}
-                  </div>
-                  {onSplit && (
+      {!titleOnly ? (
+        <div className="widget-title-actions">
+          <div className="widget-settings" ref={anchorRef}>
+            <Button
+              className="ghost mini icon-settings"
+              variant="ghost"
+              size="icon"
+              onClick={() => setMenuOpen((prev) => !prev)}
+              aria-label={t("actions.settings")}
+              title={t("actions.settings")}
+            >
+              <IoSettings />
+            </Button>
+            {menuOpen &&
+              createPortal(
+                <div
+                  ref={menuRef}
+                  className="widget-settings-menu"
+                  style={{
+                    left: `${menuPosition.left}px`,
+                    top: `${menuPosition.top}px`,
+                    maxHeight: `${menuPosition.maxHeight}px`,
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="widget-settings-group">
+                    <div className="widget-settings-group-title">
+                      {t("widget.group.actions")}
+                    </div>
+                    {onSplit ? (
+                      <Button
+                        className="widget-settings-item"
+                        variant="ghost"
+                        size="sm"
+                        disabled={splitDisabled}
+                        onClick={() => {
+                          onSplit();
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {t("layout.split")}
+                      </Button>
+                    ) : null}
                     <Button
                       className="widget-settings-item"
                       variant="ghost"
                       size="sm"
-                      disabled={splitDisabled}
                       onClick={() => {
-                        onSplit();
+                        onFloat?.();
                         setMenuOpen(false);
                       }}
+                      disabled={!active}
                     >
-                      {t("layout.split")}
+                      {t("widget.float")}
                     </Button>
-                  )}
-                  <Button
-                    className="widget-settings-item"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      onFloat?.();
-                      setMenuOpen(false);
-                    }}
-                    disabled={!active}
-                  >
-                    {t("widget.float")}
-                  </Button>
-                </div>
-                <div className="widget-settings-divider" />
-                <div className="widget-settings-group">
-                  <div className="widget-settings-group-title">
-                    {t("widget.group.components")}
                   </div>
-                  {componentItems.map((item) => (
-                    <Button
-                      key={item}
-                      className={`widget-settings-item ${item === active ? "selected" : ""}`}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        onReplace(item);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      {labels[item]}
-                    </Button>
-                  ))}
-                </div>
-              </div>,
-              document.body,
-            )}
+                  <div className="widget-settings-divider" />
+                  <div className="widget-settings-group">
+                    <div className="widget-settings-group-title">
+                      {t("widget.group.components")}
+                    </div>
+                    {componentItems.map((item) => (
+                      <Button
+                        key={item}
+                        className={`widget-settings-item ${item === active ? "selected" : ""}`}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onReplace(item);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {labels[item]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>,
+                document.body,
+              )}
+          </div>
+          <Button
+            className="ghost mini icon-close"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            disabled={closeDisabled}
+            aria-label={t("actions.close")}
+            title={t("actions.close")}
+          >
+            <IoClose />
+          </Button>
         </div>
-        <Button
-          className="ghost mini icon-close"
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          disabled={closeDisabled}
-          aria-label={t("actions.close")}
-          title={t("actions.close")}
-        >
-          <IoClose />
-        </Button>
-      </div>
+      ) : null}
     </div>
   );
 }

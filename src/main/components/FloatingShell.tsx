@@ -4,6 +4,7 @@ import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import type { WidgetKey } from "@/types";
 import type { WidgetSide } from "@/layout/types";
 import TitleBar from "@/components/layout/TitleBar";
+import WidgetTitleBar from "@/components/layout/WidgetTitleBar";
 import { isMacOS } from "@/utils/platform";
 
 type FloatingShellProps = {
@@ -45,9 +46,14 @@ export default function FloatingShell({
       )}
       <div className="floating-body">
         <section className="widget floating-widget">
-          <div className="widget-header floating-header">
-            <span>{widgetLabels[floatingWidgetKey]}</span>
-          </div>
+          <WidgetTitleBar
+            active={floatingWidgetKey}
+            allWidgets={[floatingWidgetKey]}
+            labels={widgetLabels}
+            onReplace={() => {}}
+            titleOnly
+            t={t}
+          />
           <div className="widget-body">{widgetBody}</div>
         </section>
       </div>
