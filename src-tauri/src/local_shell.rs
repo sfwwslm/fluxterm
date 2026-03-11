@@ -5,12 +5,16 @@ use std::io::{Read, Write};
 #[cfg(target_os = "windows")]
 use std::path::Path;
 #[cfg(target_os = "windows")]
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
+#[cfg(target_os = "windows")]
+use std::time::{Duration, Instant};
 
 #[cfg(not(target_os = "windows"))]
 use std::path::PathBuf;
+#[cfg(target_os = "windows")]
+use std::{os::windows::process::CommandExt, thread::sleep};
 
 use engine::{EngineError, Session, SessionState, TerminalSize, util::now_epoch};
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -21,6 +25,10 @@ use uuid::Uuid;
 use crate::ai::{record_terminal_exit_from_app, record_terminal_output_from_app};
 
 const LOCAL_PROFILE_ID: &str = "__local_shell__";
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+#[cfg(target_os = "windows")]
+const WSL_LIST_TIMEOUT: Duration = Duration::from_millis(400);
 
 /// 本地 Shell 配置。
 #[derive(Clone, Serialize, Deserialize)]
@@ -116,14 +124,48 @@ fn decode_windows_command_output(bytes: &[u8]) -> String {
 #[cfg(target_os = "windows")]
 /// 枚举已安装的 WSL 发行版名称。
 fn collect_wsl_distributions(wsl_path: &str) -> Vec<String> {
-    let output = Command::new(wsl_path).args(["-l", "-q"]).output();
-    let Ok(output) = output else {
+    let mut child = Command::new(wsl_path)
+        .args(["-l", "-q"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn();
+    let Ok(ref mut child) = child else {
         return Vec::new();
     };
-    if !output.status.success() {
+
+    let deadline = Instant::now() + WSL_LIST_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => {
+                sleep(Duration::from_millis(15));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    let Some(status) = status else {
+        return Vec::new();
+    };
+
+    let mut stdout = Vec::new();
+    if let Some(mut pipe) = child.stdout.take() {
+        let _ = pipe.read_to_end(&mut stdout);
+    }
+    if !status.success() {
         return Vec::new();
     }
-    decode_windows_command_output(&output.stdout)
+    decode_windows_command_output(&stdout)
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
