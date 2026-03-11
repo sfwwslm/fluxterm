@@ -54,7 +54,7 @@ export default function TransfersWidget({
   const progressTitle = progress
     ? progress.totalItems && progress.totalItems > 1
       ? t("log.transferItems", { count: progress.totalItems })
-      : progress.displayName || progress.itemLabel || progress.path
+      : progress.path
     : "";
   const progressPercent = progress
     ? progress.total && progress.total > 0
@@ -137,9 +137,7 @@ export default function TransfersWidget({
                 : "--"}
               ] [{progressLabel}]{" "}
             </span>
-            <strong className="log-transfer-path" title={progress.path}>
-              {progressTitle}
-            </strong>
+            <strong className="log-transfer-path">{progressTitle}</strong>
           </div>
           <div className="progress-bar">
             <span
@@ -160,17 +158,13 @@ export default function TransfersWidget({
           {!!currentItemName && (
             <div className="log-row small">
               <span>{t("log.transferCurrentItem")}</span>
-              <span className="log-transfer-current" title={currentItemName}>
-                {currentItemName}
-              </span>
+              <span className="log-transfer-current">{currentItemName}</span>
             </div>
           )}
           {!!targetName && (
             <div className="log-row small">
               <span>{t("log.transferTargetName")}</span>
-              <span className="log-transfer-current" title={targetName}>
-                {targetName}
-              </span>
+              <span className="log-transfer-current">{targetName}</span>
             </div>
           )}
           <div className="log-row small">

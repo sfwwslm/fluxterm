@@ -13,6 +13,7 @@ import type { Locale, Translate } from "@/i18n";
 import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
+import Tooltip from "@/components/ui/menu/Tooltip";
 import { useNotices } from "@/hooks/useNotices";
 import {
   getAppConfigDir,
@@ -736,18 +737,21 @@ export default function ConfigModal({
               </div>
             </div>
             <div className="config-file-picker config-file-picker-align-end">
-              <div
-                className={`config-file-picker-path config-file-picker-path-single-line ${
-                  defaultEditorProgramName ? "" : "empty"
-                }`.trim()}
-                title={
+              <Tooltip
+                content={
                   defaultEditorPathDraft ||
                   t("config.app.fileDefaultEditorUnset")
                 }
               >
-                {defaultEditorProgramName ||
-                  t("config.app.fileDefaultEditorUnset")}
-              </div>
+                <div
+                  className={`config-file-picker-path config-file-picker-path-single-line ${
+                    defaultEditorProgramName ? "" : "empty"
+                  }`.trim()}
+                >
+                  {defaultEditorProgramName ||
+                    t("config.app.fileDefaultEditorUnset")}
+                </div>
+              </Tooltip>
               <div className="config-file-picker-actions config-file-picker-actions-nowrap">
                 <Button
                   variant="ghost"
@@ -809,18 +813,21 @@ export default function ConfigModal({
                 }
               />
             </label>
-            <div
-              className={`config-file-picker-path config-file-picker-path-single-line ${
-                backgroundImageAsset ? "" : "empty"
-              }`.trim()}
-              title={
+            <Tooltip
+              content={
                 backgroundImageAsset ||
                 t("config.app.backgroundMediaPlaceholder")
               }
             >
-              {backgroundImageAsset ||
-                t("config.app.backgroundMediaPlaceholder")}
-            </div>
+              <div
+                className={`config-file-picker-path config-file-picker-path-single-line ${
+                  backgroundImageAsset ? "" : "empty"
+                }`.trim()}
+              >
+                {backgroundImageAsset ||
+                  t("config.app.backgroundMediaPlaceholder")}
+              </div>
+            </Tooltip>
             <label className="config-subsetting">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">

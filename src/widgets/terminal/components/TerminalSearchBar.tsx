@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { FiChevronDown, FiChevronUp, FiX } from "react-icons/fi";
+import Tooltip from "@/components/ui/menu/Tooltip";
 import type { Translate } from "@/i18n";
 
 type SearchDecorations = {
@@ -112,6 +113,53 @@ export default function useTerminalSearchBar({
     return `${current}/${total}`;
   })();
 
+  const searchToggleItems = [
+    {
+      key: "caseSensitive",
+      label: t("terminal.search.caseSensitive"),
+      token: "Aa",
+      active: searchCaseSensitive,
+      onClick: () => {
+        setSearchCaseSensitive((prev) => !prev);
+        setSearchMiss(false);
+      },
+    },
+    {
+      key: "regex",
+      label: t("terminal.search.regex"),
+      token: ".*",
+      active: searchRegex,
+      onClick: () => {
+        setSearchRegex((prev) => !prev);
+        setSearchMiss(false);
+      },
+    },
+    {
+      key: "wholeWord",
+      label: t("terminal.search.wholeWord"),
+      token: "W",
+      active: searchWholeWord,
+      onClick: () => {
+        setSearchWholeWord((prev) => !prev);
+        setSearchMiss(false);
+      },
+    },
+    {
+      key: "highlightAll",
+      label: t("terminal.search.highlightAll"),
+      token: "HL",
+      active: searchHighlightAll,
+      onClick: () => {
+        setSearchHighlightAll((prev) => {
+          const next = !prev;
+          if (!next) onSearchClear();
+          return next;
+        });
+        setSearchMiss(false);
+      },
+    },
+  ] as const;
+
   return {
     openSearch,
     renderedSearchBar: searchVisible ? (
@@ -138,68 +186,19 @@ export default function useTerminalSearchBar({
           }}
         />
         <div className="terminal-search-options">
-          <button
-            className={`terminal-search-toggle ${
-              searchCaseSensitive ? "active" : ""
-            }`}
-            type="button"
-            aria-pressed={searchCaseSensitive}
-            aria-label={t("terminal.search.caseSensitive")}
-            title={t("terminal.search.caseSensitive")}
-            onClick={() => {
-              setSearchCaseSensitive((prev) => !prev);
-              setSearchMiss(false);
-            }}
-          >
-            Aa
-          </button>
-          <button
-            className={`terminal-search-toggle ${searchRegex ? "active" : ""}`}
-            type="button"
-            aria-pressed={searchRegex}
-            aria-label={t("terminal.search.regex")}
-            title={t("terminal.search.regex")}
-            onClick={() => {
-              setSearchRegex((prev) => !prev);
-              setSearchMiss(false);
-            }}
-          >
-            .*
-          </button>
-          <button
-            className={`terminal-search-toggle ${
-              searchWholeWord ? "active" : ""
-            }`}
-            type="button"
-            aria-pressed={searchWholeWord}
-            aria-label={t("terminal.search.wholeWord")}
-            title={t("terminal.search.wholeWord")}
-            onClick={() => {
-              setSearchWholeWord((prev) => !prev);
-              setSearchMiss(false);
-            }}
-          >
-            W
-          </button>
-          <button
-            className={`terminal-search-toggle ${
-              searchHighlightAll ? "active" : ""
-            }`}
-            type="button"
-            aria-pressed={searchHighlightAll}
-            aria-label={t("terminal.search.highlightAll")}
-            title={t("terminal.search.highlightAll")}
-            onClick={() => {
-              setSearchHighlightAll((prev) => {
-                const next = !prev;
-                if (!next) onSearchClear();
-                return next;
-              });
-              setSearchMiss(false);
-            }}
-          >
-            HL
-          </button>
+          {searchToggleItems.map((item) => (
+            <Tooltip key={item.key} content={item.label}>
+              <button
+                className={`terminal-search-toggle ${item.active ? "active" : ""}`}
+                type="button"
+                aria-pressed={item.active}
+                aria-label={item.label}
+                onClick={item.onClick}
+              >
+                {item.token}
+              </button>
+            </Tooltip>
+          ))}
         </div>
         <div
           className="terminal-search-results"

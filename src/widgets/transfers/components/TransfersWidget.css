@@ -76,6 +76,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .log-cancel-button {
@@ -85,20 +87,27 @@
 }
 
 .log-row-transfer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .log-transfer-meta {
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .log-transfer-path {
+  display: block;
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   text-align: right;
+  scrollbar-width: thin;
 }
 
 .log-row.small {
@@ -106,6 +115,7 @@
 }
 
 .log-transfer-current {
+  display: inline-block;
   min-width: 0;
   max-width: 60%;
   overflow: hidden;

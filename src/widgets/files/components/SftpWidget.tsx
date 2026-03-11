@@ -384,9 +384,9 @@ export default function SftpWidget({
               <pathSyncMeta.Icon />
             </span>
           </Tooltip>
-          <div className="path" title={displayPath}>
-            {displayPath}
-          </div>
+          <Tooltip content={displayPath} disabled={interactionsDisabled}>
+            <div className="path">{displayPath}</div>
+          </Tooltip>
         </div>
         {!interactionsDisabled && (
           <div className="sftp-actions">

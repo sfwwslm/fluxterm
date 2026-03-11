@@ -5,6 +5,7 @@
  */
 .tooltip-target {
   display: inline-flex;
+  min-width: 0;
 }
 
 .tooltip-layer {
@@ -16,17 +17,22 @@
 
 .tooltip-bubble {
   position: fixed;
-  padding: 6px 10px;
-  max-width: 240px;
-  border-radius: 8px;
-  background: var(--surface-menu);
-  border: 1px solid var(--border-weak);
-  color: var(--text-secondary);
+  padding: 7px 11px;
+  max-width: 260px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-menu) 94%, black 6%);
+  border: 1px solid color-mix(in srgb, var(--border-weak) 86%, white 14%);
+  color: var(--text-primary);
   font-size: 12px;
-  line-height: 1.4;
-  box-shadow: var(--shadow-strong);
+  line-height: 1.45;
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.12);
   white-space: normal;
   word-break: break-word;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  animation: tooltip-fade-in 0.14s ease-out forwards;
 }
 
 .tooltip-bubble[data-placement="top"] {
@@ -43,4 +49,16 @@
 
 .tooltip-bubble[data-placement="right"] {
   transform: translate(0, -50%);
+}
+
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
 }

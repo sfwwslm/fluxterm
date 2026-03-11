@@ -424,13 +424,17 @@ export default function BottomArea({
     t,
     resourceSnapshot?.unsupportedReason,
   );
+  const allowResourcePopover =
+    resourceStatus === "ready" && Boolean(resourceCpu && resourceMemory);
+  const readyResourceCpu = allowResourcePopover ? resourceCpu : null;
+  const readyResourceMemory = allowResourcePopover ? resourceMemory : null;
 
   return (
     <>
       <footer className="bottom-area">
         {visibility.quickbar && (
           <div className="quickbar-row">
-            <div className="quickbar" title={t("layout.footer.quickbar")}>
+            <div className="quickbar">
               <Button
                 variant="ghost"
                 size="icon"
@@ -499,7 +503,6 @@ export default function BottomArea({
                                 variant="ghost"
                                 size="sm"
                                 className="quickbar-command"
-                                title={item.command}
                                 onClick={() => onRunCommand(item.command)}
                                 onContextMenu={(event) => {
                                   event.preventDefault();
@@ -528,13 +531,17 @@ export default function BottomArea({
           <div
             className={`statusbar-row ${visibility.quickbar ? "with-separator" : ""}`.trim()}
           >
-            <div className="statusbar" title={t("layout.footer.statusbar")}>
+            <div className="statusbar">
               <div className="statusbar-left">
                 {showResourceStatus && (
                   <div
                     className="statusbar-resource"
-                    onMouseEnter={() => setResourcePopoverOpen(true)}
-                    onMouseLeave={() => setResourcePopoverOpen(false)}
+                    onMouseEnter={() => {
+                      if (allowResourcePopover) setResourcePopoverOpen(true);
+                    }}
+                    onMouseLeave={() => {
+                      if (resourcePopoverOpen) setResourcePopoverOpen(false);
+                    }}
                   >
                     {resourceStatus === "ready" &&
                     resourceCpu &&
@@ -570,80 +577,78 @@ export default function BottomArea({
                             : t("status.resource.checking")}
                       </span>
                     )}
-                    {resourcePopoverOpen && (
+                    {allowResourcePopover && resourcePopoverOpen && (
                       <div className="statusbar-resource-popover">
-                        {resourceStatus === "ready" &&
-                        resourceCpu &&
-                        resourceMemory ? (
-                          <>
-                            <div className="statusbar-resource-block">
-                              <div className="statusbar-resource-title">
-                                {t("status.resource.cpu")}
-                              </div>
-                              <div className="statusbar-resource-grid">
-                                <span>{t("status.resource.total")}</span>
-                                <strong>
-                                  {formatPercent(resourceCpu.totalPercent)}
-                                </strong>
-                                {resourceSnapshot?.source === "ssh-linux" && (
-                                  <>
-                                    <span>{t("status.resource.user")}</span>
-                                    <strong>
-                                      {formatPercent(resourceCpu.userPercent)}
-                                    </strong>
-                                    <span>{t("status.resource.system")}</span>
-                                    <strong>
-                                      {formatPercent(resourceCpu.systemPercent)}
-                                    </strong>
-                                    <span>{t("status.resource.idle")}</span>
-                                    <strong>
-                                      {formatPercent(resourceCpu.idlePercent)}
-                                    </strong>
-                                    <span>{t("status.resource.iowait")}</span>
-                                    <strong>
-                                      {formatPercent(resourceCpu.iowaitPercent)}
-                                    </strong>
-                                  </>
-                                )}
-                              </div>
+                        <>
+                          <div className="statusbar-resource-block">
+                            <div className="statusbar-resource-title">
+                              {t("status.resource.cpu")}
                             </div>
-                            <div className="statusbar-resource-block">
-                              <div className="statusbar-resource-title">
-                                {t("status.resource.memory")}
-                              </div>
-                              <div className="statusbar-resource-grid">
-                                <span>{t("status.resource.total")}</span>
-                                <strong>
-                                  {formatBytes(resourceMemory.totalBytes)}
-                                </strong>
-                                <span>{t("status.resource.used")}</span>
-                                <strong>
-                                  {formatBytes(resourceMemory.usedBytes)}
-                                </strong>
-                                <span>{t("status.resource.free")}</span>
-                                <strong>
-                                  {formatBytes(resourceMemory.freeBytes)}
-                                </strong>
-                                <span>{t("status.resource.available")}</span>
-                                <strong>
-                                  {formatBytes(resourceMemory.availableBytes)}
-                                </strong>
-                                <span>{t("status.resource.cache")}</span>
-                                <strong>
-                                  {formatBytes(resourceMemory.cacheBytes)}
-                                </strong>
-                              </div>
+                            <div className="statusbar-resource-grid">
+                              <span>{t("status.resource.total")}</span>
+                              <strong>
+                                {formatPercent(readyResourceCpu!.totalPercent)}
+                              </strong>
+                              {resourceSnapshot?.source === "ssh-linux" && (
+                                <>
+                                  <span>{t("status.resource.user")}</span>
+                                  <strong>
+                                    {formatPercent(
+                                      readyResourceCpu!.userPercent,
+                                    )}
+                                  </strong>
+                                  <span>{t("status.resource.system")}</span>
+                                  <strong>
+                                    {formatPercent(
+                                      readyResourceCpu!.systemPercent,
+                                    )}
+                                  </strong>
+                                  <span>{t("status.resource.idle")}</span>
+                                  <strong>
+                                    {formatPercent(
+                                      readyResourceCpu!.idlePercent,
+                                    )}
+                                  </strong>
+                                  <span>{t("status.resource.iowait")}</span>
+                                  <strong>
+                                    {formatPercent(
+                                      readyResourceCpu!.iowaitPercent,
+                                    )}
+                                  </strong>
+                                </>
+                              )}
                             </div>
-                          </>
-                        ) : (
-                          <div className="statusbar-resource-empty">
-                            {resourceStatus === "disabled"
-                              ? t("status.resource.inactive")
-                              : resourceStatus === "unsupported"
-                                ? resourceUnsupportedMessage
-                                : t("status.resource.checking")}
                           </div>
-                        )}
+                          <div className="statusbar-resource-block">
+                            <div className="statusbar-resource-title">
+                              {t("status.resource.memory")}
+                            </div>
+                            <div className="statusbar-resource-grid">
+                              <span>{t("status.resource.total")}</span>
+                              <strong>
+                                {formatBytes(readyResourceMemory!.totalBytes)}
+                              </strong>
+                              <span>{t("status.resource.used")}</span>
+                              <strong>
+                                {formatBytes(readyResourceMemory!.usedBytes)}
+                              </strong>
+                              <span>{t("status.resource.free")}</span>
+                              <strong>
+                                {formatBytes(readyResourceMemory!.freeBytes)}
+                              </strong>
+                              <span>{t("status.resource.available")}</span>
+                              <strong>
+                                {formatBytes(
+                                  readyResourceMemory!.availableBytes,
+                                )}
+                              </strong>
+                              <span>{t("status.resource.cache")}</span>
+                              <strong>
+                                {formatBytes(readyResourceMemory!.cacheBytes)}
+                              </strong>
+                            </div>
+                          </div>
+                        </>
                       </div>
                     )}
                   </div>
@@ -658,11 +663,6 @@ export default function BottomArea({
                   <button
                     type="button"
                     className={`statusbar-transfer-token ${transferHint.hasTransfer ? "active" : "idle"}`.trim()}
-                    title={
-                      transferHint.hasTransfer
-                        ? `${t("actions.upload")} ${transferHint.runningUploads} / ${t("actions.download")} ${transferHint.runningDownloads}`
-                        : `${t("actions.upload")} / ${t("actions.download")}`
-                    }
                     aria-label={
                       transferHint.hasTransfer
                         ? `${t("actions.upload")} ${transferHint.runningUploads} / ${t("actions.download")} ${transferHint.runningDownloads}`

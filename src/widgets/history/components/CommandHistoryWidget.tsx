@@ -84,7 +84,6 @@ export default function CommandHistoryWidget({
               key={item.id}
               className="history-item"
               onDoubleClick={() => onExecute(item.command)}
-              title={item.command}
               type="button"
             >
               <span className="history-command">{item.command}</span>

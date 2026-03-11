@@ -126,7 +126,6 @@ export default function WidgetTitleBar({
               size="icon"
               onClick={() => setMenuOpen((prev) => !prev)}
               aria-label={t("actions.settings")}
-              title={t("actions.settings")}
             >
               <IoSettings />
             </Button>
@@ -205,7 +204,6 @@ export default function WidgetTitleBar({
             onClick={onClose}
             disabled={closeDisabled}
             aria-label={t("actions.close")}
-            title={t("actions.close")}
           >
             <IoClose />
           </Button>
