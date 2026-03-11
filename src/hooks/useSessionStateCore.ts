@@ -13,6 +13,7 @@ import type {
   LogEntry,
   LogLevel,
   Session,
+  SessionInput,
   SessionStateUi,
   SessionWorkspaceState,
 } from "@/types";
@@ -91,6 +92,10 @@ type UseSessionStateResult = {
   setBusyMessage: React.Dispatch<React.SetStateAction<string | null>>;
   isLocalSession: (sessionId: string | null) => boolean;
   setLastCommand: (sessionId: string, command: string) => void;
+  sendSessionInput: (
+    sessionId: string,
+    input: SessionInput,
+  ) => Promise<unknown>;
   writeToSession: (sessionId: string, data: string) => Promise<unknown>;
   resizeSession: (
     sessionId: string,
@@ -398,15 +403,22 @@ export default function useSessionState({
     return isLocalSession(sessionId) ? localCommand : sshCommand;
   }
 
-  async function writeToSession(sessionId: string, data: string) {
+  /** 统一发送会话输入；文本与二进制在此分流到对应命令。 */
+  async function sendSessionInput(sessionId: string, input: SessionInput) {
+    const command =
+      input.kind === "binary"
+        ? sessionCommand(
+            sessionId,
+            "ssh_write_binary",
+            "local_shell_write_binary",
+          )
+        : sessionCommand(sessionId, "ssh_write", "local_shell_write");
+    const payload =
+      input.kind === "binary"
+        ? { sessionId, data: input.data }
+        : { sessionId, data: input.data };
     try {
-      return await callTauri(
-        sessionCommand(sessionId, "ssh_write", "local_shell_write"),
-        {
-          sessionId,
-          data,
-        },
-      );
+      return await callTauri(command, payload);
     } catch (err) {
       // 本地 Shell 进程退出后，若 terminal:exit 事件未及时到达，
       // 这里以写入失败作为兜底信号，确保会话进入断开状态并可回车重连。
@@ -415,6 +427,10 @@ export default function useSessionState({
       }
       throw err;
     }
+  }
+
+  async function writeToSession(sessionId: string, data: string) {
+    return sendSessionInput(sessionId, { kind: "text", data });
   }
 
   function resizeSession(sessionId: string, cols: number, rows: number) {
@@ -967,6 +983,7 @@ export default function useSessionState({
     setBusyMessage,
     isLocalSession,
     setLastCommand,
+    sendSessionInput,
     writeToSession,
     resizeSession,
     connectProfile,

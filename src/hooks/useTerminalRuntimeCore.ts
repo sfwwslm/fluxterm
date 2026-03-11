@@ -23,6 +23,7 @@ import type {
   CommandHistoryLiveCapture,
   DisconnectReason,
   Session,
+  SessionInput,
   SessionStateUi,
   TerminalCwdSupport,
   TerminalWorkingDirectory,
@@ -71,7 +72,10 @@ type UseTerminalRuntimeProps = {
   sessionReasonsRef: React.RefObject<Record<string, DisconnectReason>>;
   sessionBuffersRef: React.RefObject<Record<string, string>>;
   setLastCommand: (sessionId: string, command: string) => void;
-  writeToSession: (sessionId: string, data: string) => Promise<unknown>;
+  sendSessionInput: (
+    sessionId: string,
+    input: SessionInput,
+  ) => Promise<unknown>;
   resizeSession: (
     sessionId: string,
     cols: number,
@@ -214,6 +218,11 @@ type LinkMenuState = {
   y: number;
   uri: string;
 };
+
+/** 将 xterm binary string 中的每个 code unit 映射为单字节。 */
+function encodeBinaryInput(data: string) {
+  return Array.from(data, (char) => char.charCodeAt(0) & 0xff);
+}
 
 /** 当前会话输入行监听的内部状态。 */
 type CommandCaptureMeta = {
@@ -421,7 +430,7 @@ export default function useTerminalRuntime({
   sessionReasonsRef,
   sessionBuffersRef,
   setLastCommand,
-  writeToSession,
+  sendSessionInput,
   resizeSession,
   onWorkingDirectoryChange,
   onPathSyncSupportChange,
@@ -481,7 +490,7 @@ export default function useTerminalRuntime({
   );
   const handlersRef = useRef({
     setLastCommand,
-    writeToSession,
+    sendSessionInput,
     resizeSession,
     onWorkingDirectoryChange,
     onPathSyncSupportChange,
@@ -571,7 +580,7 @@ export default function useTerminalRuntime({
   useEffect(() => {
     handlersRef.current = {
       setLastCommand,
-      writeToSession,
+      sendSessionInput,
       resizeSession,
       onWorkingDirectoryChange,
       onPathSyncSupportChange,
@@ -591,7 +600,7 @@ export default function useTerminalRuntime({
     onPathSyncSupportChange,
     onCommandCaptureChange,
     onCommandCommit,
-    writeToSession,
+    sendSessionInput,
   ]);
 
   useEffect(() => {
@@ -826,10 +835,10 @@ export default function useTerminalRuntime({
     if (!selectedCommand) return false;
     const currentInput = autocompleteInputBufferRef.current[sessionId] ?? "";
     const deleteSequence = "\u007f".repeat(currentInput.length);
-    await handlersRef.current.writeToSession(
-      sessionId,
-      `${deleteSequence}${selectedCommand}`,
-    );
+    await handlersRef.current.sendSessionInput(sessionId, {
+      kind: "text",
+      data: `${deleteSequence}${selectedCommand}`,
+    });
     autocompleteInputBufferRef.current[sessionId] = selectedCommand;
     scheduleCommandCaptureRefresh(sessionId);
     setActiveAutocomplete(null);
@@ -1402,7 +1411,9 @@ export default function useTerminalRuntime({
         }
         if (autocompleteReady && (data === "\u001b[C" || data === "\u001b[D")) {
           setActiveAutocomplete(null);
-          handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+          handlersRef.current
+            .sendSessionInput(sessionId, { kind: "text", data })
+            .catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
           return;
         }
@@ -1433,7 +1444,9 @@ export default function useTerminalRuntime({
             data,
           ).buffer;
           refreshAutocomplete(sessionId, nextInput);
-          handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+          handlersRef.current
+            .sendSessionInput(sessionId, { kind: "text", data })
+            .catch(() => {});
           return;
         }
         if (data === "\u001b") {
@@ -1441,7 +1454,9 @@ export default function useTerminalRuntime({
             prev?.sessionId === sessionId ? null : prev,
           );
           // Esc 既要关闭联想面板，也必须透传到 PTY，保证 vim 等 TUI 能正确退出插入模式。
-          handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+          handlersRef.current
+            .sendSessionInput(sessionId, { kind: "text", data })
+            .catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
           return;
         }
@@ -1450,8 +1465,21 @@ export default function useTerminalRuntime({
           data,
         ).buffer;
         refreshAutocomplete(sessionId, nextInput);
-        handlersRef.current.writeToSession(sessionId, data).catch(() => {});
+        handlersRef.current
+          .sendSessionInput(sessionId, { kind: "text", data })
+          .catch(() => {});
         scheduleCommandCaptureRefresh(sessionId);
+      }),
+    );
+
+    bundle.disposables.push(
+      term.onBinary((data) => {
+        handlersRef.current
+          .sendSessionInput(sessionId, {
+            kind: "binary",
+            data: encodeBinaryInput(data),
+          })
+          .catch(() => {});
       }),
     );
 
@@ -1867,7 +1895,10 @@ export default function useTerminalRuntime({
     try {
       const text = await readText();
       if (!text) return false;
-      await handlersRef.current.writeToSession(sessionId, text);
+      await handlersRef.current.sendSessionInput(sessionId, {
+        kind: "text",
+        data: text,
+      });
       return true;
     } catch {
       return false;

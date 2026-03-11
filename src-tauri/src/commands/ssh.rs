@@ -75,6 +75,16 @@ pub fn ssh_write(
 }
 
 #[tauri::command]
+/// 发送终端二进制输入数据。
+pub fn ssh_write_binary(
+    state: State<EngineState>,
+    session_id: String,
+    data: Vec<u8>,
+) -> Result<(), EngineError> {
+    state.engine.write(&session_id, data)
+}
+
+#[tauri::command]
 /// 显式确认并写入 Host Key 信任记录。
 pub fn ssh_host_key_confirm(
     app: AppHandle,

@@ -35,6 +35,17 @@ export type Session = {
   } | null;
 };
 
+/** 统一的会话输入负载。 */
+export type SessionInput =
+  | {
+      kind: "text";
+      data: string;
+    }
+  | {
+      kind: "binary";
+      data: number[];
+    };
+
 /** 会话窗格标识。 */
 export type SessionPaneId = string;
 

@@ -31,7 +31,7 @@ use crate::commands::file::file_open;
 use crate::commands::local::{local_home, local_list, local_ssh_keys};
 use crate::commands::local_shell::{
     local_shell_connect, local_shell_disconnect, local_shell_list, local_shell_resize,
-    local_shell_write,
+    local_shell_write, local_shell_write_binary,
 };
 use crate::commands::profile::{
     profile_groups_list, profile_groups_save, profile_list, profile_remove, profile_save,
@@ -47,7 +47,7 @@ use crate::commands::sftp::{
     sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
 };
 use crate::commands::ssh::{
-    ssh_connect, ssh_disconnect, ssh_host_key_confirm, ssh_resize, ssh_write,
+    ssh_connect, ssh_disconnect, ssh_host_key_confirm, ssh_resize, ssh_write, ssh_write_binary,
 };
 use crate::commands::system::{app_config_dir, app_data_dir, get_system_info, open_devtools};
 use crate::commands::tunnel::{
@@ -134,6 +134,7 @@ pub fn run() {
             ssh_host_key_confirm,
             ssh_resize,
             ssh_write,
+            ssh_write_binary,
             ssh_tunnel_open,
             ssh_tunnel_close,
             ssh_tunnel_list,
@@ -157,6 +158,7 @@ pub fn run() {
             local_shell_disconnect,
             local_shell_list,
             local_shell_write,
+            local_shell_write_binary,
             local_shell_resize,
             resource_monitor_start_local,
             resource_monitor_start_ssh,

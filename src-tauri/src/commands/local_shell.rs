@@ -47,6 +47,16 @@ pub fn local_shell_write(
     session_id: String,
     data: String,
 ) -> Result<(), EngineError> {
+    write_local_shell(&state, &session_id, data.as_bytes())
+}
+
+#[tauri::command]
+/// 写入本地 Shell 二进制数据。
+pub fn local_shell_write_binary(
+    state: State<LocalShellState>,
+    session_id: String,
+    data: Vec<u8>,
+) -> Result<(), EngineError> {
     write_local_shell(&state, &session_id, &data)
 }
 

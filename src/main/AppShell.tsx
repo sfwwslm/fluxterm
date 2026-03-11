@@ -1065,7 +1065,7 @@ export default function AppShell() {
     sessionReasonsRef: sessionRefs.sessionReasonsRef,
     sessionBuffersRef: sessionRefs.sessionBuffersRef,
     setLastCommand: sessionActions.setLastCommand,
-    writeToSession: sessionActions.writeToSession,
+    sendSessionInput: sessionActions.sendSessionInput,
     resizeSession: sessionActions.resizeSession,
     onWorkingDirectoryChange: (sessionId, payload) => {
       setTerminalWorkingDirs((prev) =>

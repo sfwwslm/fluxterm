@@ -363,7 +363,7 @@ pub fn start_local_shell(
 pub fn write_local_shell(
     state: &LocalShellState,
     session_id: &str,
-    data: &str,
+    data: &[u8],
 ) -> Result<(), EngineError> {
     let mut sessions = state
         .sessions
@@ -372,7 +372,7 @@ pub fn write_local_shell(
     let handle = sessions
         .get_mut(session_id)
         .ok_or_else(|| EngineError::new("local_shell_missing", "本地 Shell 会话不存在"))?;
-    handle.writer.write_all(data.as_bytes()).map_err(|err| {
+    handle.writer.write_all(data).map_err(|err| {
         EngineError::with_detail(
             "local_shell_write_failed",
             "无法写入本地 Shell",

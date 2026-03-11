@@ -48,6 +48,7 @@ export default function useSessionController(
       setBusyMessage: raw.setBusyMessage,
       isLocalSession: raw.isLocalSession,
       setLastCommand: raw.setLastCommand,
+      sendSessionInput: raw.sendSessionInput,
       writeToSession: raw.writeToSession,
       resizeSession: raw.resizeSession,
       connectProfile: raw.connectProfile,
