@@ -36,6 +36,8 @@ pub struct HostProfile {
     pub target_system: Option<String>,
     pub charset: Option<String>,
     pub word_separators: Option<String>,
+    pub bell_mode: Option<String>,
+    pub bell_cooldown_ms: Option<u32>,
     pub description: Option<String>,
 }
 

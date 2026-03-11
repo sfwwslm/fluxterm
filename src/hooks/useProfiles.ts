@@ -8,6 +8,10 @@ import {
   importOpenSshConfig as importOpenSshConfigCommand,
   type OpensshImportSummary,
 } from "@/features/profile/core/commands";
+import {
+  DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+  DEFAULT_TERMINAL_BELL_MODE,
+} from "@/constants/terminalBell";
 import type { HostProfile } from "@/types";
 
 /** 主机配置状态 hook 的返回值。 */
@@ -45,6 +49,8 @@ const defaultProfile: HostProfile = {
   knownHost: null,
   tags: null,
   wordSeparators: null,
+  bellMode: DEFAULT_TERMINAL_BELL_MODE,
+  bellCooldownMs: DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
 };
 
 /** 统一清理分组名的首尾空白，避免分组展示与持久化出现幽灵差异。 */

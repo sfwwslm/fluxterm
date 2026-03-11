@@ -1,6 +1,9 @@
 /** 认证方式。 */
 export type AuthType = "password" | "privateKey" | "agent";
 
+/** 终端 Bell 响应模式。 */
+export type TerminalBellMode = "silent" | "sound";
+
 /** 主机配置数据。 */
 export type HostProfile = {
   id: string;
@@ -18,6 +21,8 @@ export type HostProfile = {
   targetSystem?: string | null;
   charset?: string | null;
   wordSeparators?: string | null;
+  bellMode?: TerminalBellMode | null;
+  bellCooldownMs?: number | null;
   description?: string | null;
 };
 
@@ -382,6 +387,8 @@ export type LocalShellLaunchConfig = {
     | "vt100";
   charset?: "utf-8" | "gbk" | "gb18030";
   wordSeparators?: string;
+  bellMode?: TerminalBellMode;
+  bellCooldownMs?: number;
 };
 
 /** 快捷命令分组。 */

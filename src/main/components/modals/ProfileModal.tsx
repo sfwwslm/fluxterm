@@ -8,6 +8,11 @@ import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import {
+  DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+  DEFAULT_TERMINAL_BELL_MODE,
+  TERMINAL_BELL_COOLDOWN_OPTIONS,
+} from "@/constants/terminalBell";
+import {
   DEFAULT_TERMINAL_WORD_SEPARATORS,
   TERMINAL_WORD_SEPARATORS_PRESET_A,
   TERMINAL_WORD_SEPARATORS_PRESET_B,
@@ -139,6 +144,8 @@ export default function ProfileModal({
     if (profileType !== "ssh") {
       onDraftChange({
         ...draft,
+        bellMode: DEFAULT_TERMINAL_BELL_MODE,
+        bellCooldownMs: DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
         terminalType: "xterm-256color",
         targetSystem: "auto",
         charset: "utf-8",
@@ -163,6 +170,8 @@ export default function ProfileModal({
       targetSystem: null,
       charset: null,
       wordSeparators: null,
+      bellMode: DEFAULT_TERMINAL_BELL_MODE,
+      bellCooldownMs: DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
       description: null,
     });
   }
@@ -186,6 +195,16 @@ export default function ProfileModal({
       { value: "gbk", label: "GBK" },
       { value: "gb18030", label: "GB18030" },
     ];
+    const bellModeOptions = [
+      { value: "silent", label: t("profile.terminal.bellMode.silent") },
+      { value: "sound", label: t("profile.terminal.bellMode.sound") },
+    ];
+    const bellCooldownOptions = TERMINAL_BELL_COOLDOWN_OPTIONS.map((value) => ({
+      value: String(value),
+      label: t("profile.terminal.bellCooldown.option", {
+        seconds: (value / 1000).toString(),
+      }),
+    }));
 
     const nameRow = (
       <div className="form-row">
@@ -321,17 +340,55 @@ export default function ProfileModal({
       </div>
     );
 
+    const terminalRows = (
+      <div className="host-editor">
+        <div className="form-row">
+          <label className="form-label">{t("profile.terminal.bellMode")}</label>
+          <Select
+            value={draft.bellMode ?? DEFAULT_TERMINAL_BELL_MODE}
+            options={bellModeOptions}
+            onChange={(value) =>
+              onDraftChange({
+                ...draft,
+                bellMode: value as NonNullable<HostProfile["bellMode"]>,
+              })
+            }
+            aria-label={t("profile.terminal.bellMode")}
+          />
+          <div className="profile-form-hint">
+            {t("profile.terminal.bellModeHint")}
+          </div>
+        </div>
+        <div className="form-row">
+          <label className="form-label">
+            {t("profile.terminal.bellCooldown")}
+          </label>
+          <Select
+            value={String(
+              draft.bellCooldownMs ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+            )}
+            options={bellCooldownOptions}
+            onChange={(value) =>
+              onDraftChange({
+                ...draft,
+                bellCooldownMs: Number(value),
+              })
+            }
+            aria-label={t("profile.terminal.bellCooldown")}
+          />
+          <div className="profile-form-hint">
+            {t("profile.terminal.bellCooldownHint")}
+          </div>
+        </div>
+      </div>
+    );
+
     if (profileType === "shell") {
       if (activeSection === "session") {
         return <div className="host-editor">{extraSessionRows}</div>;
       }
       if (activeSection === "terminal") {
-        return (
-          <div className="profile-modal-placeholder">
-            <h4>{t("profile.section.terminal")}</h4>
-            <p>{t("profile.shell.terminalTodo")}</p>
-          </div>
-        );
+        return terminalRows;
       }
       if (activeSection === "window") {
         return windowRows;
@@ -480,12 +537,7 @@ export default function ProfileModal({
     }
 
     if (activeSection === "terminal") {
-      return (
-        <div className="profile-modal-placeholder">
-          <h4>{t("profile.section.terminal")}</h4>
-          <p>{t("profile.section.terminalHint")}</p>
-        </div>
-      );
+      return terminalRows;
     }
 
     if (activeSection === "window") {

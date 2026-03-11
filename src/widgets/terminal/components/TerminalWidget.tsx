@@ -51,6 +51,7 @@ type TerminalWidgetProps = {
   activeSessionReason: DisconnectReason | null;
   sessionStates: Record<string, SessionStateUi>;
   sessionReasons: Record<string, DisconnectReason>;
+  bellPendingBySession: Record<string, boolean>;
   registerTerminalContainer: (
     sessionId: string,
     element: HTMLDivElement | null,
@@ -121,6 +122,7 @@ export default function TerminalWidget({
   activeSessionId,
   sessionStates,
   sessionReasons,
+  bellPendingBySession,
   registerTerminalContainer,
   isTerminalReady,
   activeLinkMenu,
@@ -247,6 +249,7 @@ export default function TerminalWidget({
             getSessionLabel={resolveSessionLabel}
             getSessionState={resolveSessionState}
             getSessionReason={resolveSessionReason}
+            bellPendingBySession={bellPendingBySession}
             exitHint={t("terminal.exitHint")}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}

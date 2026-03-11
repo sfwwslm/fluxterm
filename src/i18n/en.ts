@@ -396,6 +396,15 @@ export const en = {
     "This section is reserved for low-level SSH parameters such as charset, target system, proxy, key command, and host verification policy.",
   "profile.section.terminalHint":
     "Terminal-related settings such as keyboard behavior, bell, and encoding will be added here later.",
+  "profile.terminal.bellMode": "Bell Response",
+  "profile.terminal.bellModeHint":
+    "A bell icon is always shown on the session tab when a terminal bell arrives; sound mode also plays a tone.",
+  "profile.terminal.bellMode.silent": "Silent",
+  "profile.terminal.bellMode.sound": "Play Sound",
+  "profile.terminal.bellCooldown": "Repeat Suppression",
+  "profile.terminal.bellCooldownHint":
+    "When the same session triggers another bell within this window, FluxTerm skips replaying the tone and refreshing the bell indicator.",
+  "profile.terminal.bellCooldown.option": "{seconds}s",
   "profile.window.wordSeparators": "Word Separators",
   "profile.window.wordSeparatorsHint":
     "Characters in this set are treated as boundaries for double-click word selection.",

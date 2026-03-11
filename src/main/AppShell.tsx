@@ -130,6 +130,12 @@ import {
   type BackgroundRenderMode,
 } from "@/constants/backgroundMedia";
 import {
+  DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+  DEFAULT_TERMINAL_BELL_MODE,
+  normalizeTerminalBellCooldownMs,
+  normalizeTerminalBellMode,
+} from "@/constants/terminalBell";
+import {
   DEFAULT_TERMINAL_WORD_SEPARATORS,
   normalizeTerminalWordSeparators,
 } from "@/constants/terminalWordSeparators";
@@ -536,6 +542,9 @@ export default function AppShell() {
     useState<Record<string, TerminalCwdSupport>>({});
   const [terminalPathSyncStateBySession, setTerminalPathSyncStateBySession] =
     useState<Record<string, TerminalPathSyncState>>({});
+  const [bellPendingBySession, setBellPendingBySession] = useState<
+    Record<string, boolean>
+  >({});
   const focusActiveTerminalRef = useRef<() => boolean>(() => false);
 
   useEffect(() => {
@@ -738,6 +747,13 @@ export default function AppShell() {
     setProfileDraft({
       ...defaultProfile,
       id: "",
+      bellMode:
+        normalizeTerminalBellMode(effectiveShellLaunchConfig.bellMode) ??
+        DEFAULT_TERMINAL_BELL_MODE,
+      bellCooldownMs:
+        normalizeTerminalBellCooldownMs(
+          effectiveShellLaunchConfig.bellCooldownMs,
+        ) ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
       terminalType: effectiveShellLaunchConfig.terminalType ?? "xterm-256color",
       charset: effectiveShellLaunchConfig.charset ?? "utf-8",
       wordSeparators:
@@ -786,7 +802,15 @@ export default function AppShell() {
       const normalizedWordSeparators =
         normalizeTerminalWordSeparators(profileDraft.wordSeparators) ??
         undefined;
+      const normalizedBellMode =
+        normalizeTerminalBellMode(profileDraft.bellMode) ??
+        DEFAULT_TERMINAL_BELL_MODE;
+      const normalizedBellCooldownMs =
+        normalizeTerminalBellCooldownMs(profileDraft.bellCooldownMs) ??
+        DEFAULT_TERMINAL_BELL_COOLDOWN_MS;
       setLocalShellLaunchConfig({
+        bellMode: normalizedBellMode,
+        bellCooldownMs: normalizedBellCooldownMs,
         terminalType: normalizedTerminalType,
         charset: normalizedCharset,
         wordSeparators: normalizedWordSeparators,
@@ -795,6 +819,8 @@ export default function AppShell() {
         setLocalShellByShellId((prev) => ({
           ...prev,
           [shellId]: {
+            bellMode: normalizedBellMode,
+            bellCooldownMs: normalizedBellCooldownMs,
             terminalType: normalizedTerminalType,
             charset: normalizedCharset,
             wordSeparators: normalizedWordSeparators,
@@ -804,7 +830,15 @@ export default function AppShell() {
       setProfileModalOpen(false);
       return;
     }
-    await saveProfile(profileDraft);
+    await saveProfile({
+      ...profileDraft,
+      bellMode:
+        normalizeTerminalBellMode(profileDraft.bellMode) ??
+        DEFAULT_TERMINAL_BELL_MODE,
+      bellCooldownMs:
+        normalizeTerminalBellCooldownMs(profileDraft.bellCooldownMs) ??
+        DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+    });
     setProfileModalOpen(false);
   }
 
@@ -1103,6 +1137,42 @@ export default function AppShell() {
     onSizeChange: (size) => {
       terminalSizeRef.current = size;
     },
+    onBell: (sessionId) => {
+      if (sessionState.activeSessionId === sessionId) {
+        return;
+      }
+      setBellPendingBySession((prev) =>
+        prev[sessionId] ? prev : { ...prev, [sessionId]: true },
+      );
+    },
+    resolveBellConfig: (sessionId) => {
+      const localMeta = sessionState.localSessionMeta[sessionId];
+      if (localMeta) {
+        return {
+          mode:
+            normalizeTerminalBellMode(localMeta.launchConfig?.bellMode) ??
+            DEFAULT_TERMINAL_BELL_MODE,
+          cooldownMs:
+            normalizeTerminalBellCooldownMs(
+              localMeta.launchConfig?.bellCooldownMs,
+            ) ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+        };
+      }
+      const session = sessionState.sessions.find(
+        (item) => item.sessionId === sessionId,
+      );
+      const profile = session
+        ? (profiles.find((item) => item.id === session.profileId) ?? null)
+        : null;
+      return {
+        mode:
+          normalizeTerminalBellMode(profile?.bellMode) ??
+          DEFAULT_TERMINAL_BELL_MODE,
+        cooldownMs:
+          normalizeTerminalBellCooldownMs(profile?.bellCooldownMs) ??
+          DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+      };
+    },
     resolveWordSeparators: (sessionId) => {
       const fallbackWordSeparators =
         normalizeTerminalWordSeparators(sessionWordSeparators) ??
@@ -1128,6 +1198,17 @@ export default function AppShell() {
     },
   });
   focusActiveTerminalRef.current = terminalActions.focusActiveTerminal;
+
+  useEffect(() => {
+    const activeSessionId = sessionState.activeSessionId;
+    if (!activeSessionId) return;
+    setBellPendingBySession((prev) => {
+      if (!prev[activeSessionId]) return prev;
+      const next = { ...prev };
+      delete next[activeSessionId];
+      return next;
+    });
+  }, [sessionState.activeSessionId]);
 
   useEffect(() => {
     const activeSessionId = sessionState.activeSessionId;
@@ -2835,6 +2916,7 @@ export default function AppShell() {
                 activeSessionReason={sessionState.activeSessionReason}
                 sessionStates={sessionState.sessionStates}
                 sessionReasons={sessionState.sessionReasons}
+                bellPendingBySession={bellPendingBySession}
                 registerTerminalContainer={
                   terminalActions.registerTerminalContainer
                 }

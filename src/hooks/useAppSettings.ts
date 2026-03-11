@@ -38,6 +38,12 @@ import {
   type BackgroundRenderMode,
   type BackgroundVideoReplayMode,
 } from "@/constants/backgroundMedia";
+import {
+  DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+  DEFAULT_TERMINAL_BELL_MODE,
+  normalizeTerminalBellCooldownMs,
+  normalizeTerminalBellMode,
+} from "@/constants/terminalBell";
 import { normalizeTerminalWordSeparators } from "@/constants/terminalWordSeparators";
 
 /** 应用全局配置结构。 */
@@ -153,6 +159,8 @@ export default function useAppSettings({
   const [shellId, setShellId] = useState<string | null>(null);
   const [localShellLaunchConfig, setLocalShellLaunchConfig] =
     useState<LocalShellLaunchConfig>({
+      bellMode: DEFAULT_TERMINAL_BELL_MODE,
+      bellCooldownMs: DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
       terminalType: "xterm-256color",
       charset: "utf-8",
     });
@@ -239,6 +247,18 @@ export default function useAppSettings({
         if (wordSeparators) {
           nextConfig.wordSeparators = wordSeparators;
         }
+        const bellMode = normalizeTerminalBellMode(
+          parsed.localShellLaunchConfig?.bellMode,
+        );
+        if (bellMode) {
+          nextConfig.bellMode = bellMode;
+        }
+        const bellCooldownMs = normalizeTerminalBellCooldownMs(
+          parsed.localShellLaunchConfig?.bellCooldownMs,
+        );
+        if (bellCooldownMs !== null) {
+          nextConfig.bellCooldownMs = bellCooldownMs;
+        }
         if (Object.keys(nextConfig).length) {
           setLocalShellLaunchConfig(nextConfig);
         }
@@ -274,6 +294,16 @@ export default function useAppSettings({
           );
           if (wordSeparators) {
             nextConfig.wordSeparators = wordSeparators;
+          }
+          const bellMode = normalizeTerminalBellMode(cfg.bellMode);
+          if (bellMode) {
+            nextConfig.bellMode = bellMode;
+          }
+          const bellCooldownMs = normalizeTerminalBellCooldownMs(
+            cfg.bellCooldownMs,
+          );
+          if (bellCooldownMs !== null) {
+            nextConfig.bellCooldownMs = bellCooldownMs;
           }
           if (Object.keys(nextConfig).length) {
             nextByShellId[id] = nextConfig;

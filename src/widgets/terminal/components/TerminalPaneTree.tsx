@@ -6,7 +6,7 @@
  * 3. 处理区域内会话拖拽排序与 split resize 交互。
  */
 import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { FiX } from "react-icons/fi";
+import { FiBell, FiX } from "react-icons/fi";
 import type { DisconnectReason, SessionPaneNode } from "@/types";
 
 type TerminalPaneTreeProps = {
@@ -19,6 +19,7 @@ type TerminalPaneTreeProps = {
   getSessionLabel: (sessionId: string) => string;
   getSessionState: (sessionId: string) => string;
   getSessionReason: (sessionId: string) => DisconnectReason | null;
+  bellPendingBySession: Record<string, boolean>;
   exitHint: string;
   onFocusPane: (paneId: string) => void;
   onSwitchSession: (sessionId: string) => void;
@@ -85,6 +86,7 @@ function PaneNodeView({
   getSessionLabel,
   getSessionState,
   getSessionReason,
+  bellPendingBySession,
   exitHint,
   onFocusPane,
   onSwitchSession,
@@ -113,6 +115,7 @@ function PaneNodeView({
             getSessionLabel={getSessionLabel}
             getSessionState={getSessionState}
             getSessionReason={getSessionReason}
+            bellPendingBySession={bellPendingBySession}
             exitHint={exitHint}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
@@ -145,6 +148,7 @@ function PaneNodeView({
             getSessionLabel={getSessionLabel}
             getSessionState={getSessionState}
             getSessionReason={getSessionReason}
+            bellPendingBySession={bellPendingBySession}
             exitHint={exitHint}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
@@ -189,6 +193,8 @@ function PaneNodeView({
           {node.sessionIds.map((sessionId, index) => {
             const sessionActive = sessionId === paneActiveSessionId;
             const disconnected = getSessionState(sessionId) === "disconnected";
+            const showBell =
+              !sessionActive && !!bellPendingBySession[sessionId];
             const showCloseButton = sessionActive;
             // 标签序号按当前 pane 内顺序独立计算，分屏后各区域都从 1 开始。
             const sessionLabel = `${index + 1}. ${getSessionLabel(sessionId)}`;
@@ -233,6 +239,11 @@ function PaneNodeView({
                 >
                   {sessionLabel}
                 </button>
+                {showBell ? (
+                  <span className="session-tab-bell" aria-hidden="true">
+                    <FiBell />
+                  </span>
+                ) : null}
                 {showCloseButton && (
                   <button
                     type="button"

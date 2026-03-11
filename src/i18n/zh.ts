@@ -375,6 +375,15 @@ export const zh = {
     "这里预留底层 SSH 参数配置，例如字符集、目标系统、代理、密钥指令和主机校验策略等。",
   "profile.section.terminalHint":
     "这里预留终端相关配置，例如键盘行为、Bell、编码等，后续会逐步补齐。",
+  "profile.terminal.bellMode": "Bell 响应",
+  "profile.terminal.bellModeHint":
+    "收到终端 Bell 后，始终显示标签铃铛；播放模式会额外发出提示音。",
+  "profile.terminal.bellMode.silent": "静音",
+  "profile.terminal.bellMode.sound": "播放声音",
+  "profile.terminal.bellCooldown": "重复抑制",
+  "profile.terminal.bellCooldownHint":
+    "同一会话在抑制时间内重复触发 Bell 时，不重复播放声音，也不重复刷新铃铛提示。",
+  "profile.terminal.bellCooldown.option": "{seconds} 秒",
   "profile.window.wordSeparators": "分词符",
   "profile.window.wordSeparatorsHint":
     "用于双击选词时的分隔符集合；命中的字符会被视作词边界。",

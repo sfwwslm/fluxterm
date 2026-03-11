@@ -24,6 +24,7 @@ import type {
   DisconnectReason,
   Session,
   SessionInput,
+  TerminalBellMode,
   SessionStateUi,
   TerminalCwdSupport,
   TerminalWorkingDirectory,
@@ -76,6 +77,10 @@ type UseTerminalRuntimeProps = {
     sessionId: string,
     input: SessionInput,
   ) => Promise<unknown>;
+  resolveBellConfig?: (sessionId: string) => {
+    mode: TerminalBellMode;
+    cooldownMs: number;
+  };
   resizeSession: (
     sessionId: string,
     cols: number,
@@ -97,6 +102,7 @@ type UseTerminalRuntimeProps = {
     capture: CommandHistoryLiveCapture,
   ) => void;
   onCommandCommit?: (sessionId: string, command: string) => void;
+  onBell?: (sessionId: string) => void;
   autocompleteProvider?: CommandAutocompleteProvider | null;
 };
 
@@ -222,6 +228,27 @@ type LinkMenuState = {
 /** 将 xterm binary string 中的每个 code unit 映射为单字节。 */
 function encodeBinaryInput(data: string) {
   return Array.from(data, (char) => char.charCodeAt(0) & 0xff);
+}
+
+/** 播放极短提示音，避免引入额外音频资源。 */
+function playBellSound(audioContext: AudioContext) {
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = "triangle";
+  oscillator.frequency.value = 880;
+  gain.gain.value = 0.0001;
+  gain.gain.exponentialRampToValueAtTime(
+    0.035,
+    audioContext.currentTime + 0.01,
+  );
+  gain.gain.exponentialRampToValueAtTime(
+    0.0001,
+    audioContext.currentTime + 0.12,
+  );
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.12);
 }
 
 /** 当前会话输入行监听的内部状态。 */
@@ -431,6 +458,7 @@ export default function useTerminalRuntime({
   sessionBuffersRef,
   setLastCommand,
   sendSessionInput,
+  resolveBellConfig,
   resizeSession,
   onWorkingDirectoryChange,
   onPathSyncSupportChange,
@@ -439,6 +467,7 @@ export default function useTerminalRuntime({
   reconnectLocalShell,
   onCommandCaptureChange,
   onCommandCommit,
+  onBell,
   autocompleteProvider = null,
 }: UseTerminalRuntimeProps): TerminalRuntime {
   const terminalsRef = useRef<Record<string, TerminalBundle>>({});
@@ -482,6 +511,8 @@ export default function useTerminalRuntime({
   const autocompleteInputBufferRef = useRef<Record<string, string>>({});
   const commandCaptureMetaRef = useRef<Record<string, CommandCaptureMeta>>({});
   const commandCaptureTimersRef = useRef<Record<string, number>>({});
+  const lastBellAtBySessionRef = useRef<Record<string, number>>({});
+  const bellAudioContextRef = useRef<AudioContext | null>(null);
   const activeCommandCaptureBySessionRef = useRef<
     Record<string, CommandHistoryLiveCapture>
   >({});
@@ -494,11 +525,13 @@ export default function useTerminalRuntime({
     resizeSession,
     onWorkingDirectoryChange,
     onPathSyncSupportChange,
+    resolveBellConfig,
     isLocalSession,
     reconnectSession,
     reconnectLocalShell,
     onCommandCaptureChange,
     onCommandCommit,
+    onBell,
   });
   const parseWorkingDirectoryFromPromptRef = useRef(
     parseWorkingDirectoryFromPrompt,
@@ -584,14 +617,17 @@ export default function useTerminalRuntime({
       resizeSession,
       onWorkingDirectoryChange,
       onPathSyncSupportChange,
+      resolveBellConfig,
       isLocalSession,
       reconnectSession,
       reconnectLocalShell,
       onCommandCaptureChange,
       onCommandCommit,
+      onBell,
     };
   }, [
     isLocalSession,
+    resolveBellConfig,
     reconnectLocalShell,
     reconnectSession,
     resizeSession,
@@ -600,6 +636,7 @@ export default function useTerminalRuntime({
     onPathSyncSupportChange,
     onCommandCaptureChange,
     onCommandCommit,
+    onBell,
     sendSessionInput,
   ]);
 
@@ -843,6 +880,43 @@ export default function useTerminalRuntime({
     scheduleCommandCaptureRefresh(sessionId);
     setActiveAutocomplete(null);
     return true;
+  }
+
+  function handleTerminalBell(sessionId: string) {
+    const { mode, cooldownMs } = handlersRef.current.resolveBellConfig?.(
+      sessionId,
+    ) ?? {
+      mode: "silent" as const,
+      cooldownMs: 3000,
+    };
+    const now = Date.now();
+    const lastTriggeredAt = lastBellAtBySessionRef.current[sessionId] ?? 0;
+    if (cooldownMs > 0 && now - lastTriggeredAt < cooldownMs) {
+      return;
+    }
+    lastBellAtBySessionRef.current[sessionId] = now;
+    handlersRef.current.onBell?.(sessionId);
+    if (mode !== "sound") {
+      return;
+    }
+    try {
+      const AudioContextCtor =
+        window.AudioContext ??
+        (
+          window as Window & {
+            webkitAudioContext?: typeof AudioContext;
+          }
+        ).webkitAudioContext;
+      if (!AudioContextCtor) return;
+      const context = bellAudioContextRef.current ?? new AudioContextCtor();
+      bellAudioContextRef.current = context;
+      if (context.state === "suspended") {
+        void context.resume().catch(() => {});
+      }
+      playBellSound(context);
+    } catch {
+      // 音频能力不可用时静默降级，不影响终端交互。
+    }
   }
 
   function syncTerminalSize(sessionId: string) {
@@ -1484,6 +1558,12 @@ export default function useTerminalRuntime({
     );
 
     bundle.disposables.push(
+      term.onBell(() => {
+        handleTerminalBell(sessionId);
+      }),
+    );
+
+    bundle.disposables.push(
       term.onSelectionChange(() => {
         disposeSelectionAutoCopyTimer(sessionId);
         if (!selectionAutoCopyEnabledRef.current) return;
@@ -1634,6 +1714,15 @@ export default function useTerminalRuntime({
           // ignore listener teardown race
         }
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const audioContext = bellAudioContextRef.current;
+      if (!audioContext) return;
+      void audioContext.close().catch(() => {});
+      bellAudioContextRef.current = null;
     };
   }, []);
 

@@ -258,6 +258,8 @@ fn map_host_block_to_profile(
         target_system: None,
         charset: None,
         word_separators: None,
+        bell_mode: None,
+        bell_cooldown_ms: None,
         description: None,
     })
 }
@@ -432,6 +434,8 @@ mod tests {
             target_system: None,
             charset: None,
             word_separators: None,
+            bell_mode: None,
+            bell_cooldown_ms: None,
             description: None,
         }
     }
