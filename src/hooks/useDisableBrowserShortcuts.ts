@@ -21,13 +21,8 @@ const isBlockedShortcut = (event: KeyboardEvent) => {
   const ctrlOrMeta = event.ctrlKey || event.metaKey;
   const terminalFocused = isTerminalFocused(event.target);
 
-  // 终端聚焦时优先把按键交给 PTY，只拦截会直接影响窗口生命周期/页面状态的组合键。
+  // 终端聚焦时由 xterm 宿主层统一处理快捷键路由，这里不再重复抢键。
   if (terminalFocused) {
-    if (key === "f5") return true;
-    if (ctrlOrMeta && key === "w") return true;
-    if (ctrlOrMeta && (key === "r" || (event.shiftKey && key === "r"))) {
-      return true;
-    }
     return false;
   }
 
@@ -43,6 +38,7 @@ const isBlockedShortcut = (event: KeyboardEvent) => {
       key === "f" ||
       key === "u" ||
       key === "l" ||
+      key === "g" ||
       key === "w" ||
       key === "n" ||
       key === "t" ||

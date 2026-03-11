@@ -201,6 +201,12 @@ type PromptParseState = {
   carry: string;
 };
 
+type TerminalHostKeyAction =
+  | "copy-selection"
+  | "paste"
+  | "prevent-browser-shortcut"
+  | "passthrough";
+
 /** 终端链接点击后的临时菜单状态。 */
 type LinkMenuState = {
   sessionId: string;
@@ -367,6 +373,36 @@ function looksLikePromptLine(line: string) {
   const trimmed = line.trimEnd();
   if (!trimmed) return false;
   return /[#$>%]\s*$/.test(trimmed);
+}
+
+function resolveTerminalHostKeyAction(
+  event: KeyboardEvent,
+  hasSelection: boolean,
+): TerminalHostKeyAction {
+  const key = event.key.toLowerCase();
+  const ctrlOrMeta = event.ctrlKey || event.metaKey;
+
+  if (ctrlOrMeta && event.shiftKey && key === "c" && hasSelection) {
+    return "copy-selection";
+  }
+
+  if (ctrlOrMeta && event.shiftKey && key === "v") {
+    return "paste";
+  }
+
+  if (key === "f5") {
+    return "prevent-browser-shortcut";
+  }
+
+  if (ctrlOrMeta && key === "w") {
+    return "prevent-browser-shortcut";
+  }
+
+  if (ctrlOrMeta && (key === "r" || (event.shiftKey && key === "r"))) {
+    return "prevent-browser-shortcut";
+  }
+
+  return "passthrough";
 }
 
 /** Xterm 初始化与输入输出处理。 */
@@ -1277,6 +1313,40 @@ export default function useTerminalRuntime({
       }),
     );
 
+    term.attachCustomKeyEventHandler((event) => {
+      const action = resolveTerminalHostKeyAction(
+        event,
+        Boolean(term.getSelection()),
+      );
+      if (action === "passthrough") {
+        return true;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (action === "copy-selection") {
+        copySelectionFromSession(sessionId).catch(() => {});
+      } else if (action === "paste") {
+        pasteToSession(sessionId).catch(() => {});
+      }
+
+      return false;
+    });
+
+    bundle.disposables.push(
+      term.onKey(({ domEvent }) => {
+        if (focusedLineBySessionRef.current[sessionId]) {
+          syncCursorBlink(sessionId, true);
+        }
+        if (domEvent.key === "Escape") {
+          setLinkMenu((current) =>
+            current?.sessionId === sessionId ? null : current,
+          );
+        }
+      }),
+    );
+
     bundle.disposables.push(
       term.onData((data) => {
         // 聚焦行只用于“查看/复制这一行”。
@@ -1724,6 +1794,17 @@ export default function useTerminalRuntime({
     }
   }
 
+  async function copySelectionFromSession(sessionId: string) {
+    const text = terminalsRef.current[sessionId]?.terminal.getSelection() ?? "";
+    if (!text) return false;
+    try {
+      await writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 在默认浏览器中打开当前链接，并在操作结束后关闭菜单。 */
   async function openActiveLink() {
     const menu = getActiveLinkMenu();
@@ -1779,6 +1860,10 @@ export default function useTerminalRuntime({
   async function pasteToActiveTerminal() {
     const sessionId = activeSessionIdRef.current;
     if (!sessionId) return false;
+    return pasteToSession(sessionId);
+  }
+
+  async function pasteToSession(sessionId: string) {
     try {
       const text = await readText();
       if (!text) return false;
