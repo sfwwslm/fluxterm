@@ -373,17 +373,16 @@ export const zh = {
   "profile.section.modem": "X/Y/Z Modem",
   "profile.section.sshHint":
     "这里预留底层 SSH 参数配置，例如字符集、目标系统、代理、密钥指令和主机校验策略等。",
-  "profile.section.terminalHint":
-    "这里预留终端相关配置，例如键盘行为、Bell、编码等，后续会逐步补齐。",
   "profile.terminal.bellMode": "Bell 响应",
-  "profile.terminal.bellModeHint":
-    "收到终端 Bell 后，始终显示标签铃铛；播放模式会额外发出提示音。",
+  "profile.terminal.bellModeHint": "选择 Bell 的反馈方式。",
   "profile.terminal.bellMode.silent": "静音",
   "profile.terminal.bellMode.sound": "播放声音",
   "profile.terminal.bellCooldown": "重复抑制",
   "profile.terminal.bellCooldownHint":
-    "同一会话在抑制时间内重复触发 Bell 时，不重复播放声音，也不重复刷新铃铛提示。",
+    "同一会话在设定时间内重复触发时不重复响应。",
   "profile.terminal.bellCooldown.option": "{seconds} 秒",
+  "profile.terminal.group.bell": "Bell",
+  "profile.terminal.group.bellHint": "响铃提示与重复抑制。",
   "profile.window.wordSeparators": "分词符",
   "profile.window.wordSeparatorsHint":
     "用于双击选词时的分隔符集合；命中的字符会被视作词边界。",
@@ -397,14 +396,6 @@ export const zh = {
   "profile.sessionTab.system": "系统",
   "profile.sessionTab.charset": "字符集",
   "profile.sessionTab.description": "描述",
-  "profile.sessionTab.terminalHint":
-    "这里展示终端相关配置，当前版本先保留兼容结构。",
-  "profile.sessionTab.systemHint":
-    "这里预留目标系统相关配置，后续将逐步开放系统级选项。",
-  "profile.sessionTab.charsetHint":
-    "这里预留字符集相关配置，后续将支持编码与转换策略。",
-  "profile.sessionTab.descriptionHint":
-    "这里预留会话描述相关配置，后续将支持备注与说明字段。",
   "profile.form.name": "名称",
   "profile.form.host": "地址",
   "profile.form.port": "端口",
@@ -424,10 +415,6 @@ export const zh = {
   "profile.auth.privateKey": "私钥",
   "profile.actions.pickKey": "选择文件",
   "profile.actions.restoreDefaults": "恢复默认配置",
-  "profile.shell.todo":
-    "本地 shell 配置壳层已就绪，后续会在这里扩展字符集、目标系统、代理和本地启动参数等选项。",
-  "profile.shell.terminalTodo":
-    "本地 shell 的终端行为配置将在后续版本开放，例如键盘行为、Bell 和编码策略。",
   "profile.shell.windowTodo":
     "本地 shell 的窗口行为配置将在后续版本开放，例如插入符样式和分词符。",
   "profile.shell.saveDisabled": "当前版本暂未开放本地 shell 配置保存",

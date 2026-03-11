@@ -394,17 +394,16 @@ export const en = {
   "profile.section.modem": "X/Y/Z Modem",
   "profile.section.sshHint":
     "This section is reserved for low-level SSH parameters such as charset, target system, proxy, key command, and host verification policy.",
-  "profile.section.terminalHint":
-    "Terminal-related settings such as keyboard behavior, bell, and encoding will be added here later.",
   "profile.terminal.bellMode": "Bell Response",
-  "profile.terminal.bellModeHint":
-    "A bell icon is always shown on the session tab when a terminal bell arrives; sound mode also plays a tone.",
+  "profile.terminal.bellModeHint": "Choose how terminal bells are surfaced.",
   "profile.terminal.bellMode.silent": "Silent",
   "profile.terminal.bellMode.sound": "Play Sound",
   "profile.terminal.bellCooldown": "Repeat Suppression",
   "profile.terminal.bellCooldownHint":
-    "When the same session triggers another bell within this window, FluxTerm skips replaying the tone and refreshing the bell indicator.",
+    "Skip repeated responses from the same session within this window.",
   "profile.terminal.bellCooldown.option": "{seconds}s",
+  "profile.terminal.group.bell": "Bell",
+  "profile.terminal.group.bellHint": "Alerts and repeat suppression.",
   "profile.window.wordSeparators": "Word Separators",
   "profile.window.wordSeparatorsHint":
     "Characters in this set are treated as boundaries for double-click word selection.",
@@ -419,14 +418,6 @@ export const en = {
   "profile.sessionTab.system": "System",
   "profile.sessionTab.charset": "Charset",
   "profile.sessionTab.description": "Description",
-  "profile.sessionTab.terminalHint":
-    "Terminal-related configuration is shown here. This version keeps a compatible structure first.",
-  "profile.sessionTab.systemHint":
-    "Target system configuration is reserved here and will be added incrementally.",
-  "profile.sessionTab.charsetHint":
-    "Charset configuration is reserved here and encoding strategy options will be added later.",
-  "profile.sessionTab.descriptionHint":
-    "Session description configuration is reserved here and note fields will be added later.",
   "profile.form.name": "Name",
   "profile.form.host": "Host",
   "profile.form.port": "Port",
@@ -446,10 +437,6 @@ export const en = {
   "profile.auth.privateKey": "Private Key",
   "profile.actions.pickKey": "Choose file",
   "profile.actions.restoreDefaults": "Restore Defaults",
-  "profile.shell.todo":
-    "The local shell configuration shell is ready. Charset, target system, proxy, and local launch options will be added here later.",
-  "profile.shell.terminalTodo":
-    "Terminal behavior settings for local shell will be added in a later version, such as keyboard behavior, bell, and encoding.",
   "profile.shell.windowTodo":
     "Window behavior settings for local shell will be added in a later version, such as cursor style and word separators.",
   "profile.shell.saveDisabled":

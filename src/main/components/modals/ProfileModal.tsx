@@ -341,45 +341,57 @@ export default function ProfileModal({
     );
 
     const terminalRows = (
-      <div className="host-editor">
-        <div className="form-row">
-          <label className="form-label">{t("profile.terminal.bellMode")}</label>
-          <Select
-            value={draft.bellMode ?? DEFAULT_TERMINAL_BELL_MODE}
-            options={bellModeOptions}
-            onChange={(value) =>
-              onDraftChange({
-                ...draft,
-                bellMode: value as NonNullable<HostProfile["bellMode"]>,
-              })
-            }
-            aria-label={t("profile.terminal.bellMode")}
-          />
-          <div className="profile-form-hint">
-            {t("profile.terminal.bellModeHint")}
+      <div className="profile-settings-page">
+        <section className="profile-settings-section">
+          <header className="profile-settings-section-header">
+            <div>
+              <h4>{t("profile.terminal.group.bell")}</h4>
+              <p>{t("profile.terminal.group.bellHint")}</p>
+            </div>
+          </header>
+          <div className="profile-settings-section-body host-editor">
+            <div className="form-row">
+              <label className="form-label">
+                {t("profile.terminal.bellMode")}
+              </label>
+              <Select
+                value={draft.bellMode ?? DEFAULT_TERMINAL_BELL_MODE}
+                options={bellModeOptions}
+                onChange={(value) =>
+                  onDraftChange({
+                    ...draft,
+                    bellMode: value as NonNullable<HostProfile["bellMode"]>,
+                  })
+                }
+                aria-label={t("profile.terminal.bellMode")}
+              />
+              <div className="profile-form-hint">
+                {t("profile.terminal.bellModeHint")}
+              </div>
+            </div>
+            <div className="form-row">
+              <label className="form-label">
+                {t("profile.terminal.bellCooldown")}
+              </label>
+              <Select
+                value={String(
+                  draft.bellCooldownMs ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+                )}
+                options={bellCooldownOptions}
+                onChange={(value) =>
+                  onDraftChange({
+                    ...draft,
+                    bellCooldownMs: Number(value),
+                  })
+                }
+                aria-label={t("profile.terminal.bellCooldown")}
+              />
+              <div className="profile-form-hint">
+                {t("profile.terminal.bellCooldownHint")}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="form-row">
-          <label className="form-label">
-            {t("profile.terminal.bellCooldown")}
-          </label>
-          <Select
-            value={String(
-              draft.bellCooldownMs ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
-            )}
-            options={bellCooldownOptions}
-            onChange={(value) =>
-              onDraftChange({
-                ...draft,
-                bellCooldownMs: Number(value),
-              })
-            }
-            aria-label={t("profile.terminal.bellCooldown")}
-          />
-          <div className="profile-form-hint">
-            {t("profile.terminal.bellCooldownHint")}
-          </div>
-        </div>
+        </section>
       </div>
     );
 

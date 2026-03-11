@@ -102,6 +102,51 @@
   gap: 12px;
 }
 
+.profile-settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px 14px;
+  border: 1px solid color-mix(in srgb, var(--border-input) 88%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-panel) 86%, transparent),
+    color-mix(in srgb, var(--surface-panel) 96%, transparent)
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+.profile-settings-section-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-settings-section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.profile-settings-section-header p {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.profile-settings-section-body {
+  gap: 12px;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: var(--profile-form-label-width) minmax(0, 1fr);
@@ -217,6 +262,10 @@
 
   .host-editor {
     --profile-form-label-width: 100%;
+  }
+
+  .profile-settings-section {
+    padding: 14px 14px 12px;
   }
 
   .form-row {
