@@ -45,6 +45,14 @@ import {
 import Button from "@/components/ui/button";
 import "./Sftpwidget.css";
 
+/** 将 WSL UNC 路径格式化为更符合 Linux 心智的展示形式。 */
+function formatDisplayPath(path: string) {
+  const wslMatch = path.match(/^\\\\wsl\.localhost\\[^\\]+(?<tail>\\.*)?$/i);
+  if (!wslMatch) return path;
+  const tail = wslMatch.groups?.tail ?? "";
+  return tail ? tail.replace(/\\/g, "/") : "/";
+}
+
 type SftpWidgetProps = {
   isRemote: boolean;
   isRemoteSession: boolean;
@@ -307,6 +315,9 @@ export default function SftpWidget({
                 tone: "disabled",
                 label: t("sftp.pathSync.disabled"),
               };
+  const displayPath = interactionsDisabled
+    ? "-"
+    : formatDisplayPath(currentPath);
 
   function openMenu(event: React.MouseEvent, entry: SftpEntry) {
     event.preventDefault();
@@ -373,11 +384,8 @@ export default function SftpWidget({
               <pathSyncMeta.Icon />
             </span>
           </Tooltip>
-          <div
-            className="path"
-            title={interactionsDisabled ? "-" : currentPath}
-          >
-            {interactionsDisabled ? "-" : currentPath}
+          <div className="path" title={displayPath}>
+            {displayPath}
           </div>
         </div>
         {!interactionsDisabled && (

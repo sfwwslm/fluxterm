@@ -10,6 +10,7 @@ import type { Translate } from "@/i18n";
 import type {
   DisconnectReason,
   HostProfile,
+  LocalSessionMeta,
   Session,
   SessionStateUi,
   SessionWorkspaceState,
@@ -18,11 +19,6 @@ import TerminalPaneTree from "@/widgets/terminal/components/TerminalPaneTree";
 import useTerminalMenus from "@/widgets/terminal/components/useTerminalMenus";
 import useTerminalSearchBar from "@/widgets/terminal/components/TerminalSearchBar";
 import "@/widgets/terminal/components/TerminalWidget.css";
-
-type LocalSessionMeta = Record<
-  string,
-  { shellId: string | null; label: string }
->;
 
 type SearchOptions = {
   regex?: boolean;
@@ -44,7 +40,7 @@ type TerminalWidgetProps = {
   workspace: SessionWorkspaceState;
   profiles: HostProfile[];
   editingProfile: HostProfile;
-  localSessionMeta: LocalSessionMeta;
+  localSessionMeta: Record<string, LocalSessionMeta>;
   activeSessionId: string | null;
   activeSession: Session | null;
   activeSessionState: SessionStateUi | null;

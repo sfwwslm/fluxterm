@@ -58,6 +58,7 @@ import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
 import type {
   HostProfile,
   LocalShellConfig,
+  LocalSessionMeta,
   LocalShellProfile,
   TerminalCwdSupport,
   TerminalPathSyncState,
@@ -300,6 +301,94 @@ function resolveTrackedWorkingDirectory(
   if (!rawPath.startsWith("~") || !homePath) return null;
   if (rawPath === "~") return homePath;
   return `${homePath.replace(/\/+$/, "")}/${rawPath.slice(2)}`;
+}
+
+function resolveWslWindowsPath(rawPath: string) {
+  const mountMatch = rawPath.match(/^\/mnt\/([a-zA-Z])(\/.*)?$/);
+  if (!mountMatch) return null;
+  const driveLetter = mountMatch[1].toUpperCase();
+  const tail = (mountMatch[2] ?? "").replace(/\//g, "\\");
+  return `${driveLetter}:${tail || "\\"}`;
+}
+
+/** 将 WSL Unix 路径映射为 Windows 可访问的 UNC 路径。 */
+function resolveWslUncPath(rawPath: string, distribution: string | null) {
+  const normalizedDistribution = distribution?.trim();
+  if (!normalizedDistribution) return null;
+  const normalizedPath = rawPath.trim();
+  if (!normalizedPath.startsWith("/")) return null;
+  const tail = normalizedPath
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .join("\\");
+  const uncRoot = `\\\\wsl.localhost\\${normalizedDistribution}`;
+  return tail ? `${uncRoot}\\${tail}` : uncRoot;
+}
+
+/** 推导 WSL 用户家目录的 UNC 路径。 */
+function resolveWslHomeUncPath(
+  distribution: string | null,
+  username: string | null,
+) {
+  const normalizedUsername = username?.trim();
+  if (!normalizedUsername) return null;
+  return resolveWslUncPath(`/home/${normalizedUsername}`, distribution);
+}
+
+/** 推导 WSL 用户家目录的 Unix 路径，用于缓存 `~` 展开结果。 */
+function inferWslHomePath(rawPath: string, username: string | null) {
+  const normalizedUsername = username?.trim();
+  if (!normalizedUsername) return null;
+  const normalizedPath = rawPath.trim();
+  const expectedHome = `/home/${normalizedUsername}`;
+  if (normalizedPath === "~" || normalizedPath.startsWith("~/")) {
+    return expectedHome;
+  }
+  if (
+    normalizedPath === expectedHome ||
+    normalizedPath.startsWith(`${expectedHome}/`)
+  ) {
+    return expectedHome;
+  }
+  return null;
+}
+
+function resolveLocalSessionWorkingDirectory(
+  rawPath: string,
+  homePath: string | null,
+  localMeta: LocalSessionMeta | null | undefined,
+  username: string | null,
+) {
+  if (localMeta?.shellKind === "wsl") {
+    if (rawPath === "~") {
+      if (!homePath) {
+        return resolveWslHomeUncPath(
+          localMeta.wslDistribution ?? null,
+          username,
+        );
+      }
+      return (
+        resolveWslWindowsPath(homePath) ??
+        resolveWslUncPath(homePath, localMeta.wslDistribution ?? null)
+      );
+    }
+    if (rawPath.startsWith("~/")) {
+      const resolvedHome = homePath
+        ? (resolveWslWindowsPath(homePath) ??
+          resolveWslUncPath(homePath, localMeta.wslDistribution ?? null))
+        : resolveWslHomeUncPath(localMeta.wslDistribution ?? null, username);
+      if (!resolvedHome) return null;
+      return normalizeLocalPath(
+        `${resolvedHome.replace(/[\\/]+$/, "")}\\${rawPath.slice(2).replace(/\//g, "\\")}`,
+      );
+    }
+    return (
+      resolveWslWindowsPath(rawPath) ??
+      resolveWslUncPath(rawPath, localMeta.wslDistribution ?? null)
+    );
+  }
+  return resolveTrackedWorkingDirectory(rawPath, homePath, true);
 }
 
 /** 应用主界面编排层。 */
@@ -1359,6 +1448,27 @@ export default function AppShell() {
     }
     const cwdSupport =
       terminalCwdSupportBySession[activeSessionId] ?? "unsupported";
+    const tracked = terminalWorkingDirs[activeSessionId];
+    const localMeta = sessionState.localSessionMeta[activeSessionId];
+    const inferredLocalHome =
+      tracked && localMeta?.shellKind === "wsl"
+        ? inferWslHomePath(tracked.path, tracked.username)
+        : null;
+    const knownHome =
+      terminalHomeDirs[activeSessionId] ??
+      inferredLocalHome ??
+      (tracked?.path === "~" && !!sftpState.currentPath
+        ? sftpState.currentPath
+        : null);
+    const localResolvedPath =
+      isLocalSession && tracked
+        ? resolveLocalSessionWorkingDirectory(
+            tracked.path,
+            knownHome,
+            localMeta,
+            tracked.username,
+          )
+        : null;
     const pathSyncState = terminalPathSyncStateBySession[activeSessionId];
     if (
       !isLocalSession &&
@@ -1370,6 +1480,9 @@ export default function AppShell() {
     if (cwdSupport !== "supported") {
       return "unsupported";
     }
+    if (isLocalSession && !localResolvedPath) {
+      return "unsupported";
+    }
     if (!isLocalSession && activeSftpAvailability === "unsupported") {
       return "unsupported";
     }
@@ -1377,11 +1490,15 @@ export default function AppShell() {
   }, [
     sessionActions,
     sessionState.activeSessionId,
+    sessionState.localSessionMeta,
     activeSftpAvailability,
     filesWidgetVisible,
+    sftpState.currentPath,
     sftpEnabled,
     terminalPathSyncEnabled,
     terminalCwdSupportBySession,
+    terminalHomeDirs,
+    terminalWorkingDirs,
     terminalPathSyncStateBySession,
   ]);
 
@@ -1624,16 +1741,18 @@ export default function AppShell() {
       ).catch(() => {});
     }
     const trackedPath = tracked.path;
+    const localMeta = sessionState.localSessionMeta[activeSessionId];
+    const inferredLocalHome =
+      localMeta?.shellKind === "wsl"
+        ? inferWslHomePath(trackedPath, tracked.username)
+        : null;
     const knownHome =
       terminalHomeDirs[activeSessionId] ??
+      inferredLocalHome ??
       (trackedPath === "~" && !!sftpState.currentPath
         ? sftpState.currentPath
         : null);
-    if (
-      trackedPath === "~" &&
-      knownHome &&
-      terminalHomeDirs[activeSessionId] !== knownHome
-    ) {
+    if (knownHome && terminalHomeDirs[activeSessionId] !== knownHome) {
       setTerminalHomeDirs((prev) => ({
         ...prev,
         [activeSessionId]: knownHome,
@@ -1644,26 +1763,35 @@ export default function AppShell() {
       knownHome,
       isLocalSession,
     );
-    if (!resolvedPath) return;
-    if (resolvedPath === sftpState.currentPath) {
+    const effectiveResolvedPath = isLocalSession
+      ? resolveLocalSessionWorkingDirectory(
+          trackedPath,
+          knownHome,
+          localMeta,
+          tracked.username,
+        )
+      : resolvedPath;
+    if (!effectiveResolvedPath) return;
+    if (effectiveResolvedPath === sftpState.currentPath) {
       // 当文件管理器已经处于终端 cwd 时，记住这次已同步的终端路径。
       // 后续用户手动浏览目录时，只要终端 cwd 没变化，就不要再被这个旧路径覆盖回去。
       setLastSyncedTerminalPaths((prev) =>
-        prev[activeSessionId] === resolvedPath
+        prev[activeSessionId] === effectiveResolvedPath
           ? prev
-          : { ...prev, [activeSessionId]: resolvedPath },
+          : { ...prev, [activeSessionId]: effectiveResolvedPath },
       );
       return;
     }
-    if (lastSyncedTerminalPaths[activeSessionId] === resolvedPath) return;
+    if (lastSyncedTerminalPaths[activeSessionId] === effectiveResolvedPath)
+      return;
     // 终端 cwd 只在“路径发生新变化”时单向驱动文件管理器，
     // 避免文件管理器手动浏览后又被旧的终端路径持续覆盖。
-    openRemoteDir(resolvedPath).catch((error) => {
+    openRemoteDir(effectiveResolvedPath).catch((error) => {
       void warn(
         JSON.stringify({
           event: "sftp:sync-terminal-path-failed",
           sessionId: activeSessionId,
-          path: resolvedPath,
+          path: effectiveResolvedPath,
           rawPath: trackedPath,
           error: extractErrorMessage(error),
         }),
@@ -1671,7 +1799,7 @@ export default function AppShell() {
     });
     setLastSyncedTerminalPaths((prev) => ({
       ...prev,
-      [activeSessionId]: resolvedPath,
+      [activeSessionId]: effectiveResolvedPath,
     }));
   }, [
     lastSyncedTerminalPaths,
@@ -1680,6 +1808,7 @@ export default function AppShell() {
     sessionState.activeSessionProfile,
     sessionState.activeSessionId,
     sessionState.isRemoteConnected,
+    sessionState.localSessionMeta,
     activeSftpAvailability,
     filesWidgetVisible,
     terminalCwdSupportBySession,

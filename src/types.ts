@@ -370,11 +370,16 @@ export type DisconnectReason =
   | "unknown";
 
 /** 本地 Shell 配置。 */
+export type LocalShellKind = "native" | "wsl";
+
+/** 本地 Shell 配置。 */
 export type LocalShellProfile = {
   id: string;
   label: string;
   path: string;
   args: string[];
+  kind: LocalShellKind;
+  wslDistribution?: string | null;
 };
 
 /** 本地 Shell 终端配置。 */
@@ -389,6 +394,15 @@ export type LocalShellConfig = {
   wordSeparators?: string;
   bellMode?: TerminalBellMode;
   bellCooldownMs?: number;
+};
+
+/** 本地会话元数据。 */
+export type LocalSessionMeta = {
+  shellId: string | null;
+  label: string;
+  shellKind: LocalShellKind;
+  wslDistribution?: string | null;
+  launchConfig?: LocalShellConfig;
 };
 
 /** 快捷命令分组。 */

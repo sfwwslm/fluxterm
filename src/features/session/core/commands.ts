@@ -7,6 +7,7 @@ import type {
   DisconnectReason,
   HostProfile,
   LocalShellConfig,
+  LocalSessionMeta,
   LocalShellProfile,
   Session,
   SessionStateUi,
@@ -15,11 +16,6 @@ import { extractErrorMessage } from "@/shared/errors/appError";
 import { warn as logWarn } from "@/shared/logging/telemetry";
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
-type LocalSessionMeta = {
-  shellId: string | null;
-  label: string;
-  launchConfig?: LocalShellConfig;
-};
 
 type ConnectProfileCommandParams = {
   profile: HostProfile;
@@ -165,6 +161,8 @@ export async function connectLocalShellCommand({
     [session.sessionId]: {
       shellId: shellProfile?.id ?? null,
       label: shellProfile?.label ?? t("session.local"),
+      shellKind: shellProfile?.kind ?? "native",
+      wslDistribution: shellProfile?.wslDistribution ?? null,
       launchConfig,
     },
   }));
@@ -289,6 +287,8 @@ export async function reconnectLocalShellCommand({
     replaceSessionConnection(sessionId, result, "connected", {
       shellId: meta?.shellId ?? null,
       label: meta?.label ?? t("session.local"),
+      shellKind: meta?.shellKind ?? "native",
+      wslDistribution: meta?.wslDistribution ?? null,
       launchConfig: meta?.launchConfig,
     });
   } catch {

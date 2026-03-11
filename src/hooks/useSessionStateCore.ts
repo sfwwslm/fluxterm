@@ -9,6 +9,7 @@ import type {
   DisconnectReason,
   HostProfile,
   LocalShellConfig,
+  LocalSessionMeta,
   LocalShellProfile,
   LogEntry,
   LogLevel,
@@ -53,12 +54,6 @@ type UseSessionStateProps = {
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
   getTerminalSize: () => TerminalSize;
-};
-
-type LocalSessionMeta = {
-  shellId: string | null;
-  label: string;
-  launchConfig?: LocalShellConfig;
 };
 
 type UseSessionStateResult = {
@@ -683,11 +678,15 @@ export default function useSessionState({
   const connectLocalShell = useCallback(
     async (shellProfile: LocalShellProfile | null, activate = false) => {
       const resolvedShellId = shellProfile?.id ?? shellId ?? null;
+      const resolvedShellProfile =
+        shellProfile ??
+        availableShells.find((shell) => shell.id === resolvedShellId) ??
+        null;
       const launchConfig = resolvedShellId
         ? normalizeLocalShellConfig(localShellProfiles[resolvedShellId])
         : DEFAULT_LOCAL_SHELL_CONFIG;
       await connectLocalShellCommand({
-        shellProfile,
+        shellProfile: resolvedShellProfile,
         activate,
         createLocalShellSession,
         localSessionIdsRef,
@@ -707,7 +706,14 @@ export default function useSessionState({
         launchConfig,
       });
     },
-    [createLocalShellSession, localShellProfiles, sessionWorkspace, shellId, t],
+    [
+      availableShells,
+      createLocalShellSession,
+      localShellProfiles,
+      sessionWorkspace,
+      shellId,
+      t,
+    ],
   );
 
   async function disconnectSession(sessionId: string) {
@@ -839,6 +845,9 @@ export default function useSessionState({
         [nextSession.sessionId]: {
           shellId: meta?.shellId ?? null,
           label: meta?.label ?? t("session.local"),
+          shellKind: meta?.shellKind ?? "native",
+          wslDistribution: meta?.wslDistribution ?? null,
+          launchConfig: meta?.launchConfig,
         },
       }));
       setSessionStates((prev) => ({

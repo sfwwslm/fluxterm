@@ -2,15 +2,9 @@
  * 会话生命周期状态迁移模块。
  * 职责：处理会话连接替换时的状态迁移与本地会话元数据同步。
  */
-import type { LocalShellConfig, Session, SessionStateUi } from "@/types";
+import type { LocalSessionMeta, Session, SessionStateUi } from "@/types";
 
 type Setter<T> = (updater: (prev: T) => T) => void;
-
-type LocalSessionMeta = {
-  shellId: string | null;
-  label: string;
-  launchConfig?: LocalShellConfig;
-};
 
 export type ReplaceSessionConnectionParams = {
   oldSessionId: string;

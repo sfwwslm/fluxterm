@@ -4,6 +4,8 @@ use std::env;
 use std::io::{Read, Write};
 #[cfg(target_os = "windows")]
 use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::process::Command;
 use std::sync::Mutex;
 use std::thread;
 
@@ -28,6 +30,8 @@ pub struct LocalShellProfile {
     pub label: String,
     pub path: String,
     pub args: Vec<String>,
+    pub kind: String,
+    pub wsl_distribution: Option<String>,
 }
 
 /// 本地 Shell 启动参数。
@@ -90,6 +94,44 @@ fn find_in_path(exe: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
+/// 解析 `wsl.exe` 输出，兼容 UTF-8/UTF-16LE 两种常见编码。
+fn decode_windows_command_output(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        let units: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        return String::from_utf16_lossy(&units);
+    }
+    if bytes.iter().skip(1).step_by(2).any(|byte| *byte == 0) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        return String::from_utf16_lossy(&units);
+    }
+    String::from_utf8_lossy(bytes).to_string()
+}
+
+#[cfg(target_os = "windows")]
+/// 枚举已安装的 WSL 发行版名称。
+fn collect_wsl_distributions(wsl_path: &str) -> Vec<String> {
+    let output = Command::new(wsl_path).args(["-l", "-q"]).output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    decode_windows_command_output(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
 fn collect_windows_shells() -> Vec<LocalShellProfile> {
     let mut shells = Vec::new();
 
@@ -102,6 +144,8 @@ fn collect_windows_shells() -> Vec<LocalShellProfile> {
             label: "PowerShell 7".to_string(),
             path: pwsh,
             args: Vec::new(),
+            kind: "native".to_string(),
+            wsl_distribution: None,
         });
     }
 
@@ -112,6 +156,8 @@ fn collect_windows_shells() -> Vec<LocalShellProfile> {
             label: "PowerShell".to_string(),
             path: windows_ps.to_string(),
             args: Vec::new(),
+            kind: "native".to_string(),
+            wsl_distribution: None,
         });
     }
 
@@ -122,6 +168,8 @@ fn collect_windows_shells() -> Vec<LocalShellProfile> {
             label: "Command Prompt".to_string(),
             path: cmd.to_string(),
             args: Vec::new(),
+            kind: "native".to_string(),
+            wsl_distribution: None,
         });
     }
 
@@ -132,17 +180,23 @@ fn collect_windows_shells() -> Vec<LocalShellProfile> {
             label: "Git Bash".to_string(),
             path: git_bash.to_string(),
             args: vec!["--login".to_string(), "-i".to_string()],
+            kind: "native".to_string(),
+            wsl_distribution: None,
         });
     }
 
     let wsl = "C:\\Windows\\System32\\wsl.exe";
     if path_exists(wsl) {
-        shells.push(LocalShellProfile {
-            id: "wsl-ubuntu".to_string(),
-            label: "WSL Ubuntu".to_string(),
-            path: wsl.to_string(),
-            args: vec!["~".to_string(), "-d".to_string(), "Ubuntu".to_string()],
-        });
+        for distribution in collect_wsl_distributions(wsl) {
+            shells.push(LocalShellProfile {
+                id: format!("wsl:{distribution}"),
+                label: format!("WSL {distribution}"),
+                path: wsl.to_string(),
+                args: vec!["~".to_string(), "-d".to_string(), distribution.clone()],
+                kind: "wsl".to_string(),
+                wsl_distribution: Some(distribution),
+            });
+        }
     }
 
     shells
@@ -169,6 +223,8 @@ fn collect_shells() -> Vec<LocalShellProfile> {
             label,
             path: shell,
             args,
+            kind: "native".to_string(),
+            wsl_distribution: None,
         });
         shells
     }
