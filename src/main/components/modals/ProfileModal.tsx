@@ -29,11 +29,10 @@ type ProfileModalProps = {
   sshGroups: string[];
   onDraftChange: (draft: HostProfile) => void;
   onClose: () => void;
-  onSubmit: (profileType: ProfileModalType) => void;
+  onSubmit: () => void;
   t: Translate;
 };
 
-type ProfileModalType = "shell" | "ssh";
 type ProfileModalSection = "session" | "terminal" | "window" | "ssh" | "modem";
 
 /** 主机配置编辑弹窗。 */
@@ -49,7 +48,6 @@ export default function ProfileModal({
 }: ProfileModalProps) {
   const autoFilledRef = useRef(false);
   const wasOpenRef = useRef(false);
-  const [profileType, setProfileType] = useState<ProfileModalType>("ssh");
   const [activeSection, setActiveSection] =
     useState<ProfileModalSection>("session");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -62,7 +60,6 @@ export default function ProfileModal({
       autoFilledRef.current = false;
       queueMicrotask(() => {
         setInitialDraftSnapshot(JSON.stringify(draft));
-        setProfileType("ssh");
         setActiveSection("session");
         setNameError(null);
       });
@@ -98,17 +95,9 @@ export default function ProfileModal({
   }
 
   const visibleSections = useMemo<ProfileModalSection[]>(
-    () =>
-      profileType === "ssh"
-        ? ["session", "terminal", "window", "ssh", "modem"]
-        : ["session", "terminal", "window"],
-    [profileType],
+    () => ["session", "terminal", "window", "ssh", "modem"],
+    [],
   );
-
-  function handleSwitchProfileType(next: ProfileModalType) {
-    setProfileType(next);
-    setActiveSection("session");
-  }
 
   /** 当前产品要求会话名称必填，且限制在较短范围内避免列表与标签过度截断。 */
   function validateProfileName(value: string) {
@@ -122,7 +111,6 @@ export default function ProfileModal({
     return null;
   }
 
-  /** 当前版本允许 shell/ssh 都提交；shell 保存到本地启动配置，ssh 保存到 profile。 */
   const canSubmit = true;
   const hasUnsavedChanges =
     open && JSON.stringify(draft) !== initialDraftSnapshot;
@@ -141,19 +129,6 @@ export default function ProfileModal({
   /** 恢复当前类型对应的默认配置，避免未来选项增多后需要逐项手工回填。 */
   function handleRestoreDefaults() {
     setActiveSection("session");
-    if (profileType !== "ssh") {
-      onDraftChange({
-        ...draft,
-        bellMode: DEFAULT_TERMINAL_BELL_MODE,
-        bellCooldownMs: DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
-        terminalType: "xterm-256color",
-        targetSystem: "auto",
-        charset: "utf-8",
-        wordSeparators: null,
-        description: "",
-      });
-      return;
-    }
     onDraftChange({
       id: draft.id,
       name: "",
@@ -189,11 +164,6 @@ export default function ProfileModal({
       { value: "linux", label: "Linux" },
       { value: "macos", label: "macOS" },
       { value: "windows", label: "Windows" },
-    ];
-    const charsetOptions = [
-      { value: "utf-8", label: "UTF-8" },
-      { value: "gbk", label: "GBK" },
-      { value: "gb18030", label: "GB18030" },
     ];
     const bellModeOptions = [
       { value: "silent", label: t("profile.terminal.bellMode.silent") },
@@ -241,36 +211,17 @@ export default function ProfileModal({
             aria-label={t("profile.sessionTab.terminal")}
           />
         </div>
-        {profileType === "ssh" ? (
-          <div className="form-row">
-            <label className="form-label">
-              {t("profile.sessionTab.system")}
-            </label>
-            <Select
-              value={draft.targetSystem ?? "auto"}
-              options={systemOptions}
-              onChange={(value) =>
-                onDraftChange({ ...draft, targetSystem: value })
-              }
-              aria-label={t("profile.sessionTab.system")}
-            />
-          </div>
-        ) : null}
-        {profileType === "shell" ? (
-          <div className="form-row">
-            <label className="form-label">
-              {t("profile.sessionTab.charset")}
-            </label>
-            <Select
-              value={draft.charset ?? "utf-8"}
-              options={charsetOptions}
-              onChange={(value) => onDraftChange({ ...draft, charset: value })}
-              aria-label={t("profile.sessionTab.charset")}
-            />
-          </div>
-        ) : null}
-        {/* 当前产品策略：shell 暂不展示 system，ssh 暂不展示 charset。
-            字段仍保留在数据模型中，后续打通运行时能力时可直接放开。 */}
+        <div className="form-row">
+          <label className="form-label">{t("profile.sessionTab.system")}</label>
+          <Select
+            value={draft.targetSystem ?? "auto"}
+            options={systemOptions}
+            onChange={(value) =>
+              onDraftChange({ ...draft, targetSystem: value })
+            }
+            aria-label={t("profile.sessionTab.system")}
+          />
+        </div>
         <div className="form-row form-row-textarea">
           <label className="form-label">
             {t("profile.sessionTab.description")}
@@ -394,24 +345,6 @@ export default function ProfileModal({
         </section>
       </div>
     );
-
-    if (profileType === "shell") {
-      if (activeSection === "session") {
-        return <div className="host-editor">{extraSessionRows}</div>;
-      }
-      if (activeSection === "terminal") {
-        return terminalRows;
-      }
-      if (activeSection === "window") {
-        return windowRows;
-      }
-      return (
-        <div className="profile-modal-placeholder">
-          <h4>{t("profile.section.window")}</h4>
-          <p>{t("profile.shell.windowTodo")}</p>
-        </div>
-      );
-    }
 
     if (activeSection === "session") {
       return (
@@ -612,18 +545,15 @@ export default function ProfileModal({
               className="ghost"
               variant="ghost"
               onClick={() => {
-                if (profileType === "ssh") {
-                  const errorText = validateProfileName(draft.name);
-                  if (errorText) {
-                    setNameError(errorText);
-                    return;
-                  }
+                const errorText = validateProfileName(draft.name);
+                if (errorText) {
+                  setNameError(errorText);
+                  return;
                 }
                 setNameError(null);
-                onSubmit(profileType);
+                onSubmit();
               }}
               disabled={!canSubmit}
-              title={canSubmit ? undefined : t("profile.shell.saveDisabled")}
             >
               {t("actions.save")}
             </Button>
@@ -632,18 +562,6 @@ export default function ProfileModal({
       }
     >
       <div className="profile-modal">
-        <div className="profile-modal-types">
-          {(["shell", "ssh"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`profile-modal-type-tab ${profileType === item ? "active" : ""}`}
-              onClick={() => handleSwitchProfileType(item)}
-            >
-              {t(`profile.type.${item}`)}
-            </button>
-          ))}
-        </div>
         <div className="profile-modal-layout">
           <nav className="profile-modal-nav">
             {visibleSections.map((section) => (

@@ -87,6 +87,7 @@ type buildWidgetsProps = {
     targetGroup: string | null,
   ) => Promise<boolean>;
   onConnectLocalShell: (shell: LocalShellProfile | null) => void;
+  onOpenLocalShellProfile: (shell: LocalShellProfile) => void;
   onRefreshList: (path?: string) => Promise<void>;
   onOpenRemoteDir: (path: string) => Promise<void>;
   onOpenFile: (entry: SftpEntry) => Promise<void>;
@@ -164,6 +165,7 @@ export function buildWidgets(
     onRemoveGroup,
     onMoveProfileToGroup,
     onConnectLocalShell,
+    onOpenLocalShellProfile,
     onRefreshList,
     onOpenRemoteDir,
     onOpenFile,
@@ -207,6 +209,7 @@ export function buildWidgets(
         onMoveProfileToGroup={onMoveProfileToGroup}
         localShells={availableShells}
         onConnectLocalShell={onConnectLocalShell}
+        onOpenLocalShellProfile={onOpenLocalShellProfile}
         t={t}
       />
     ),

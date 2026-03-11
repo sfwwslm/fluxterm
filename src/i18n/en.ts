@@ -294,7 +294,7 @@ export const en = {
   "session.reason.network": "Connection interrupted",
   "session.reason.unknown": "Disconnected",
   "host.searchPlaceholder": "Search host or group",
-  "host.shellGroup": "shell",
+  "host.shellGroup": "Local Shell",
   "host.ungrouped": "Ungrouped",
   "host.addGroup": "Add Group",
   "host.menu.renameGroup": "Rename Group",
@@ -385,8 +385,6 @@ export const en = {
   "profile.menu.delete": "Delete",
   "profile.modal.newTitle": "New Session",
   "profile.modal.editTitle": "Edit Session",
-  "profile.type.shell": "shell",
-  "profile.type.ssh": "ssh",
   "profile.section.session": "Session",
   "profile.section.terminal": "Terminal",
   "profile.section.window": "Window",
@@ -404,6 +402,9 @@ export const en = {
   "profile.terminal.bellCooldown.option": "{seconds}s",
   "profile.terminal.group.bell": "Bell",
   "profile.terminal.group.bellHint": "Alerts and repeat suppression.",
+  "profile.localShell.modal.title": "{name} Settings",
+  "profile.localShell.modal.fallbackTitle": "Local Shell Settings",
+  "profile.localShell.section.basic": "Terminal",
   "profile.window.wordSeparators": "Word Separators",
   "profile.window.wordSeparatorsHint":
     "Characters in this set are treated as boundaries for double-click word selection.",
@@ -437,10 +438,6 @@ export const en = {
   "profile.auth.privateKey": "Private Key",
   "profile.actions.pickKey": "Choose file",
   "profile.actions.restoreDefaults": "Restore Defaults",
-  "profile.shell.windowTodo":
-    "Window behavior settings for local shell will be added in a later version, such as cursor style and word separators.",
-  "profile.shell.saveDisabled":
-    "Saving local shell configuration is not available in this version",
   "profile.unsavedChangesConfirm":
     "You have unsaved session changes. Discard them and close?",
   "actions.cancel": "Cancel",

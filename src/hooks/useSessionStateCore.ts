@@ -8,7 +8,7 @@ import type { Translate, TranslationKey } from "@/i18n";
 import type {
   DisconnectReason,
   HostProfile,
-  LocalShellLaunchConfig,
+  LocalShellConfig,
   LocalShellProfile,
   LogEntry,
   LogLevel,
@@ -17,6 +17,10 @@ import type {
   SessionStateUi,
   SessionWorkspaceState,
 } from "@/types";
+import {
+  DEFAULT_LOCAL_SHELL_CONFIG,
+  normalizeLocalShellConfig,
+} from "@/constants/localShellConfig";
 import { useNotices } from "@/hooks/useNotices";
 import { inferDisconnectReason } from "@/features/session/core/disconnectReason";
 import type { HostKeyVerificationRequiredPayload } from "@/features/session/core/listeners";
@@ -45,8 +49,7 @@ type UseSessionStateProps = {
   profiles: HostProfile[];
   t: Translate;
   shellId: string | null;
-  localShellLaunchConfig: LocalShellLaunchConfig;
-  localShellByShellId: Record<string, LocalShellLaunchConfig>;
+  localShellProfiles: Record<string, LocalShellConfig>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
   getTerminalSize: () => TerminalSize;
@@ -55,7 +58,7 @@ type UseSessionStateProps = {
 type LocalSessionMeta = {
   shellId: string | null;
   label: string;
-  launchConfig?: LocalShellLaunchConfig;
+  launchConfig?: LocalShellConfig;
 };
 
 type UseSessionStateResult = {
@@ -136,8 +139,7 @@ export default function useSessionState({
   profiles,
   t,
   shellId,
-  localShellLaunchConfig,
-  localShellByShellId,
+  localShellProfiles,
   availableShells,
   settingsLoaded,
   getTerminalSize,
@@ -379,7 +381,7 @@ export default function useSessionState({
   const createLocalShellSession = useCallback(
     async (
       shellOverride: string | null = null,
-      launchConfig?: LocalShellLaunchConfig,
+      launchConfig?: LocalShellConfig,
     ) => {
       const { cols, rows } = getTerminalSize();
       const payload: Record<string, unknown> = { size: { cols, rows } };
@@ -681,9 +683,9 @@ export default function useSessionState({
   const connectLocalShell = useCallback(
     async (shellProfile: LocalShellProfile | null, activate = false) => {
       const resolvedShellId = shellProfile?.id ?? shellId ?? null;
-      const launchConfig =
-        (resolvedShellId ? localShellByShellId[resolvedShellId] : undefined) ??
-        localShellLaunchConfig;
+      const launchConfig = resolvedShellId
+        ? normalizeLocalShellConfig(localShellProfiles[resolvedShellId])
+        : DEFAULT_LOCAL_SHELL_CONFIG;
       await connectLocalShellCommand({
         shellProfile,
         activate,
@@ -705,14 +707,7 @@ export default function useSessionState({
         launchConfig,
       });
     },
-    [
-      createLocalShellSession,
-      localShellByShellId,
-      localShellLaunchConfig,
-      sessionWorkspace,
-      shellId,
-      t,
-    ],
+    [createLocalShellSession, localShellProfiles, sessionWorkspace, shellId, t],
   );
 
   async function disconnectSession(sessionId: string) {

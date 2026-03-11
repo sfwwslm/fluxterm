@@ -11,34 +11,6 @@
   min-height: 0;
 }
 
-.profile-modal-types {
-  display: flex;
-  gap: 10px;
-  padding: 16px 18px 14px;
-  border-bottom: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface-header) 72%, transparent);
-}
-
-.profile-modal-type-tab {
-  min-width: 92px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--border-input);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    color 140ms ease;
-}
-
-.profile-modal-type-tab.active {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-input));
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--text-primary);
-}
-
 .profile-modal-layout {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);

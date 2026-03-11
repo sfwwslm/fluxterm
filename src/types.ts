@@ -377,8 +377,8 @@ export type LocalShellProfile = {
   args: string[];
 };
 
-/** 本地 Shell 启动参数。 */
-export type LocalShellLaunchConfig = {
+/** 本地 Shell 终端配置。 */
+export type LocalShellConfig = {
   terminalType?:
     | "xterm-256color"
     | "xterm"

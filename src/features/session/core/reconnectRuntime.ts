@@ -8,7 +8,7 @@ import {
 } from "@/features/session/core/reconnectPolicy";
 import type {
   HostProfile,
-  LocalShellLaunchConfig,
+  LocalShellConfig,
   Session,
   SessionStateUi,
 } from "@/types";
@@ -16,7 +16,7 @@ import type {
 type LocalSessionMeta = {
   shellId: string | null;
   label: string;
-  launchConfig?: LocalShellLaunchConfig;
+  launchConfig?: LocalShellConfig;
 };
 
 type Setter<T> = (updater: (prev: T) => T) => void;

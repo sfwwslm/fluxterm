@@ -28,6 +28,7 @@ import Workspace from "@/main/components/Workspace";
 import BottomArea from "@/main/components/BottomArea";
 import TerminalWidget from "@/widgets/terminal/components/TerminalWidget";
 import AboutModal from "@/main/components/modals/AboutModal";
+import LocalShellProfileModal from "@/main/components/modals/LocalShellProfileModal";
 import ProfileModal from "@/main/components/modals/ProfileModal";
 import NoticeHost from "@/components/ui/notice-host";
 import { useNotices } from "@/hooks/useNotices";
@@ -56,6 +57,8 @@ import { moveWidgetToSlot, widgetKeys } from "@/layout/model";
 import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
 import type {
   HostProfile,
+  LocalShellConfig,
+  LocalShellProfile,
   TerminalCwdSupport,
   TerminalPathSyncState,
   TerminalWorkingDirectory,
@@ -63,6 +66,10 @@ import type {
   SessionResourceSnapshot,
   ThemeId,
 } from "@/types";
+import {
+  DEFAULT_LOCAL_SHELL_CONFIG,
+  normalizeLocalShellConfig,
+} from "@/constants/localShellConfig";
 import { isMacOS } from "@/utils/platform";
 import useSessionController from "@/hooks/useSessionController";
 import useTerminalController from "@/hooks/useTerminalController";
@@ -305,10 +312,8 @@ export default function AppShell() {
     setThemeId,
     shellId,
     setShellId,
-    localShellLaunchConfig,
-    setLocalShellLaunchConfig,
-    localShellByShellId,
-    setLocalShellByShellId,
+    localShellProfiles,
+    setLocalShellProfiles,
     sftpEnabled,
     setSftpEnabled,
     fileDefaultEditorPath,
@@ -467,6 +472,12 @@ export default function AppShell() {
     "new",
   );
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
+  const [localShellProfileModalOpen, setLocalShellProfileModalOpen] =
+    useState(false);
+  const [activeLocalShellProfile, setActiveLocalShellProfile] =
+    useState<LocalShellProfile | null>(null);
+  const [localShellProfileDraft, setLocalShellProfileDraft] =
+    useState<LocalShellConfig>(DEFAULT_LOCAL_SHELL_CONFIG);
   const [connectingProfileId, setConnectingProfileId] = useState<string | null>(
     null,
   );
@@ -738,42 +749,32 @@ export default function AppShell() {
   }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
 
   const openNewProfile = useCallback(() => {
-    const shellScopedConfig = shellId
-      ? localShellByShellId[shellId]
-      : undefined;
-    const effectiveShellLaunchConfig =
-      shellScopedConfig ?? localShellLaunchConfig;
     setProfileModalMode("new");
     setProfileDraft({
       ...defaultProfile,
       id: "",
-      bellMode:
-        normalizeTerminalBellMode(effectiveShellLaunchConfig.bellMode) ??
-        DEFAULT_TERMINAL_BELL_MODE,
-      bellCooldownMs:
-        normalizeTerminalBellCooldownMs(
-          effectiveShellLaunchConfig.bellCooldownMs,
-        ) ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
-      terminalType: effectiveShellLaunchConfig.terminalType ?? "xterm-256color",
-      charset: effectiveShellLaunchConfig.charset ?? "utf-8",
-      wordSeparators:
-        normalizeTerminalWordSeparators(
-          effectiveShellLaunchConfig.wordSeparators,
-        ) ??
-        normalizeTerminalWordSeparators(sessionWordSeparators) ??
-        DEFAULT_TERMINAL_WORD_SEPARATORS,
     });
     setProfileModalOpen(true);
-  }, [
-    defaultProfile,
-    localShellByShellId,
-    localShellLaunchConfig,
-    sessionWordSeparators,
-    shellId,
-  ]);
+  }, [defaultProfile]);
 
   function closeProfileModal() {
     setProfileModalOpen(false);
+  }
+
+  const openLocalShellProfile = useCallback(
+    (shell: LocalShellProfile) => {
+      setActiveLocalShellProfile(shell);
+      setLocalShellProfileDraft(
+        normalizeLocalShellConfig(localShellProfiles[shell.id]),
+      );
+      setLocalShellProfileModalOpen(true);
+    },
+    [localShellProfiles],
+  );
+
+  function closeLocalShellProfileModal() {
+    setLocalShellProfileModalOpen(false);
+    setActiveLocalShellProfile(null);
   }
 
   function openEditProfile(profile: HostProfile) {
@@ -783,53 +784,7 @@ export default function AppShell() {
     setProfileModalOpen(true);
   }
 
-  async function submitProfile(profileType: "shell" | "ssh") {
-    if (profileType === "shell") {
-      const normalizedTerminalType =
-        profileDraft.terminalType === "xterm-256color" ||
-        profileDraft.terminalType === "xterm" ||
-        profileDraft.terminalType === "screen-256color" ||
-        profileDraft.terminalType === "tmux-256color" ||
-        profileDraft.terminalType === "vt100"
-          ? profileDraft.terminalType
-          : "xterm-256color";
-      const normalizedCharset =
-        profileDraft.charset === "utf-8" ||
-        profileDraft.charset === "gbk" ||
-        profileDraft.charset === "gb18030"
-          ? profileDraft.charset
-          : "utf-8";
-      const normalizedWordSeparators =
-        normalizeTerminalWordSeparators(profileDraft.wordSeparators) ??
-        undefined;
-      const normalizedBellMode =
-        normalizeTerminalBellMode(profileDraft.bellMode) ??
-        DEFAULT_TERMINAL_BELL_MODE;
-      const normalizedBellCooldownMs =
-        normalizeTerminalBellCooldownMs(profileDraft.bellCooldownMs) ??
-        DEFAULT_TERMINAL_BELL_COOLDOWN_MS;
-      setLocalShellLaunchConfig({
-        bellMode: normalizedBellMode,
-        bellCooldownMs: normalizedBellCooldownMs,
-        terminalType: normalizedTerminalType,
-        charset: normalizedCharset,
-        wordSeparators: normalizedWordSeparators,
-      });
-      if (shellId) {
-        setLocalShellByShellId((prev) => ({
-          ...prev,
-          [shellId]: {
-            bellMode: normalizedBellMode,
-            bellCooldownMs: normalizedBellCooldownMs,
-            terminalType: normalizedTerminalType,
-            charset: normalizedCharset,
-            wordSeparators: normalizedWordSeparators,
-          },
-        }));
-      }
-      setProfileModalOpen(false);
-      return;
-    }
+  async function submitProfile() {
     await saveProfile({
       ...profileDraft,
       bellMode:
@@ -840,6 +795,17 @@ export default function AppShell() {
         DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
     });
     setProfileModalOpen(false);
+  }
+
+  function submitLocalShellProfile() {
+    if (!activeLocalShellProfile) return;
+    const nextConfig = normalizeLocalShellConfig(localShellProfileDraft);
+    setLocalShellProfiles((prev) => ({
+      ...prev,
+      [activeLocalShellProfile.id]: nextConfig,
+    }));
+    setLocalShellProfileModalOpen(false);
+    setActiveLocalShellProfile(null);
   }
 
   const configSectionLabels = useMemo(
@@ -1025,8 +991,7 @@ export default function AppShell() {
     profiles,
     t,
     shellId,
-    localShellLaunchConfig,
-    localShellByShellId,
+    localShellProfiles,
     availableShells,
     settingsLoaded,
     getTerminalSize: () => terminalSizeRef.current,
@@ -1148,14 +1113,14 @@ export default function AppShell() {
     resolveBellConfig: (sessionId) => {
       const localMeta = sessionState.localSessionMeta[sessionId];
       if (localMeta) {
+        const localShellConfig = normalizeLocalShellConfig(
+          localMeta.launchConfig,
+        );
         return {
-          mode:
-            normalizeTerminalBellMode(localMeta.launchConfig?.bellMode) ??
-            DEFAULT_TERMINAL_BELL_MODE,
+          mode: localShellConfig.bellMode ?? DEFAULT_TERMINAL_BELL_MODE,
           cooldownMs:
-            normalizeTerminalBellCooldownMs(
-              localMeta.launchConfig?.bellCooldownMs,
-            ) ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
+            localShellConfig.bellCooldownMs ??
+            DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
         };
       }
       const session = sessionState.sessions.find(
@@ -1179,10 +1144,12 @@ export default function AppShell() {
         DEFAULT_TERMINAL_WORD_SEPARATORS;
       const localMeta = sessionState.localSessionMeta[sessionId];
       if (localMeta) {
+        const localShellConfig = normalizeLocalShellConfig(
+          localMeta.launchConfig,
+        );
         return (
-          normalizeTerminalWordSeparators(
-            localMeta.launchConfig?.wordSeparators,
-          ) ?? fallbackWordSeparators
+          normalizeTerminalWordSeparators(localShellConfig.wordSeparators) ??
+          fallbackWordSeparators
         );
       }
       const session = sessionState.sessions.find(
@@ -2754,6 +2721,7 @@ export default function AppShell() {
         onConnectLocalShell: (shell) => {
           sessionActions.connectLocalShell(shell, true).catch(() => {});
         },
+        onOpenLocalShellProfile: openLocalShellProfile,
         onRefreshList: filesWidgetActions.refreshList,
         onOpenRemoteDir: filesWidgetActions.openRemoteDir,
         onOpenFile: filesWidgetActions.openFile,
@@ -2806,6 +2774,7 @@ export default function AppShell() {
       moveProfileToGroup,
       handleConnectProfile,
       openNewProfile,
+      openLocalShellProfile,
       removeProfile,
       sessionActions,
       filesWidgetActions,
@@ -3042,9 +3011,19 @@ export default function AppShell() {
         sshGroups={sshGroups}
         onDraftChange={setProfileDraft}
         onClose={closeProfileModal}
-        onSubmit={(profileType) => {
-          void submitProfile(profileType);
+        onSubmit={() => {
+          void submitProfile();
         }}
+        t={t}
+      />
+      <LocalShellProfileModal
+        key={`${activeLocalShellProfile?.id ?? "none"}:${localShellProfileModalOpen ? "open" : "closed"}`}
+        open={localShellProfileModalOpen}
+        shell={activeLocalShellProfile}
+        draft={localShellProfileDraft}
+        onDraftChange={setLocalShellProfileDraft}
+        onClose={closeLocalShellProfileModal}
+        onSubmit={submitLocalShellProfile}
         t={t}
       />
       <ConfigModal

@@ -52,6 +52,7 @@ type HostWidgetProps = {
   ) => Promise<boolean>;
   localShells: LocalShellProfile[];
   onConnectLocalShell: (shell: LocalShellProfile) => void;
+  onOpenLocalShellProfile: (shell: LocalShellProfile) => void;
   t: Translate;
 };
 
@@ -73,6 +74,7 @@ export default function HostWidget({
   onMoveProfileToGroup,
   localShells,
   onConnectLocalShell,
+  onOpenLocalShellProfile,
   t,
 }: HostWidgetProps) {
   const localShellKey = LOCAL_SHELL_GROUP_VALUE;
@@ -315,15 +317,6 @@ export default function HostWidget({
   function buildLocalShellGroupMenuItems(): ContextMenuItem[] {
     return [
       {
-        label: t("profile.menu.new"),
-        icon: <FiPlus />,
-        disabled: false,
-        onClick: () => {
-          setMenu(null);
-          onOpenNewProfile();
-        },
-      },
-      {
         label: t("host.menu.importOpenSshConfig"),
         icon: <FiServer />,
         disabled: false,
@@ -331,18 +324,6 @@ export default function HostWidget({
           setMenu(null);
           onImportOpenSshConfig();
         },
-      },
-      {
-        label: t("host.addGroup"),
-        icon: <FiFolderPlus />,
-        disabled: false,
-        onClick: openAddGroupDialog,
-      },
-      {
-        label: t("host.menu.renameGroup"),
-        icon: <FiEdit2 />,
-        disabled: true,
-        onClick: () => {},
       },
     ];
   }
@@ -352,6 +333,15 @@ export default function HostWidget({
     shell: LocalShellProfile,
   ): ContextMenuItem[] {
     return [
+      {
+        label: t("actions.settings"),
+        icon: <FiEdit2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenLocalShellProfile(shell);
+        },
+      },
       {
         label: t("host.menu.importOpenSshConfig"),
         icon: <FiServer />,

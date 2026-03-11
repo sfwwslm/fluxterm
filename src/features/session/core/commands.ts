@@ -6,7 +6,7 @@ import type { Translate } from "@/i18n";
 import type {
   DisconnectReason,
   HostProfile,
-  LocalShellLaunchConfig,
+  LocalShellConfig,
   LocalShellProfile,
   Session,
   SessionStateUi,
@@ -18,7 +18,7 @@ type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 type LocalSessionMeta = {
   shellId: string | null;
   label: string;
-  launchConfig?: LocalShellLaunchConfig;
+  launchConfig?: LocalShellConfig;
 };
 
 type ConnectProfileCommandParams = {
@@ -127,10 +127,10 @@ export async function connectProfileCommand({
 type ConnectLocalShellCommandParams = {
   shellProfile: LocalShellProfile | null;
   activate?: boolean;
-  launchConfig?: LocalShellLaunchConfig;
+  launchConfig?: LocalShellConfig;
   createLocalShellSession: (
     shellOverride?: string | null,
-    launchConfig?: LocalShellLaunchConfig,
+    launchConfig?: LocalShellConfig,
   ) => Promise<Session>;
   localSessionIdsRef: React.RefObject<Set<string>>;
   setLocalSessionMeta: Setter<Record<string, LocalSessionMeta>>;
@@ -254,7 +254,7 @@ type ReconnectLocalShellCommandParams = {
   sessionId: string;
   createLocalShellSession: (
     shellOverride?: string | null,
-    launchConfig?: LocalShellLaunchConfig,
+    launchConfig?: LocalShellConfig,
   ) => Promise<Session>;
   localSessionMetaRef: React.RefObject<Record<string, LocalSessionMeta>>;
   setSessionStates: Setter<Record<string, SessionStateUi>>;

@@ -16,11 +16,8 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { debug, warn } from "@/shared/logging/telemetry";
 import type { Locale } from "@/i18n";
-import type {
-  LocalShellLaunchConfig,
-  LocalShellProfile,
-  ThemeId,
-} from "@/types";
+import type { LocalShellConfig, LocalShellProfile, ThemeId } from "@/types";
+import { normalizeLocalShellConfig } from "@/constants/localShellConfig";
 import { getGlobalConfigDir, getSettingsPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
@@ -38,20 +35,11 @@ import {
   type BackgroundRenderMode,
   type BackgroundVideoReplayMode,
 } from "@/constants/backgroundMedia";
-import {
-  DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
-  DEFAULT_TERMINAL_BELL_MODE,
-  normalizeTerminalBellCooldownMs,
-  normalizeTerminalBellMode,
-} from "@/constants/terminalBell";
-import { normalizeTerminalWordSeparators } from "@/constants/terminalWordSeparators";
-
 /** 应用全局配置结构。 */
 type AppSettings = {
   version: 1;
   shellId?: string | null;
-  localShellLaunchConfig?: LocalShellLaunchConfig;
-  localShellByShellId?: Record<string, LocalShellLaunchConfig>;
+  localShellProfiles?: Record<string, LocalShellConfig>;
   locale?: Locale;
   themeId?: ThemeId;
   sftpEnabled?: boolean;
@@ -78,13 +66,9 @@ type UseAppSettingsResult = {
   setThemeId: React.Dispatch<React.SetStateAction<ThemeId>>;
   shellId: string | null;
   setShellId: React.Dispatch<React.SetStateAction<string | null>>;
-  localShellLaunchConfig: LocalShellLaunchConfig;
-  setLocalShellLaunchConfig: React.Dispatch<
-    React.SetStateAction<LocalShellLaunchConfig>
-  >;
-  localShellByShellId: Record<string, LocalShellLaunchConfig>;
-  setLocalShellByShellId: React.Dispatch<
-    React.SetStateAction<Record<string, LocalShellLaunchConfig>>
+  localShellProfiles: Record<string, LocalShellConfig>;
+  setLocalShellProfiles: React.Dispatch<
+    React.SetStateAction<Record<string, LocalShellConfig>>
   >;
   sftpEnabled: boolean;
   setSftpEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -157,15 +141,8 @@ export default function useAppSettings({
     [],
   );
   const [shellId, setShellId] = useState<string | null>(null);
-  const [localShellLaunchConfig, setLocalShellLaunchConfig] =
-    useState<LocalShellLaunchConfig>({
-      bellMode: DEFAULT_TERMINAL_BELL_MODE,
-      bellCooldownMs: DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
-      terminalType: "xterm-256color",
-      charset: "utf-8",
-    });
-  const [localShellByShellId, setLocalShellByShellId] = useState<
-    Record<string, LocalShellLaunchConfig>
+  const [localShellProfiles, setLocalShellProfiles] = useState<
+    Record<string, LocalShellConfig>
   >({});
   const [sftpEnabled, setSftpEnabled] = useState(true);
   const [fileDefaultEditorPath, setFileDefaultEditorPath] = useState("");
@@ -225,91 +202,16 @@ export default function useAppSettings({
       if (parsed?.shellId) {
         pendingShellIdRef.current = parsed.shellId;
       }
-      if (typeof parsed?.localShellLaunchConfig === "object") {
-        const nextConfig: LocalShellLaunchConfig = {};
-        const terminalType = parsed.localShellLaunchConfig?.terminalType;
-        if (
-          terminalType === "xterm-256color" ||
-          terminalType === "xterm" ||
-          terminalType === "screen-256color" ||
-          terminalType === "tmux-256color" ||
-          terminalType === "vt100"
-        ) {
-          nextConfig.terminalType = terminalType;
-        }
-        const charset = parsed.localShellLaunchConfig?.charset;
-        if (charset === "utf-8" || charset === "gbk" || charset === "gb18030") {
-          nextConfig.charset = charset;
-        }
-        const wordSeparators = normalizeTerminalWordSeparators(
-          parsed.localShellLaunchConfig?.wordSeparators,
-        );
-        if (wordSeparators) {
-          nextConfig.wordSeparators = wordSeparators;
-        }
-        const bellMode = normalizeTerminalBellMode(
-          parsed.localShellLaunchConfig?.bellMode,
-        );
-        if (bellMode) {
-          nextConfig.bellMode = bellMode;
-        }
-        const bellCooldownMs = normalizeTerminalBellCooldownMs(
-          parsed.localShellLaunchConfig?.bellCooldownMs,
-        );
-        if (bellCooldownMs !== null) {
-          nextConfig.bellCooldownMs = bellCooldownMs;
-        }
-        if (Object.keys(nextConfig).length) {
-          setLocalShellLaunchConfig(nextConfig);
-        }
-      }
       if (
-        parsed?.localShellByShellId &&
-        typeof parsed.localShellByShellId === "object"
+        parsed?.localShellProfiles &&
+        typeof parsed.localShellProfiles === "object"
       ) {
-        const nextByShellId: Record<string, LocalShellLaunchConfig> = {};
-        Object.entries(parsed.localShellByShellId).forEach(([id, cfg]) => {
+        const nextProfiles: Record<string, LocalShellConfig> = {};
+        Object.entries(parsed.localShellProfiles).forEach(([id, cfg]) => {
           if (!id || !cfg || typeof cfg !== "object") return;
-          const nextConfig: LocalShellLaunchConfig = {};
-          const terminalType = cfg.terminalType;
-          if (
-            terminalType === "xterm-256color" ||
-            terminalType === "xterm" ||
-            terminalType === "screen-256color" ||
-            terminalType === "tmux-256color" ||
-            terminalType === "vt100"
-          ) {
-            nextConfig.terminalType = terminalType;
-          }
-          const charset = cfg.charset;
-          if (
-            charset === "utf-8" ||
-            charset === "gbk" ||
-            charset === "gb18030"
-          ) {
-            nextConfig.charset = charset;
-          }
-          const wordSeparators = normalizeTerminalWordSeparators(
-            cfg.wordSeparators,
-          );
-          if (wordSeparators) {
-            nextConfig.wordSeparators = wordSeparators;
-          }
-          const bellMode = normalizeTerminalBellMode(cfg.bellMode);
-          if (bellMode) {
-            nextConfig.bellMode = bellMode;
-          }
-          const bellCooldownMs = normalizeTerminalBellCooldownMs(
-            cfg.bellCooldownMs,
-          );
-          if (bellCooldownMs !== null) {
-            nextConfig.bellCooldownMs = bellCooldownMs;
-          }
-          if (Object.keys(nextConfig).length) {
-            nextByShellId[id] = nextConfig;
-          }
+          nextProfiles[id] = normalizeLocalShellConfig(cfg);
         });
-        setLocalShellByShellId(nextByShellId);
+        setLocalShellProfiles(nextProfiles);
       }
       if (parsed?.locale === "zh-CN" || parsed?.locale === "en-US") {
         setLocale(parsed.locale);
@@ -435,8 +337,7 @@ export default function useAppSettings({
     const currentSettings: AppSettings = {
       version: 1,
       shellId,
-      localShellLaunchConfig,
-      localShellByShellId,
+      localShellProfiles,
       locale,
       themeId,
       sftpEnabled,
@@ -502,8 +403,7 @@ export default function useAppSettings({
     };
   }, [
     shellId,
-    localShellLaunchConfig,
-    localShellByShellId,
+    localShellProfiles,
     locale,
     themeId,
     sftpEnabled,
@@ -531,10 +431,8 @@ export default function useAppSettings({
     setThemeId,
     shellId,
     setShellId,
-    localShellLaunchConfig,
-    setLocalShellLaunchConfig,
-    localShellByShellId,
-    setLocalShellByShellId,
+    localShellProfiles,
+    setLocalShellProfiles,
     sftpEnabled,
     setSftpEnabled,
     fileDefaultEditorPath,
