@@ -24,6 +24,8 @@ import type {
   DisconnectReason,
   Session,
   SessionStateUi,
+  TerminalCwdSupport,
+  TerminalWorkingDirectory,
 } from "@/types";
 import type {
   CommandAutocompleteCandidate,
@@ -77,11 +79,11 @@ type UseTerminalRuntimeProps = {
   ) => Promise<unknown>;
   onWorkingDirectoryChange?: (
     sessionId: string,
-    payload: { username: string | null; path: string },
+    payload: TerminalWorkingDirectory,
   ) => void;
   onPathSyncSupportChange?: (
     sessionId: string,
-    status: "supported" | "unsupported",
+    status: TerminalCwdSupport,
   ) => void;
   isLocalSession: (sessionId: string | null) => boolean;
   reconnectSession: (sessionId: string) => Promise<void>;
@@ -258,6 +260,32 @@ function stripAnsiForPromptParsing(text: string) {
 }
 
 /**
+ * 解析 OSC 7 的 file URI，并尽量保留远端 shell 上报的绝对路径语义。
+ * 目前主要面向 SSH 场景的 Unix 路径，同时兼容常见的 Windows file URI 形式。
+ */
+function parseOsc7WorkingDirectory(data: string) {
+  const normalized = data.replace(/\0/g, "").trim();
+  if (!normalized) return null;
+  if (normalized.startsWith("/")) {
+    return normalized;
+  }
+  if (!normalized.startsWith("file://")) {
+    return null;
+  }
+  try {
+    const uri = new URL(normalized);
+    let path = decodeURIComponent(uri.pathname || "");
+    if (!path) return null;
+    if (/^\/[A-Za-z]:\//.test(path)) {
+      path = path.slice(1);
+    }
+    return path || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 检测颜色是否包含小于 1 的 alpha。
  * 目前只解析 rgb/rgba 字符串，已满足终端主题背景的当前产出格式。
  */
@@ -298,6 +326,22 @@ function matchPromptUsername(line: string) {
       /(?:^|\s)(?<username>[^@\s:]+)@[^:\s]+:(?:~(?:\/[^\s#$]*)?|\/[^\s#$]*)\s*[#$]$/,
     ) ?? trimmed.match(/(?:^|\s)(?<username>[^@\s:]+)@[^:\s]+\s*[$#]$/);
   return promptMatch?.groups?.username ?? null;
+}
+
+/**
+ * 识别 Windows cmd.exe 常见提示符：
+ * 1. C:\Users\name>
+ * 2. D:\repo\app>
+ * 3. \\server\share\dir>
+ *
+ * 当前先只覆盖标准“当前目录 + >”形式，不兼容高度自定义的 PROMPT。
+ */
+function matchCmdPromptPath(line: string) {
+  const trimmed = line.trimEnd();
+  const promptMatch = trimmed.match(
+    /(?:^|\s)(?<path>(?:[A-Za-z]:\\(?:[^<>:"/|?*\r\n]+\\)*[^<>:"/|?*\r\n]*|\\\\[^\\/\s]+\\[^\\/\s]+(?:\\[^<>:"/|?*\r\n]+)*))>\s*$/,
+  );
+  return promptMatch?.groups?.path ?? null;
 }
 
 /**
@@ -383,7 +427,13 @@ export default function useTerminalRuntime({
   const workingDirectoryUserBySessionRef = useRef<
     Record<string, string | null>
   >({});
+  const workingDirectorySourceBySessionRef = useRef<
+    Record<string, TerminalWorkingDirectory["source"]>
+  >({});
   const disabledPromptParsingRef = useRef<Record<string, boolean>>({});
+  const hasOsc7SupportBySessionRef = useRef<Record<string, boolean>>({});
+  const promptUsernameBySessionRef = useRef<Record<string, string | null>>({});
+  const osc7SeenDuringWriteRef = useRef<Record<string, boolean>>({});
   const autocompleteInputBufferRef = useRef<Record<string, string>>({});
   const commandCaptureMetaRef = useRef<Record<string, CommandCaptureMeta>>({});
   const commandCaptureTimersRef = useRef<Record<string, number>>({});
@@ -860,30 +910,37 @@ export default function useTerminalRuntime({
     delete promptParseStateRef.current[sessionId];
     delete workingDirectoryBySessionRef.current[sessionId];
     delete workingDirectoryUserBySessionRef.current[sessionId];
+    delete workingDirectorySourceBySessionRef.current[sessionId];
     delete disabledPromptParsingRef.current[sessionId];
+    delete hasOsc7SupportBySessionRef.current[sessionId];
+    delete promptUsernameBySessionRef.current[sessionId];
+    delete osc7SeenDuringWriteRef.current[sessionId];
   }
 
   function maybePublishWorkingDirectory(
     sessionId: string,
     payload: { username: string | null; path: string },
+    source: TerminalWorkingDirectory["source"],
   ) {
     const normalizedUser = payload.username?.trim() || null;
     const normalizedPath = payload.path.replace(/\r/g, "").trim();
     if (!normalizedPath) return;
-    if (
+    const unchanged =
       workingDirectoryBySessionRef.current[sessionId] === normalizedPath &&
-      workingDirectoryUserBySessionRef.current[sessionId] === normalizedUser
-    ) {
-      return;
-    }
+      workingDirectoryUserBySessionRef.current[sessionId] === normalizedUser;
     workingDirectoryBySessionRef.current[sessionId] = normalizedPath;
     workingDirectoryUserBySessionRef.current[sessionId] = normalizedUser;
+    workingDirectorySourceBySessionRef.current[sessionId] = source;
     handlersRef.current.onPathSyncSupportChange?.(sessionId, "supported");
-    // 终端运行时只负责上报“当前 prompt 用户 + prompt 路径”。
+    if (unchanged) {
+      return;
+    }
+    // 终端运行时只负责上报“当前 shell 用户 + 当前目录”。
     // 是否允许继续驱动 SFTP，由上层再和 SSH 初始登录用户做一致性判断。
     handlersRef.current.onWorkingDirectoryChange?.(sessionId, {
       username: normalizedUser,
       path: normalizedPath,
+      source,
     });
   }
 
@@ -905,6 +962,21 @@ export default function useTerminalRuntime({
     );
   }
 
+  function publishWorkingDirectoryFromOsc7(sessionId: string, data: string) {
+    const path = parseOsc7WorkingDirectory(data);
+    if (!path) return;
+    hasOsc7SupportBySessionRef.current[sessionId] = true;
+    osc7SeenDuringWriteRef.current[sessionId] = true;
+    maybePublishWorkingDirectory(
+      sessionId,
+      {
+        username: promptUsernameBySessionRef.current[sessionId] ?? null,
+        path,
+      },
+      "osc7",
+    );
+  }
+
   /**
    * 这里只支持 bash 常见的绝对路径/家目录提示符。
    * 遇到 zsh、sh 或其他无法稳定反推出绝对路径的 prompt 时，当前会话只记一条日志，
@@ -912,10 +984,15 @@ export default function useTerminalRuntime({
    * 解析职责也刻意保持很窄：这里只负责从输出里提取“当前 prompt 用户 + 路径”，
    * 不在终端层直接判断 SFTP 是否还能安全联动，那个决策交给上层和 SSH 登录用户一起做。
    */
-  function parseWorkingDirectoryFromPrompt(sessionId: string, data: string) {
-    if (handlersRef.current.isLocalSession(sessionId)) return;
-    if (disabledPromptParsingRef.current[sessionId]) return;
+  function parseWorkingDirectoryFromPrompt(
+    sessionId: string,
+    data: string,
+    options?: { suppressPathPublish?: boolean },
+  ) {
+    const hasOsc7Support = !!hasOsc7SupportBySessionRef.current[sessionId];
+    if (disabledPromptParsingRef.current[sessionId] && !hasOsc7Support) return;
     const state = ensurePromptParseState(sessionId);
+    const suppressPathPublish = !!options?.suppressPathPublish;
     // 先剥离 ANSI，再按“行 + 最后一段未闭合 prompt 缓冲”解析，
     // 兼容终端输出被拆成多个事件时的 prompt 拼接。
     const normalized = stripAnsiForPromptParsing(data).replace(/\r\n/g, "\n");
@@ -924,28 +1001,76 @@ export default function useTerminalRuntime({
     state.carry = lines.pop() ?? "";
 
     lines.forEach((line) => {
+      const username = matchPromptUsername(line);
+      if (username) {
+        promptUsernameBySessionRef.current[sessionId] = username;
+      }
       const path = matchPromptPath(line);
       if (path) {
-        maybePublishWorkingDirectory(sessionId, {
-          username: matchPromptUsername(line),
-          path,
-        });
+        if (!suppressPathPublish) {
+          maybePublishWorkingDirectory(
+            sessionId,
+            {
+              username,
+              path,
+            },
+            "prompt",
+          );
+        }
         return;
       }
-      if (looksLikeUnsupportedPrompt(line)) {
+      const cmdPath = matchCmdPromptPath(line);
+      if (cmdPath) {
+        if (!suppressPathPublish) {
+          maybePublishWorkingDirectory(
+            sessionId,
+            {
+              username: null,
+              path: cmdPath,
+            },
+            "cmd",
+          );
+        }
+        return;
+      }
+      if (!hasOsc7Support && looksLikeUnsupportedPrompt(line)) {
         disablePromptParsing(sessionId, line, "unsupported-shell-prompt");
       }
     });
 
+    const trailingUsername = matchPromptUsername(state.carry);
+    if (trailingUsername) {
+      promptUsernameBySessionRef.current[sessionId] = trailingUsername;
+    }
     const trailingPath = matchPromptPath(state.carry);
     if (trailingPath) {
-      maybePublishWorkingDirectory(sessionId, {
-        username: matchPromptUsername(state.carry),
-        path: trailingPath,
-      });
+      if (!suppressPathPublish) {
+        maybePublishWorkingDirectory(
+          sessionId,
+          {
+            username: trailingUsername,
+            path: trailingPath,
+          },
+          "prompt",
+        );
+      }
       return;
     }
-    if (looksLikeUnsupportedPrompt(state.carry)) {
+    const trailingCmdPath = matchCmdPromptPath(state.carry);
+    if (trailingCmdPath) {
+      if (!suppressPathPublish) {
+        maybePublishWorkingDirectory(
+          sessionId,
+          {
+            username: null,
+            path: trailingCmdPath,
+          },
+          "cmd",
+        );
+      }
+      return;
+    }
+    if (!hasOsc7Support && looksLikeUnsupportedPrompt(state.carry)) {
       disablePromptParsing(sessionId, state.carry, "unsupported-shell-prompt");
     }
   }
@@ -1144,6 +1269,13 @@ export default function useTerminalRuntime({
       host,
       disposables: [],
     };
+
+    bundle.disposables.push(
+      term.parser.registerOscHandler(7, (data) => {
+        publishWorkingDirectoryFromOsc7(sessionId, data);
+        return true;
+      }),
+    );
 
     bundle.disposables.push(
       term.onData((data) => {
@@ -1365,13 +1497,21 @@ export default function useTerminalRuntime({
     const registerListeners = async () => {
       const outputUnlisten = await registerTerminalOutputListener(
         ({ sessionId, data }) => {
-          parseWorkingDirectoryFromPromptRef.current(sessionId, data);
           appendSessionBufferRef.current(sessionId, data);
           const bundle = terminalsRef.current[sessionId];
+          let suppressPromptPathPublish: boolean = false;
           if (bundle) {
+            osc7SeenDuringWriteRef.current[sessionId] = false;
             writeToBundle(bundle, data);
+            suppressPromptPathPublish = Boolean(
+              osc7SeenDuringWriteRef.current[sessionId],
+            );
+            delete osc7SeenDuringWriteRef.current[sessionId];
             scheduleCommandCaptureRefreshRef.current(sessionId);
           }
+          parseWorkingDirectoryFromPromptRef.current(sessionId, data, {
+            suppressPathPublish: suppressPromptPathPublish,
+          });
         },
       );
       if (cancelled) {

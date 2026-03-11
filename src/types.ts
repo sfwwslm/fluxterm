@@ -196,6 +196,33 @@ export type SftpAvailability =
   | "disabled"
   | "unsupported";
 
+/** 终端 cwd 来源类型。 */
+export type TerminalCwdSource = "osc7" | "prompt" | "cmd" | "none";
+
+/** 终端 cwd 能力状态。 */
+export type TerminalCwdSupport = "supported" | "unsupported";
+
+/** 终端 cwd 驱动目标。 */
+export type TerminalCwdTarget = "local-fs" | "remote-sftp" | "none";
+
+/** 终端路径联动状态。 */
+export type TerminalPathSyncState = "active" | "paused-mismatch" | "disabled";
+
+/** 终端当前目录快照。 */
+export type TerminalWorkingDirectory = {
+  path: string;
+  username: string | null;
+  source: Exclude<TerminalCwdSource, "none">;
+};
+
+/** 终端路径联动运行时模型。 */
+export type TerminalPathSyncModel = {
+  cwdSource: TerminalCwdSource;
+  cwdSupport: TerminalCwdSupport;
+  target: TerminalCwdTarget;
+  syncState: TerminalPathSyncState;
+};
+
 /** 资源监控状态。 */
 export type ResourceMonitorStatus =
   | "disabled"
