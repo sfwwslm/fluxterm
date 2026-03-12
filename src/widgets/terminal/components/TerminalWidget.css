@@ -364,9 +364,10 @@ button.session-tab {
 
 .terminal-banner {
   position: absolute;
-  top: 55px;
-  left: 12px;
-  right: 12px;
+  /* 横幅顶部距离 */
+  top: 2rem;
+  left: 1rem;
+  right: 1rem;
   padding: 10px 14px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--danger) 88%, transparent);
