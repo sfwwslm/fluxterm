@@ -1,69 +1,27 @@
 name: Release Build
 
-run-name: "Version ${{ inputs.workflow_name }}"
+run-name: "Version ${{ inputs.tag_name }}"
+
+env:
+  NODE_VERSION: "24"
 
 on:
   workflow_dispatch:
     inputs:
-      workflow_name:
+      tag_name:
         description: "App version (e.g. 0.1.0-rc.1)"
         required: true
       release_name:
         description: "The name of the release."
         required: false
         default: Version
+      toolchain:
+        description: "Rust toolchain version for this release build."
+        required: false
+        default: "1.93.1"
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      version: ${{ steps.meta.outputs.version }}
-      tag: ${{ steps.meta.outputs.tag }}
-      name: ${{ steps.meta.outputs.name }}
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Resolve version and release metadata
-        id: meta
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); process.stdout.write(cfg.version);")
-
-          name="${{ github.event.inputs.release_name }}"
-          if [ -z "$name" ] || [ "$name" = "Version" ]; then
-            name="Version $version"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$version" >> "$GITHUB_OUTPUT"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-
-      - name: Create release
-        env:
-          tag: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.name }}
-        run: |
-          # 检查 Release 是否已存在，如果存在则报错停止构建
-          if gh release view "$tag" > /dev/null 2>&1; then
-            echo "错误: Release $tag 已经存在。为防止意外修改已发布版本，构建将停止。"
-            exit 1
-          fi
-          gh release create "$tag" --title "$name" --notes "See commit history for details." --prerelease
-
   publish-tauri:
-    needs: [create-release]
     permissions:
       contents: write
     strategy:
@@ -74,26 +32,18 @@ jobs:
           #   target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
+          # - os: windows-latest
+          #   target: aarch64-pc-windows-msvc
           # - os: macos-latest
           #   target: aarch64-apple-darwin
           # - os: macos-latest
           #   target: x86_64-apple-darwin
 
     runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Install Rust Stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.92.0"
-          targets: ${{ matrix.target }}
-
-      - name: Add Rust Target
-        run: rustup target add ${{ matrix.target }}
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -121,15 +71,16 @@ jobs:
           echo "OPENSSL_LIB_DIR=$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
       - name: Install Node
         uses: actions/setup-node@v6
         with:
-          node-version: "24.13.0"
-
-      - uses: pnpm/action-setup@v4
-        name: Install pnpm
-        with:
-          run_install: false
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
 
       - name: Install frontend dependencies
         run: pnpm install --no-frozen-lockfile
@@ -137,7 +88,7 @@ jobs:
       - name: Add Rust Target
         run: |
           # Ensure cross target is installed for the pinned toolchain; fallback without explicit toolchain if needed
-          rustup target add ${{ matrix.target }} --toolchain 1.92.0 || rustup target add ${{ matrix.target }}
+          rustup target add ${{ matrix.target }} --toolchain ${{ inputs.toolchain }} || rustup target add ${{ matrix.target }}
           rustup target list --installed
           echo "Rust target ${{ matrix.target }} installed."
 
@@ -149,8 +100,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ needs.create-release.outputs.tag }}
-          releaseName: ${{ needs.create-release.outputs.name }}
+          tagName: ${{ inputs.tag_name }}
+          releaseName: ${{ inputs.release_name == 'Version' && 'Version __VERSION__' || inputs.release_name }}
           releaseBody: "Draft release, will be updated later."
           releaseDraft: true
           prerelease: true
