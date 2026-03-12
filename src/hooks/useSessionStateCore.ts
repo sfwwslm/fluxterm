@@ -43,8 +43,34 @@ import {
 
 const logStorageKey = "fluxterm.logs";
 const maxLogEntries = 10;
+const TERMINAL_EOF_EXIT_GRACE_MS = 1500;
 
 type TerminalSize = { cols: number; rows: number };
+
+function markTerminalEofRequested(
+  requestAt: Record<string, number>,
+  sessionId: string,
+) {
+  requestAt[sessionId] = Date.now();
+}
+
+function clearTerminalEofRequested(
+  requestAt: Record<string, number>,
+  sessionId: string,
+) {
+  delete requestAt[sessionId];
+}
+
+function consumeTerminalEofRequested(
+  requestAt: Record<string, number>,
+  sessionId: string,
+  graceMs: number,
+) {
+  const requested =
+    Date.now() - (requestAt[sessionId] ?? -graceMs * 2) <= graceMs;
+  delete requestAt[sessionId];
+  return requested;
+}
 
 type UseSessionStateProps = {
   profiles: HostProfile[];
@@ -186,6 +212,7 @@ export default function useSessionState({
   const reconnectTimersRef = useRef<Record<string, number>>({});
   const reconnectAttemptsRef = useRef<Record<string, number>>({});
   const sessionCloseHandledRef = useRef<Record<string, boolean>>({});
+  const terminalEofRequestAtRef = useRef<Record<string, number>>({});
   const errorDialogShownRef = useRef<Record<string, boolean>>({});
   // 按 profile 记录待确认的 Host Key 重连链路。
   // Host Key 事件不带 sessionId，这里用 profileId 映射对应会话。
@@ -402,6 +429,13 @@ export default function useSessionState({
 
   /** 统一发送会话输入；文本与二进制在此分流到对应命令。 */
   async function sendSessionInput(sessionId: string, input: SessionInput) {
+    if (input.kind === "text") {
+      if (input.data.includes("\u0004")) {
+        markTerminalEofRequested(terminalEofRequestAtRef.current, sessionId);
+      } else {
+        clearTerminalEofRequested(terminalEofRequestAtRef.current, sessionId);
+      }
+    }
     const command =
       input.kind === "binary"
         ? sessionCommand(
@@ -484,9 +518,15 @@ export default function useSessionState({
     );
     if (!session) return;
     sessionCloseHandledRef.current[sessionId] = true;
+    const terminalEofRequested = consumeTerminalEofRequested(
+      terminalEofRequestAtRef.current,
+      sessionId,
+      TERMINAL_EOF_EXIT_GRACE_MS,
+    );
     const reason = inferDisconnectReason(
       lastCommandRef.current[sessionId],
       isLocalSession(sessionId),
+      terminalEofRequested,
     );
     setSessionReasons((prev) => ({ ...prev, [sessionId]: reason }));
     setSessionStates((prev) => ({

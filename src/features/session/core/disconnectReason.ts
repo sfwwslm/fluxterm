@@ -17,7 +17,11 @@ function normalizeCommand(command: string) {
 export function inferDisconnectReason(
   lastCommand: string | undefined,
   localSession: boolean,
+  terminalEofRequested = false,
 ): DisconnectReason {
+  if (terminalEofRequested) {
+    return "exit";
+  }
   if (!lastCommand) {
     return localSession ? "exit" : "network";
   }
