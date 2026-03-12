@@ -43,6 +43,14 @@
   flex-shrink: 0;
 }
 
+/* 底部区域高度较紧，禁用快捷栏按钮悬浮上移，避免顶部边框视觉上被容器边缘吞掉；边框高亮仍沿用通用按钮样式。 */
+.quickbar-manage-button.ui-button:hover,
+.quickbar-manage-button.ui-button:active,
+.quickbar-command.ui-button:hover,
+.quickbar-command.ui-button:active {
+  transform: none;
+}
+
 .quickbar-menu {
   position: absolute;
   left: 0;
