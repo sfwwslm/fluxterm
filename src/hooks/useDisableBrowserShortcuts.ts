@@ -4,22 +4,47 @@ import { useEffect } from "react";
  * 浏览器快捷键禁用 Hook。
  * 职责：拦截并禁用浏览器常用的原生快捷键（如 F5 刷新、F12 开发者工具、Ctrl+W 关闭窗口等），
  * 确保应用作为桌面终端的交互完整性，防止用户误触导致会话中断。
+ *
+ * 与 terminalHostShortcuts 的分工：
+ * 1. 本 Hook 只负责窗口级/浏览器级默认行为屏蔽。
+ * 2. 一旦焦点已进入 xterm 宿主，应尽量放行给终端，由 terminalHostShortcuts 决定是否接管少量宿主增强快捷键。
+ * 3. shell 常用编辑键（如 Ctrl+R、Ctrl+W）不能在这里越权拦截，否则会破坏 SSH/readline/zsh 的原生体验。
  */
 type Options = {
   enabled?: boolean;
 };
 
-function isTerminalFocused(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
+/**
+ * 判断事件链路或当前活动元素是否位于终端宿主内。
+ * 这里同时检查 composedPath 和 activeElement，减少 xterm 内部 focus target 波动导致的误判。
+ */
+function isTerminalFocused(event: KeyboardEvent) {
+  const selector = ".terminal-container, .terminal-xterm-host, .xterm";
+  const path = event.composedPath();
+
+  if (
+    path.some(
+      (item) => item instanceof HTMLElement && Boolean(item.closest(selector)),
+    )
+  ) {
+    return true;
+  }
+
+  const target = event.target;
+  if (target instanceof HTMLElement && target.closest(selector)) {
+    return true;
+  }
+
+  const activeElement = document.activeElement;
   return Boolean(
-    target.closest(".terminal-container, .terminal-xterm-host, .xterm"),
+    activeElement instanceof HTMLElement && activeElement.closest(selector),
   );
 }
 
 const isBlockedShortcut = (event: KeyboardEvent) => {
   const key = event.key.toLowerCase();
   const ctrlOrMeta = event.ctrlKey || event.metaKey;
-  const terminalFocused = isTerminalFocused(event.target);
+  const terminalFocused = isTerminalFocused(event);
 
   // 终端聚焦时由 xterm 宿主层统一处理快捷键路由，这里不再重复抢键。
   if (terminalFocused) {
@@ -72,7 +97,10 @@ export const useDisableBrowserShortcuts = ({
   useEffect(() => {
     if (!enabled) return;
 
-    /** 拦截键盘按下事件。 */
+    /**
+     * 拦截键盘按下事件。
+     * 注意：终端聚焦时应尽量直接透传，避免与 terminalHostShortcuts 重复抢键。
+     */
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isBlockedShortcut(event)) {
         event.preventDefault();

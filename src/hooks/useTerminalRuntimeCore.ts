@@ -50,6 +50,7 @@ import {
   normalizeTerminalCursorStyle,
   type TerminalCursorStyle,
 } from "@/constants/terminalCursorStyle";
+import { resolveTerminalHostKeyAction } from "@/hooks/terminalHostShortcuts";
 
 type TerminalTheme = {
   background: string;
@@ -210,12 +211,6 @@ type SearchStats = {
 type PromptParseState = {
   carry: string;
 };
-
-type TerminalHostKeyAction =
-  | "copy-selection"
-  | "paste"
-  | "prevent-browser-shortcut"
-  | "passthrough";
 
 /** 终端链接点击后的临时菜单状态。 */
 type LinkMenuState = {
@@ -409,36 +404,6 @@ function looksLikePromptLine(line: string) {
   const trimmed = line.trimEnd();
   if (!trimmed) return false;
   return /[#$>%]\s*$/.test(trimmed);
-}
-
-function resolveTerminalHostKeyAction(
-  event: KeyboardEvent,
-  hasSelection: boolean,
-): TerminalHostKeyAction {
-  const key = event.key.toLowerCase();
-  const ctrlOrMeta = event.ctrlKey || event.metaKey;
-
-  if (ctrlOrMeta && event.shiftKey && key === "c" && hasSelection) {
-    return "copy-selection";
-  }
-
-  if (ctrlOrMeta && event.shiftKey && key === "v") {
-    return "paste";
-  }
-
-  if (key === "f5") {
-    return "prevent-browser-shortcut";
-  }
-
-  if (ctrlOrMeta && key === "w") {
-    return "prevent-browser-shortcut";
-  }
-
-  if (ctrlOrMeta && (key === "r" || (event.shiftKey && key === "r"))) {
-    return "prevent-browser-shortcut";
-  }
-
-  return "passthrough";
 }
 
 /** Xterm 初始化与输入输出处理。 */
