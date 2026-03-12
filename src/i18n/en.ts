@@ -184,6 +184,12 @@ export const en = {
   "config.session.commandAutocompleteEnabled": "Enable Command Autocomplete",
   "config.session.commandAutocompleteEnabledHint":
     "Show command suggestions from history to speed up repeated input.",
+  "config.session.autoReconnectOnReboot": "Auto Reconnect After Reboot",
+  "config.session.autoReconnectOnRebootHint":
+    "When disconnection is inferred as reboot, retry automatically with backoff.",
+  "config.session.autoReconnectOnPoweroff": "Auto Reconnect After Poweroff",
+  "config.session.autoReconnectOnPoweroffHint":
+    "When disconnection is inferred as poweroff, keep retrying automatically.",
   "config.session.terminalPathSyncEnabled":
     "Sync Terminal Path to File Manager",
   "config.session.terminalPathSyncEnabledHint":
@@ -268,6 +274,13 @@ export const en = {
     "No widget in this slot. Add a widget from the Settings menu.",
   "terminal.empty": "No active session",
   "terminal.exitHint": "Session disconnected. Press Enter to reconnect",
+  "terminal.reconnectHint.manual": "{reason}. Press Enter to reconnect",
+  "terminal.reconnectHint.disabled":
+    "{reason}. Auto reconnect is off. Press Enter to reconnect",
+  "terminal.reconnectHint.pending": "{reason}. Retry {attempt} in {delay}s",
+  "terminal.reconnectHint.connecting": "{reason}. Attempting to reconnect",
+  "terminal.reconnectHint.stopped":
+    "{reason}. Auto reconnect stopped. Press Enter to reconnect",
   "terminal.menu.copy": "Copy",
   "terminal.menu.sendToAi": "Send To AI",
   "terminal.menu.paste": "Paste",

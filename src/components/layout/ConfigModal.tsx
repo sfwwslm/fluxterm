@@ -115,6 +115,8 @@ type ConfigModalProps = {
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  autoReconnectOnPoweroff?: boolean;
+  autoReconnectOnReboot?: boolean;
   cursorStyle?: TerminalCursorStyle;
   scrollback?: number;
   terminalPathSyncEnabled?: boolean;
@@ -156,6 +158,8 @@ type ConfigModalProps = {
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
+  onAutoReconnectOnPoweroffChange?: (enabled: boolean) => void;
+  onAutoReconnectOnRebootChange?: (enabled: boolean) => void;
   onCursorStyleChange?: (value: TerminalCursorStyle) => void;
   onScrollbackChange?: (value: number) => void;
   onTerminalPathSyncEnabledChange?: (enabled: boolean) => void;
@@ -231,6 +235,8 @@ export default function ConfigModal({
   webLinksEnabled = true,
   commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
+  autoReconnectOnPoweroff = false,
+  autoReconnectOnReboot = true,
   cursorStyle = DEFAULT_TERMINAL_CURSOR_STYLE,
   scrollback = 3000,
   terminalPathSyncEnabled = true,
@@ -260,6 +266,8 @@ export default function ConfigModal({
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
+  onAutoReconnectOnPoweroffChange,
+  onAutoReconnectOnRebootChange,
   onCursorStyleChange,
   onScrollbackChange,
   onTerminalPathSyncEnabledChange,
@@ -1515,6 +1523,40 @@ export default function ConfigModal({
               checked={commandAutocompleteEnabled}
               onChange={(event) =>
                 onCommandAutocompleteEnabledChange?.(event.target.checked)
+              }
+            />
+          </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.autoReconnectOnReboot")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.autoReconnectOnRebootHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={autoReconnectOnReboot}
+              onChange={(event) =>
+                onAutoReconnectOnRebootChange?.(event.target.checked)
+              }
+            />
+          </label>
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.session.autoReconnectOnPoweroff")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.session.autoReconnectOnPoweroffHint")}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={autoReconnectOnPoweroff}
+              onChange={(event) =>
+                onAutoReconnectOnPoweroffChange?.(event.target.checked)
               }
             />
           </label>

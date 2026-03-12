@@ -45,8 +45,12 @@ type TerminalWidgetProps = {
   activeSession: Session | null;
   activeSessionState: SessionStateUi | null;
   activeSessionReason: DisconnectReason | null;
+  activeReconnectInfo: { attempt: number; delayMs: number } | null;
+  reconnectInfoBySession: Record<string, { attempt: number; delayMs: number }>;
   sessionStates: Record<string, SessionStateUi>;
   sessionReasons: Record<string, DisconnectReason>;
+  autoReconnectOnPoweroff: boolean;
+  autoReconnectOnReboot: boolean;
   bellPendingBySession: Record<string, boolean>;
   registerTerminalContainer: (
     sessionId: string,
@@ -116,8 +120,14 @@ export default function TerminalWidget({
   editingProfile,
   localSessionMeta,
   activeSessionId,
+  activeSessionState,
+  activeSessionReason,
+  activeReconnectInfo,
+  reconnectInfoBySession,
   sessionStates,
   sessionReasons,
+  autoReconnectOnPoweroff,
+  autoReconnectOnReboot,
   bellPendingBySession,
   registerTerminalContainer,
   isTerminalReady,
@@ -185,6 +195,54 @@ export default function TerminalWidget({
     return sessionReasons[sessionId] ?? null;
   }
 
+  function getSessionBanner(sessionId: string) {
+    const isActiveSession = activeSessionId === sessionId;
+    const state = sessionStates[sessionId] ?? "connecting";
+    const reason = sessionReasons[sessionId] ?? null;
+    const reconnectInfo =
+      reconnectInfoBySession[sessionId] ??
+      (isActiveSession ? activeReconnectInfo : null);
+    if (!reason) return null;
+    if (
+      reconnectInfo ||
+      (isActiveSession &&
+        activeSessionState === state &&
+        activeSessionReason === reason &&
+        state === "reconnecting")
+    ) {
+      if (reconnectInfo) {
+        return t("terminal.reconnectHint.pending", {
+          reason: t(`session.reason.${reason}`),
+          attempt: String(reconnectInfo.attempt),
+          delay: String(Math.ceil(reconnectInfo.delayMs / 1000)),
+        });
+      }
+      return t("terminal.reconnectHint.connecting", {
+        reason: t(`session.reason.${reason}`),
+      });
+    }
+    if (state !== "disconnected") return null;
+    if (reason === "exit") {
+      return t("terminal.exitHint");
+    }
+    if (reason === "network") {
+      return t("terminal.reconnectHint.manual", {
+        reason: t("session.reason.network"),
+      });
+    }
+    const autoReconnectEnabled =
+      (reason === "poweroff" && autoReconnectOnPoweroff) ||
+      (reason === "reboot" && autoReconnectOnReboot);
+    if (!autoReconnectEnabled) {
+      return t("terminal.reconnectHint.disabled", {
+        reason: t(`session.reason.${reason}`),
+      });
+    }
+    return t("terminal.reconnectHint.stopped", {
+      reason: t(`session.reason.${reason}`),
+    });
+  }
+
   function getTerminalContainerRef(sessionId: string) {
     const existing = containerRefs.current[sessionId];
     if (existing) return existing;
@@ -246,7 +304,7 @@ export default function TerminalWidget({
             getSessionState={resolveSessionState}
             getSessionReason={resolveSessionReason}
             bellPendingBySession={bellPendingBySession}
-            exitHint={t("terminal.exitHint")}
+            getSessionBanner={getSessionBanner}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}

@@ -174,6 +174,12 @@ export const zh = {
   "config.session.commandAutocompleteEnabled": "启用命令联想",
   "config.session.commandAutocompleteEnabledHint":
     "根据历史命令提供输入建议，帮助更快输入常用命令。",
+  "config.session.autoReconnectOnReboot": "主机重启后自动重连",
+  "config.session.autoReconnectOnRebootHint":
+    "检测到 reboot 导致断线时，按指数退避自动尝试重新连接。",
+  "config.session.autoReconnectOnPoweroff": "主机关机后自动重连",
+  "config.session.autoReconnectOnPoweroffHint":
+    "检测到 poweroff 导致断线时，是否继续自动尝试重新连接。",
   "config.session.terminalPathSyncEnabled": "终端路径联动文件管理器",
   "config.session.terminalPathSyncEnabledHint":
     "让文件面板跟随终端当前目录切换，减少来回定位路径。",
@@ -252,6 +258,12 @@ export const zh = {
   "widget.emptyHint": "当前槽位没有组件，请从设置菜单添加组件",
   "terminal.empty": "尚未连接主机",
   "terminal.exitHint": "会话已断开连接，按回车重新连接",
+  "terminal.reconnectHint.manual": "{reason}，按回车重新连接",
+  "terminal.reconnectHint.disabled": "{reason}，自动重连已关闭，按回车重新连接",
+  "terminal.reconnectHint.pending":
+    "{reason}，将在 {delay} 秒后进行第 {attempt} 次自动重连",
+  "terminal.reconnectHint.connecting": "{reason}，正在尝试重新连接",
+  "terminal.reconnectHint.stopped": "{reason}，自动重连已停止，按回车重新连接",
   "terminal.menu.copy": "复制",
   "terminal.menu.sendToAi": "发送给 AI",
   "terminal.menu.paste": "粘贴",

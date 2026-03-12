@@ -20,7 +20,7 @@ type TerminalPaneTreeProps = {
   getSessionState: (sessionId: string) => string;
   getSessionReason: (sessionId: string) => DisconnectReason | null;
   bellPendingBySession: Record<string, boolean>;
-  exitHint: string;
+  getSessionBanner: (sessionId: string) => string | null;
   onFocusPane: (paneId: string) => void;
   onSwitchSession: (sessionId: string) => void;
   onReorderPaneSessions: (
@@ -87,7 +87,7 @@ function PaneNodeView({
   getSessionState,
   getSessionReason,
   bellPendingBySession,
-  exitHint,
+  getSessionBanner,
   onFocusPane,
   onSwitchSession,
   onReorderPaneSessions,
@@ -116,7 +116,7 @@ function PaneNodeView({
             getSessionState={getSessionState}
             getSessionReason={getSessionReason}
             bellPendingBySession={bellPendingBySession}
-            exitHint={exitHint}
+            getSessionBanner={getSessionBanner}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}
@@ -149,7 +149,7 @@ function PaneNodeView({
             getSessionState={getSessionState}
             getSessionReason={getSessionReason}
             bellPendingBySession={bellPendingBySession}
-            exitHint={exitHint}
+            getSessionBanner={getSessionBanner}
             onFocusPane={onFocusPane}
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}
@@ -173,10 +173,9 @@ function PaneNodeView({
   const activePane = hasSplitPanes && node.paneId === activePaneId;
   const paneActiveSessionId =
     node.activeSessionId ?? node.sessionIds[node.sessionIds.length - 1] ?? null;
-  const showExitBanner =
-    !!paneActiveSessionId &&
-    getSessionState(paneActiveSessionId) === "disconnected" &&
-    getSessionReason(paneActiveSessionId) === "exit";
+  const bannerText = paneActiveSessionId
+    ? getSessionBanner(paneActiveSessionId)
+    : null;
   const paneAutocomplete =
     paneActiveSessionId && autocomplete?.sessionId === paneActiveSessionId
       ? autocomplete
@@ -319,7 +318,7 @@ function PaneNodeView({
             </div>
           );
         })}
-        {showExitBanner && <div className="terminal-banner">{exitHint}</div>}
+        {bannerText && <div className="terminal-banner">{bannerText}</div>}
       </div>
     </div>
   );

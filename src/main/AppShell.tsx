@@ -456,6 +456,8 @@ export default function AppShell() {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    autoReconnectOnPoweroff,
+    autoReconnectOnReboot,
     cursorStyle,
     wordSeparators: sessionWordSeparators,
     scrollback,
@@ -466,6 +468,8 @@ export default function AppShell() {
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
+    setAutoReconnectOnPoweroff,
+    setAutoReconnectOnReboot,
     setCursorStyle,
     setScrollback,
     setTerminalPathSyncEnabled,
@@ -1083,6 +1087,8 @@ export default function AppShell() {
     localShellProfiles,
     availableShells,
     settingsLoaded,
+    autoReconnectOnPoweroff,
+    autoReconnectOnReboot,
     getTerminalSize: () => terminalSizeRef.current,
   });
   const tunnelState = useSshTunnelState(sessionState.activeSessionId);
@@ -3012,8 +3018,12 @@ export default function AppShell() {
                 activeSession={sessionState.activeSession}
                 activeSessionState={sessionState.activeSessionState}
                 activeSessionReason={sessionState.activeSessionReason}
+                activeReconnectInfo={sessionState.activeReconnectInfo}
+                reconnectInfoBySession={sessionState.reconnectInfoBySession}
                 sessionStates={sessionState.sessionStates}
                 sessionReasons={sessionState.sessionReasons}
+                autoReconnectOnPoweroff={autoReconnectOnPoweroff}
+                autoReconnectOnReboot={autoReconnectOnReboot}
                 bellPendingBySession={bellPendingBySession}
                 registerTerminalContainer={
                   terminalActions.registerTerminalContainer
@@ -3183,6 +3193,8 @@ export default function AppShell() {
         webLinksEnabled={webLinksEnabled}
         commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
+        autoReconnectOnPoweroff={autoReconnectOnPoweroff}
+        autoReconnectOnReboot={autoReconnectOnReboot}
         cursorStyle={cursorStyle}
         scrollback={scrollback}
         terminalPathSyncEnabled={terminalPathSyncEnabled}
@@ -3214,6 +3226,8 @@ export default function AppShell() {
         onWebLinksEnabledChange={setWebLinksEnabled}
         onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}
+        onAutoReconnectOnPoweroffChange={setAutoReconnectOnPoweroff}
+        onAutoReconnectOnRebootChange={setAutoReconnectOnReboot}
         onCursorStyleChange={setCursorStyle}
         onScrollbackChange={setScrollback}
         onTerminalPathSyncEnabledChange={setTerminalPathSyncEnabled}

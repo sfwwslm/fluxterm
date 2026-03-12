@@ -35,6 +35,8 @@ type SessionSettings = {
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
+  autoReconnectOnPoweroff?: boolean;
+  autoReconnectOnReboot?: boolean;
   cursorStyle?: TerminalCursorStyle;
   wordSeparators?: string;
   scrollback?: number;
@@ -52,6 +54,8 @@ type UseSessionSettingsResult = {
   webLinksEnabled: boolean;
   commandAutocompleteEnabled: boolean;
   selectionAutoCopyEnabled: boolean;
+  autoReconnectOnPoweroff: boolean;
+  autoReconnectOnReboot: boolean;
   cursorStyle: TerminalCursorStyle;
   wordSeparators: string;
   scrollback: number;
@@ -62,6 +66,8 @@ type UseSessionSettingsResult = {
   setWebLinksEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setCommandAutocompleteEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectionAutoCopyEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setAutoReconnectOnPoweroff: React.Dispatch<React.SetStateAction<boolean>>;
+  setAutoReconnectOnReboot: React.Dispatch<React.SetStateAction<boolean>>;
   setCursorStyle: React.Dispatch<React.SetStateAction<TerminalCursorStyle>>;
   setWordSeparators: React.Dispatch<React.SetStateAction<string>>;
   setScrollback: React.Dispatch<React.SetStateAction<number>>;
@@ -99,6 +105,8 @@ const defaultSessionSettings: Required<
     | "webLinksEnabled"
     | "commandAutocompleteEnabled"
     | "selectionAutoCopyEnabled"
+    | "autoReconnectOnPoweroff"
+    | "autoReconnectOnReboot"
     | "cursorStyle"
     | "wordSeparators"
     | "scrollback"
@@ -111,6 +119,8 @@ const defaultSessionSettings: Required<
   webLinksEnabled: true,
   commandAutocompleteEnabled: true,
   selectionAutoCopyEnabled: false,
+  autoReconnectOnPoweroff: false,
+  autoReconnectOnReboot: true,
   cursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
   wordSeparators: DEFAULT_TERMINAL_WORD_SEPARATORS,
   scrollback: 3000,
@@ -133,6 +143,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
   );
   const [selectionAutoCopyEnabled, setSelectionAutoCopyEnabled] = useState(
     defaultSessionSettings.selectionAutoCopyEnabled,
+  );
+  const [autoReconnectOnPoweroff, setAutoReconnectOnPoweroff] = useState(
+    defaultSessionSettings.autoReconnectOnPoweroff,
+  );
+  const [autoReconnectOnReboot, setAutoReconnectOnReboot] = useState(
+    defaultSessionSettings.autoReconnectOnReboot,
   );
   const [cursorStyle, setCursorStyle] = useState<TerminalCursorStyle>(
     defaultSessionSettings.cursorStyle,
@@ -191,6 +207,12 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       }
       if (typeof parsed?.selectionAutoCopyEnabled === "boolean") {
         setSelectionAutoCopyEnabled(parsed.selectionAutoCopyEnabled);
+      }
+      if (typeof parsed?.autoReconnectOnPoweroff === "boolean") {
+        setAutoReconnectOnPoweroff(parsed.autoReconnectOnPoweroff);
+      }
+      if (typeof parsed?.autoReconnectOnReboot === "boolean") {
+        setAutoReconnectOnReboot(parsed.autoReconnectOnReboot);
       }
       {
         const nextCursorStyle = normalizeTerminalCursorStyle(
@@ -270,6 +292,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
       webLinksEnabled,
       commandAutocompleteEnabled,
       selectionAutoCopyEnabled,
+      autoReconnectOnPoweroff,
+      autoReconnectOnReboot,
       cursorStyle:
         normalizeTerminalCursorStyle(cursorStyle) ??
         defaultSessionSettings.cursorStyle,
@@ -333,6 +357,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    autoReconnectOnPoweroff,
+    autoReconnectOnReboot,
     cursorStyle,
     wordSeparators,
     scrollback,
@@ -352,6 +378,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     webLinksEnabled,
     commandAutocompleteEnabled,
     selectionAutoCopyEnabled,
+    autoReconnectOnPoweroff,
+    autoReconnectOnReboot,
     cursorStyle:
       normalizeTerminalCursorStyle(cursorStyle) ??
       defaultSessionSettings.cursorStyle,
@@ -368,6 +396,8 @@ export default function useSessionSettings(): UseSessionSettingsResult {
     setWebLinksEnabled,
     setCommandAutocompleteEnabled,
     setSelectionAutoCopyEnabled,
+    setAutoReconnectOnPoweroff,
+    setAutoReconnectOnReboot,
     setCursorStyle,
     setWordSeparators,
     setScrollback,

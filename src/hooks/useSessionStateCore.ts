@@ -79,6 +79,8 @@ type UseSessionStateProps = {
   localShellProfiles: Record<string, LocalShellConfig>;
   availableShells: LocalShellProfile[];
   settingsLoaded: boolean;
+  autoReconnectOnPoweroff: boolean;
+  autoReconnectOnReboot: boolean;
   getTerminalSize: () => TerminalSize;
 };
 
@@ -163,6 +165,8 @@ export default function useSessionState({
   localShellProfiles,
   availableShells,
   settingsLoaded,
+  autoReconnectOnPoweroff,
+  autoReconnectOnReboot,
   getTerminalSize,
 }: UseSessionStateProps): UseSessionStateResult {
   const { openDialog } = useNotices();
@@ -486,6 +490,7 @@ export default function useSessionState({
     }
     await attemptSessionReconnect({
       sessionId,
+      getDisconnectReason: (id) => sessionReasonsRef.current[id] ?? "unknown",
       sessionsRef,
       profilesRef,
       reconnectAttemptsRef,
@@ -500,9 +505,12 @@ export default function useSessionState({
     }
   }
 
-  function scheduleReconnect(sessionId: string) {
+  function scheduleReconnect(sessionId: string, reason?: DisconnectReason) {
+    const resolvedReason =
+      reason ?? sessionReasonsRef.current[sessionId] ?? "unknown";
     scheduleReconnectAttempt({
       sessionId,
+      reason: resolvedReason,
       reconnectAttemptsRef,
       reconnectTimersRef,
       setReconnectInfoBySession,
@@ -528,18 +536,21 @@ export default function useSessionState({
       isLocalSession(sessionId),
       terminalEofRequested,
     );
+    const shouldAutoReconnect =
+      (reason === "poweroff" && autoReconnectOnPoweroff) ||
+      (reason === "reboot" && autoReconnectOnReboot);
     setSessionReasons((prev) => ({ ...prev, [sessionId]: reason }));
     setSessionStates((prev) => ({
       ...prev,
-      [sessionId]: "disconnected",
+      [sessionId]: shouldAutoReconnect ? "reconnecting" : "disconnected",
     }));
     appendLog(
       "log.event.disconnected",
       { name: resolveSessionLabel(sessionId) },
       "error",
     );
-    if (reason === "poweroff" || reason === "reboot") {
-      scheduleReconnect(sessionId);
+    if (shouldAutoReconnect) {
+      scheduleReconnect(sessionId, reason);
     }
   }
 
@@ -550,6 +561,10 @@ export default function useSessionState({
       handleSessionDisconnected,
       handleSessionStatus: (payload) => {
         const label = resolveSessionLabel(payload.sessionId);
+        if (payload.state === "disconnected") {
+          handleSessionDisconnected(payload.sessionId);
+          return;
+        }
         setSessionStates((prev) => ({
           ...prev,
           [payload.sessionId]: payload.state,
@@ -605,9 +620,6 @@ export default function useSessionState({
               sessionId: payload.sessionId,
             }),
           );
-        }
-        if (payload.state === "disconnected") {
-          handleSessionDisconnected(payload.sessionId);
         }
       },
       handleHostKeyVerificationRequired: (payload) => {

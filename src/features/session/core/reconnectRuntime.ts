@@ -4,9 +4,10 @@
  */
 import {
   computeReconnectDelayMs,
-  maxReconnectAttempts,
+  getMaxReconnectAttempts,
 } from "@/features/session/core/reconnectPolicy";
 import type {
+  DisconnectReason,
   HostProfile,
   LocalSessionMeta,
   Session,
@@ -46,6 +47,7 @@ export function clearReconnectStateById({
 
 type AttemptSessionReconnectParams = {
   sessionId: string;
+  getDisconnectReason: (sessionId: string) => DisconnectReason;
   sessionsRef: React.RefObject<Session[]>;
   profilesRef: React.RefObject<HostProfile[]>;
   reconnectAttemptsRef: React.RefObject<Record<string, number>>;
@@ -64,6 +66,7 @@ type AttemptSessionReconnectParams = {
 /** 执行一次远端会话重连尝试。 */
 export async function attemptSessionReconnect({
   sessionId,
+  getDisconnectReason,
   sessionsRef,
   profilesRef,
   reconnectAttemptsRef,
@@ -106,7 +109,8 @@ export async function attemptSessionReconnect({
       return;
     }
     const attempts = reconnectAttemptsRef.current[sessionId] ?? 0;
-    if (attempts >= maxReconnectAttempts) {
+    const reason = getDisconnectReason(sessionId);
+    if (attempts >= getMaxReconnectAttempts(reason)) {
       clearReconnectState(sessionId);
       setSessionStates((prev) => ({
         ...prev,
@@ -120,6 +124,7 @@ export async function attemptSessionReconnect({
 
 type ScheduleReconnectParams = {
   sessionId: string;
+  reason: DisconnectReason;
   reconnectAttemptsRef: React.RefObject<Record<string, number>>;
   reconnectTimersRef: React.RefObject<Record<string, number>>;
   setReconnectInfoBySession: Setter<
@@ -132,6 +137,7 @@ type ScheduleReconnectParams = {
 /** 安排下一次重连尝试。 */
 export function scheduleReconnectAttempt({
   sessionId,
+  reason,
   reconnectAttemptsRef,
   reconnectTimersRef,
   setReconnectInfoBySession,
@@ -140,7 +146,15 @@ export function scheduleReconnectAttempt({
 }: ScheduleReconnectParams) {
   const attempts = (reconnectAttemptsRef.current[sessionId] ?? 0) + 1;
   reconnectAttemptsRef.current[sessionId] = attempts;
-  const delayMs = computeReconnectDelayMs(attempts);
+  const delayMs = computeReconnectDelayMs(reason, attempts);
+  if (delayMs === null) {
+    delete reconnectAttemptsRef.current[sessionId];
+    setSessionStates((prev) => ({
+      ...prev,
+      [sessionId]: "disconnected",
+    }));
+    return;
+  }
 
   setReconnectInfoBySession((prev) => ({
     ...prev,

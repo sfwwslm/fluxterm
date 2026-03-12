@@ -419,7 +419,6 @@ export default function useTerminalRuntime({
   sessions,
   onSizeChange,
   sessionStatesRef,
-  sessionReasonsRef,
   sessionBuffersRef,
   setLastCommand,
   sendSessionInput,
@@ -1404,9 +1403,8 @@ export default function useTerminalRuntime({
         }
         const state = sessionStatesRef.current[sessionId];
         if (state === "disconnected") {
-          const reason = sessionReasonsRef.current[sessionId];
           const requestReconnect = data.includes("\r") || data.includes("\n");
-          if (reason === "exit" && requestReconnect) {
+          if (requestReconnect) {
             if (handlersRef.current.isLocalSession(sessionId)) {
               handlersRef.current
                 .reconnectLocalShell(sessionId)
