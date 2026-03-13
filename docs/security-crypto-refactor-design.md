@@ -1,16 +1,12 @@
-# 加密工具公共模块重构设计
+# 加密工具公共模块设计
 
 ## 摘要
 
-本次重构将 SSH 凭据加密从 `profile` 命令层中抽离，统一下沉到 `src-tauri/src/security` 公共模块。
+该设计将 SSH 凭据加密从 `profile` 命令层中抽离，统一下沉到 `src-tauri/src/security` 公共模块。
 
-当前阶段为 Alpha：
+当前方案使用 `enc:v1` 密文 token，并保持 `ProfileStore.version = 1`。默认 Provider 为硬编码密钥实现。
 
-- 启用首版 `enc:v1` 密文 token 方案
-- `ProfileStore.version` 保持 `1`
-- 默认 Provider 仍为硬编码密钥
-
-目标不是立即提升安全等级，而是把“加密能力”从业务逻辑中剥离出来，为后续切换系统钥匙串、用户主密码或云端密钥提供稳定的替换点。
+设计目标是将“加密能力”从业务逻辑中剥离出来，为替换系统钥匙串、用户主密码或远端密钥管理方案提供稳定的替换点。
 
 ## 模块结构
 
@@ -29,7 +25,7 @@ src-tauri/src/security
 
 另有：
 
-- `src-tauri/src/profile_secrets.rs`：负责 `HostProfile` 的敏感字段编解码
+- `src-tauri/src/profile_secrets.rs`：负责 `HostProfile` 的敏感字段编解码。
 
 ## 分层职责
 
@@ -38,7 +34,7 @@ src-tauri/src/security
 只负责原始字节加解密：
 
 - `HardcodedKeyProvider`
-- `SystemKeychainProvider`（占位）
+- `SystemKeychainProvider`
 
 Provider 不知道：
 
@@ -82,11 +78,11 @@ enc:v1:<base64(payload-bytes)>
 
 说明：
 
-- `enc:v1:` 是外层 token 封装协议版本
-- `payload-bytes` 当前为 JSON 序列化后的字节，再整体做 base64
-- 当前读取逻辑仅处理 `enc:v1:` 前缀的密文 token
+- `enc:v1:` 是外层 token 封装协议版本。
+- `payload-bytes` 为 JSON 序列化后的字节，再整体做 base64。
+- 当前读取逻辑仅处理 `enc:v1:` 前缀的密文 token。
 
-`v1` 下的内部 payload 结构为：
+`v1` 的内部 payload 结构如下：
 
 ```json
 {
@@ -100,15 +96,15 @@ enc:v1:<base64(payload-bytes)>
 
 说明：
 
-- 内层 payload 不再包含通用 `version` 字段，避免和外层 `enc:v1:` 语义冲突
-- `provider`、`algorithm`、`keyId` 属于密文元数据，仍由安全模块私有管理
-- 后续若要更换内部编码，可新增 `enc:v2:`，而不是复用 `v1`
+- 内层 payload 不再包含通用 `version` 字段，避免和外层 `enc:v1:` 语义冲突。
+- `provider`、`algorithm`、`keyId` 属于密文元数据，仍由安全模块私有管理。
+- 若需变更内部编码，应新增 `enc:v2:`，而不是复用 `v1`。
 
-## 当前 Provider
+## Provider 设计
 
 ### HardcodedKeyProvider
 
-当前默认实现：
+默认实现：
 
 - AES-256-GCM
 - 固定 32 字节内置密钥
@@ -118,60 +114,43 @@ enc:v1:<base64(payload-bytes)>
 
 ### SystemKeychainProvider
 
-本轮只保留骨架，不接入真实系统能力。
+当前保留抽象与骨架，不接入真实系统能力。
 
-目的是提前固定 Provider 抽象，避免以后切换时再次改业务接口。
+这样做的目的是提前固定 Provider 抽象，避免以后切换时再次改动业务接口。
 
 ## Profile 流程
 
 ### 保存
 
-1. 前端传入明文 `HostProfile`
-2. `profile_save`
-3. `ProfileSecretCodec::encrypt_profile_secrets`
-4. `SecretStore::protect_optional_string`
-5. `CryptoService::encrypt_string`
-6. Provider 执行真实加密
-7. 写入 `profiles.json`
+1. 前端传入明文 `HostProfile`。
+2. `profile_save`。
+3. `ProfileSecretCodec::encrypt_profile_secrets`。
+4. `SecretStore::protect_optional_string`。
+5. `CryptoService::encrypt_string`。
+6. Provider 执行真实加密。
+7. 写入 `profiles.json`。
 
 ### 读取
 
-1. `profile_list`
-2. 读取 `profiles.json`
-3. `ProfileSecretCodec::decrypt_profile_secrets`
-4. `SecretStore::reveal_optional_string`
-5. `CryptoService::decrypt_string`
-6. Provider 执行真实解密
-7. 返回前端明文 `HostProfile`
+1. `profile_list`。
+2. 读取 `profiles.json`。
+3. `ProfileSecretCodec::decrypt_profile_secrets`。
+4. `SecretStore::reveal_optional_string`。
+5. `CryptoService::decrypt_string`。
+6. Provider 执行真实解密。
+7. 返回前端明文 `HostProfile`。
 
 ## 演进路径
 
-### Phase 1
+Provider 可以沿以下方向扩展：
 
-- `HardcodedKeyProvider`
-
-### Phase 2
-
-- `SystemKeychainProvider`
-
-### Phase 3
-
-- `UserPasswordProvider`
-
-### Phase 4
-
-- `RemoteKeyProvider`
+1. `HardcodedKeyProvider`
+2. `SystemKeychainProvider`
+3. `UserPasswordProvider`
+4. `RemoteKeyProvider`
 
 无论底层 Provider 如何变化，业务调用入口保持不变：
 
 - `CryptoService`
 - `SecretStore`
 - `ProfileSecretCodec`
-
-## 当前边界
-
-- 不新增前端加密逻辑
-- 不改变 `HostProfile` 前后端接口
-- 当前仅实现 `enc:v1` token 读写
-
-这符合当前 Alpha 阶段“允许破坏性重构、优先干净架构”的要求。

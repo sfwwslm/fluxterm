@@ -2,9 +2,7 @@
 
 ## 文档目标
 
-本文档描述当前已经落地的终端拆分工作区实现，作为后续维护、排查问题和继续演进的参考。
-
-这份文档只记录“当前真实实现”，不再复述已经放弃的外层 tab 方案。
+本文档描述已经落地的终端拆分工作区实现，用于维护、排查问题和演进参考。
 
 ## 当前结论
 
@@ -14,7 +12,7 @@
 2. Pane 作为可拆分区域。
 3. 每个 Pane 顶部自带一条工作区栏。
 4. Pane 内可以承载多个会话，并支持区域内会话排序。
-5. 全局不再存在用户可见的“最顶部总工作区栏”。
+5. 全局不存在用户可见的“最顶部总工作区栏”。
 
 ## 核心状态模型
 
@@ -112,26 +110,21 @@ type SessionWorkspaceState = {
 
 ### 新建会话
 
-当前新建会话不是总是创建新区域，而是：
+新建会话并不总是创建新区域，而是：
 
 1. 若工作区为空，创建一个根 leaf。
 2. 若工作区已存在，则优先附着到当前活动区域。
 
-这意味着：
-
-1. 首个会话创建根区域。
-2. 拆分后再新建会话，会进入当前活动区域。
-
 ### 拆分区域
 
-当前拆分行为由 `splitActivePane()` 驱动。
+拆分行为由 `splitActivePane()` 驱动。
 
 规则如下：
 
 1. 只对当前活动区域执行拆分。
 2. 复制当前活动会话的连接来源：
-   - 本地 shell 则创建新的本地 shell 会话
-   - SSH 会话则使用同一个 profile 再创建一个新 SSH 会话
+   - 本地 shell 则创建新的本地 shell 会话。
+   - SSH 会话则使用同一个 profile 再创建一个新 SSH 会话。
 3. 原区域会变成 split 的第一子节点。
 4. 新区域会变成 split 的第二子节点。
 5. 新区域自动成为活动区域。
@@ -143,9 +136,7 @@ type SessionWorkspaceState = {
 
 ### 区域工作区栏
 
-每个 leaf pane 顶部都有一条 `terminal-header` 工作区栏。
-
-这条栏负责：
+每个 leaf pane 顶部都有一条 `terminal-header` 工作区栏，负责：
 
 1. 展示该区域内部的会话列表。
 2. 切换该区域当前活动会话。
@@ -153,24 +144,22 @@ type SessionWorkspaceState = {
 4. 当前会话右键菜单。
 5. 当前会话关闭按钮。
 
-当前没有独立的 pane 标题栏，也没有全局顶部工作区栏。
-
 ### 区域内关闭语义
 
 右键菜单里的以下操作只对当前区域生效：
 
-1. 关闭当前会话
-2. 关闭其他会话
-3. 关闭右侧会话
-4. 关闭全部会话
+1. 关闭当前会话。
+2. 关闭其他会话。
+3. 关闭右侧会话。
+4. 关闭全部会话。
 
 关闭链路为：
 
-1. 根据 `paneId` 找到该区域内的 `sessionIds`
-2. 调用现有 `disconnectSession()`
-3. reducer 通过 `detach-session` 从工作区树删除会话
-4. 若 leaf 最后一个会话被关掉，则删除该 leaf
-5. 若 split 某一侧被删空，则自动折叠为剩余子树
+1. 根据 `paneId` 找到该区域内的 `sessionIds`。
+2. 调用现有 `disconnectSession()`。
+3. reducer 通过 `detach-session` 从工作区树删除会话。
+4. 若 leaf 最后一个会话被关掉，则删除该 leaf。
+5. 若 split 某一侧被删空，则自动折叠为剩余子树。
 
 ## 工作区树变换规则
 
@@ -179,7 +168,7 @@ type SessionWorkspaceState = {
 语义：
 
 1. 首个会话创建根 leaf。
-2. 后续会话附着到目标 pane 或当前活动 pane。
+2. 新增会话附着到目标 pane 或当前活动 pane。
 
 ### activate-session
 
@@ -262,13 +251,13 @@ type SessionWorkspaceState = {
 
 ### 为什么 split 后旧内容不会丢
 
-当前终端输出会持续追加到 `sessionBuffersRef`，而不是只做“挂载前临时缓存”。
+终端输出会持续追加到 `sessionBuffersRef`，而不是只做“挂载前临时缓存”。
 
 因此：
 
-1. 即使某个 xterm 因为重挂载被销毁
-2. 只要 session 仍然存在
-3. 重新创建 xterm 时就会把完整缓存重新写回
+1. 即使某个 xterm 因为重挂载被销毁。
+2. 只要 session 仍然存在。
+3. 重新创建 xterm 时就会把完整缓存重新写回。
 
 这也是“保存会话”能够导出完整横幅和历史内容的基础。
 
@@ -278,17 +267,17 @@ type SessionWorkspaceState = {
 
 这样可以解决：
 
-1. split 后非活动区域尺寸变化却未 `fit` 的问题
-2. 只有再次点击区域后才恢复显示的问题
+1. split 后非活动区域尺寸变化却未 `fit` 的问题。
+2. 只有再次点击区域后才恢复显示的问题。
 
 ### 保存会话
 
 保存流程：
 
-1. UI 根据当前操作的 `sessionId` 调用 `getSessionBufferText(sessionId)`
-2. 运行时优先从 xterm buffer 导出文本
-3. 若 xterm 当前不存在，则回退到 `sessionBuffersRef`
-4. 上层使用 Tauri 的保存对话框和文件写入能力完成落盘
+1. UI 根据当前操作的 `sessionId` 调用 `getSessionBufferText(sessionId)`。
+2. 运行时优先从 xterm buffer 导出文本。
+3. 若 xterm 当前不存在，则回退到 `sessionBuffersRef`。
+4. 上层使用 Tauri 的保存对话框和文件写入能力完成落盘。
 
 当前导出的是纯文本，不保留 ANSI 样式。
 
@@ -296,59 +285,57 @@ type SessionWorkspaceState = {
 
 ### TerminalPanel
 
-`TerminalPanel` 当前只做编排：
+`TerminalPanel` 只做编排：
 
-1. 解析会话名称和状态
-2. 为 `sessionId` 提供稳定的 terminal 容器 ref
-3. 连接 pane 树、菜单和搜索栏
-
-它已经不再直接维护复杂的搜索和菜单状态。
+1. 解析会话名称和状态。
+2. 为 `sessionId` 提供稳定的 terminal 容器 ref。
+3. 连接 pane 树、菜单和搜索栏。
 
 ### TerminalPaneTree
 
 `TerminalPaneTree` 负责：
 
-1. 递归渲染 split / leaf
-2. 渲染区域工作区栏
-3. 渲染每个会话对应的 `terminal-container`
-4. 处理区域内拖拽排序和 split resize
+1. 递归渲染 split / leaf。
+2. 渲染区域工作区栏。
+3. 渲染每个会话对应的 `terminal-container`。
+4. 处理区域内拖拽排序和 split resize。
 
 ### useTerminalMenus
 
 负责三类菜单状态：
 
-1. 终端正文右键菜单
-2. 区域工作区栏会话菜单
-3. 链接菜单
+1. 终端正文右键菜单。
+2. 区域工作区栏会话菜单。
+3. 链接菜单。
 
 ### TerminalSearchBar
 
 负责搜索栏局部状态：
 
-1. 关键字
-2. 大小写 / 正则 / 全词匹配
-3. 高亮开关
-4. 搜索结果统计显示
+1. 关键字。
+2. 大小写 / 正则 / 全词匹配。
+3. 高亮开关。
+4. 搜索结果统计显示。
 
-## 当前边界
+## 设计边界
 
 ### 已支持
 
-1. Pane 拆分
-2. 区域内多会话
-3. 区域内会话拖拽排序
-4. 区域级关闭语义
-5. 区域 resize
-6. split 后终端内容恢复
-7. 保存完整会话文本
+1. Pane 拆分。
+2. 区域内多会话。
+3. 区域内会话拖拽排序。
+4. 区域级关闭语义。
+5. 区域 resize。
+6. split 后终端内容恢复。
+7. 保存完整会话文本。
 
-### 当前未做
+### 未覆盖
 
-1. 区域之间拖拽移动会话
-2. 多工作区根节点
-3. 会话跨区域拖放
-4. 自动化单元测试
-5. 输出缓存上限控制
+1. 区域之间拖拽移动会话。
+2. 多工作区根节点。
+3. 会话跨区域拖放。
+4. 自动化单元测试。
+5. 输出缓存上限控制。
 
 ## 维护建议
 
@@ -366,15 +353,15 @@ type SessionWorkspaceState = {
 
 优先检查：
 
-1. `TerminalPaneTree.tsx` 的区域结构是否改变了容器尺寸
-2. `useTerminalRuntimeCore.ts` 的容器观察和 `finalizeTerminalMount()` 是否仍然覆盖该场景
+1. `TerminalPaneTree.tsx` 的区域结构是否改变了容器尺寸。
+2. `useTerminalRuntimeCore.ts` 的容器观察和 `finalizeTerminalMount()` 是否仍然覆盖该场景。
 
 ### 变更会话导出/恢复时
 
 优先检查：
 
-1. `sessionBuffersRef` 是否仍然持续累计完整输出
-2. xterm 重建时是否仍会完整回放缓存
+1. `sessionBuffersRef` 是否仍然持续累计完整输出。
+2. xterm 重建时是否仍会完整回放缓存。
 
 ## 相关文件
 
