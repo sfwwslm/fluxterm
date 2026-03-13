@@ -1374,8 +1374,6 @@ export default function useTerminalRuntime({
 
       if (action === "copy-selection") {
         copySelectionFromSession(sessionId).catch(() => {});
-      } else if (action === "paste") {
-        pasteToSession(sessionId).catch(() => {});
       }
 
       return false;

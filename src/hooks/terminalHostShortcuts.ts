@@ -5,7 +5,6 @@
  */
 export type TerminalHostKeyAction =
   | "copy-selection"
-  | "paste"
   | "prevent-browser-shortcut"
   | "passthrough";
 
@@ -25,10 +24,6 @@ export function resolveTerminalHostKeyAction(
 
   if (ctrlOrMeta && event.shiftKey && key === "c" && hasSelection) {
     return "copy-selection";
-  }
-
-  if (ctrlOrMeta && event.shiftKey && key === "v") {
-    return "paste";
   }
 
   if (key === "f5") {
