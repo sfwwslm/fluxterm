@@ -568,9 +568,6 @@ export default function AppShell() {
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeConfigSection, setActiveConfigSection] =
     useState<ConfigSectionKey>("app-settings");
-  const [configModalSections, setConfigModalSections] = useState<
-    ConfigSectionItem[]
-  >([{ key: "app-settings", label: "" }]);
   const [footerVisibility, setFooterVisibility] = useState({
     quickbar: true,
     statusbar: true,
@@ -933,9 +930,7 @@ export default function AppShell() {
     [t],
   );
 
-  /** 打开统一配置模态框，并切换到指定配置分区。 */
-  function openConfigSection(section: ConfigSectionKey) {
-    // 每个顶部二级菜单只携带自己所属的配置分组，避免共享一个总导航。
+  const configModalSections = useMemo<ConfigSectionItem[]>(() => {
     const sectionsByEntry: Record<ConfigSectionKey, ConfigSectionItem[]> = {
       "app-settings": [
         {
@@ -1100,7 +1095,11 @@ export default function AppShell() {
         },
       ],
     };
-    setConfigModalSections(sectionsByEntry[section]);
+    return sectionsByEntry[activeConfigSection];
+  }, [activeConfigSection, configSectionLabels]);
+
+  /** 打开统一配置模态框，并切换到指定配置分区。 */
+  function openConfigSection(section: ConfigSectionKey) {
     setActiveConfigSection(section);
     setConfigModalOpen(true);
   }
