@@ -4,7 +4,7 @@
  * 包含：阴影效果、圆角边框以及针对不同弹出方向（top, bottom, left, right）的偏移处理。
  */
 .tooltip-target {
-  display: inline-flex;
+  display: block;
   min-width: 0;
 }
 
