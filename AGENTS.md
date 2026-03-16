@@ -29,30 +29,16 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 
 ## Build, Test, and Development Commands
 
-Frontend (from repo root):
-
-- `pnpm dev` or `pnpm web:dev`: Start Vite dev server.
-- `pnpm check`: Run frontend checks (`type-check + lint`).
-- `pnpm web:build`: Type-check and build frontend (`tsc && vite build`).
-- `pnpm preview`: Preview the production Vite build.
-- `pnpm format`: Format frontend files in `src/` with Prettier.
-
-Desktop app:
-
-- `pnpm build`: Build the Tauri app (Rust + frontend bundle).
-- `pnpm tauri dev`: Run the Tauri dev app.
-
-Rust workspace:
-
-- `cargo build`: Build all crates in the workspace.
-- `cargo test`: Run Rust tests (if present in a crate).
+- Frontend formatting: `pnpm format`
+- Frontend checks: `pnpm check`
+- Backend formatting: `cargo fmt`
+- Backend checks: `cargo clippy --all-targets --all-features -- -D warnings`
 
 ## Coding Style & Naming Conventions
 
-- TypeScript/React: 2-space indentation and Prettier formatting (run `pnpm format`).
+- TypeScript/React: 2-space indentation and Prettier formatting.
 - Paths and imports: Prefer `@/` alias for `src/` imports (configured via Vite/TS).
 - Rust: Follow standard `rustfmt` conventions.
-- Rust formatting/linting: Run `cargo fmt` and `cargo clippy --all-targets --all-features -- -D warnings` before opening a PR.
 - Naming: `PascalCase` for components, `camelCase` for functions and variables.
 - Comments: Follow `cargo doc` conventions so generated docs are clear and readable; do not add meaningless comments.
 
@@ -87,8 +73,8 @@ For pull requests:
 
 - If a task requires modifying more than three files, pause first and break it down into updated tasks.
 - Before writing any code, please describe your proposed approach and wait for approval. If the requirements are unclear, make sure to ask clarifying questions before writing any code.
-- After modifying frontend code, run `pnpm format` before final verification to avoid style drift and reduce unnecessary diffs.
-- After modifying backend Rust code, run `cargo fmt` before final verification so the written code and the checked code stay consistent.
+- After modifying frontend code, run `pnpm format` and `pnpm check`.
+- After modifying backend Rust code, run `cargo fmt` and `cargo clippy --all-targets --all-features -- -D warnings`.
 - During this development-stage refactor, compatibility is not required; prioritize a clean redesign.
 - When a bug is caused by backend, engine, state machine, or lifecycle timing issues, do not add frontend “stopgap” patches to mask it. Fix the source of truth first, and only adjust frontend logic when the root cause is genuinely on the frontend side.
 
