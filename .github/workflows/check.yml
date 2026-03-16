@@ -1,0 +1,46 @@
+name: Code Check
+
+run-name: "Code Check - ${{ github.event_name }} - ${{ github.ref_name }}"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          prefix-key: "v1-rust"
+          key: "rust-shared-stable-${{ matrix.os }}"
+          workspaces: |
+            . -> target
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run code checks
+        run: pnpm check:all
