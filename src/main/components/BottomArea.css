@@ -186,7 +186,8 @@
 
 .statusbar-ai-chip,
 .statusbar-info-chip,
-.statusbar-transfer-token {
+.statusbar-transfer-token,
+.statusbar-security-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -226,6 +227,36 @@
 .statusbar-transfer-token svg {
   width: 14px;
   height: 14px;
+}
+
+.statusbar-security-chip {
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.statusbar-security-chip svg {
+  width: 14px;
+  height: 14px;
+}
+
+.statusbar-security-chip.locked {
+  color: var(--danger, #d9480f);
+  border-color: color-mix(
+    in srgb,
+    var(--danger, #d9480f) 38%,
+    var(--border-soft)
+  );
+}
+
+.statusbar-security-chip.unlocked {
+  color: color-mix(in srgb, var(--accent) 84%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-soft));
+}
+
+.statusbar-security-chip.plaintext {
+  color: var(--text-secondary);
 }
 
 @keyframes statusbar-transfer-blink {

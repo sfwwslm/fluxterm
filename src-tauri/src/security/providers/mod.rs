@@ -1,7 +1,5 @@
 //! 内置 Provider 集合。
 
-pub mod hardcoded;
-pub mod system_keychain;
+pub mod user_password;
 
-pub use hardcoded::HardcodedKeyProvider;
-pub use system_keychain::SystemKeychainProvider;
+pub use user_password::UserPasswordProvider;

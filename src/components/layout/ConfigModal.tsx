@@ -23,6 +23,7 @@ import {
   toBackgroundImageAsset,
 } from "@/shared/config/paths";
 import type { AiProviderVendor, AiProviderView } from "@/features/ai/types";
+import type { SecurityStatus } from "@/features/security/types";
 import {
   DEFAULT_RESOURCE_MONITOR_INTERVAL_SEC,
   type HostKeyPolicy,
@@ -53,6 +54,7 @@ import {
 } from "@/constants/backgroundMedia";
 import "@/components/layout/ConfigModal.css";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import { translateAppError } from "@/shared/errors/appError";
 import {
   AI_PROVIDER_PRESETS,
   getAiProviderPreset,
@@ -61,6 +63,7 @@ import {
 export type ConfigSectionKey =
   | "app-settings"
   | "app-appearance"
+  | "security"
   | "ai-settings"
   | "ai-provider-manage"
   | "ai-provider-quick"
@@ -112,6 +115,9 @@ type ConfigModalProps = {
   aiDebugLoggingEnabled?: boolean;
   aiActiveProviderId?: string;
   aiProviders?: AiProviderView[];
+  securityStatus?: SecurityStatus;
+  securityLoaded?: boolean;
+  securityBusy?: boolean;
   webLinksEnabled?: boolean;
   commandAutocompleteEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
@@ -155,6 +161,14 @@ type ConfigModalProps = {
   }) => Promise<string | void> | string | void;
   onAiProviderRemove?: (providerId: string) => void;
   onAiProviderTest?: (providerId: string) => Promise<void> | void;
+  onSecurityUnlock?: (password: string) => Promise<void> | void;
+  onSecurityLock?: () => Promise<void> | void;
+  onSecurityEnableWithPassword?: (password: string) => Promise<void> | void;
+  onSecurityChangePassword?: (
+    currentPassword: string,
+    nextPassword: string,
+  ) => Promise<void> | void;
+  onSecurityDisableEncryption?: () => Promise<void> | void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
@@ -179,6 +193,10 @@ type ConfigModalProps = {
   onSectionChange: (section: ConfigSectionKey) => void;
   t: Translate;
 };
+
+function getTranslatedErrorMessage(error: unknown, t: Translate) {
+  return translateAppError(error, t);
+}
 
 function normalizeConfigDirectoryPath(path: string) {
   if (/^[A-Za-z]:[\\/]/.test(path)) {
@@ -232,6 +250,13 @@ export default function ConfigModal({
   aiDebugLoggingEnabled = true,
   aiActiveProviderId = "",
   aiProviders = [],
+  securityStatus = {
+    provider: "plaintext",
+    locked: false,
+    encryptionEnabled: false,
+  },
+  securityLoaded = false,
+  securityBusy = false,
   webLinksEnabled = true,
   commandAutocompleteEnabled = true,
   selectionAutoCopyEnabled = false,
@@ -263,6 +288,11 @@ export default function ConfigModal({
   onAiCompatibleProviderCreate,
   onAiProviderRemove,
   onAiProviderTest,
+  onSecurityUnlock,
+  onSecurityLock,
+  onSecurityEnableWithPassword,
+  onSecurityChangePassword,
+  onSecurityDisableEncryption,
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
@@ -287,7 +317,7 @@ export default function ConfigModal({
   onSectionChange,
   t,
 }: ConfigModalProps) {
-  const { pushToast } = useNotices();
+  const { pushToast, openDialog } = useNotices();
   const [configDir, setConfigDir] = useState("");
   const [dataDir, setDataDir] = useState("");
   const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useState(
@@ -331,6 +361,17 @@ export default function ConfigModal({
   const [compatibleApiKeyDraft, setCompatibleApiKeyDraft] = useState("");
   const [compatibleCreating, setCompatibleCreating] = useState(false);
   const [testingProviderId, setTestingProviderId] = useState("");
+  const [securityPasswordDraft, setSecurityPasswordDraft] = useState("");
+  const [securityConfirmPasswordDraft, setSecurityConfirmPasswordDraft] =
+    useState("");
+  const [securityCurrentPasswordDraft, setSecurityCurrentPasswordDraft] =
+    useState("");
+  const [securityNextPasswordDraft, setSecurityNextPasswordDraft] =
+    useState("");
+  const [
+    securityNextPasswordConfirmDraft,
+    setSecurityNextPasswordConfirmDraft,
+  ] = useState("");
   const isDeveloperMode = import.meta.env.DEV;
   const normalizedBackgroundMediaType =
     normalizeBackgroundMediaType(backgroundMediaType);
@@ -410,6 +451,15 @@ export default function ConfigModal({
     const preset = getAiProviderPreset(quickPresetVendorDraft);
     setQuickPresetModelDraft(preset?.models[0] ?? "");
   }, [quickPresetVendorDraft]);
+
+  useEffect(() => {
+    if (activeSection !== "security") return;
+    setSecurityPasswordDraft("");
+    setSecurityConfirmPasswordDraft("");
+    setSecurityCurrentPasswordDraft("");
+    setSecurityNextPasswordDraft("");
+    setSecurityNextPasswordConfirmDraft("");
+  }, [activeSection, securityStatus.provider, securityStatus.locked]);
 
   async function pickBackgroundMedia() {
     try {
@@ -1058,6 +1108,312 @@ export default function ConfigModal({
         </div>
       );
     }
+    if (activeSection === "security") {
+      const isEncrypted = securityStatus.encryptionEnabled;
+      const isLocked = securityStatus.locked;
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable config-security-section">
+          <h3>{t("config.section.security")}</h3>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.security.currentMode")}
+              </span>
+            </div>
+            <div className="config-dir-path">
+              {securityLoaded
+                ? isEncrypted
+                  ? t("config.security.providerEncrypted")
+                  : t("config.security.providerPlaintext")
+                : t("config.security.loading")}
+            </div>
+          </div>
+          {isEncrypted && isLocked ? (
+            <div className="config-toggle-card config-feature-group">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.security.unlockPassword")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.security.passwordHintEncrypted")}
+                </span>
+              </div>
+              <input
+                type="password"
+                className="config-text-input"
+                value={securityPasswordDraft}
+                placeholder={t("config.security.passwordPlaceholder")}
+                onChange={(event) =>
+                  setSecurityPasswordDraft(event.target.value)
+                }
+              />
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={securityBusy || !securityPasswordDraft.trim()}
+                  onClick={() => {
+                    void Promise.resolve(
+                      onSecurityUnlock?.(securityPasswordDraft.trim()),
+                    )
+                      .then(() => {
+                        setSecurityPasswordDraft("");
+                        pushToast({
+                          level: "success",
+                          message: t("config.security.unlockSuccess"),
+                        });
+                      })
+                      .catch((error) => {
+                        pushToast({
+                          level: "error",
+                          message: getTranslatedErrorMessage(error, t),
+                        });
+                      });
+                  }}
+                >
+                  {t("config.security.unlockAction")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {!isEncrypted ? (
+            <div className="config-toggle-card config-feature-group">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.security.enablePassword")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.security.passwordHintPlaintext")}
+                </span>
+              </div>
+              <input
+                type="password"
+                className="config-text-input"
+                value={securityPasswordDraft}
+                placeholder={t("config.security.passwordPlaceholder")}
+                onChange={(event) =>
+                  setSecurityPasswordDraft(event.target.value)
+                }
+              />
+              <input
+                type="password"
+                className="config-text-input"
+                value={securityConfirmPasswordDraft}
+                placeholder={t("config.security.confirmPasswordPlaceholder")}
+                onChange={(event) =>
+                  setSecurityConfirmPasswordDraft(event.target.value)
+                }
+              />
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={securityBusy}
+                  onClick={() => {
+                    const password = securityPasswordDraft.trim();
+                    const confirm = securityConfirmPasswordDraft.trim();
+                    if (!password) {
+                      pushToast({
+                        level: "error",
+                        message: t("config.security.passwordRequired"),
+                      });
+                      return;
+                    }
+                    if (password !== confirm) {
+                      pushToast({
+                        level: "error",
+                        message: t("config.security.passwordMismatch"),
+                      });
+                      return;
+                    }
+                    void Promise.resolve(
+                      onSecurityEnableWithPassword?.(password),
+                    )
+                      .then(() => {
+                        setSecurityPasswordDraft("");
+                        setSecurityConfirmPasswordDraft("");
+                        pushToast({
+                          level: "success",
+                          message: t("config.security.enableSuccess"),
+                        });
+                      })
+                      .catch((error) => {
+                        pushToast({
+                          level: "error",
+                          message: getTranslatedErrorMessage(error, t),
+                        });
+                      });
+                  }}
+                >
+                  {t("config.security.enableAction")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {isEncrypted && !isLocked ? (
+            <div className="config-toggle-card config-feature-group">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.security.changePassword")}
+                </span>
+              </div>
+              <input
+                type="password"
+                className="config-text-input"
+                value={securityCurrentPasswordDraft}
+                placeholder={t("config.security.currentPasswordPlaceholder")}
+                onChange={(event) =>
+                  setSecurityCurrentPasswordDraft(event.target.value)
+                }
+              />
+              <input
+                type="password"
+                className="config-text-input"
+                value={securityNextPasswordDraft}
+                placeholder={t("config.security.nextPasswordPlaceholder")}
+                onChange={(event) =>
+                  setSecurityNextPasswordDraft(event.target.value)
+                }
+              />
+              <input
+                type="password"
+                className="config-text-input"
+                value={securityNextPasswordConfirmDraft}
+                placeholder={t(
+                  "config.security.confirmNextPasswordPlaceholder",
+                )}
+                onChange={(event) =>
+                  setSecurityNextPasswordConfirmDraft(event.target.value)
+                }
+              />
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={securityBusy}
+                  onClick={() => {
+                    const currentPassword = securityCurrentPasswordDraft.trim();
+                    const nextPassword = securityNextPasswordDraft.trim();
+                    const confirm = securityNextPasswordConfirmDraft.trim();
+                    if (!currentPassword) {
+                      pushToast({
+                        level: "error",
+                        message: t("config.security.currentPasswordRequired"),
+                      });
+                      return;
+                    }
+                    if (!nextPassword) {
+                      pushToast({
+                        level: "error",
+                        message: t("config.security.passwordRequired"),
+                      });
+                      return;
+                    }
+                    if (nextPassword !== confirm) {
+                      pushToast({
+                        level: "error",
+                        message: t("config.security.passwordMismatch"),
+                      });
+                      return;
+                    }
+                    void Promise.resolve(
+                      onSecurityChangePassword?.(currentPassword, nextPassword),
+                    )
+                      .then(() => {
+                        setSecurityCurrentPasswordDraft("");
+                        setSecurityNextPasswordDraft("");
+                        setSecurityNextPasswordConfirmDraft("");
+                        pushToast({
+                          level: "success",
+                          message: t("config.security.changeSuccess"),
+                        });
+                      })
+                      .catch((error) => {
+                        pushToast({
+                          level: "error",
+                          message: getTranslatedErrorMessage(error, t),
+                        });
+                      });
+                  }}
+                >
+                  {t("config.security.changeAction")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {isEncrypted && !isLocked ? (
+            <div className="config-toggle-card config-feature-group">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.security.dangerTitle")}
+                </span>
+                <span className="config-toggle-desc">
+                  {t("config.security.dangerHint")}
+                </span>
+              </div>
+              <div className="config-file-picker-actions">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={securityBusy}
+                  onClick={() => {
+                    void Promise.resolve(onSecurityLock?.())
+                      .then(() => {
+                        setSecurityPasswordDraft("");
+                        setSecurityConfirmPasswordDraft("");
+                        pushToast({
+                          level: "success",
+                          message: t("config.security.lockSuccess"),
+                        });
+                      })
+                      .catch((error) => {
+                        pushToast({
+                          level: "error",
+                          message: getTranslatedErrorMessage(error, t),
+                        });
+                      });
+                  }}
+                >
+                  {t("config.security.lockAction")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={securityBusy}
+                  onClick={() => {
+                    openDialog({
+                      title: t("config.security.disableAction"),
+                      message: t("config.security.disableConfirm"),
+                      confirmLabel: t("config.security.disableAction"),
+                      cancelLabel: t("actions.cancel"),
+                      onConfirm: () => {
+                        void Promise.resolve(onSecurityDisableEncryption?.())
+                          .then(() => {
+                            setSecurityPasswordDraft("");
+                            setSecurityConfirmPasswordDraft("");
+                            pushToast({
+                              level: "success",
+                              message: t("config.security.disableSuccess"),
+                            });
+                          })
+                          .catch((error) => {
+                            pushToast({
+                              level: "error",
+                              message: getTranslatedErrorMessage(error, t),
+                            });
+                          });
+                      },
+                    });
+                  }}
+                >
+                  {t("config.security.disableAction")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
     if (activeSection === "ai-settings") {
       const activeProvider =
         aiProviders.find((provider) => provider.id === aiActiveProviderId) ??
@@ -1107,7 +1463,7 @@ export default function ConfigModal({
                       } catch (error) {
                         pushToast({
                           level: "error",
-                          message: getErrorMessage(error),
+                          message: getTranslatedErrorMessage(error, t),
                         });
                       } finally {
                         setTestingProviderId("");
@@ -1841,6 +2197,13 @@ export default function ConfigModal({
   return (
     <Modal
       open={open}
+      busy={securityBusy}
+      busyOverlay={
+        <div className="config-security-busy-card">
+          <div className="config-security-busy-spinner" aria-hidden="true" />
+          <span>{t("config.security.processing")}</span>
+        </div>
+      }
       title={t("menu.config")}
       closeLabel={t("actions.close")}
       onClose={handleClose}

@@ -22,6 +22,7 @@ impl<'a> SecretStore<'a> {
     ) -> Result<Option<String>, EngineError> {
         match value {
             Some(raw) if raw.trim().is_empty() => Ok(None),
+            Some(raw) if !self.crypto.encryption_enabled() => Ok(Some(raw)),
             Some(raw) => self.crypto.encrypt_string(&raw).map(Some),
             None => Ok(None),
         }
@@ -34,6 +35,7 @@ impl<'a> SecretStore<'a> {
     ) -> Result<Option<String>, EngineError> {
         match value {
             Some(raw) if raw.trim().is_empty() => Ok(None),
+            Some(raw) if !raw.starts_with("enc:v1:") => Ok(Some(raw)),
             Some(raw) => self.crypto.decrypt_string(&raw).map(Some),
             None => Ok(None),
         }

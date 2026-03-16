@@ -14,8 +14,8 @@ import type {
   AiChatMessage,
   AiChatChunkPayload,
 } from "@/features/ai/types";
-import type { Locale } from "@/i18n";
-import { extractErrorMessage } from "@/shared/errors/appError";
+import { translations, type Locale, type TranslationKey } from "@/i18n";
+import { translateAppError } from "@/shared/errors/appError";
 
 /**
  * AI 面板状态管理 Hook。
@@ -58,10 +58,6 @@ type UseAiStateResult = {
   cancelMessage: () => void;
   clearMessages: () => void;
 };
-
-function getErrorMessage(error: unknown) {
-  return extractErrorMessage(error);
-}
 
 function readPersistedAiSessionStates() {
   if (typeof window === "undefined")
@@ -117,6 +113,10 @@ export default function useAiState({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pendingRequestIdRef = useRef<string | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const t = useCallback(
+    (key: TranslationKey) => translations[locale][key] ?? key,
+    [locale],
+  );
 
   const handleChunk = useCallback((payload: AiChatChunkPayload) => {
     if (payload.requestId !== pendingRequestIdRef.current) return;
@@ -149,7 +149,7 @@ export default function useAiState({
       pendingRequestIdRef.current = null;
       setPending(false);
       setWaitingFirstChunk(false);
-      setErrorMessage(payload.error.message);
+      setErrorMessage(translateAppError(payload.error, t));
       setMessages((prev) => {
         // 错误场景移除末尾 assistant 占位，避免空消息残留。
         const next = prev.slice();
@@ -163,12 +163,12 @@ export default function useAiState({
           JSON.stringify({
             event: "ai.session-chat.error",
             sessionId: payload.sessionId,
-            error: payload.error.message,
+            error: translateAppError(payload.error, t),
           }),
         );
       }
     },
-    [debugLoggingEnabled],
+    [debugLoggingEnabled, t],
   );
 
   useEffect(() => {
@@ -337,7 +337,7 @@ export default function useAiState({
             event: "ai.session-chat.error",
             sessionId: activeSessionId,
             requestId: nextRequestId,
-            error: getErrorMessage(error),
+            error: translateAppError(error, t),
           }),
         );
       }
@@ -354,7 +354,7 @@ export default function useAiState({
         return next;
       });
       setDraftState(content);
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(translateAppError(error, t));
       setPending(false);
       setWaitingFirstChunk(false);
     }
@@ -429,7 +429,7 @@ export default function useAiState({
           JSON.stringify({
             event: "ai.selection.error",
             sessionId: activeSessionId,
-            error: getErrorMessage(error),
+            error: translateAppError(error, t),
           }),
         );
       }
@@ -446,7 +446,7 @@ export default function useAiState({
           return true;
         });
       });
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(translateAppError(error, t));
     } finally {
       setPending(false);
       setWaitingFirstChunk(false);

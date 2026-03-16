@@ -7,6 +7,8 @@ import {
   FiActivity,
   FiDatabase,
   FiEdit2,
+  FiLock,
+  FiUnlock,
   FiRepeat,
   FiSettings,
   FiTrash2,
@@ -75,6 +77,9 @@ type BottomAreaProps = {
   sftpProgressBySession: Record<string, SftpProgress>;
   onOpenTransfersWidget: () => void;
   activeAiConfigName: string | null;
+  securityEnabled: boolean;
+  securityLocked: boolean;
+  onSecurityAction: () => void;
   locale: Locale;
   t: Translate;
 };
@@ -167,6 +172,9 @@ export default function BottomArea({
   sftpProgressBySession,
   onOpenTransfersWidget,
   activeAiConfigName,
+  securityEnabled,
+  securityLocked,
+  onSecurityAction,
   locale,
   t,
 }: BottomAreaProps) {
@@ -676,6 +684,41 @@ export default function BottomArea({
                     <FiRepeat />
                   </button>
                 </div>
+                <button
+                  type="button"
+                  className={`statusbar-security-chip ${
+                    securityEnabled
+                      ? securityLocked
+                        ? "locked"
+                        : "unlocked"
+                      : "plaintext"
+                  }`.trim()}
+                  onClick={onSecurityAction}
+                  aria-label={
+                    securityEnabled
+                      ? securityLocked
+                        ? t("status.security.lockedAction")
+                        : t("status.security.unlockedAction")
+                      : t("status.security.plaintextAction")
+                  }
+                >
+                  {securityEnabled ? (
+                    securityLocked ? (
+                      <FiLock />
+                    ) : (
+                      <FiUnlock />
+                    )
+                  ) : (
+                    <FiUnlock />
+                  )}
+                  <span>
+                    {securityEnabled
+                      ? securityLocked
+                        ? t("status.security.locked")
+                        : t("status.security.unlocked")
+                      : t("status.security.plaintext")}
+                  </span>
+                </button>
                 <span className="statusbar-info-chip">
                   {t("status.window")} {stats.windowRows}x{stats.windowCols}
                 </span>

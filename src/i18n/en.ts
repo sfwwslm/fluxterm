@@ -38,6 +38,7 @@ export const en = {
   "menu.help.about": "About FluxTerm",
   "config.section.appSettings": "Settings",
   "config.section.appAppearance": "Language & Theme",
+  "config.section.security": "Security",
   "config.section.aiSettings": "AI Assistant",
   "config.section.aiProviderManage": "Access Management",
   "config.section.aiProviderQuick": "Quick Access",
@@ -46,6 +47,57 @@ export const en = {
   "config.section.sessionWindow": "Window",
   "config.section.sessionShell": "Default Shell",
   "config.section.configDirectory": "App Directories",
+  "config.security.currentMode": "Current Mode",
+  "config.security.providerPlaintext": "Plaintext Storage",
+  "config.security.providerEncrypted": "Encrypted",
+  "config.security.loading": "Loading security status",
+  "config.security.processing": "Processing security action...",
+  "config.security.enablePassword": "Set Security Password",
+  "config.security.unlockPassword": "Enter Security Password",
+  "config.security.changePassword": "Change Security Password",
+  "config.security.passwordHintPlaintext":
+    "Once enabled, saved SSH passwords, key passphrases, and AI keys will be protected by your security password.",
+  "config.security.passwordHintEncrypted":
+    "After restart, enter your security password again before using protected data.",
+  "config.security.currentPasswordPlaceholder":
+    "Enter current security password",
+  "config.security.nextPasswordPlaceholder": "Enter new security password",
+  "config.security.confirmNextPasswordPlaceholder":
+    "Re-enter new security password",
+  "config.security.passwordPlaceholder": "Enter security password",
+  "config.security.confirmPasswordPlaceholder": "Re-enter security password",
+  "config.security.currentPasswordRequired":
+    "Enter the current security password",
+  "config.security.passwordRequired": "Enter a security password",
+  "config.security.passwordMismatch": "The two passwords do not match",
+  "config.security.enableAction": "Enable Encryption",
+  "config.security.changeAction": "Change Password",
+  "config.security.unlockAction": "Unlock",
+  "config.security.lockAction": "Lock Now",
+  "config.security.disableAction": "Disable Encryption",
+  "config.security.enableSuccess":
+    "Master-password encryption has been enabled",
+  "config.security.changeSuccess": "The security password was changed",
+  "config.security.unlockSuccess": "Protected data has been unlocked",
+  "config.security.lockSuccess": "Protected data has been locked",
+  "config.security.disableSuccess":
+    "Encryption was disabled and data was restored to plaintext storage",
+  "config.security.dangerTitle": "Danger Zone",
+  "config.security.dangerHint":
+    "This action cannot be undone. Proceed carefully.",
+  "config.security.disableConfirm":
+    "Disabling encryption will write all saved SSH passwords, key passphrases, and AI keys to disk in plaintext. Continue?",
+  "error.securityLocked":
+    "Protected data is locked. Click the lock icon in the status bar or open Security settings, then enter your security password to unlock it",
+  "error.securityPasswordInvalid": "The security password is incorrect",
+  "error.securityPasswordTooShort":
+    "The security password must be at least 4 characters long",
+  "error.securityEnableUnavailable":
+    "Encryption is already enabled. Change the security password instead",
+  "error.securityChangeUnavailable":
+    "Master-password encryption is not enabled, so the password cannot be changed",
+  "error.securityUnlockUnavailable":
+    "Master-password encryption is not enabled, so unlocking is not required",
   "config.app.sftpEnabled": "Enable SFTP",
   "config.app.sftpEnabledHint":
     "Enable file browsing, upload, and download for remote hosts in the file widget.",
@@ -471,6 +523,12 @@ export const en = {
   "actions.reconnect": "Reconnect",
   "status.ai": "AI",
   "status.ai.unset": "Not set",
+  "status.security.locked": "Locked",
+  "status.security.unlocked": "Unlocked",
+  "status.security.plaintext": "Plaintext",
+  "status.security.lockedAction": "Open security settings to unlock",
+  "status.security.unlockedAction": "Lock protected data now",
+  "status.security.plaintextAction": "Open security settings",
   "status.window": "Window",
   "status.buffer": "Buffer",
   "status.resource.checking": "Checking resources",

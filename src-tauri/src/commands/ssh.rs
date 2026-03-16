@@ -5,10 +5,13 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::{AiRuntimeState, register_remote_session};
 use crate::events::build_event_bridge;
+use crate::profile_secrets::decrypt_profile_secrets;
+use crate::profile_store::read_profiles;
 use crate::resource_monitor::ResourceMonitorState;
+use crate::security::{CryptoService, SecretStore};
 use crate::session_settings::{HostKeyPolicy, read_session_settings};
 use crate::ssh_host_keys::{HostKeyMatchStatus, match_host_key, trust_host_key};
-use crate::state::EngineState;
+use crate::state::{EngineState, SecurityState};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,16 +32,19 @@ struct HostKeyVerificationRequiredPayload {
 pub async fn ssh_connect(
     app: AppHandle,
     state: State<'_, EngineState>,
+    security: State<'_, SecurityState>,
     ai_state: State<'_, AiRuntimeState>,
     profile: HostProfile,
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
-    let expected_host_key = enforce_host_key_policy(&app, &profile).await?;
+    let resolved_profile = resolve_connect_profile(&app, &security, &profile)?;
+    let expected_host_key = enforce_host_key_policy(&app, &resolved_profile).await?;
     let on_event = build_event_bridge(app.clone());
-    let session = state
-        .engine
-        .connect(profile.clone(), expected_host_key, size, on_event)?;
-    register_remote_session(&ai_state, &session, &profile)?;
+    let session =
+        state
+            .engine
+            .connect(resolved_profile.clone(), expected_host_key, size, on_event)?;
+    register_remote_session(&ai_state, &session, &resolved_profile)?;
     Ok(session)
 }
 
@@ -183,4 +189,26 @@ fn emit_host_key_required(
             err.to_string(),
         )
     })
+}
+
+fn resolve_connect_profile(
+    app: &AppHandle,
+    security: &State<'_, SecurityState>,
+    requested_profile: &HostProfile,
+) -> Result<HostProfile, EngineError> {
+    // 连接时必须回读磁盘中的 profile，再按当前安全状态解保护。
+    // 这样在用户锁定后，即使前端仍保留旧的明文副本，也不能继续建立 SSH 连接。
+    if requested_profile.id.trim().is_empty() {
+        return Err(EngineError::new("profile_not_found", "会话配置不存在"));
+    }
+    let store = read_profiles(app)?;
+    let encrypted_profile = store
+        .profiles
+        .into_iter()
+        .find(|item| item.id == requested_profile.id)
+        .ok_or_else(|| EngineError::new("profile_not_found", "会话配置不存在"))?;
+    let session = security.current_session();
+    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let secret_store = SecretStore::new(&crypto);
+    decrypt_profile_secrets(encrypted_profile, &secret_store)
 }

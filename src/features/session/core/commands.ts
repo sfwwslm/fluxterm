@@ -12,7 +12,10 @@ import type {
   Session,
   SessionStateUi,
 } from "@/types";
-import { extractErrorMessage } from "@/shared/errors/appError";
+import {
+  extractErrorMessage,
+  translateAppError,
+} from "@/shared/errors/appError";
 import { warn as logWarn } from "@/shared/logging/telemetry";
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
@@ -91,26 +94,38 @@ export async function connectProfileCommand({
       typeof (err as { code?: unknown }).code === "string"
         ? (err as { code: string }).code
         : "";
-    const errorMessage = extractErrorMessage(err);
+    const errorMessage = translateAppError(err, t);
     if (code === "ssh_host_key_unknown" || code === "ssh_host_key_mismatch") {
       void logWarn(
         JSON.stringify({
           event: "ssh.connect.pending-host-key-confirmation",
           profileId: profile.id,
           host: profile.host,
-          error: errorMessage,
+          error: extractErrorMessage(err),
         }),
       );
       throw err;
     }
-    logError(
-      JSON.stringify({
-        event: "ssh.connect.failed",
-        profileId: profile.id,
-        host: profile.host,
-        error: errorMessage,
-      }),
-    );
+    if (code === "security_locked") {
+      // 锁定是用户主动触发的受控状态，不属于系统异常，按 warning 记录即可。
+      void logWarn(
+        JSON.stringify({
+          event: "ssh.connect.blocked.security-locked",
+          profileId: profile.id,
+          host: profile.host,
+          error: errorMessage,
+        }),
+      );
+    } else {
+      logError(
+        JSON.stringify({
+          event: "ssh.connect.failed",
+          profileId: profile.id,
+          host: profile.host,
+          error: errorMessage,
+        }),
+      );
+    }
     openDialog({
       title: t("dialog.sshErrorTitle"),
       message: errorMessage || t("dialog.sshErrorBody"),

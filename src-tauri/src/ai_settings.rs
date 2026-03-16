@@ -6,11 +6,12 @@ use std::fs;
 use engine::EngineError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::config_paths::resolve_ai_settings_path;
 use crate::profile_store::{ProfileStore, read_profiles};
 use crate::security::{CryptoService, SecretStore};
+use crate::state::SecurityState;
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::utils::write_atomic;
 
@@ -426,7 +427,9 @@ fn build_ai_settings_from_input(
 
 fn load_ai_crypto(app: &AppHandle) -> Result<CryptoService, EngineError> {
     let store = read_profiles(app).unwrap_or_else(|_| ProfileStore::default());
-    CryptoService::new(store.secret.as_ref())
+    let security = app.state::<SecurityState>();
+    let session = security.current_session();
+    CryptoService::new(store.secret.as_ref(), session.as_ref())
 }
 
 #[cfg(test)]

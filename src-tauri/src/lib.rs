@@ -41,7 +41,10 @@ use crate::commands::proxy::{proxy_close, proxy_close_all, proxy_list, proxy_ope
 use crate::commands::resource_monitor::{
     resource_monitor_start_local, resource_monitor_start_ssh, resource_monitor_stop,
 };
-use crate::commands::security::security_status;
+use crate::commands::security::{
+    security_change_password, security_disable_encryption, security_enable_with_password,
+    security_lock, security_status, security_unlock,
+};
 use crate::commands::sftp::{
     sftp_cancel_transfer, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
     sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
@@ -55,7 +58,7 @@ use crate::commands::tunnel::{
 };
 use crate::local_shell::LocalShellState;
 use crate::resource_monitor::ResourceMonitorState;
-use crate::state::EngineState;
+use crate::state::{EngineState, SecurityState};
 
 fn resolve_log_level() -> LevelFilter {
     let raw = std::env::var("RUST_LOG").unwrap_or_default();
@@ -92,6 +95,7 @@ pub fn run() {
         .manage(EngineState {
             engine: Arc::new(Engine::new()),
         })
+        .manage(SecurityState::default())
         .manage(LocalShellState::default())
         .manage(ResourceMonitorState::default())
         .manage(ai::AiRuntimeState::default())
@@ -129,6 +133,11 @@ pub fn run() {
             ai_settings_save,
             ai_provider_test,
             security_status,
+            security_unlock,
+            security_lock,
+            security_enable_with_password,
+            security_change_password,
+            security_disable_encryption,
             ssh_connect,
             ssh_disconnect,
             ssh_host_key_confirm,

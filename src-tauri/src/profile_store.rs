@@ -44,8 +44,8 @@ impl Default for ProfileStore {
             ssh_groups: Vec::new(),
             secret: Some(SecretConfig {
                 version: 1,
-                provider: "hardcoded_key".to_string(),
-                active_key_id: Some("builtin-v1".to_string()),
+                provider: "plaintext".to_string(),
+                active_key_id: None,
                 kdf_salt: None,
                 verify_hash: None,
             }),
@@ -57,7 +57,7 @@ impl Default for ProfileStore {
 /// 读取配置文件。
 ///
 /// 职责：
-/// 1. 若 profiles.json 不存在，返回包含硬编码初始密钥的默认结构。
+/// 1. 若 profiles.json 不存在，返回默认明文存储结构。
 /// 2. 反序列化磁盘内容并注入内存。
 pub fn read_profiles(app: &AppHandle) -> Result<ProfileStore, EngineError> {
     let path = profiles_path(app)?;

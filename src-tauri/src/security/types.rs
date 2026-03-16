@@ -6,10 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EncryptionProviderKind {
-    HardcodedKey,
-    SystemKeychain,
+    Plaintext,
     UserPassword,
-    RemoteKey,
 }
 
 /// 加密算法标识。
@@ -43,7 +41,6 @@ pub struct EncryptedPayload {
 #[serde(rename_all = "camelCase")]
 pub struct SecurityStatus {
     pub provider: EncryptionProviderKind,
-    pub key_id: String,
     pub locked: bool,
-    pub can_rotate: bool,
+    pub encryption_enabled: bool,
 }

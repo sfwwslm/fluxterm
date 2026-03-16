@@ -1,11 +1,13 @@
 //! 主机配置相关命令。
 use engine::{EngineError, HostProfile};
 use tauri::AppHandle;
+use tauri::State;
 use uuid::Uuid;
 
 use crate::profile_secrets::{decrypt_profile_secrets, encrypt_profile_secrets};
 use crate::profile_store::{read_profiles, write_profiles};
 use crate::security::{CryptoService, SecretStore};
+use crate::state::SecurityState;
 
 const GROUP_NAME_MAX_LENGTH: usize = 12;
 /// 会话名称上限与前端 ProfileModal 保持一致，避免前后端校验结果不同。
@@ -13,14 +15,30 @@ const PROFILE_NAME_MAX_LENGTH: usize = 14;
 
 #[tauri::command]
 /// 读取主机配置列表。
-pub fn profile_list(app: AppHandle) -> Result<Vec<HostProfile>, EngineError> {
+pub fn profile_list(
+    app: AppHandle,
+    security: State<'_, SecurityState>,
+) -> Result<Vec<HostProfile>, EngineError> {
     let store = read_profiles(&app)?;
-    let crypto = CryptoService::new(store.secret.as_ref())?;
+    let session = security.current_session();
+    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     store
         .profiles
         .into_iter()
-        .map(|profile| decrypt_profile_secrets(profile, &secret_store))
+        .map(
+            |profile| match decrypt_profile_secrets(profile.clone(), &secret_store) {
+                Ok(decrypted) => Ok(decrypted),
+                Err(err)
+                    if err.code == "security_locked"
+                        && crypto.provider_kind()
+                            == crate::security::EncryptionProviderKind::UserPassword =>
+                {
+                    Ok(redact_profile_secrets(profile))
+                }
+                Err(err) => Err(err),
+            },
+        )
         .collect()
 }
 
@@ -47,9 +65,14 @@ pub fn profile_groups_save(
 
 #[tauri::command]
 /// 新增或更新主机配置。
-pub fn profile_save(app: AppHandle, mut profile: HostProfile) -> Result<HostProfile, EngineError> {
+pub fn profile_save(
+    app: AppHandle,
+    security: State<'_, SecurityState>,
+    mut profile: HostProfile,
+) -> Result<HostProfile, EngineError> {
     let mut store = read_profiles(&app)?;
-    let crypto = CryptoService::new(store.secret.as_ref())?;
+    let session = security.current_session();
+    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     profile.name = validate_profile_name(profile.name)?;
     profile.tags = normalize_profile_tags(profile.tags)?;
@@ -59,15 +82,6 @@ pub fn profile_save(app: AppHandle, mut profile: HostProfile) -> Result<HostProf
     if profile.port == 0 {
         profile.port = 22;
     }
-    store
-        .secret
-        .get_or_insert_with(|| crate::profile_store::SecretConfig {
-            version: 1,
-            provider: CryptoService::provider_name(&crypto.provider_kind()).to_string(),
-            active_key_id: Some(crypto.key_id().to_string()),
-            kdf_salt: None,
-            verify_hash: None,
-        });
     let encrypted_profile = encrypt_profile_secrets(profile.clone(), &secret_store)?;
     let existing = store.profiles.iter_mut().find(|item| item.id == profile.id);
     if let Some(item) = existing {
@@ -179,4 +193,10 @@ fn now_epoch() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+fn redact_profile_secrets(mut profile: HostProfile) -> HostProfile {
+    profile.password_ref = None;
+    profile.private_key_passphrase_ref = None;
+    profile
 }

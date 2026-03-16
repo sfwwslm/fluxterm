@@ -21,21 +21,12 @@ pub trait EncryptionProvider: Send + Sync {
     /// 对原始字节执行解密。
     fn decrypt(&self, payload: &ProviderCiphertext) -> Result<Vec<u8>, EngineError>;
 
-    /// 触发密钥轮换；当前 Alpha 默认不支持。
-    fn rotate_key(&self) -> Result<(), EngineError> {
-        Err(EngineError::new(
-            "crypto_rotate_unsupported",
-            "当前加密 Provider 不支持密钥轮换",
-        ))
-    }
-
     /// 返回 Provider 当前状态，供未来 UI 或诊断使用。
     fn status(&self) -> SecurityStatus {
         SecurityStatus {
             provider: self.kind(),
-            key_id: self.key_id().to_string(),
             locked: self.is_locked(),
-            can_rotate: false,
+            encryption_enabled: true,
         }
     }
 }

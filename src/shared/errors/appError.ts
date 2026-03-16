@@ -2,6 +2,7 @@
  * 应用统一错误模型。
  * 职责：将未知异常归一化为可读、可记录、可扩展的标准错误结构。
  */
+import type { Translate, TranslationKey } from "@/i18n";
 
 /** 应用错误来源。 */
 export type AppErrorSource = "tauri" | "frontend";
@@ -95,6 +96,14 @@ export function normalizeToAppError(
   });
 }
 
+/** 使用 i18n 优先翻译标准错误码，翻译不到时回退原始消息。 */
+export function translateAppError(error: unknown, t: Translate): string {
+  const code = resolveErrorCode(error);
+  const key = code ? ERROR_CODE_TRANSLATIONS[code] : null;
+  if (key) return t(key);
+  return extractErrorMessage(error);
+}
+
 function pickNestedMessage(value: unknown): string | null {
   if (!isRecord(value)) return null;
   return pickString(value.message, value.error, value.reason);
@@ -154,3 +163,20 @@ function mergeDetails(base: unknown, extra: unknown): unknown {
     raw: extra,
   };
 }
+
+function resolveErrorCode(error: unknown): string | null {
+  if (error instanceof AppError) return error.code;
+  if (isRecord(error)) {
+    return pickString(error.code, error.kind, error.type);
+  }
+  return null;
+}
+
+const ERROR_CODE_TRANSLATIONS: Partial<Record<string, TranslationKey>> = {
+  security_locked: "error.securityLocked",
+  security_password_invalid: "error.securityPasswordInvalid",
+  security_password_too_short: "error.securityPasswordTooShort",
+  security_enable_unavailable: "error.securityEnableUnavailable",
+  security_change_unavailable: "error.securityChangeUnavailable",
+  security_unlock_unavailable: "error.securityUnlockUnavailable",
+};

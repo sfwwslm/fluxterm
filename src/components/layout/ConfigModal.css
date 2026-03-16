@@ -1,6 +1,7 @@
 .modal-body.config-modal-body {
   padding: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .config-modal-layout {
@@ -77,6 +78,47 @@
   max-height: 440px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.config-modal-busy-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface-menu) 72%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 5;
+}
+
+.config-security-busy-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-input);
+  border-radius: 14px;
+  background: var(--surface-header);
+  color: var(--text-primary);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.config-security-busy-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-top-color: var(--accent);
+  animation: config-security-spin 0.8s linear infinite;
+}
+
+@keyframes config-security-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .config-modal-widget h3 {

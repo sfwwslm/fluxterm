@@ -42,6 +42,7 @@ import {
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/useAppSettings";
 import useAiSettings from "@/hooks/useAiSettings";
+import useSecurity from "@/hooks/useSecurity";
 import useSessionSettings from "@/hooks/useSessionSettings";
 import useLayoutState from "@/main/hooks/useLayoutState";
 import useFloatingWidgets from "@/main/hooks/useFloatingWidgets";
@@ -128,7 +129,10 @@ import { normalizeLocalPath } from "@/features/sftp/core/path";
 import { subscribeTauri } from "@/shared/tauri/events";
 import { callTauri } from "@/shared/tauri/commands";
 import { getBackgroundImageAssetPath } from "@/shared/config/paths";
-import { extractErrorMessage } from "@/shared/errors/appError";
+import {
+  extractErrorMessage,
+  translateAppError,
+} from "@/shared/errors/appError";
 import {
   clampBackgroundVideoReplayIntervalSec,
   normalizeBackgroundMediaType,
@@ -533,12 +537,23 @@ export default function AppShell() {
     pickProfile,
     saveProfile,
     removeProfile,
+    reloadProfiles,
     importOpenSshConfig,
     addGroup,
     renameGroup,
     removeGroup,
     moveProfileToGroup,
   } = useProfiles();
+  const {
+    status: securityStatus,
+    loaded: securityLoaded,
+    busy: securityBusy,
+    unlock: unlockSecurity,
+    lock: lockSecurity,
+    enableWithPassword: enableSecurityWithPassword,
+    changePassword: changeSecurityPassword,
+    disableEncryption: disableSecurityEncryption,
+  } = useSecurity();
   const { pushToast } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
   const appUpdater = useAppUpdater();
@@ -905,6 +920,7 @@ export default function AppShell() {
     () => ({
       "app-settings": t("config.section.appSettings"),
       "app-appearance": t("config.section.appAppearance"),
+      security: t("config.section.security"),
       "ai-settings": t("config.section.aiSettings"),
       "ai-provider-manage": t("config.section.aiProviderManage"),
       "ai-provider-quick": t("config.section.aiProviderQuick"),
@@ -930,6 +946,10 @@ export default function AppShell() {
           key: "app-appearance",
           label: configSectionLabels["app-appearance"],
         },
+        {
+          key: "security",
+          label: configSectionLabels.security,
+        },
       ],
       "app-appearance": [
         {
@@ -939,6 +959,24 @@ export default function AppShell() {
         {
           key: "app-appearance",
           label: configSectionLabels["app-appearance"],
+        },
+        {
+          key: "security",
+          label: configSectionLabels.security,
+        },
+      ],
+      security: [
+        {
+          key: "app-settings",
+          label: configSectionLabels["app-settings"],
+        },
+        {
+          key: "app-appearance",
+          label: configSectionLabels["app-appearance"],
+        },
+        {
+          key: "security",
+          label: configSectionLabels.security,
         },
       ],
       "ai-settings": [
@@ -2342,7 +2380,7 @@ export default function AppShell() {
         sessionActions.setBusyMessage(null);
       } catch (error: unknown) {
         sessionActions.setBusyMessage(
-          extractErrorMessage(error) || t("messages.connectFailed"),
+          translateAppError(error, t) || t("messages.connectFailed"),
         );
       } finally {
         if (requestId === latestConnectRequestIdRef.current) {
@@ -3126,6 +3164,15 @@ export default function AppShell() {
             sftpProgressBySession={sftpState.progressBySession}
             onOpenTransfersWidget={handleOpenTransfersWidget}
             activeAiConfigName={aiActiveProvider?.name?.trim() || null}
+            securityEnabled={securityStatus.encryptionEnabled}
+            securityLocked={securityStatus.locked}
+            onSecurityAction={() => {
+              if (securityStatus.encryptionEnabled && !securityStatus.locked) {
+                lockSecurity().catch(() => {});
+                return;
+              }
+              openConfigSection("security");
+            }}
             locale={locale}
             t={t}
           />
@@ -3190,6 +3237,9 @@ export default function AppShell() {
         aiDebugLoggingEnabled={aiDebugLoggingEnabled}
         aiActiveProviderId={aiActiveProviderId}
         aiProviders={aiProviders}
+        securityStatus={securityStatus}
+        securityLoaded={securityLoaded}
+        securityBusy={securityBusy}
         webLinksEnabled={webLinksEnabled}
         commandAutocompleteEnabled={commandAutocompleteEnabled}
         selectionAutoCopyEnabled={selectionAutoCopyEnabled}
@@ -3223,6 +3273,35 @@ export default function AppShell() {
         onAiCompatibleProviderCreate={addCompatibleProviderWithConfig}
         onAiProviderRemove={removeProvider}
         onAiProviderTest={testProviderConnection}
+        onSecurityUnlock={(password) =>
+          unlockSecurity(password).then(async (nextStatus) => {
+            if (!nextStatus.locked) {
+              await reloadProfiles();
+            }
+          })
+        }
+        onSecurityLock={() =>
+          lockSecurity().then(async () => {
+            await reloadProfiles();
+          })
+        }
+        onSecurityEnableWithPassword={(password) =>
+          enableSecurityWithPassword(password).then(async () => {
+            await reloadProfiles();
+          })
+        }
+        onSecurityChangePassword={(currentPassword, nextPassword) =>
+          changeSecurityPassword(currentPassword, nextPassword).then(
+            async () => {
+              await reloadProfiles();
+            },
+          )
+        }
+        onSecurityDisableEncryption={() =>
+          disableSecurityEncryption().then(async () => {
+            await reloadProfiles();
+          })
+        }
         onWebLinksEnabledChange={setWebLinksEnabled}
         onCommandAutocompleteEnabledChange={setCommandAutocompleteEnabled}
         onSelectionAutoCopyEnabledChange={setSelectionAutoCopyEnabled}

@@ -19,7 +19,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::ai_settings::{AiProviderSettings, AiSettings, read_ai_settings};
 use crate::profile_store::{ProfileStore, read_profiles};
-use crate::security::CryptoService;
+use crate::security::{CryptoService, SecretStore};
+use crate::state::SecurityState;
 
 const DEFAULT_OPENAI_TIMEOUT_MS: u64 = 20_000;
 const MAX_OUTPUT_CHARS: usize = 6_000;
@@ -155,8 +156,13 @@ fn resolve_provider_api_key(
         .and_then(|provider| provider.api_key_ref.as_ref())
     {
         let store = read_profiles(app).unwrap_or_else(|_| ProfileStore::default());
-        let crypto = CryptoService::new(store.secret.as_ref())?;
-        return crypto.decrypt_string(token);
+        let security = app.state::<SecurityState>();
+        let session = security.current_session();
+        let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+        let secret_store = SecretStore::new(&crypto);
+        return secret_store
+            .reveal_optional_string(Some(token.clone()))
+            .map(|value| value.unwrap_or_default());
     }
     Ok(String::new())
 }

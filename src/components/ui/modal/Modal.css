@@ -16,6 +16,7 @@
   background: var(--chrome-modal-bg);
   border: 1px solid var(--border-weak);
   border-radius: 18px;
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -67,4 +68,15 @@
   padding: 14px 18px;
   background: var(--chrome-modal-header-bg);
   border-top: 1px solid var(--border-soft);
+}
+
+.modal-busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface-menu) 72%, transparent);
+  backdrop-filter: blur(4px);
 }

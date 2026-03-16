@@ -1,6 +1,4 @@
-//! 硬编码密钥 Provider。
-//!
-//! Alpha 阶段允许继续使用弱保护模型，但业务层不再直接依赖固定 key 或 AES 实现。
+//! 用户主密码 Provider。
 
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
@@ -10,30 +8,35 @@ use rand::random;
 use crate::security::provider::EncryptionProvider;
 use crate::security::types::{EncryptionAlgorithm, EncryptionProviderKind, ProviderCiphertext};
 
-const BUILTIN_KEY_ID: &str = "builtin-v1";
-const BUILTIN_KEY: [u8; 32] = [
-    0x46, 0x6c, 0x75, 0x78, 0x54, 0x65, 0x72, 0x6d, 0x2d, 0x44, 0x65, 0x76, 0x2d, 0x4b, 0x65, 0x79,
-    0x2d, 0x32, 0x30, 0x32, 0x36, 0x2d, 0x30, 0x32, 0x2d, 0x32, 0x36, 0x2d, 0x58, 0x58, 0x58, 0x58,
-];
+/// 基于用户主密码派生密钥的 AES-256-GCM Provider。
+pub struct UserPasswordProvider {
+    key_id: String,
+    encryption_key: [u8; 32],
+}
 
-/// 基于固定 32 字节密钥的 AES-256-GCM Provider。
-pub struct HardcodedKeyProvider;
+impl UserPasswordProvider {
+    /// 使用已派生的会话密钥创建 Provider。
+    pub fn new(key_id: String, encryption_key: [u8; 32]) -> Self {
+        Self {
+            key_id,
+            encryption_key,
+        }
+    }
 
-impl HardcodedKeyProvider {
     fn cipher(&self) -> Result<Aes256Gcm, EngineError> {
-        Aes256Gcm::new_from_slice(&BUILTIN_KEY).map_err(|err| {
+        Aes256Gcm::new_from_slice(&self.encryption_key).map_err(|err| {
             EngineError::with_detail("crypto_init_failed", "无法初始化加密器", err.to_string())
         })
     }
 }
 
-impl EncryptionProvider for HardcodedKeyProvider {
+impl EncryptionProvider for UserPasswordProvider {
     fn kind(&self) -> EncryptionProviderKind {
-        EncryptionProviderKind::HardcodedKey
+        EncryptionProviderKind::UserPassword
     }
 
     fn key_id(&self) -> &str {
-        BUILTIN_KEY_ID
+        &self.key_id
     }
 
     fn is_locked(&self) -> bool {
