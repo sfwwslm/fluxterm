@@ -186,6 +186,7 @@
 
 .statusbar-ai-chip,
 .statusbar-info-chip,
+.statusbar-link-chip,
 .statusbar-transfer-token,
 .statusbar-security-chip {
   display: inline-flex;
@@ -197,6 +198,21 @@
   background: var(--chrome-status-chip-bg);
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.statusbar-link-chip {
+  margin: 0;
+  font: inherit;
+  line-height: inherit;
+  min-height: 22px;
+  box-sizing: border-box;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.statusbar-link-chip:hover {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-soft));
 }
 
 .statusbar-transfer-token {

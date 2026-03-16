@@ -3,6 +3,7 @@
  * 负责快捷命令栏、状态栏和资源监控展示，并承载快捷命令的上下文菜单。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   FiActivity,
   FiDatabase,
@@ -29,6 +30,7 @@ import Select from "@/components/ui/select";
 import InputDialog from "@/components/ui/InputDialog";
 import ContextMenu from "@/components/ui/menu/ContextMenu";
 import { DEFAULT_QUICKBAR_GROUP_ID } from "@/constants/quickbar";
+import { FLUXTERM_ISSUES_URL } from "@/constants/links";
 import "@/main/components/BottomArea.css";
 
 type GroupMutationResult =
@@ -725,6 +727,16 @@ export default function BottomArea({
                 <span className="statusbar-info-chip">
                   {t("status.buffer")} {stats.bufferLines}
                 </span>
+                <button
+                  type="button"
+                  className="statusbar-link-chip"
+                  aria-label="Issues"
+                  onClick={() => {
+                    void openUrl(FLUXTERM_ISSUES_URL);
+                  }}
+                >
+                  <span>Issues</span>
+                </button>
                 <span className="statusbar-info-chip">
                   {formatDateTime(now, locale)}
                 </span>
