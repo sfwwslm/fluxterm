@@ -1,0 +1,42 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="240" y1="120" x2="1640" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050816"/>
+      <stop offset="0.52" stop-color="#08182A"/>
+      <stop offset="1" stop-color="#02050C"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1440 212) rotate(134.901) scale(718.169 465.004)">
+      <stop stop-color="#31C7D5" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="#31C7D5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(500 790) rotate(35.8466) scale(603.505 391.165)">
+      <stop stop-color="#4F6FFF" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#4F6FFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="269" y1="850" x2="1572" y2="252" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5A8" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#0EA5A8" stop-opacity="0.36"/>
+      <stop offset="0.64" stop-color="#7DD3FC" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M80 0H0V80" stroke="#7DD3FC" stroke-opacity="0.14"/>
+      <path d="M40 0V80M0 40H80" stroke="#7DD3FC" stroke-opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#grid)"/>
+  <rect width="1920" height="1080" fill="url(#glowA)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+  <path d="M172 787C390 747 566 640 796 626C1115 607 1288 734 1682 664" stroke="url(#beam)" stroke-width="164" stroke-linecap="round"/>
+  <path d="M1220 125L1684 125" stroke="#9AE6F5" stroke-opacity="0.26" stroke-width="2"/>
+  <path d="M1386 244L1760 244" stroke="#9AE6F5" stroke-opacity="0.18" stroke-width="2"/>
+  <path d="M183 865L580 865" stroke="#9AE6F5" stroke-opacity="0.18" stroke-width="2"/>
+  <circle cx="1412" cy="126" r="5" fill="#C4F1F9"/>
+  <circle cx="1588" cy="244" r="4" fill="#C4F1F9" fill-opacity="0.72"/>
+  <circle cx="579" cy="865" r="4" fill="#C4F1F9" fill-opacity="0.72"/>
+  <circle cx="1345" cy="391" r="2" fill="#D7FBFF" fill-opacity="0.82"/>
+  <circle cx="1213" cy="618" r="2" fill="#D7FBFF" fill-opacity="0.58"/>
+  <circle cx="742" cy="438" r="2" fill="#D7FBFF" fill-opacity="0.52"/>
+  <circle cx="862" cy="699" r="2" fill="#D7FBFF" fill-opacity="0.5"/>
+</svg>

@@ -1,0 +1,37 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="960" y1="0" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#01040B"/>
+      <stop offset="0.58" stop-color="#071220"/>
+      <stop offset="1" stop-color="#02050A"/>
+    </linearGradient>
+    <radialGradient id="vaultGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(931 1182) rotate(-90) scale(723 929)">
+      <stop stop-color="#7DD3FC" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="trailA" x1="144" y1="972" x2="1765" y2="490" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#E0FBFF" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#67E8F9" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="trailB" x1="155" y1="1030" x2="1766" y2="588" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4B5FD" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#F5F3FF" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#C4B5FD" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#vaultGlow)"/>
+  <g opacity="0.92">
+    <path d="M-46 961C98 856 231 770 377 703C550 624 730 579 912 578C1099 577 1270 633 1438 726C1592 811 1738 927 1882 1058" stroke="url(#trailA)" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M58 1036C214 908 355 808 506 733C675 649 846 609 1019 611C1185 614 1344 666 1501 750C1659 835 1810 944 1961 1066" stroke="url(#trailB)" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M179 1088C314 949 443 838 584 767C720 698 862 662 1009 665C1159 668 1303 714 1449 789C1590 861 1731 954 1876 1044" stroke="url(#trailA)" stroke-opacity="0.72" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+  <path d="M0 929C226 895 445 900 673 933C876 962 1028 994 1183 994C1345 994 1493 969 1682 969C1768 969 1849 975 1920 985V1080H0V929Z" fill="#030810"/>
+  <path d="M0 992C162 988 332 1007 528 1039C677 1063 841 1080 1033 1080H0V992Z" fill="#02050A"/>
+  <circle cx="368" cy="231" r="2" fill="#F8FDFF" fill-opacity="0.72"/>
+  <circle cx="606" cy="188" r="1.5" fill="#F8FDFF" fill-opacity="0.5"/>
+  <circle cx="981" cy="128" r="1.6" fill="#F8FDFF" fill-opacity="0.78"/>
+  <circle cx="1299" cy="204" r="1.5" fill="#F8FDFF" fill-opacity="0.56"/>
+  <circle cx="1595" cy="263" r="1.7" fill="#F8FDFF" fill-opacity="0.6"/>
+</svg>

@@ -1,0 +1,39 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="960" y1="0" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020611"/>
+      <stop offset="0.52" stop-color="#071426"/>
+      <stop offset="1" stop-color="#03060D"/>
+    </linearGradient>
+    <radialGradient id="poleGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1003 326) rotate(90) scale(365 462)">
+      <stop stop-color="#8EDCFF" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#8EDCFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="trailA" x1="267" y1="706" x2="1432" y2="-44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#D8F6FF" stop-opacity="0.56"/>
+      <stop offset="1" stop-color="#67E8F9" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="trailB" x1="449" y1="874" x2="1529" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A78BFA" stop-opacity="0"/>
+      <stop offset="0.48" stop-color="#EDE9FE" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#A78BFA" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#poleGlow)"/>
+  <g opacity="0.88">
+    <path d="M175 942C228 797 310 668 421 556C560 416 734 319 938 284C1133 250 1300 281 1451 363C1589 438 1705 552 1801 700" stroke="url(#trailA)" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M80 1003C151 824 245 681 366 568C517 427 705 327 923 291C1144 255 1337 288 1508 378C1649 452 1768 555 1865 682" stroke="url(#trailA)" stroke-opacity="0.88" stroke-width="2.1" stroke-linecap="round"/>
+    <path d="M313 980C371 820 452 689 553 592C676 472 832 391 1012 372C1199 352 1363 390 1511 465C1632 526 1736 609 1828 711" stroke="url(#trailB)" stroke-width="1.9" stroke-linecap="round"/>
+    <path d="M519 1056C553 903 617 772 711 670C810 562 939 492 1091 482C1245 472 1381 514 1511 585C1626 648 1732 744 1831 864" stroke="url(#trailA)" stroke-opacity="0.7" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M872 1088C875 930 914 784 986 677C1066 558 1180 478 1315 455C1450 432 1569 473 1687 552C1766 605 1839 675 1910 760" stroke="url(#trailB)" stroke-opacity="0.72" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  <path d="M0 903C183 858 332 847 500 858C725 874 850 940 1024 940C1217 940 1319 867 1515 867C1670 867 1798 898 1920 936V1080H0V903Z" fill="#06111A"/>
+  <path d="M0 958C198 924 368 930 566 951C770 973 913 1017 1090 1017C1269 1017 1410 973 1599 973C1719 973 1827 990 1920 1010V1080H0V958Z" fill="#040A11"/>
+  <circle cx="1004" cy="327" r="4.5" fill="#E6FAFF" fill-opacity="0.88"/>
+  <circle cx="404" cy="168" r="2" fill="#F8FDFF" fill-opacity="0.8"/>
+  <circle cx="582" cy="241" r="1.5" fill="#F8FDFF" fill-opacity="0.54"/>
+  <circle cx="1309" cy="189" r="1.7" fill="#F8FDFF" fill-opacity="0.7"/>
+  <circle cx="1555" cy="288" r="1.5" fill="#F8FDFF" fill-opacity="0.48"/>
+</svg>

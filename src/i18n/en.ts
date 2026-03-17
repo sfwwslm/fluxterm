@@ -108,19 +108,12 @@ export const en = {
     "For example C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.fileDefaultEditorUnset": "No default editor set",
   "config.app.pickEditor": "Choose App",
-  "config.app.backgroundImage": "Custom Background Image",
-  "config.app.backgroundImageHint":
-    "Select a local image to use as the background.",
-  "config.app.backgroundImagePlaceholder": "No background image selected",
-  "config.app.pickBackgroundImage": "Choose Image",
-  "config.app.deleteBackgroundImage": "Delete Image",
-  "config.app.backgroundImageUnsupported":
-    "Only png/jpg/jpeg/webp image formats are supported",
-  "config.app.backgroundImagePermissionDenied":
-    "Image read/copy was blocked by system permissions. Check Tauri fs scope and source path access.",
   "config.app.backgroundMedia": "Custom Wallpaper",
-  "config.app.backgroundMediaHint": "Supports image and video.",
+  "config.app.backgroundMediaHint": "Supports custom images and videos",
   "config.app.backgroundMediaPlaceholder": "No wallpaper selected",
+  "config.app.backgroundMediaSourceBuiltin": "Built-in",
+  "config.app.builtinWallpapers": "Built-in Wallpapers",
+  "config.app.clearBackgroundMedia": "Clear Selection",
   "config.app.pickBackgroundMedia": "Choose Media",
   "config.app.deleteBackgroundMedia": "Delete Media",
   "config.app.backgroundMediaUnsupported":

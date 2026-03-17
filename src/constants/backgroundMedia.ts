@@ -1,3 +1,5 @@
+import { getBuiltinWallpaperByAsset } from "@/constants/builtinWallpapers";
+
 /** 背景媒体类型。 */
 export type BackgroundMediaType = "image" | "video";
 
@@ -59,6 +61,9 @@ export function clampBackgroundVideoReplayIntervalSec(value: unknown): number {
 
 /** 根据扩展名判断背景媒体类型，无法识别时默认图片。 */
 export function inferBackgroundMediaTypeFromAsset(asset: string) {
+  if (getBuiltinWallpaperByAsset(asset)) {
+    return "image" satisfies BackgroundMediaType;
+  }
   const match = asset.match(/\.([A-Za-z0-9]+)$/);
   const ext = match?.[1]?.toLowerCase();
   if (ext && BACKGROUND_VIDEO_EXTENSIONS.includes(ext)) {

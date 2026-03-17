@@ -41,6 +41,11 @@ import {
 } from "@/hooks/useAppSettings";
 import type { ThemeId } from "@/types";
 import {
+  BUILTIN_WALLPAPERS,
+  getBuiltinWallpaperByAsset,
+  isBuiltinWallpaperAsset,
+} from "@/constants/builtinWallpapers";
+import {
   BACKGROUND_IMAGE_EXTENSIONS,
   BACKGROUND_MEDIA_EXTENSIONS,
   BACKGROUND_VIDEO_EXTENSIONS,
@@ -382,6 +387,12 @@ export default function ConfigModal({
   const normalizedBackgroundVideoReplayIntervalSec =
     clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec);
   const isBackgroundVideoMode = normalizedBackgroundMediaType === "video";
+  const selectedBuiltinWallpaper =
+    getBuiltinWallpaperByAsset(backgroundImageAsset);
+  const isBuiltinBackgroundSelected = !!selectedBuiltinWallpaper;
+  const backgroundMediaDisplayName = selectedBuiltinWallpaper
+    ? `${t("config.app.backgroundMediaSourceBuiltin")} · ${selectedBuiltinWallpaper.label}`
+    : backgroundImageAsset || t("config.app.backgroundMediaPlaceholder");
   const isBackgroundImageModeActive =
     backgroundImageEnabled && !!backgroundImageAsset;
   const effectiveModalSurfaceAlpha = isBackgroundImageModeActive
@@ -525,6 +536,12 @@ export default function ConfigModal({
           : message,
       });
     }
+  }
+
+  function selectBuiltinWallpaper(asset: string) {
+    onBackgroundImageAssetChange?.(asset);
+    onBackgroundImageEnabledChange?.(true);
+    onBackgroundMediaTypeChange?.("image");
   }
 
   // 数值草稿在失焦、回车或关闭模态框时统一提交；非法输入回退到当前生效值。
@@ -871,21 +888,51 @@ export default function ConfigModal({
                 }
               />
             </label>
-            <Tooltip
-              content={
-                backgroundImageAsset ||
-                t("config.app.backgroundMediaPlaceholder")
-              }
-            >
+            <Tooltip content={backgroundMediaDisplayName}>
               <div
                 className={`config-file-picker-path config-file-picker-path-single-line ${
                   backgroundImageAsset ? "" : "empty"
                 }`.trim()}
               >
-                {backgroundImageAsset ||
-                  t("config.app.backgroundMediaPlaceholder")}
+                {backgroundMediaDisplayName}
               </div>
             </Tooltip>
+            <div className="config-subsetting config-subsetting-stack">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.app.builtinWallpapers")}
+                </span>
+              </div>
+              <div className="config-wallpaper-grid">
+                {BUILTIN_WALLPAPERS.map((wallpaper) => {
+                  const isActive = backgroundImageAsset === wallpaper.asset;
+                  return (
+                    <button
+                      key={wallpaper.id}
+                      type="button"
+                      className={`config-wallpaper-card ${
+                        isActive ? "active" : ""
+                      }`.trim()}
+                      aria-label={wallpaper.label}
+                      title={wallpaper.label}
+                      onClick={() => {
+                        selectBuiltinWallpaper(wallpaper.asset);
+                      }}
+                    >
+                      <span
+                        className={`config-wallpaper-card-preview tone-${wallpaper.tone}`}
+                        style={
+                          {
+                            "--config-wallpaper-preview": `url("${wallpaper.url}")`,
+                          } as CSSProperties
+                        }
+                        aria-hidden="true"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <label className="config-subsetting">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
@@ -1004,7 +1051,10 @@ export default function ConfigModal({
                   void (async () => {
                     try {
                       const assetToDelete = backgroundImageAsset;
-                      if (assetToDelete) {
+                      if (
+                        assetToDelete &&
+                        !isBuiltinWallpaperAsset(assetToDelete)
+                      ) {
                         const targetPath =
                           await getBackgroundImageAssetPath(assetToDelete);
                         if (await exists(targetPath)) {
@@ -1013,6 +1063,7 @@ export default function ConfigModal({
                       }
                       onBackgroundImageAssetChange?.("");
                       onBackgroundImageEnabledChange?.(false);
+                      onBackgroundMediaTypeChange?.("image");
                     } catch (error) {
                       pushToast({
                         level: "error",
@@ -1022,7 +1073,11 @@ export default function ConfigModal({
                   })();
                 }}
               >
-                {t("config.app.deleteBackgroundMedia")}
+                {t(
+                  isBuiltinBackgroundSelected
+                    ? "config.app.clearBackgroundMedia"
+                    : "config.app.deleteBackgroundMedia",
+                )}
               </Button>
             </div>
           </div>

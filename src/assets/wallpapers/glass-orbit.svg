@@ -1,0 +1,49 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="163" y1="98" x2="1714" y2="988" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06101B"/>
+      <stop offset="0.48" stop-color="#0C1E33"/>
+      <stop offset="1" stop-color="#040813"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1438 212) rotate(139.865) scale(650.53 435.618)">
+      <stop stop-color="#83E7FF" stop-opacity="0.46"/>
+      <stop offset="1" stop-color="#83E7FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(552 840) rotate(31.8053) scale(600.696 404.019)">
+      <stop stop-color="#60A5FA" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#60A5FA" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="536" y1="829" x2="1373" y2="242" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9" stop-opacity="0.12"/>
+      <stop offset="0.5" stop-color="#D8F6FF" stop-opacity="0.68"/>
+      <stop offset="1" stop-color="#67E8F9" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="704" y1="302" x2="1247" y2="770" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0F2FE" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#E0F2FE" stop-opacity="0.08"/>
+    </linearGradient>
+    <filter id="blur" x="490" y="116" width="954" height="846" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glowA)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+  <g filter="url(#blur)" opacity="0.44">
+    <ellipse cx="969" cy="543" rx="374" ry="212" fill="#69D7FF"/>
+  </g>
+  <ellipse cx="957" cy="540" rx="510" ry="245" stroke="url(#ring)" stroke-width="2.5"/>
+  <ellipse cx="958" cy="540" rx="412" ry="183" stroke="url(#ring)" stroke-opacity="0.72" stroke-width="1.5"/>
+  <ellipse cx="959" cy="540" rx="294" ry="118" stroke="url(#ring)" stroke-opacity="0.54" stroke-width="1.5"/>
+  <g opacity="0.9">
+    <rect x="708" y="265" width="516" height="550" rx="38" fill="url(#glass)" stroke="#D9F5FF" stroke-opacity="0.34"/>
+    <rect x="776" y="204" width="360" height="176" rx="26" fill="#E0F2FE" fill-opacity="0.08" stroke="#E0F2FE" stroke-opacity="0.28"/>
+    <rect x="819" y="471" width="508" height="153" rx="26" transform="rotate(9 819 471)" fill="#E0F2FE" fill-opacity="0.07" stroke="#E0F2FE" stroke-opacity="0.24"/>
+    <rect x="620" y="576" width="394" height="134" rx="26" transform="rotate(-8 620 576)" fill="#E0F2FE" fill-opacity="0.05" stroke="#E0F2FE" stroke-opacity="0.2"/>
+  </g>
+  <path d="M233 872C515 764 677 757 889 791C1114 828 1275 885 1650 757" stroke="#B7F1FF" stroke-opacity="0.12" stroke-width="120" stroke-linecap="round"/>
+  <circle cx="866" cy="294" r="3" fill="#F0FBFF" fill-opacity="0.8"/>
+  <circle cx="1170" cy="341" r="2.5" fill="#F0FBFF" fill-opacity="0.72"/>
+  <circle cx="736" cy="647" r="2.5" fill="#F0FBFF" fill-opacity="0.56"/>
+  <circle cx="1322" cy="588" r="2" fill="#F0FBFF" fill-opacity="0.6"/>
+</svg>

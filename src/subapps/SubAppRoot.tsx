@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "@/App.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { readFile } from "@tauri-apps/plugin-fs";
 import { warn } from "@/shared/logging/telemetry";
 import useAppSettings, {
   DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA,
@@ -12,7 +11,6 @@ import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import { usePreventBrowserDefaults } from "@/hooks/usePreventBrowserDefaults";
 import { translations, type Locale, type Translate } from "@/i18n";
 import type { ThemeId } from "@/types";
-import { getBackgroundImageAssetPath } from "@/shared/config/paths";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import { themePresets } from "@/main/theme/themePresets";
 import { buildThemeCssVars } from "@/main/theme/buildThemeCssVars";
@@ -35,6 +33,7 @@ import ProxySubApp from "@/subapps/proxy/ProxySubApp";
 import "@/subapps/SubAppShell.css";
 import "@/subapps/proxy/ProxySubApp.css";
 import { callTauri } from "@/shared/tauri/commands";
+import { resolveBackgroundAssetUrl } from "@/features/backgrounds/core/assetResolver";
 
 function resolveBackgroundImageStyle(mode: BackgroundRenderMode) {
   if (mode === "contain") {
@@ -244,6 +243,7 @@ export default function SubAppRoot() {
   useEffect(() => {
     let disposed = false;
     let blobUrl: string | null = null;
+    let revokeBlobUrl = () => {};
     const root = document.documentElement;
     const applyBackgroundImageMode = (enabled: boolean) => {
       root.dataset.backgroundImageMode = enabled ? "on" : "off";
@@ -279,13 +279,13 @@ export default function SubAppRoot() {
 
     void (async () => {
       try {
-        const filePath = await getBackgroundImageAssetPath(
+        const resolvedAsset = await resolveBackgroundAssetUrl(
           effectiveBackgroundImageAsset,
         );
-        const bytes = await readFile(filePath);
-        blobUrl = URL.createObjectURL(new Blob([bytes]));
+        blobUrl = resolvedAsset.url;
+        revokeBlobUrl = resolvedAsset.revoke;
         if (disposed) {
-          URL.revokeObjectURL(blobUrl);
+          resolvedAsset.revoke();
           return;
         }
         const style = resolveBackgroundImageStyle(
@@ -322,7 +322,7 @@ export default function SubAppRoot() {
     return () => {
       disposed = true;
       if (!blobUrl) return;
-      URL.revokeObjectURL(blobUrl);
+      revokeBlobUrl();
     };
   }, [
     effectiveBackgroundImageEnabled,

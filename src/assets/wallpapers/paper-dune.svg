@@ -1,0 +1,48 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="217" y1="95" x2="1688" y2="1018" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F1E4"/>
+      <stop offset="0.48" stop-color="#F1E4CB"/>
+      <stop offset="1" stop-color="#E7D2B1"/>
+    </linearGradient>
+    <radialGradient id="washA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1420 210) rotate(136.237) scale(626.039 380.053)">
+      <stop stop-color="#F8F7F0" stop-opacity="0.84"/>
+      <stop offset="1" stop-color="#F8F7F0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="washB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(468 868) rotate(24.447) scale(648.955 356.389)">
+      <stop stop-color="#D9BE92" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#D9BE92" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grain" width="120" height="120" patternUnits="userSpaceOnUse">
+      <circle cx="18" cy="22" r="1.2" fill="#B88A5F" fill-opacity="0.12"/>
+      <circle cx="74" cy="50" r="1" fill="#B88A5F" fill-opacity="0.08"/>
+      <circle cx="46" cy="94" r="1.4" fill="#B88A5F" fill-opacity="0.1"/>
+      <circle cx="102" cy="18" r="1.1" fill="#B88A5F" fill-opacity="0.08"/>
+      <circle cx="98" cy="86" r="1.3" fill="#B88A5F" fill-opacity="0.1"/>
+    </pattern>
+    <linearGradient id="duneA" x1="85" y1="735" x2="1835" y2="612" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0BE92"/>
+      <stop offset="0.42" stop-color="#D8AD7E"/>
+      <stop offset="1" stop-color="#C69365"/>
+    </linearGradient>
+    <linearGradient id="duneB" x1="0" y1="903" x2="1920" y2="769" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CD9C6E"/>
+      <stop offset="0.48" stop-color="#B98057"/>
+      <stop offset="1" stop-color="#A86E47"/>
+    </linearGradient>
+    <linearGradient id="duneC" x1="0" y1="1007" x2="1920" y2="879" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8E5C3C"/>
+      <stop offset="0.52" stop-color="#7E5035"/>
+      <stop offset="1" stop-color="#6C442D"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#washA)"/>
+  <rect width="1920" height="1080" fill="url(#washB)"/>
+  <rect width="1920" height="1080" fill="url(#grain)"/>
+  <path d="M0 716C208 670 372 700 560 700C716 700 867 615 1038 615C1234 615 1363 705 1553 705C1704 705 1815 672 1920 650V1080H0V716Z" fill="url(#duneA)"/>
+  <path d="M0 844C170 805 329 792 505 806C688 820 798 886 971 886C1164 886 1273 793 1455 793C1638 793 1787 850 1920 902V1080H0V844Z" fill="url(#duneB)"/>
+  <path d="M0 946C241 921 402 890 568 902C771 916 852 987 1029 987C1202 987 1310 919 1486 919C1661 919 1796 958 1920 1002V1080H0V946Z" fill="url(#duneC)"/>
+  <path d="M372 338C526 312 668 325 822 365C1017 416 1172 467 1377 456" stroke="#FDF7E8" stroke-opacity="0.4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M470 420C636 402 765 423 919 464C1047 498 1144 530 1288 536" stroke="#FFF8EB" stroke-opacity="0.24" stroke-width="2" stroke-linecap="round"/>
+</svg>

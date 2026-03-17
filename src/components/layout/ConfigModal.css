@@ -224,6 +224,11 @@
   border-top: 1px solid var(--border-soft);
 }
 
+.config-subsetting-stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .config-range-setting {
   align-items: center;
 }
@@ -361,6 +366,56 @@
   width: 96px;
 }
 
+.config-wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.config-wallpaper-card {
+  display: block;
+  padding: 6px;
+  border: 1px solid var(--border-input);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-menu) 68%, transparent);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.config-wallpaper-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border-input));
+  transform: translateY(-1px);
+}
+
+.config-wallpaper-card.active {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border-input));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-menu));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.config-wallpaper-card-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 78%, transparent);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12)),
+    var(--config-wallpaper-preview);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.config-wallpaper-card-preview.tone-light {
+  border-color: color-mix(in srgb, var(--border-input) 82%, transparent);
+}
+
 .config-empty-state {
   padding: 18px 16px;
   border: 1px dashed var(--border-soft);
@@ -470,5 +525,9 @@
 
   .config-ai-provider-inline .config-file-picker-actions {
     margin-left: 0;
+  }
+
+  .config-wallpaper-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

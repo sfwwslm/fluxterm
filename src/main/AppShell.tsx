@@ -16,7 +16,7 @@ import "@/components/ui/base-input.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { info, warn } from "@/shared/logging/telemetry";
 import { save } from "@tauri-apps/plugin-dialog";
-import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
 import ConfigModal, {
   type ConfigSectionItem,
@@ -128,11 +128,11 @@ import {
 import { normalizeLocalPath } from "@/features/sftp/core/path";
 import { subscribeTauri } from "@/shared/tauri/events";
 import { callTauri } from "@/shared/tauri/commands";
-import { getBackgroundImageAssetPath } from "@/shared/config/paths";
 import {
   extractErrorMessage,
   translateAppError,
 } from "@/shared/errors/appError";
+import { resolveBackgroundAssetUrl } from "@/features/backgrounds/core/assetResolver";
 import {
   clampBackgroundVideoReplayIntervalSec,
   normalizeBackgroundMediaType,
@@ -685,6 +685,7 @@ export default function AppShell() {
   useEffect(() => {
     let disposed = false;
     let blobUrl: string | null = null;
+    let revokeBlobUrl = () => {};
     const root = document.documentElement;
     const applyBackgroundImageMode = (enabled: boolean) => {
       root.dataset.backgroundImageMode = enabled ? "on" : "off";
@@ -720,12 +721,12 @@ export default function AppShell() {
 
     void (async () => {
       try {
-        const filePath =
-          await getBackgroundImageAssetPath(backgroundImageAsset);
-        const bytes = await readFile(filePath);
-        blobUrl = URL.createObjectURL(new Blob([bytes]));
+        const resolvedAsset =
+          await resolveBackgroundAssetUrl(backgroundImageAsset);
+        blobUrl = resolvedAsset.url;
+        revokeBlobUrl = resolvedAsset.revoke;
         if (disposed) {
-          URL.revokeObjectURL(blobUrl);
+          resolvedAsset.revoke();
           return;
         }
         const style = resolveBackgroundImageStyle(
@@ -767,7 +768,7 @@ export default function AppShell() {
     return () => {
       disposed = true;
       if (!blobUrl) return;
-      URL.revokeObjectURL(blobUrl);
+      revokeBlobUrl();
     };
   }, [
     isBackgroundMediaRequested,

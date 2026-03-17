@@ -97,18 +97,12 @@ export const zh = {
     "例如 C:\\Program Files\\Notepad++\\notepad++.exe",
   "config.app.fileDefaultEditorUnset": "未设置默认编辑器",
   "config.app.pickEditor": "选择程序",
-  "config.app.backgroundImage": "自定义背景图",
-  "config.app.backgroundImageHint": "选择本地图片后即可作为背景使用。",
-  "config.app.backgroundImagePlaceholder": "未设置背景图",
-  "config.app.pickBackgroundImage": "选择图片",
-  "config.app.deleteBackgroundImage": "删除图片",
-  "config.app.backgroundImageUnsupported":
-    "仅支持 png/jpg/jpeg/webp 格式的图片",
-  "config.app.backgroundImagePermissionDenied":
-    "读取或复制图片被系统权限拦截，请检查 Tauri fs scope 配置和图片路径权限。",
   "config.app.backgroundMedia": "自定义壁纸",
-  "config.app.backgroundMediaHint": "支持图片与视频。",
+  "config.app.backgroundMediaHint": "支持自定义图片、视频",
   "config.app.backgroundMediaPlaceholder": "未设置壁纸",
+  "config.app.backgroundMediaSourceBuiltin": "内置",
+  "config.app.builtinWallpapers": "内置壁纸",
+  "config.app.clearBackgroundMedia": "取消使用",
   "config.app.pickBackgroundMedia": "选择媒体",
   "config.app.deleteBackgroundMedia": "删除媒体",
   "config.app.backgroundMediaUnsupported":

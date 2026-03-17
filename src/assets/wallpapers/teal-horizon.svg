@@ -1,0 +1,40 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="960" y1="0" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06131B"/>
+      <stop offset="0.42" stop-color="#0A2731"/>
+      <stop offset="1" stop-color="#051017"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="960" y1="162" x2="960" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FF4D8"/>
+      <stop offset="1" stop-color="#8FF4D8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="mist" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(960 663) rotate(90) scale(403 994)">
+      <stop stop-color="#6CE8D7" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#6CE8D7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ridgeA" x1="183" y1="734" x2="1713" y2="551" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E3A45"/>
+      <stop offset="0.46" stop-color="#115966"/>
+      <stop offset="1" stop-color="#0C313D"/>
+    </linearGradient>
+    <linearGradient id="ridgeB" x1="98" y1="910" x2="1809" y2="676" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B2A34"/>
+      <stop offset="0.48" stop-color="#0F4651"/>
+      <stop offset="1" stop-color="#09252D"/>
+    </linearGradient>
+    <linearGradient id="ridgeC" x1="163" y1="1046" x2="1731" y2="792" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#071821"/>
+      <stop offset="0.46" stop-color="#0D2D37"/>
+      <stop offset="1" stop-color="#06141B"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <ellipse cx="960" cy="288" rx="178" ry="178" fill="url(#sun)" fill-opacity="0.72"/>
+  <rect width="1920" height="1080" fill="url(#mist)"/>
+  <path d="M0 715C117 692 254 649 420 661C603 674 733 760 913 760C1118 760 1240 647 1434 647C1617 647 1770 711 1920 730V1080H0V715Z" fill="url(#ridgeA)"/>
+  <path d="M0 820C203 808 312 739 501 739C708 739 798 830 1003 830C1217 830 1312 719 1517 719C1699 719 1824 814 1920 860V1080H0V820Z" fill="url(#ridgeB)"/>
+  <path d="M0 925C229 862 356 878 548 878C747 878 844 965 1024 965C1223 965 1326 876 1522 876C1699 876 1818 951 1920 997V1080H0V925Z" fill="url(#ridgeC)"/>
+  <path d="M652 385C760 363 875 357 973 378C1087 402 1180 447 1272 450" stroke="#AAFFF0" stroke-opacity="0.24" stroke-width="3" stroke-linecap="round"/>
+  <path d="M594 442C705 420 845 422 961 449C1066 474 1175 518 1320 516" stroke="#AAFFF0" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+</svg>
