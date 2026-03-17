@@ -5,7 +5,6 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 ## Project Structure & Module Organization
 
 - `src/`: Frontend source (React + TypeScript). UI components, hooks, and utilities live here.
-- `public/`: Static assets served by Vite.
 - `crates/engine/`: Core engine for SSH/SFTP and terminal features.
 - `src-tauri/`: Tauri desktop shell.
 - `ARCHITECTURE_V1.md`: High-level architecture notes.
@@ -18,7 +17,7 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 - SubApps are independent Tauri windows and must not be rendered inside main layout.
 - Non-generic code must stay in its owning domain (`features/widgets/subapps`) and should not be placed in `shared`.
 - `widgets` must not depend on internal code of `subapps`; `subapps` should not back-reference widget internals.
-- Naming rules are strict: use `main` for main-window shell naming and `widget` for component unit naming; do not use `panel` as a synonym for `widget`.
+- Naming rules are strict: use `main` for main-window shells, `widget` for component units, and `subapp` for sub-applications.
 
 ## Hooks & Constants Ownership
 
@@ -71,11 +70,11 @@ For pull requests:
 
 ## Development Process
 
-- If a task requires modifying more than three files, pause first and break it down into updated tasks.
+- If a task requires modifying more than five files, pause first and break it down into updated tasks.
 - Before writing any code, please describe your proposed approach and wait for approval. If the requirements are unclear, make sure to ask clarifying questions before writing any code.
 - After modifying frontend code, run `pnpm format` and `pnpm check`.
 - After modifying backend Rust code, run `cargo fmt` and `cargo clippy --all-targets --all-features -- -D warnings`.
-- During this development-stage refactor, compatibility is not required; prioritize a clean redesign.
+- During refactor, compatibility is not required; prioritize a clean redesign.
 - When a bug is caused by backend, engine, state machine, or lifecycle timing issues, do not add frontend “stopgap” patches to mask it. Fix the source of truth first, and only adjust frontend logic when the root cause is genuinely on the frontend side.
 
 ## Communication
