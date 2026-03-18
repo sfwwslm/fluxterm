@@ -14,7 +14,18 @@
 - 明确打开、修改、保存的基本流程
 - 补一份单独设计文档
 
-### P2 串口功能
+### P2 SSH Profile 高级连接能力
+
+目标：面向所有 SSH Profile 提供更完整的连接配置能力，让手动添加和导入生成的配置在连接行为上保持一致，逐步支持跳板机、代理、主机密钥校验和多密钥等高级能力。
+
+下一步：
+
+- 明确哪些高级字段需要纳入 SSH Profile 编辑界面
+- 梳理高级字段从 Profile 到连接链路的传递与生效方式
+- 明确 `ProxyJump`、`ProxyCommand`、多 `IdentityFile`、`UserKnownHostsFile`、`StrictHostKeyChecking`、`AddKeysToAgent` 的分阶段支持范围
+- 补一份单独设计文档
+
+### P3 串口功能
 
 目标：基于 `tokio-serial` 增加串口连接能力，支持本地串口设备调试和终端交互。
 
@@ -24,7 +35,7 @@
 - 评估如何复用现有终端能力
 - 补一份单独设计文档
 
-### P3 远程桌面功能
+### P4 远程桌面功能
 
 目标：基于 `IronRDP` 增加远程桌面访问能力，扩展 FluxTerm 的远程运维场景。
 
