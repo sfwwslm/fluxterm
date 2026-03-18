@@ -122,7 +122,6 @@ fluxterm/
 - [文档索引](./docs/README.md)
 - [窗口与应用模型](./docs/window-app-model.md)
 - [终端拆分工作区设计](./docs/terminal-split-workspace-design.md)
-- [SSH 会话与资源监控](./docs/ssh-session-and-monitoring.md)
 - [AI 上下文契约](./docs/ai-context-contract.md)
 
 ## 贡献

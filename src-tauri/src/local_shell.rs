@@ -1,4 +1,18 @@
 //! 本地 Shell 会话管理。
+//!
+//! 本模块是本地 Shell 启动参数的最终生效位置。
+//! 当前本地 Shell 启动链路遵循以下规则：
+//!
+//! - 前端可配置 `terminalType` 与 `charset`，并随 `local_shell_connect` 一起传入后端。
+//! - 同一会话重连时会复用既有启动参数；运行中的会话不会被动态改写环境变量。
+//! - `terminalType` 非法或缺失时回退到 `xterm-256color`，并在启动前写入 `TERM`。
+//! - `charset` 仅在非 Windows 平台生效：
+//!   - `utf-8 -> en_US.UTF-8`
+//!   - `gbk -> zh_CN.GBK`
+//!   - `gb18030 -> zh_CN.GB18030`
+//! - Windows 当前不注入 `chcp`，避免在 shell 启动阶段引入额外输出或续行副作用。
+//!
+//! UI 可能按 profile 类型隐藏部分字段，但隐藏仅限展示层；底层启动参数模型仍保留这些字段。
 use std::collections::HashMap;
 use std::env;
 use std::io::{Read, Write};

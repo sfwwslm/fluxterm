@@ -8,15 +8,12 @@
 2. [窗口与应用模型](./window-app-model.md)
 3. [浮动窗口快照同步模式](./floating-panel-snapshot-pattern.md)
 4. [终端拆分工作区设计](./terminal-split-workspace-design.md)
-5. [SSH 会话与资源监控](./ssh-session-and-monitoring.md)
 
 ## 能力与设计
 
 - [文件打开能力设计](./file-open-v1-design.md)
-- [SSH Config 会话导入说明](./ssh-config-import-design.md)
 - [历史命令与命令联想设计](./history-and-autocomplete.md)
 - [终端与 SFTP 路径联动设计](./terminal-sftp-path-sync-design.md)
-- [本地 Shell 终端字符集透传](./local-shell-term-charset-propagation.md)
 - [设置交互规范](./settings-interaction-spec-v1.md)
 - [持久化设计模式](./persistence-design-pattern.md)
 - [公共加密模块设计](./security-crypto-refactor-design.md)
@@ -28,7 +25,6 @@
 
 ## 日志与可观测性
 
-- [SFTP 日志与事件说明](./sftp-log-events.md)
 - [Telemetry / 埋点日志规范](./telemetry-logging-spec.md)
 
 ## 性能与专题记录

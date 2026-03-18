@@ -1,4 +1,17 @@
 //! 应用私有 known_hosts 管理。
+//!
+//! 本模块维护 FluxTerm 自己的 Host Key 记录，不与系统 `~/.ssh/known_hosts` 互相读写。
+//! 当前规则如下：
+//!
+//! - 存储路径位于应用配置目录下的 `terminal/ssh/known_hosts`
+//! - 存储格式兼容 OpenSSH 文本行：
+//!   - `host key-type base64-key`
+//!   - `[host]:port key-type base64-key`
+//!   - 空行与 `#` 注释行
+//! - 当前不支持 hashed host、marker、多 host 合并记录以及复杂模式匹配
+//! - 匹配维度为 `host + port + keyAlgorithm`
+//!
+//! 主 SSH 会话与资源监控连接都依赖本模块的受信任记录来决定是否允许继续握手。
 
 use std::fs;
 use std::path::Path;

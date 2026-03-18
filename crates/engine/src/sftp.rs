@@ -5,6 +5,26 @@
 //! - 扫描器流式产出任务
 //! - worker 池并发处理 mkdir/文件传输
 //! - 聚合器统一汇报 job 级进度与最终状态
+//!
+//! 本模块同时定义 SFTP 传输日志事件约定，作为实现侧唯一说明来源。
+//! 当前约定如下：
+//!
+//! - 开始事件：
+//!   - `sftp_upload_start`
+//!   - `sftp_download_start`
+//! - 成功事件：
+//!   - `sftp_upload_success`
+//!   - `sftp_download_success`
+//!   - 批量任务会使用独立的 `*_batch_*` / `*_dir_*` 事件名
+//! - 失败事件：
+//!   - `sftp_upload_failed`
+//!   - `sftp_download_failed`
+//!   - 初始化、目录、重命名等失败会使用对应操作名
+//!
+//! 上传与下载成功/失败日志统一使用 `source_path` 与 `target_path`，以便跨方向分析；
+//! 开始事件保留更直观的原始字段名。通用字段包括 `session_id`、`started_at_ms`、
+//! `elapsed_ms`、`transferred_bytes` 与 `total_bytes`。成功事件额外记录平均速率，
+//! 失败事件额外记录 `error_code`、`error_message` 与 `error_detail`。
 use futures_util::stream::{FuturesUnordered, StreamExt};
 use russh::client;
 use russh_sftp::client::error::Error as SftpClientError;

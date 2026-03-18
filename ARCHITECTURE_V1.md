@@ -89,6 +89,5 @@ React 前端采用“领域能力 + 运行单元壳层”结构：
 ## 文档索引（按职责）
 
 - `docs/window-app-model.md`：窗口模型、生命周期协议、目录归属（唯一细则来源）。
-- `docs/ssh-session-and-monitoring.md`：SSH 会话、主机身份校验与资源监控实现说明。
 - `docs/terminal-split-workspace-design.md`：终端拆分工作区与会话重建策略。
 - `docs/security-crypto-refactor-design.md`：加密模块与凭据存储设计。
