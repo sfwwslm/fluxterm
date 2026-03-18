@@ -13,9 +13,15 @@ export type HostProfile = {
   username: string;
   authType: AuthType;
   privateKeyPath?: string | null;
+  identityFiles?: string[] | null;
   privateKeyPassphraseRef?: string | null;
   passwordRef?: string | null;
   knownHost?: string | null;
+  proxyCommand?: string | null;
+  proxyJump?: string | null;
+  addKeysToAgent?: string | null;
+  userKnownHostsFile?: string | null;
+  strictHostKeyChecking?: boolean | null;
   tags?: string[] | null;
   terminalType?: string | null;
   targetSystem?: string | null;

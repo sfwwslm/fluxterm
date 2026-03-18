@@ -27,10 +27,16 @@ pub struct HostProfile {
     pub auth_type: AuthType,
     #[serde(alias = "keyPath", alias = "publicKeyPath")]
     pub private_key_path: Option<String>,
+    pub identity_files: Option<Vec<String>>,
     #[serde(alias = "keyPassphraseRef", alias = "publicKeyPassphraseRef")]
     pub private_key_passphrase_ref: Option<String>,
     pub password_ref: Option<String>,
     pub known_host: Option<String>,
+    pub proxy_command: Option<String>,
+    pub proxy_jump: Option<String>,
+    pub add_keys_to_agent: Option<String>,
+    pub user_known_hosts_file: Option<String>,
+    pub strict_host_key_checking: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub terminal_type: Option<String>,
     pub target_system: Option<String>,

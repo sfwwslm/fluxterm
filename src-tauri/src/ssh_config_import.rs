@@ -1,10 +1,39 @@
 //! OpenSSH config 导入能力。
-use std::fs;
-use std::path::{Path, PathBuf};
-
+//!
+//! 导入范围：
+//! - 固定读取 `<home>/.ssh/config`。
+//! - 所有导入会话统一写入固定分组 `OpenSSH`。
+//! - 导入目标来自 `Host` 规则中的具体 alias。
+//!
+//! 导入目标识别规则：
+//! - `Host alpha` 会生成一个导入目标 `alpha`。
+//! - `Host alpha beta` 会生成两个导入目标 `alpha` 与 `beta`。
+//! - `Host *` 只作为默认规则参与后续解析，不会生成会话，也不会计入 `unsupported_count`。
+//! - 含通配符或否定 pattern 的规则不会直接展开为导入目标。
+//! - 若同一条 `Host` 规则同时包含具体 alias 与不支持 pattern，则具体 alias 仍可导入，
+//!   但该规则额外计入一次 `unsupported_count`。
+//!
+//! 最终配置解析：
+//! - 每个 alias 的最终生效配置由统一解析规则计算，包含默认值继承与字段覆盖。
+//! - 若配置文件在首个 `Host` 之前存在全局参数，导入阶段会按等价语义将其视作默认规则。
+//!
+//! 当前会写入 `HostProfile` 的关键字段：
+//! - `host` / `port` / `username`
+//! - `private_key_path` 与 `identity_files`
+//! - `proxy_jump` / `proxy_command`
+//! - `add_keys_to_agent`
+//! - `user_known_hosts_file`
+//! - `strict_host_key_checking`
+//!
+//! 注意：
+//! - 某些 OpenSSH 字段虽然已被导入并保存，但不代表 FluxTerm 当前连接链路已经消费这些字段。
+//! - 导入采用默认不覆盖策略，判重依据为 `name + host + port + username`。
 use engine::{AuthType, EngineError, HostProfile};
+use russh_config::AddKeysToAgent;
 use serde::Serialize;
 use serde_json::json;
+use std::collections::HashSet;
+use std::fs;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
@@ -16,33 +45,18 @@ const IMPORT_GROUP_NAME: &str = "OpenSSH";
 /// 导入会话名称沿用前端 ProfileModal 的 14 字符显示约束，避免导入结果与手工编辑规则不一致。
 const IMPORT_PROFILE_NAME_MAX_CHARS: usize = 14;
 
-/// OpenSSH config 中可映射为会话的 Host 块。
+/// 可作为导入目标的 OpenSSH Host 别名。
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct OpensshHostBlock {
-    host_pattern: String,
-    hostname: Option<String>,
-    port: Option<u16>,
-    user: Option<String>,
-    identity_file: Option<String>,
-    identities_only: Option<bool>,
+struct OpensshImportTarget {
+    alias: String,
 }
 
-/// OpenSSH config 文本的解析结果。
-/// `unsupported_count` 记录未进入导入映射阶段的块数量。
+/// OpenSSH config 的导入计划。
+/// `unsupported_count` 记录无法稳定枚举成导入目标的 Host 规则数量。
 #[derive(Debug, Default)]
 struct ParsedOpensshConfig {
-    blocks: Vec<OpensshHostBlock>,
+    targets: Vec<OpensshImportTarget>,
     unsupported_count: usize,
-}
-
-/// 当前生效的默认导入字段，仅由 `Host *` 提供。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct OpensshDefaults {
-    hostname: Option<String>,
-    port: Option<u16>,
-    user: Option<String>,
-    identity_file: Option<String>,
-    identities_only: Option<bool>,
 }
 
 /// 前端用于展示的导入摘要。
@@ -77,9 +91,10 @@ pub fn import_openssh_config(app: &AppHandle) -> Result<OpensshImportSummary, En
             err.to_string(),
         )
     })?;
+    let normalized = normalize_config_for_russh(&content);
     let parsed = parse_openssh_config(&content)?;
     let mut store = read_profiles(app)?;
-    let summary = apply_import(&mut store, &home, parsed)?;
+    let summary = apply_import(&mut store, &normalized, parsed)?;
     if summary.added_count == 0
         && summary.skipped_count == 0
         && summary.conflict_count == 0
@@ -94,12 +109,11 @@ pub fn import_openssh_config(app: &AppHandle) -> Result<OpensshImportSummary, En
     Ok(summary)
 }
 
-/// 将文本解析为可导入的 Host 块列表。
-/// 当前只把 `Host *` 识别为默认值块；其他含通配符或多 pattern 的块记为 unsupported。
+/// 从 OpenSSH config 文本中收集可稳定导入的 Host 别名。
+/// 解析仍按产品语义筛选导入目标，而具体字段合并与默认值解析交由 `russh-config` 完成。
 fn parse_openssh_config(content: &str) -> Result<ParsedOpensshConfig, EngineError> {
     let mut parsed = ParsedOpensshConfig::default();
-    let mut current: Option<OpensshHostBlock> = None;
-    let mut defaults = OpensshDefaults::default();
+    let mut seen = HashSet::new();
 
     for raw_line in content.lines() {
         let line = raw_line.trim();
@@ -112,75 +126,53 @@ fn parse_openssh_config(content: &str) -> Result<ParsedOpensshConfig, EngineErro
                 "SSH config 解析失败",
             ));
         };
-        let key_lower = key.to_ascii_lowercase();
-        if key_lower == "host" {
-            if let Some(block) = current.take() {
-                if is_default_host_pattern(&block.host_pattern) {
-                    defaults = merge_defaults(&defaults, &block);
-                } else if is_supported_host_pattern(&block.host_pattern) {
-                    parsed.blocks.push(block);
-                } else {
-                    parsed.unsupported_count += 1;
-                }
-            }
-            if value.is_empty() {
-                parsed.unsupported_count += 1;
-                current = None;
-                continue;
-            }
-            current = Some(apply_defaults_to_block(
-                &OpensshHostBlock {
-                    host_pattern: value.to_string(),
-                    hostname: None,
-                    port: None,
-                    user: None,
-                    identity_file: None,
-                    identities_only: None,
-                },
-                &defaults,
-            ));
+        if !key.eq_ignore_ascii_case("host") {
             continue;
         }
 
-        let Some(block) = current.as_mut() else {
-            continue;
-        };
-        match key_lower.as_str() {
-            "hostname" => block.hostname = Some(value.to_string()),
-            "port" => {
-                if let Ok(port) = value.parse::<u16>() {
-                    block.port = Some(port);
-                }
-            }
-            "user" => block.user = Some(value.to_string()),
-            "identityfile" => {
-                if block.identity_file.is_none() {
-                    block.identity_file = Some(value.to_string());
-                }
-            }
-            "identitiesonly" => block.identities_only = parse_ssh_bool(value),
-            _ => {}
-        }
-    }
-
-    if let Some(block) = current {
-        if is_default_host_pattern(&block.host_pattern) {
-            let _ = merge_defaults(&defaults, &block);
-        } else if is_supported_host_pattern(&block.host_pattern) {
-            parsed.blocks.push(block);
-        } else {
+        let patterns = split_host_patterns(value);
+        if patterns.is_empty() {
             parsed.unsupported_count += 1;
+            continue;
+        }
+        if patterns.len() == 1 && patterns[0] == "*" {
+            continue;
+        }
+        if patterns.iter().any(|pattern| pattern.starts_with('!')) {
+            parsed.unsupported_count += 1;
+            continue;
+        }
+
+        let aliases: Vec<&str> = patterns
+            .iter()
+            .copied()
+            .filter(|pattern| is_exact_host_alias(pattern))
+            .collect();
+        if aliases.is_empty() {
+            parsed.unsupported_count += 1;
+            continue;
+        }
+        if aliases.len() != patterns.len() {
+            parsed.unsupported_count += 1;
+        }
+
+        for alias in aliases {
+            if seen.insert(alias.to_string()) {
+                parsed.targets.push(OpensshImportTarget {
+                    alias: alias.to_string(),
+                });
+            }
         }
     }
 
     Ok(parsed)
 }
 
-/// 将解析后的 Host 块写入现有 ProfileStore。
+/// 将解析后的 Host 别名解析为完整配置并写入现有 ProfileStore。
 /// 判重使用 `name + host + port + username`，同名但目标不同记为冲突而不是覆盖。
 fn apply_import(
     store: &mut ProfileStore,
-    home: &Path,
+    content: &str,
     parsed: ParsedOpensshConfig,
 ) -> Result<OpensshImportSummary, EngineError> {
     ensure_import_group(store)?;
@@ -192,8 +184,8 @@ fn apply_import(
         error_count: 0,
     };
 
-    for block in parsed.blocks {
-        let mapped = match map_host_block_to_profile(&block, home) {
+    for target in parsed.targets {
+        let mapped = match map_host_target_to_profile(content, &target) {
             Ok(profile) => profile,
             Err(_) => {
                 summary.error_count += 1;
@@ -223,36 +215,53 @@ fn apply_import(
     Ok(summary)
 }
 
-/// 将单个 OpenSSH Host 块映射为 FluxTerm 会话。
-/// 映射阶段只生成当前模型能表达的字段，不扩展新的 profile 存储结构。
-fn map_host_block_to_profile(
-    block: &OpensshHostBlock,
-    home: &Path,
+/// 将单个 OpenSSH Host 别名解析为 FluxTerm 会话。
+/// `russh-config` 负责解析匹配规则、默认值和支持字段的最终生效配置。
+fn map_host_target_to_profile(
+    content: &str,
+    target: &OpensshImportTarget,
 ) -> Result<HostProfile, EngineError> {
-    let name = validate_profile_name(truncate_profile_name(&block.host_pattern))?;
-    let host = block
-        .hostname
-        .clone()
-        .unwrap_or_else(|| block.host_pattern.clone());
-    let private_key_path = block
-        .identity_file
+    let resolved = russh_config::parse(content, &target.alias).map_err(|err| {
+        EngineError::with_detail(
+            "ssh_config_parse_failed",
+            "SSH config 解析失败",
+            err.to_string(),
+        )
+    })?;
+    let identity_files = collect_identity_files(&resolved.host_config);
+    let private_key_path = identity_files
         .as_ref()
-        .map(|value| expand_identity_file(value, home));
+        .and_then(|values| values.first().cloned());
+
     Ok(HostProfile {
         id: Uuid::new_v4().to_string(),
-        name,
-        host,
-        port: block.port.unwrap_or(22),
-        username: block.user.clone().unwrap_or_default(),
+        name: validate_profile_name(truncate_profile_name(&target.alias))?,
+        host: resolved.host().to_string(),
+        port: resolved.port(),
+        username: resolved.host_config.user.clone().unwrap_or_default(),
         auth_type: if private_key_path.is_some() {
             AuthType::PrivateKey
         } else {
             AuthType::Password
         },
         private_key_path,
+        identity_files,
         private_key_passphrase_ref: None,
         password_ref: None,
         known_host: None,
+        proxy_command: resolved.host_config.proxy_command.clone(),
+        proxy_jump: resolved.host_config.proxy_jump.clone(),
+        add_keys_to_agent: resolved
+            .host_config
+            .add_keys_to_agent
+            .as_ref()
+            .map(normalize_add_keys_to_agent),
+        user_known_hosts_file: resolved
+            .host_config
+            .user_known_hosts_file
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string()),
+        strict_host_key_checking: resolved.host_config.strict_host_key_checking,
         tags: Some(vec![IMPORT_GROUP_NAME.to_string()]),
         terminal_type: None,
         target_system: None,
@@ -262,6 +271,76 @@ fn map_host_block_to_profile(
         bell_cooldown_ms: None,
         description: None,
     })
+}
+
+/// 将配置前置的全局参数折叠成 `Host *`，规避 `russh-config` 对首个 `Host` 前参数的限制。
+fn normalize_config_for_russh(content: &str) -> String {
+    let mut leading = Vec::new();
+    let mut rest = Vec::new();
+    let mut seen_host = false;
+
+    for raw_line in content.lines() {
+        let trimmed = raw_line.trim();
+        if !seen_host
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && split_config_line(trimmed)
+                .map(|(key, _)| key.eq_ignore_ascii_case("host"))
+                .unwrap_or(false)
+        {
+            seen_host = true;
+        }
+
+        if seen_host {
+            rest.push(raw_line);
+        } else {
+            leading.push(raw_line);
+        }
+    }
+
+    let has_leading_directives = leading.iter().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && !trimmed.starts_with('#')
+    });
+    if !has_leading_directives {
+        return content.to_string();
+    }
+
+    let mut normalized = String::from("Host *\n");
+    for line in leading {
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            normalized.push_str(line);
+        } else {
+            normalized.push_str("  ");
+            normalized.push_str(line.trim_start());
+        }
+        normalized.push('\n');
+    }
+    if !rest.is_empty() {
+        normalized.push('\n');
+        normalized.push_str(&rest.join("\n"));
+    }
+    normalized
+}
+
+/// 收集 `IdentityFile` 数组，保持导入时的原始优先级顺序。
+fn collect_identity_files(config: &russh_config::HostConfig) -> Option<Vec<String>> {
+    let values = config
+        .identity_file
+        .as_ref()?
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
+}
+
+/// 规范化 `AddKeysToAgent`，让持久化值稳定为小写字符串。
+fn normalize_add_keys_to_agent(value: &AddKeysToAgent) -> String {
+    format!("{value:?}").to_ascii_lowercase()
 }
 
 /// 确保固定导入分组存在于现有 SSH 分组集合中。
@@ -279,64 +358,21 @@ fn ensure_import_group(store: &mut ProfileStore) -> Result<(), EngineError> {
     Ok(())
 }
 
-/// 判断 Host pattern 是否在当前支持范围内。
-/// 当前只接受单个具体目标，不接受通配符、否定模式或多 pattern。
-fn is_supported_host_pattern(value: &str) -> bool {
+/// 判断一个 Host pattern 是否可以直接当成导入别名。
+fn is_exact_host_alias(value: &str) -> bool {
     let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed == "*" {
-        return false;
-    }
-    if trimmed.contains(char::is_whitespace) {
+    if trimmed.is_empty() {
         return false;
     }
     !trimmed.contains('*') && !trimmed.contains('?') && !trimmed.contains('!')
 }
 
-/// 判断是否为当前支持的默认值块。
-fn is_default_host_pattern(value: &str) -> bool {
-    value.trim() == "*"
-}
-
-/// 将当前默认值合并到新的 `Host *` 块中，后出现的字段覆盖前值。
-fn merge_defaults(current: &OpensshDefaults, block: &OpensshHostBlock) -> OpensshDefaults {
-    OpensshDefaults {
-        hostname: block.hostname.clone().or_else(|| current.hostname.clone()),
-        port: block.port.or(current.port),
-        user: block.user.clone().or_else(|| current.user.clone()),
-        identity_file: block
-            .identity_file
-            .clone()
-            .or_else(|| current.identity_file.clone()),
-        identities_only: block.identities_only.or(current.identities_only),
-    }
-}
-
-/// 将 `Host *` 提供的默认字段应用到新块中，块内显式字段后续仍可覆盖。
-/// 默认值块自身不会进入导入结果，只影响其后的具体 Host 块。
-fn apply_defaults_to_block(
-    block: &OpensshHostBlock,
-    defaults: &OpensshDefaults,
-) -> OpensshHostBlock {
-    if is_default_host_pattern(&block.host_pattern) {
-        return block.clone();
-    }
-    OpensshHostBlock {
-        host_pattern: block.host_pattern.clone(),
-        hostname: defaults.hostname.clone(),
-        port: defaults.port,
-        user: defaults.user.clone(),
-        identity_file: defaults.identity_file.clone(),
-        identities_only: defaults.identities_only,
-    }
-}
-
-/// 解析 OpenSSH 布尔值。
-fn parse_ssh_bool(value: &str) -> Option<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "yes" | "true" | "on" => Some(true),
-        "no" | "false" | "off" => Some(false),
-        _ => None,
-    }
+/// 按 OpenSSH 语义拆分 `Host` 行中的多个 pattern。
+fn split_host_patterns(value: &str) -> Vec<&str> {
+    value
+        .split_whitespace()
+        .filter(|item| !item.trim().is_empty())
+        .collect()
 }
 
 /// 解析 `key value` 形式的配置行。
@@ -348,25 +384,6 @@ fn split_config_line(line: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((key, value))
-}
-
-/// 将 IdentityFile 展开为当前平台可直接使用的路径。
-fn expand_identity_file(value: &str, home: &Path) -> String {
-    let trimmed = value.trim();
-    if trimmed == "~" {
-        return home.to_string_lossy().to_string();
-    }
-    if let Some(stripped) = trimmed.strip_prefix("~/") {
-        return home.join(stripped).to_string_lossy().to_string();
-    }
-    let candidate = PathBuf::from(trimmed);
-    if candidate.is_absolute() {
-        return candidate.to_string_lossy().to_string();
-    }
-    home.join(".ssh")
-        .join(candidate)
-        .to_string_lossy()
-        .to_string()
 }
 
 /// 将导入来源的 Host 名裁剪到当前会话名称上限。
@@ -399,14 +416,6 @@ fn now_epoch() -> u64 {
 mod tests {
     use super::*;
 
-    fn fake_home() -> PathBuf {
-        if cfg!(windows) {
-            PathBuf::from(r"C:\Users\tester")
-        } else {
-            PathBuf::from("/home/tester")
-        }
-    }
-
     fn profile_store_with_profiles(profiles: Vec<HostProfile>) -> ProfileStore {
         ProfileStore {
             version: 1,
@@ -426,9 +435,15 @@ mod tests {
             username: username.to_string(),
             auth_type: AuthType::Password,
             private_key_path: None,
+            identity_files: None,
             private_key_passphrase_ref: None,
             password_ref: None,
             known_host: None,
+            proxy_command: None,
+            proxy_jump: None,
+            add_keys_to_agent: None,
+            user_known_hosts_file: None,
+            strict_host_key_checking: None,
             tags: None,
             terminal_type: None,
             target_system: None,
@@ -453,81 +468,130 @@ Host prod
         .unwrap();
 
         assert_eq!(parsed.unsupported_count, 0);
-        assert_eq!(parsed.blocks.len(), 1);
-        assert_eq!(parsed.blocks[0].host_pattern, "prod");
-        assert_eq!(parsed.blocks[0].hostname.as_deref(), Some("10.0.0.10"));
-        assert_eq!(parsed.blocks[0].user.as_deref(), Some("root"));
-        assert_eq!(parsed.blocks[0].port, Some(2222));
+        assert_eq!(parsed.targets.len(), 1);
+        assert_eq!(parsed.targets[0].alias, "prod");
     }
 
     #[test]
-    fn parse_openssh_config_is_case_insensitive_and_last_value_wins() {
+    fn parse_openssh_config_supports_multiple_concrete_aliases() {
         let parsed = parse_openssh_config(
             r#"
-HOST Prod
-  User deploy
-  user root
-  HostName 10.0.0.1
-  HOSTNAME 10.0.0.2
+Host prod staging
+  User root
 "#,
         )
         .unwrap();
 
-        assert_eq!(parsed.blocks.len(), 1);
-        assert_eq!(parsed.blocks[0].user.as_deref(), Some("root"));
-        assert_eq!(parsed.blocks[0].hostname.as_deref(), Some("10.0.0.2"));
+        assert_eq!(parsed.unsupported_count, 0);
+        assert_eq!(parsed.targets.len(), 2);
+        assert_eq!(parsed.targets[0].alias, "prod");
+        assert_eq!(parsed.targets[1].alias, "staging");
     }
 
     #[test]
-    fn parse_openssh_config_marks_wildcards_and_multi_pattern_as_unsupported() {
+    fn parse_openssh_config_marks_wildcards_and_negations_as_unsupported() {
         let parsed = parse_openssh_config(
             r#"
 Host *
   User root
-Host web-*
+Host web-* prod
   HostName 10.0.0.3
-Host prod staging
+Host !jump
   HostName 10.0.0.4
 "#,
         )
         .unwrap();
 
-        assert_eq!(parsed.blocks.len(), 0);
+        assert_eq!(parsed.targets.len(), 1);
+        assert_eq!(parsed.targets[0].alias, "prod");
         assert_eq!(parsed.unsupported_count, 2);
     }
 
     #[test]
-    fn map_host_block_to_profile_uses_defaults_and_expands_identity_file() {
-        let profile = map_host_block_to_profile(
-            &OpensshHostBlock {
-                host_pattern: "prod".to_string(),
-                hostname: None,
-                port: None,
-                user: None,
-                identity_file: Some("~/.ssh/id_ed25519".to_string()),
-                identities_only: Some(true),
+    fn parse_openssh_config_ignores_host_star_in_unsupported_count() {
+        let parsed = parse_openssh_config(
+            r#"
+Host *
+  User demo_user
+
+Host alpha-node
+  HostName 192.168.56.21
+
+Host beta-panel
+  HostName 192.168.56.31
+
+Host gamma-workspace
+  HostName 192.168.56.31
+  Port 32022
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(parsed.unsupported_count, 0);
+        assert_eq!(parsed.targets.len(), 3);
+    }
+
+    #[test]
+    fn map_host_target_to_profile_uses_russh_config_defaults() {
+        let profile = map_host_target_to_profile(
+            &normalize_config_for_russh(
+                r#"
+Host *
+  User demo
+  Port 2200
+  IdentityFile ~/.ssh/id_ed25519
+  ProxyJump bastion
+  StrictHostKeyChecking yes
+  UserKnownHostsFile ~/.ssh/known_hosts_work
+
+Host prod
+  HostName 10.0.0.9
+"#,
+            ),
+            &OpensshImportTarget {
+                alias: "prod".to_string(),
             },
-            &fake_home(),
         )
         .unwrap();
 
         assert_eq!(profile.name, "prod");
-        assert_eq!(profile.host, "prod");
-        assert_eq!(profile.port, 22);
-        assert_eq!(profile.username, "");
+        assert_eq!(profile.host, "10.0.0.9");
+        assert_eq!(profile.port, 2200);
+        assert_eq!(profile.username, "demo");
         assert!(matches!(profile.auth_type, AuthType::PrivateKey));
         assert!(profile.private_key_path.unwrap().contains("id_ed25519"));
-        assert_eq!(profile.tags, Some(vec![IMPORT_GROUP_NAME.to_string()]));
+        assert_eq!(profile.proxy_jump.as_deref(), Some("bastion"));
+        assert_eq!(profile.strict_host_key_checking, Some(true));
+        assert!(
+            profile
+                .user_known_hosts_file
+                .unwrap()
+                .contains("known_hosts_work")
+        );
     }
 
     #[test]
-    fn expand_identity_file_uses_ssh_dir_for_relative_paths() {
-        let home = fake_home();
-        let path = expand_identity_file("keys/id_rsa", &home);
+    fn normalize_config_for_russh_wraps_global_directives() {
+        let normalized = normalize_config_for_russh(
+            r#"
+User demo
+Port 2200
 
-        assert!(path.contains(".ssh"));
-        assert!(path.contains("keys"));
-        assert!(path.contains("id_rsa"));
+Host prod
+  HostName 10.0.0.9
+"#,
+        );
+
+        assert!(normalized.contains("Host *"));
+        let profile = map_host_target_to_profile(
+            &normalized,
+            &OpensshImportTarget {
+                alias: "prod".to_string(),
+            },
+        )
+        .unwrap();
+        assert_eq!(profile.username, "demo");
+        assert_eq!(profile.port, 2200);
     }
 
     #[test]
@@ -536,35 +600,36 @@ Host prod staging
             sample_profile("prod", "10.0.0.1", 22, "root"),
             sample_profile("staging", "10.0.0.2", 22, "root"),
         ]);
+        let content = normalize_config_for_russh(
+            r#"
+Host prod
+  HostName 10.0.0.1
+  User root
+
+Host staging
+  HostName 10.0.0.20
+  User root
+
+Host qa
+  HostName 10.0.0.3
+  User deploy
+  Port 2200
+"#,
+        );
         let summary = apply_import(
             &mut store,
-            &fake_home(),
+            &content,
             ParsedOpensshConfig {
                 unsupported_count: 1,
-                blocks: vec![
-                    OpensshHostBlock {
-                        host_pattern: "prod".to_string(),
-                        hostname: Some("10.0.0.1".to_string()),
-                        port: Some(22),
-                        user: Some("root".to_string()),
-                        identity_file: None,
-                        identities_only: None,
+                targets: vec![
+                    OpensshImportTarget {
+                        alias: "prod".to_string(),
                     },
-                    OpensshHostBlock {
-                        host_pattern: "staging".to_string(),
-                        hostname: Some("10.0.0.20".to_string()),
-                        port: Some(22),
-                        user: Some("root".to_string()),
-                        identity_file: None,
-                        identities_only: None,
+                    OpensshImportTarget {
+                        alias: "staging".to_string(),
                     },
-                    OpensshHostBlock {
-                        host_pattern: "qa".to_string(),
-                        hostname: Some("10.0.0.3".to_string()),
-                        port: Some(2200),
-                        user: Some("deploy".to_string()),
-                        identity_file: None,
-                        identities_only: None,
+                    OpensshImportTarget {
+                        alias: "qa".to_string(),
                     },
                 ],
             },
@@ -591,72 +656,21 @@ Host prod staging
     }
 
     #[test]
-    fn parse_openssh_config_applies_host_star_defaults_to_following_blocks() {
-        let parsed = parse_openssh_config(
-            r#"
-Host *
-  User demo
-  Port 2200
-
-Host alpha
-  HostName 10.0.0.33
-
-Host beta
-  HostName example.com
-  Port 58022
+    fn map_host_target_to_profile_truncates_long_host_name() {
+        let profile = map_host_target_to_profile(
+            &normalize_config_for_russh(
+                r#"
+Host 0123456789abcde
+  HostName 10.0.0.9
+  User root
 "#,
-        )
-        .unwrap();
-
-        assert_eq!(parsed.unsupported_count, 0);
-        assert_eq!(parsed.blocks.len(), 2);
-        assert_eq!(parsed.blocks[0].user.as_deref(), Some("demo"));
-        assert_eq!(parsed.blocks[0].port, Some(2200));
-        assert_eq!(parsed.blocks[1].user.as_deref(), Some("demo"));
-        assert_eq!(parsed.blocks[1].port, Some(58022));
-    }
-
-    #[test]
-    fn map_host_block_to_profile_truncates_long_host_name() {
-        let profile = map_host_block_to_profile(
-            &OpensshHostBlock {
-                host_pattern: "0123456789abcde".to_string(),
-                hostname: Some("10.0.0.9".to_string()),
-                port: Some(22),
-                user: Some("root".to_string()),
-                identity_file: None,
-                identities_only: None,
+            ),
+            &OpensshImportTarget {
+                alias: "0123456789abcde".to_string(),
             },
-            &fake_home(),
         )
         .unwrap();
 
         assert_eq!(profile.name, "0123456789abcd");
-    }
-
-    #[test]
-    fn apply_import_adds_truncated_long_host_name() {
-        let mut store = profile_store_with_profiles(Vec::new());
-        let summary = apply_import(
-            &mut store,
-            &fake_home(),
-            ParsedOpensshConfig {
-                unsupported_count: 0,
-                blocks: vec![OpensshHostBlock {
-                    host_pattern: "0123456789abcde".to_string(),
-                    hostname: Some("10.0.0.9".to_string()),
-                    port: Some(22),
-                    user: Some("root".to_string()),
-                    identity_file: None,
-                    identities_only: None,
-                }],
-            },
-        )
-        .unwrap();
-
-        assert_eq!(summary.added_count, 1);
-        assert_eq!(summary.error_count, 0);
-        assert_eq!(store.profiles.len(), 1);
-        assert_eq!(store.profiles[0].name, "0123456789abcd");
     }
 }
