@@ -318,6 +318,85 @@ export default function SftpWidget({
   const displayPath = interactionsDisabled
     ? "-"
     : formatDisplayPath(currentPath);
+  // 操作菜单按运行态收口可见项：
+  // 本地 shell 不显示“新建 / 上传”，SSH 会话不显示“文件管理器”。
+  const actionMenuItems = [
+    {
+      label: showHiddenEntries ? t("sftp.hideHidden") : t("sftp.showHidden"),
+      icon: <FiEye />,
+      disabled: false,
+      onClick: () => {
+        setShowHiddenEntries((prev) => !prev);
+        closeActionsMenu();
+      },
+    },
+    ...(!isRemoteSession
+      ? [
+          {
+            label: t("sftp.openInFileManager"),
+            icon: <FiFolder />,
+            disabled: !currentPath,
+            onClick: () => {
+              void (async () => {
+                if (!currentPath) return;
+                try {
+                  await openPath(currentPath);
+                } catch (error) {
+                  const errorMessage = extractErrorMessage(error);
+                  const message = errorMessage.includes(
+                    "Not allowed to open path",
+                  )
+                    ? t("sftp.openInFileManagerDenied")
+                    : t("sftp.openInFileManagerFailed");
+                  const logOpenFailure = errorMessage.includes(
+                    "Not allowed to open path",
+                  )
+                    ? logWarn
+                    : logError;
+                  pushToast({
+                    level: "error",
+                    message,
+                  });
+                  void logOpenFailure(
+                    JSON.stringify({
+                      event: "sftp:open-in-file-manager-failed",
+                      path: currentPath,
+                      message: errorMessage,
+                    }),
+                  );
+                } finally {
+                  closeActionsMenu();
+                }
+              })();
+            },
+          },
+        ]
+      : []),
+    ...(isRemote
+      ? [
+          {
+            label: t("actions.new"),
+            icon: <FiFolderPlus />,
+            disabled: false,
+            onClick: () => {
+              const name = window.prompt(t("prompts.newFolder"));
+              if (!name) return;
+              onMkdir(name);
+              closeActionsMenu();
+            },
+          },
+          {
+            label: t("actions.upload"),
+            icon: <FiUpload />,
+            disabled: false,
+            onClick: () => {
+              onUpload();
+              closeActionsMenu();
+            },
+          },
+        ]
+      : []),
+  ];
 
   function openMenu(event: React.MouseEvent, entry: SftpEntry) {
     event.preventDefault();
@@ -583,79 +662,7 @@ export default function SftpWidget({
         <ContextMenu
           x={actionsMenu.x}
           y={actionsMenu.y}
-          items={[
-            {
-              label: showHiddenEntries
-                ? t("sftp.hideHidden")
-                : t("sftp.showHidden"),
-              icon: <FiEye />,
-              disabled: false,
-              onClick: () => {
-                setShowHiddenEntries((prev) => !prev);
-                closeActionsMenu();
-              },
-            },
-            {
-              label: t("sftp.openInFileManager"),
-              icon: <FiFolder />,
-              disabled: isRemote || !currentPath,
-              onClick: () => {
-                void (async () => {
-                  if (isRemote || !currentPath) return;
-                  try {
-                    await openPath(currentPath);
-                  } catch (error) {
-                    const errorMessage = extractErrorMessage(error);
-                    const message = errorMessage.includes(
-                      "Not allowed to open path",
-                    )
-                      ? t("sftp.openInFileManagerDenied")
-                      : t("sftp.openInFileManagerFailed");
-                    const logOpenFailure = errorMessage.includes(
-                      "Not allowed to open path",
-                    )
-                      ? logWarn
-                      : logError;
-                    pushToast({
-                      level: "error",
-                      message,
-                    });
-                    void logOpenFailure(
-                      JSON.stringify({
-                        event: "sftp:open-in-file-manager-failed",
-                        path: currentPath,
-                        message: errorMessage,
-                      }),
-                    );
-                  } finally {
-                    closeActionsMenu();
-                  }
-                })();
-              },
-            },
-            {
-              label: t("actions.new"),
-              icon: <FiFolderPlus />,
-              disabled: !isRemote,
-              onClick: () => {
-                if (!isRemote) return;
-                const name = window.prompt(t("prompts.newFolder"));
-                if (!name) return;
-                onMkdir(name);
-                closeActionsMenu();
-              },
-            },
-            {
-              label: t("actions.upload"),
-              icon: <FiUpload />,
-              disabled: !isRemote,
-              onClick: () => {
-                if (!isRemote) return;
-                onUpload();
-                closeActionsMenu();
-              },
-            },
-          ]}
+          items={actionMenuItems}
           onClose={closeActionsMenu}
         />
       )}
