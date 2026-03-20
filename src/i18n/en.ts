@@ -671,6 +671,7 @@ export const en = {
     "The local work copy has unsynced changes and cannot be overwritten or reopened",
   "sftp.remoteEdit.workspaceInvalid":
     "The local work copy metadata is missing or corrupted, so the file cannot be safely reused",
+  "sftp.nameRequired": "Name is required",
   "sftp.drop.title": "Drop to Upload",
   "sftp.drop.accept": "Upload files or folders to the current directory",
   "sftp.drop.reject": "This area cannot accept the current drop",

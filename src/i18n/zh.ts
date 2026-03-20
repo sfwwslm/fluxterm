@@ -627,6 +627,7 @@ export const zh = {
     "本地工作副本存在未回传修改，不能直接覆盖或继续打开",
   "sftp.remoteEdit.workspaceInvalid":
     "本地工作副本元数据缺失或已损坏，无法安全复用，请处理缓存后重试",
+  "sftp.nameRequired": "名称不能为空",
   "sftp.drop.title": "拖到这里上传",
   "sftp.drop.accept": "将文件或目录上传到当前目录",
   "sftp.drop.reject": "当前区域不能接收这次拖拽",

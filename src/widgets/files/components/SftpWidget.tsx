@@ -13,6 +13,7 @@ import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
 import { useNotices } from "@/hooks/useNotices";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import InputDialog from "@/components/ui/InputDialog";
 import ContextMenu from "@/components/ui/menu/ContextMenu";
 import Tooltip from "@/components/ui/menu/Tooltip";
 import {
@@ -243,6 +244,14 @@ export default function SftpWidget({
     x: number;
     y: number;
   } | null>(null);
+  const [entryDialog, setEntryDialog] = useState<{
+    mode: "mkdir" | "rename";
+    title: string;
+    label: string;
+    initialValue: string;
+    sourceEntry: SftpEntry | null;
+  } | null>(null);
+  const [entryDialogError, setEntryDialogError] = useState<string | null>(null);
   const showUnavailable = isRemoteSession && !isRemote;
   const showSftpDisabled = isRemoteSession && sftpAvailability === "disabled";
   const showSftpUnsupported =
@@ -379,9 +388,14 @@ export default function SftpWidget({
             icon: <FiFolderPlus />,
             disabled: false,
             onClick: () => {
-              const name = window.prompt(t("prompts.newFolder"));
-              if (!name) return;
-              onMkdir(name);
+              setEntryDialog({
+                mode: "mkdir",
+                title: t("actions.new"),
+                label: t("prompts.newFolder"),
+                initialValue: "",
+                sourceEntry: null,
+              });
+              setEntryDialogError(null);
               closeActionsMenu();
             },
           },
@@ -415,6 +429,31 @@ export default function SftpWidget({
 
   function closeActionsMenu() {
     setActionsMenu(null);
+  }
+
+  function closeEntryDialog() {
+    setEntryDialog(null);
+    setEntryDialogError(null);
+  }
+
+  function submitEntryDialog(value: string) {
+    if (!entryDialog) return;
+    const name = value.trim();
+    if (!name) {
+      setEntryDialogError(t("sftp.nameRequired"));
+      return;
+    }
+    if (entryDialog.mode === "mkdir") {
+      onMkdir(name);
+      closeEntryDialog();
+      return;
+    }
+    if (!entryDialog.sourceEntry || name === entryDialog.sourceEntry.name) {
+      closeEntryDialog();
+      return;
+    }
+    onRename(entryDialog.sourceEntry, name);
+    closeEntryDialog();
   }
 
   function handleSelectEntry(entry: SftpEntry) {
@@ -635,12 +674,14 @@ export default function SftpWidget({
               disabled: !isRemote,
               onClick: () => {
                 if (!isRemote) return;
-                const name = window.prompt(
-                  t("prompts.rename"),
-                  menu.entry.name,
-                );
-                if (!name || name === menu.entry.name) return;
-                onRename(menu.entry, name);
+                setEntryDialog({
+                  mode: "rename",
+                  title: t("actions.rename"),
+                  label: t("prompts.rename"),
+                  initialValue: menu.entry.name,
+                  sourceEntry: menu.entry,
+                });
+                setEntryDialogError(null);
                 closeMenu();
               },
             },
@@ -676,6 +717,23 @@ export default function SftpWidget({
           onClose={closeActionsMenu}
         />
       )}
+      {entryDialog ? (
+        <InputDialog
+          open
+          title={entryDialog.title}
+          label={entryDialog.label}
+          initialValue={entryDialog.initialValue}
+          confirmText={
+            entryDialog.mode === "mkdir" ? t("actions.new") : t("actions.save")
+          }
+          cancelText={t("actions.cancel")}
+          closeText={t("actions.close")}
+          errorText={entryDialogError}
+          onClose={closeEntryDialog}
+          onValueChange={() => setEntryDialogError(null)}
+          onConfirm={submitEntryDialog}
+        />
+      ) : null}
     </div>
   );
 }
