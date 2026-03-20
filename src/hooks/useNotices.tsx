@@ -14,8 +14,10 @@ export type DialogPayload = {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  secondaryLabel?: string;
   onConfirm?: () => void;
   onCancel?: () => void;
+  onSecondary?: () => void;
 };
 
 export type ToastItem = ToastPayload & { id: string };

@@ -42,6 +42,18 @@ export default function NoticeHost() {
                   {activeDialog.cancelLabel}
                 </Button>
               )}
+              {activeDialog.secondaryLabel && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    activeDialog.onSecondary?.();
+                    closeDialog(activeDialog.id);
+                  }}
+                >
+                  {activeDialog.secondaryLabel}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

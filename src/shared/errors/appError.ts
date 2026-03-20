@@ -179,4 +179,12 @@ const ERROR_CODE_TRANSLATIONS: Partial<Record<string, TranslationKey>> = {
   security_enable_unavailable: "error.securityEnableUnavailable",
   security_change_unavailable: "error.securityChangeUnavailable",
   security_unlock_unavailable: "error.securityUnlockUnavailable",
+  remote_edit_conflict: "sftp.remoteEdit.remoteChanged",
+  sftp_stat_failed: "sftp.remoteEdit.remoteMissing",
+  remote_edit_not_found: "sftp.remoteEdit.instanceMissing",
+  remote_edit_not_pending: "sftp.remoteEdit.notPending",
+  remote_edit_snapshot_failed: "sftp.remoteEdit.localReadFailed",
+  remote_edit_local_dirty: "sftp.remoteEdit.localDirty",
+  remote_edit_workspace_invalid: "sftp.remoteEdit.workspaceInvalid",
+  remote_edit_index_failed: "sftp.remoteEdit.workspaceInvalid",
 };

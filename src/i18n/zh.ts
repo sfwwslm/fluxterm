@@ -605,10 +605,28 @@ export const zh = {
   "sftp.hideHidden": "不显示隐藏",
   "sftp.showHidden": "显示隐藏",
   "sftp.openInFileManager": "文件管理器",
+  "sftp.openWithSystemEditor": "用系统编辑器打开",
   "sftp.openInFileManagerFailed": "打开系统文件管理器失败",
   "sftp.openInFileManagerDenied": "当前路径不允许通过系统文件管理器打开",
   "sftp.openFileFailed": "打开文件失败",
   "sftp.downloadForOpenFailed": "下载远端文件后打开失败",
+  "sftp.remoteEdit.openedTracked":
+    "已在系统编辑器中打开 {name}，保存后可回传到远端",
+  "sftp.remoteEdit.openedExternal": "已在系统编辑器中打开 {name}",
+  "sftp.remoteEdit.confirmTitle": "远程文件已被修改",
+  "sftp.remoteEdit.confirmMessage":
+    "是否要将此文件上传回服务器？\n\n文件名称：{name}\n服务器：{server}\n远程路径：{path}",
+  "sftp.remoteEdit.confirmAllInSession": "本次会话都是",
+  "sftp.remoteEdit.uploadSuccess": "{name} 已回传到远端",
+  "sftp.remoteEdit.remoteChanged": "远端文件已发生变化，当前修改未回传",
+  "sftp.remoteEdit.remoteMissing": "远端文件不存在，当前修改未回传",
+  "sftp.remoteEdit.instanceMissing": "远端编辑实例不存在或已失效",
+  "sftp.remoteEdit.notPending": "当前没有待确认的远端修改",
+  "sftp.remoteEdit.localReadFailed": "读取本地编辑文件失败",
+  "sftp.remoteEdit.localDirty":
+    "本地工作副本存在未回传修改，不能直接覆盖或继续打开",
+  "sftp.remoteEdit.workspaceInvalid":
+    "本地工作副本元数据缺失或已损坏，无法安全复用，请处理缓存后重试",
   "sftp.drop.title": "拖到这里上传",
   "sftp.drop.accept": "将文件或目录上传到当前目录",
   "sftp.drop.reject": "当前区域不能接收这次拖拽",

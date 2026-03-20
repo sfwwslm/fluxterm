@@ -174,6 +174,28 @@ impl Engine {
         self.await_response(resp_rx, "无法接收 SFTP 列表响应")
     }
 
+    /// 获取远端文件信息。
+    pub fn sftp_stat(&self, session_id: &str, path: &str) -> Result<SftpEntry, EngineError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| EngineError::new("session_not_found", "会话不存在"))?;
+        handle
+            .tx
+            .send(SessionCommand::SftpStat {
+                path: path.to_string(),
+                respond_to: resp_tx,
+            })
+            .map_err(|_| {
+                EngineError::new("session_command_failed", "无法发送 SFTP 文件信息命令")
+            })?;
+        self.await_response(resp_rx, "无法接收 SFTP 文件信息响应")
+    }
+
     /// 获取远端家目录。
     pub fn sftp_home(&self, session_id: &str) -> Result<String, EngineError> {
         let (resp_tx, resp_rx) = oneshot::channel();

@@ -3,12 +3,13 @@ use std::sync::Arc;
 
 use engine::{EngineError, EngineEvent, SessionState};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::ai::{
     record_resource_snapshot_from_app, record_session_status_from_app,
     record_terminal_exit_from_app, record_terminal_output_from_app,
 };
+use crate::remote_edit::RemoteEditState;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,16 @@ pub fn build_event_bridge(app: AppHandle) -> Arc<dyn Fn(EngineEvent) + Send + Sy
             state,
             error,
         } => {
+            if matches!(state, SessionState::Disconnected | SessionState::Error) {
+                let app_handle = app.clone();
+                let target_session_id = session_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    app_handle
+                        .state::<RemoteEditState>()
+                        .remove_by_session(&target_session_id)
+                        .await;
+                });
+            }
             record_session_status_from_app(&app, &session_id, state.clone(), error.clone());
             let _ = app.emit(
                 "session:status",

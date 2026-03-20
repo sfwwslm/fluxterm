@@ -14,7 +14,7 @@ import "@xterm/xterm/css/xterm.css";
 import "@/App.css";
 import "@/components/ui/base-input.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { info, warn } from "@/shared/logging/telemetry";
+import { info, logTelemetry, warn } from "@/shared/logging/telemetry";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
@@ -61,6 +61,8 @@ import type {
   LocalShellConfig,
   LocalSessionMeta,
   LocalShellProfile,
+  RemoteEditSnapshot,
+  SftpEntry,
   TerminalCwdSupport,
   TerminalPathSyncState,
   TerminalWorkingDirectory,
@@ -122,9 +124,13 @@ import {
   type FloatingTunnelsSnapshot,
 } from "@/features/tunnel/core/widgetSync";
 import {
+  confirmRemoteEditUpload,
+  dismissRemoteEditPending,
+  listRemoteEditSessions,
   openLocalFile,
-  openRemoteFileViaCache,
+  openRemoteFileForEditing,
 } from "@/features/file-open/core/commands";
+import { registerRemoteEditListener } from "@/features/file-open/core/listeners";
 import { normalizeLocalPath } from "@/features/sftp/core/path";
 import { subscribeTauri } from "@/shared/tauri/events";
 import { callTauri } from "@/shared/tauri/commands";
@@ -554,7 +560,7 @@ export default function AppShell() {
     changePassword: changeSecurityPassword,
     disableEncryption: disableSecurityEncryption,
   } = useSecurity();
-  const { pushToast } = useNotices();
+  const { pushToast, openDialog } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
   const appUpdater = useAppUpdater();
 
@@ -661,8 +667,17 @@ export default function AppShell() {
   const [bellPendingBySession, setBellPendingBySession] = useState<
     Record<string, boolean>
   >({});
+  const [remoteEditSessions, setRemoteEditSessions] = useState<
+    Record<string, RemoteEditSnapshot>
+  >({});
+  const [remoteEditAutoUploadBySession, setRemoteEditAutoUploadBySession] =
+    useState<Record<string, boolean>>({});
   const focusActiveTerminalRef = useRef<() => boolean>(() => false);
+  const remoteEditSessionsRef = useRef<Record<string, RemoteEditSnapshot>>({});
 
+  useEffect(() => {
+    remoteEditSessionsRef.current = remoteEditSessions;
+  }, [remoteEditSessions]);
   useEffect(() => {
     const theme = activeThemePreset;
     const cssVars = buildThemeCssVars(theme);
@@ -1129,6 +1144,48 @@ export default function AppShell() {
     autoReconnectOnReboot,
     getTerminalSize: () => terminalSizeRef.current,
   });
+  const openManagedRemoteFile = useCallback(
+    async (sessionId: string, entry: SftpEntry) => {
+      const session = sessionState.sessions.find(
+        (sessionItem) => sessionItem.sessionId === sessionId,
+      );
+      const profile = session?.profileId
+        ? (profiles.find((item) => item.id === session.profileId) ?? null)
+        : null;
+      const opened = await openRemoteFileForEditing(
+        sessionId,
+        {
+          host: profile?.host?.trim() || "unknown-host",
+          username: profile?.username?.trim() || "unknown-user",
+          port:
+            typeof profile?.port === "number" && profile.port > 0
+              ? profile.port
+              : 22,
+        },
+        entry,
+        fileDefaultEditorPath,
+      );
+      void logTelemetry("info", "remote_edit.open.completed", {
+        sessionId,
+        instanceId: opened.instanceId,
+        remotePath: entry.path,
+        trackChanges: opened.trackChanges,
+      });
+      pushToast({
+        level: "success",
+        message: opened.trackChanges
+          ? t("sftp.remoteEdit.openedTracked", { name: entry.name })
+          : t("sftp.remoteEdit.openedExternal", { name: entry.name }),
+      });
+      if (opened.trackChanges) {
+        setRemoteEditSessions((current) => ({
+          ...current,
+          [opened.instanceId]: opened,
+        }));
+      }
+    },
+    [fileDefaultEditorPath, profiles, pushToast, sessionState.sessions, t],
+  );
   const tunnelState = useSshTunnelState(sessionState.activeSessionId);
   const activeTunnelSessionMeta = useMemo(() => {
     if (!sessionState.activeSessionId) {
@@ -1158,6 +1215,190 @@ export default function AppShell() {
     sessionState.activeSessionProfile,
     sessionState.isRemoteSession,
     sessionState.localSessionMeta,
+    t,
+  ]);
+
+  useEffect(() => {
+    setRemoteEditSessions((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([, item]) => {
+          return sessionState.sessionStates[item.sessionId] === "connected";
+        }),
+      ),
+    );
+    setRemoteEditAutoUploadBySession((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([sessionId]) =>
+            sessionState.sessionStates[sessionId] === "connected",
+        ),
+      ),
+    );
+  }, [sessionState.sessionStates]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+
+    void listRemoteEditSessions()
+      .then((items) => {
+        if (disposed) return;
+        setRemoteEditSessions(() =>
+          Object.fromEntries(items.map((item) => [item.instanceId, item])),
+        );
+      })
+      .catch(() => {});
+
+    void registerRemoteEditListener((payload) => {
+      const previous =
+        remoteEditSessionsRef.current[payload.instanceId] ?? null;
+      if (previous?.status === "uploading" && payload.status === "synced") {
+        void logTelemetry("info", "remote_edit.upload.succeeded", {
+          sessionId: payload.sessionId,
+          instanceId: payload.instanceId,
+          remotePath: payload.remotePath,
+        });
+        pushToast({
+          level: "success",
+          message: t("sftp.remoteEdit.uploadSuccess", {
+            name: payload.fileName,
+          }),
+        });
+      }
+      if (
+        payload.status === "sync_failed" &&
+        payload.lastError &&
+        previous?.lastError !== payload.lastError
+      ) {
+        void logTelemetry("warn", "remote_edit.sync_failed", {
+          sessionId: payload.sessionId,
+          instanceId: payload.instanceId,
+          remotePath: payload.remotePath,
+          errorCode: payload.lastErrorCode,
+        });
+        const translatedMessage = payload.lastErrorCode
+          ? translateAppError(
+              {
+                code: payload.lastErrorCode,
+                message: payload.lastError,
+              },
+              t,
+            )
+          : payload.lastError;
+        pushToast({
+          level: "error",
+          message: translatedMessage,
+        });
+      }
+      setRemoteEditSessions((current) => ({
+        ...current,
+        [payload.instanceId]: payload,
+      }));
+      if (payload.status !== "pending_confirm") {
+        return;
+      }
+      if (sessionState.sessionStates[payload.sessionId] !== "connected") {
+        return;
+      }
+      if (remoteEditAutoUploadBySession[payload.sessionId]) {
+        void logTelemetry("info", "remote_edit.upload.auto_confirmed", {
+          sessionId: payload.sessionId,
+          instanceId: payload.instanceId,
+          remotePath: payload.remotePath,
+        });
+        void confirmRemoteEditUpload(payload.instanceId).catch((error) => {
+          pushToast({
+            level: "error",
+            message: translateAppError(error, t),
+          });
+        });
+        return;
+      }
+      const session = sessionState.sessions.find(
+        (sessionItem) => sessionItem.sessionId === payload.sessionId,
+      );
+      const profile = session?.profileId
+        ? (profiles.find((item) => item.id === session.profileId) ?? null)
+        : null;
+      const serverLabel =
+        profile?.name && profile.host
+          ? `${profile.name} (${profile.host})`
+          : profile?.host || profile?.name || payload.sessionId;
+      void logTelemetry("info", "remote_edit.upload.prompted", {
+        sessionId: payload.sessionId,
+        instanceId: payload.instanceId,
+        remotePath: payload.remotePath,
+      });
+      openDialog({
+        title: t("sftp.remoteEdit.confirmTitle"),
+        message: t("sftp.remoteEdit.confirmMessage", {
+          name: payload.fileName,
+          server: serverLabel,
+          path: payload.remotePath,
+        }),
+        confirmLabel: t("actions.upload"),
+        secondaryLabel: t("sftp.remoteEdit.confirmAllInSession"),
+        cancelLabel: t("actions.cancel"),
+        onConfirm: () => {
+          void logTelemetry("info", "remote_edit.upload.confirmed", {
+            sessionId: payload.sessionId,
+            instanceId: payload.instanceId,
+            remotePath: payload.remotePath,
+          });
+          void confirmRemoteEditUpload(payload.instanceId).catch((error) => {
+            pushToast({
+              level: "error",
+              message: translateAppError(error, t),
+            });
+          });
+        },
+        onSecondary: () => {
+          void logTelemetry("info", "remote_edit.upload.auto_enabled", {
+            sessionId: payload.sessionId,
+            instanceId: payload.instanceId,
+            remotePath: payload.remotePath,
+          });
+          setRemoteEditAutoUploadBySession((current) => ({
+            ...current,
+            [payload.sessionId]: true,
+          }));
+          void confirmRemoteEditUpload(payload.instanceId).catch((error) => {
+            pushToast({
+              level: "error",
+              message: translateAppError(error, t),
+            });
+          });
+        },
+        onCancel: () => {
+          void logTelemetry("info", "remote_edit.upload.cancelled", {
+            sessionId: payload.sessionId,
+            instanceId: payload.instanceId,
+            remotePath: payload.remotePath,
+          });
+          void dismissRemoteEditPending(payload.instanceId).catch(() => {});
+        },
+      });
+    }).then((listener) => {
+      if (disposed) {
+        void listener();
+        return;
+      }
+      unlisten = listener;
+    });
+
+    return () => {
+      disposed = true;
+      if (unlisten) {
+        void unlisten();
+      }
+    };
+  }, [
+    openDialog,
+    profiles,
+    pushToast,
+    remoteEditAutoUploadBySession,
+    sessionState.sessionStates,
+    sessionState.sessions,
     t,
   ]);
 
@@ -1910,14 +2151,23 @@ export default function AppShell() {
         case "files:open-file":
           if (!sessionState.activeSessionId) break;
           if (sessionState.isRemoteConnected) {
-            openRemoteFileViaCache(
+            openManagedRemoteFile(
               sessionState.activeSessionId,
               message.entry,
-              fileDefaultEditorPath,
-            ).catch(() => {});
+            ).catch((error) => {
+              pushToast({
+                level: "error",
+                message: translateAppError(error, t),
+              });
+            });
           } else {
             openLocalFile(message.entry.path, fileDefaultEditorPath).catch(
-              () => {},
+              (error) => {
+                pushToast({
+                  level: "error",
+                  message: translateAppError(error, t),
+                });
+              },
             );
           }
           break;
@@ -1970,7 +2220,10 @@ export default function AppShell() {
       uploadFile,
       uploadDroppedPaths,
       sessionState.isRemoteConnected,
+      openManagedRemoteFile,
       fileDefaultEditorPath,
+      pushToast,
+      t,
     ],
   });
 
@@ -2557,10 +2810,9 @@ export default function AppShell() {
                 sessionState.isRemoteConnected &&
                 sessionState.activeSessionId
               ) {
-                await openRemoteFileViaCache(
+                await openManagedRemoteFile(
                   sessionState.activeSessionId,
                   entry,
-                  fileDefaultEditorPath,
                 );
                 return;
               }
@@ -2585,6 +2837,7 @@ export default function AppShell() {
       refreshList,
       removeEntry,
       renameEntry,
+      openManagedRemoteFile,
       sessionState.activeSessionId,
       sessionState.isRemoteConnected,
       uploadFile,

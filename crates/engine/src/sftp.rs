@@ -315,6 +315,38 @@ pub async fn sftp_list(
     Ok(results)
 }
 
+/// 获取远端单个文件或目录信息。
+pub async fn sftp_stat(
+    session: &client::Handle<super::session::ClientHandler>,
+    path: &str,
+) -> Result<SftpEntry, EngineError> {
+    let normalized = path.trim_end_matches('/');
+    let parent = if normalized.is_empty() || normalized == "/" {
+        "/".to_string()
+    } else {
+        normalized
+            .rsplit_once('/')
+            .map(|(dir, _)| {
+                if dir.is_empty() {
+                    "/".to_string()
+                } else {
+                    dir.to_string()
+                }
+            })
+            .unwrap_or_else(|| "/".to_string())
+    };
+    let file_name = normalized
+        .rsplit('/')
+        .next()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| EngineError::new("sftp_stat_failed", "无法识别远端路径名称"))?;
+    let entries = sftp_list(session, &parent).await?;
+    entries
+        .into_iter()
+        .find(|entry| entry.path == normalized || entry.name == file_name)
+        .ok_or_else(|| EngineError::new("sftp_stat_failed", "远端文件不存在或不可访问"))
+}
+
 /// 上传本地文件至远端。
 pub async fn sftp_upload(
     session: &client::Handle<super::session::ClientHandler>,

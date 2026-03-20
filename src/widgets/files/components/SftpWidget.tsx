@@ -610,6 +610,16 @@ export default function SftpWidget({
           y={menu.y}
           items={[
             {
+              label: t("sftp.openWithSystemEditor"),
+              icon: <FiEdit2 />,
+              disabled: menu.entry.kind !== "file",
+              onClick: () => {
+                if (menu.entry.kind !== "file") return;
+                closeMenu();
+                void handleOpenEntry(menu.entry);
+              },
+            },
+            {
               label: t("actions.download"),
               icon: <FiDownload />,
               disabled: !isRemote,

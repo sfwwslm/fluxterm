@@ -643,11 +643,34 @@ export const en = {
   "sftp.hideHidden": "Hide Hidden",
   "sftp.showHidden": "Show Hidden",
   "sftp.openInFileManager": "File Manager",
+  "sftp.openWithSystemEditor": "Open With System Editor",
   "sftp.openInFileManagerFailed": "Failed to open system file manager",
   "sftp.openInFileManagerDenied":
     "This path is not allowed to open in the system file manager",
   "sftp.openFileFailed": "Failed to open file",
   "sftp.downloadForOpenFailed": "Failed to download and open remote file",
+  "sftp.remoteEdit.openedTracked":
+    "{name} was opened in the system editor and can be synced back after save",
+  "sftp.remoteEdit.openedExternal": "{name} was opened in the system editor",
+  "sftp.remoteEdit.confirmTitle": "Remote File Modified",
+  "sftp.remoteEdit.confirmMessage":
+    "Upload this file back to the server?\n\nFile: {name}\nServer: {server}\nRemote Path: {path}",
+  "sftp.remoteEdit.confirmAllInSession": "Always This Session",
+  "sftp.remoteEdit.uploadSuccess":
+    "{name} was uploaded back to the remote host",
+  "sftp.remoteEdit.remoteChanged":
+    "The remote file changed, so the local edits were not uploaded",
+  "sftp.remoteEdit.remoteMissing":
+    "The remote file no longer exists, so the local edits were not uploaded",
+  "sftp.remoteEdit.instanceMissing":
+    "The remote edit instance no longer exists or is unavailable",
+  "sftp.remoteEdit.notPending":
+    "There is no pending remote edit waiting for confirmation",
+  "sftp.remoteEdit.localReadFailed": "Failed to read the local edited file",
+  "sftp.remoteEdit.localDirty":
+    "The local work copy has unsynced changes and cannot be overwritten or reopened",
+  "sftp.remoteEdit.workspaceInvalid":
+    "The local work copy metadata is missing or corrupted, so the file cannot be safely reused",
   "sftp.drop.title": "Drop to Upload",
   "sftp.drop.accept": "Upload files or folders to the current directory",
   "sftp.drop.reject": "This area cannot accept the current drop",

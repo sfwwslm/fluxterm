@@ -8,6 +8,7 @@ pub mod local_fs;
 pub mod local_shell;
 pub mod profile_secrets;
 pub mod profile_store;
+pub mod remote_edit;
 pub mod resource_monitor;
 pub mod security;
 pub mod session_settings;
@@ -38,6 +39,9 @@ use crate::commands::profile::{
     ssh_import_openssh_config,
 };
 use crate::commands::proxy::{proxy_close, proxy_close_all, proxy_list, proxy_open};
+use crate::commands::remote_edit::{
+    remote_edit_confirm_upload, remote_edit_dismiss_pending, remote_edit_list, remote_edit_open,
+};
 use crate::commands::resource_monitor::{
     resource_monitor_start_local, resource_monitor_start_ssh, resource_monitor_stop,
 };
@@ -57,6 +61,7 @@ use crate::commands::tunnel::{
     ssh_tunnel_close, ssh_tunnel_close_all, ssh_tunnel_list, ssh_tunnel_open,
 };
 use crate::local_shell::LocalShellState;
+use crate::remote_edit::RemoteEditState;
 use crate::resource_monitor::ResourceMonitorState;
 use crate::state::{EngineState, SecurityState};
 
@@ -98,6 +103,7 @@ pub fn run() {
         .manage(SecurityState::default())
         .manage(LocalShellState::default())
         .manage(ResourceMonitorState::default())
+        .manage(RemoteEditState::default())
         .manage(ai::AiRuntimeState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -180,6 +186,10 @@ pub fn run() {
             proxy_close,
             proxy_list,
             proxy_close_all,
+            remote_edit_open,
+            remote_edit_list,
+            remote_edit_confirm_upload,
+            remote_edit_dismiss_pending,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

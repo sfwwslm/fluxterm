@@ -95,6 +95,30 @@ export type SftpEntry = {
   group?: string | null;
 };
 
+/** 远端编辑实例状态。 */
+export type RemoteEditStatus =
+  | "synced"
+  | "pending_confirm"
+  | "uploading"
+  | "sync_failed";
+
+/** 远端编辑实例快照。 */
+export type RemoteEditSnapshot = {
+  instanceId: string;
+  sessionId: string;
+  remotePath: string;
+  localPath: string;
+  fileName: string;
+  downloadedAt: number;
+  remoteMtime?: number | null;
+  remoteSize?: number | null;
+  trackChanges: boolean;
+  status: RemoteEditStatus;
+  lastSyncedAt: number;
+  lastErrorCode?: string | null;
+  lastError?: string | null;
+};
+
 /** SFTP 传输进度。 */
 export type SftpTransferKind = "file" | "directory" | "batch";
 export type SftpTransferStatus =

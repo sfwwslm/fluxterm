@@ -31,7 +31,7 @@ use crate::auth::{AuthPurpose, authenticate};
 use crate::error::EngineError;
 use crate::sftp::{
     next_transfer_id, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
-    sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
+    sftp_remove, sftp_rename, sftp_resolve_path, sftp_stat, sftp_upload, sftp_upload_batch,
 };
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
@@ -62,6 +62,10 @@ pub enum SessionCommand {
     SftpList {
         path: String,
         respond_to: tokio::sync::oneshot::Sender<Result<Vec<SftpEntry>, EngineError>>,
+    },
+    SftpStat {
+        path: String,
+        respond_to: tokio::sync::oneshot::Sender<Result<SftpEntry, EngineError>>,
     },
     SftpHome {
         respond_to: tokio::sync::oneshot::Sender<Result<String, EngineError>>,
@@ -806,6 +810,13 @@ pub async fn run_session_loop(
                         tokio::spawn(async move {
                             let guard = session_handle.lock().await;
                             let _ = respond_to.send(sftp_list(&guard, &path).await);
+                        });
+                    }
+                    SessionCommand::SftpStat { path, respond_to } => {
+                        let session_handle = Arc::clone(&session);
+                        tokio::spawn(async move {
+                            let guard = session_handle.lock().await;
+                            let _ = respond_to.send(sftp_stat(&guard, &path).await);
                         });
                     }
                     SessionCommand::SftpHome { respond_to } => {
