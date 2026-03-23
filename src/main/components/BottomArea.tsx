@@ -540,10 +540,11 @@ export default function BottomArea({
             </div>
           </div>
         )}
+        {visibility.quickbar && visibility.statusbar ? (
+          <div className="bottom-area-divider" aria-hidden="true" />
+        ) : null}
         {visibility.statusbar && (
-          <div
-            className={`statusbar-row ${visibility.quickbar ? "with-separator" : ""}`.trim()}
-          >
+          <div className="statusbar-row">
             <div className="statusbar">
               <div className="statusbar-left">
                 {showResourceStatus && (

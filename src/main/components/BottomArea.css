@@ -19,6 +19,12 @@
   min-width: 0;
 }
 
+.bottom-area-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border-soft);
+}
+
 .quickbar {
   position: relative;
   width: 100%;
@@ -354,10 +360,6 @@
 
 .statusbar-row {
   width: 100%;
-}
-
-.statusbar-row.with-separator {
-  border-top: 1px solid var(--border-soft);
 }
 
 .quickbar-manager {
