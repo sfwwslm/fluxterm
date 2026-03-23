@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::profile_store::SecretConfig;
 use crate::security::provider::EncryptionProvider;
-use crate::security::providers::UserPasswordProvider;
+use crate::security::providers::{EmbeddedProvider, UserPasswordProvider};
 use crate::security::types::{
     EncryptedPayload, EncryptionAlgorithm, EncryptionProviderKind, ProviderCiphertext,
     SecurityStatus,
@@ -27,6 +27,7 @@ pub struct CryptoService {
 }
 
 const SECRET_TOKEN_PREFIX: &str = "enc:v1:";
+const EMBEDDED_KEY_ID: &str = "embedded-v1";
 const USER_PASSWORD_SALT_LEN: usize = 16;
 const USER_PASSWORD_DERIVED_LEN: usize = 64;
 
@@ -38,14 +39,21 @@ impl CryptoService {
     ) -> Result<Self, EngineError> {
         let provider_name = config
             .map(|item| item.provider.trim().to_ascii_lowercase())
-            .unwrap_or_else(|| "plaintext".to_string());
+            .unwrap_or_else(|| "embedded".to_string());
         match provider_name.as_str() {
-            "plaintext" | "" => Ok(Self {
-                provider_kind: EncryptionProviderKind::Plaintext,
-                key_id: "plaintext".to_string(),
-                provider: None,
-                locked: false,
-            }),
+            "embedded" | "" => {
+                let provider = Arc::new(EmbeddedProvider::new());
+                Ok(Self {
+                    provider_kind: EncryptionProviderKind::Embedded,
+                    key_id: provider.key_id().to_string(),
+                    provider: Some(provider),
+                    locked: false,
+                })
+            }
+            "plaintext" => Err(EngineError::new(
+                "crypto_provider_invalid",
+                "当前配置文件仍使用已移除的明文模式，请重新初始化安全设置。",
+            )),
             "user_password" => {
                 let key_id = config
                     .and_then(|item| item.active_key_id.clone())
@@ -78,17 +86,29 @@ impl CryptoService {
         }
     }
 
-    /// 构造默认明文模式服务。
-    pub fn plaintext() -> Self {
+    /// 构造默认弱保护模式服务。
+    pub fn embedded() -> Self {
+        let provider = Arc::new(EmbeddedProvider::new());
         Self {
-            provider_kind: EncryptionProviderKind::Plaintext,
-            key_id: "plaintext".to_string(),
-            provider: None,
+            provider_kind: EncryptionProviderKind::Embedded,
+            key_id: provider.key_id().to_string(),
+            provider: Some(provider),
             locked: false,
         }
     }
 
-    /// 基于主密码创建新的配置与解锁会话。
+    /// 构造默认弱保护模式配置。
+    pub fn build_embedded_config() -> SecretConfig {
+        SecretConfig {
+            version: 1,
+            provider: "embedded".to_string(),
+            active_key_id: Some(EMBEDDED_KEY_ID.to_string()),
+            kdf_salt: None,
+            verify_hash: None,
+        }
+    }
+
+    /// 基于主密码创建新的强保护配置与解锁会话。
     pub fn build_user_password_config(
         password: &str,
     ) -> Result<(SecretConfig, UnlockedSecretSession), EngineError> {
@@ -158,7 +178,7 @@ impl CryptoService {
 
     /// 当前模式是否启用了加密。
     pub fn encryption_enabled(&self) -> bool {
-        self.provider_kind != EncryptionProviderKind::Plaintext
+        true
     }
 
     /// 对明文字符串执行加密并返回结构化密文字符串。
@@ -262,12 +282,6 @@ impl CryptoService {
     }
 
     fn require_provider_for_encryption(&self) -> Result<&Arc<dyn EncryptionProvider>, EngineError> {
-        if self.provider_kind == EncryptionProviderKind::Plaintext {
-            return Err(EngineError::new(
-                "security_encryption_disabled",
-                "当前为未加密模式，请先设置安全密码后再启用加密。",
-            ));
-        }
         self.provider.as_ref().ok_or_else(|| {
             EngineError::new(
                 "security_locked",
@@ -318,12 +332,15 @@ mod tests {
     use super::{CryptoService, SECRET_TOKEN_PREFIX};
 
     #[test]
-    fn plaintext_mode_does_not_enable_encryption() {
-        let crypto = CryptoService::plaintext();
-        assert!(!crypto.encryption_enabled());
+    fn embedded_mode_encrypts_and_decrypts_roundtrip() {
+        let crypto = CryptoService::embedded();
+        let encrypted = crypto.encrypt_string("secret-value").expect("encrypt");
+        assert_ne!(encrypted, "secret-value");
+        let decrypted = crypto.decrypt_string(&encrypted).expect("decrypt");
+        assert_eq!(decrypted, "secret-value");
         assert_eq!(
             crypto.provider_kind(),
-            crate::security::EncryptionProviderKind::Plaintext
+            crate::security::EncryptionProviderKind::Embedded
         );
     }
 

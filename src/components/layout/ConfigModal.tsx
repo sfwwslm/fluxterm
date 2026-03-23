@@ -168,12 +168,12 @@ type ConfigModalProps = {
   onAiProviderTest?: (providerId: string) => Promise<void> | void;
   onSecurityUnlock?: (password: string) => Promise<void> | void;
   onSecurityLock?: () => Promise<void> | void;
-  onSecurityEnableWithPassword?: (password: string) => Promise<void> | void;
+  onSecurityEnableStrongProtection?: (password: string) => Promise<void> | void;
   onSecurityChangePassword?: (
     currentPassword: string,
     nextPassword: string,
   ) => Promise<void> | void;
-  onSecurityDisableEncryption?: () => Promise<void> | void;
+  onSecurityEnableWeakProtection?: () => Promise<void> | void;
   onWebLinksEnabledChange?: (enabled: boolean) => void;
   onCommandAutocompleteEnabledChange?: (enabled: boolean) => void;
   onSelectionAutoCopyEnabledChange?: (enabled: boolean) => void;
@@ -256,9 +256,9 @@ export default function ConfigModal({
   aiActiveProviderId = "",
   aiProviders = [],
   securityStatus = {
-    provider: "plaintext",
+    provider: "embedded",
     locked: false,
-    encryptionEnabled: false,
+    encryptionEnabled: true,
   },
   securityLoaded = false,
   securityBusy = false,
@@ -295,9 +295,9 @@ export default function ConfigModal({
   onAiProviderTest,
   onSecurityUnlock,
   onSecurityLock,
-  onSecurityEnableWithPassword,
+  onSecurityEnableStrongProtection,
   onSecurityChangePassword,
-  onSecurityDisableEncryption,
+  onSecurityEnableWeakProtection,
   onWebLinksEnabledChange,
   onCommandAutocompleteEnabledChange,
   onSelectionAutoCopyEnabledChange,
@@ -1164,7 +1164,8 @@ export default function ConfigModal({
       );
     }
     if (activeSection === "security") {
-      const isEncrypted = securityStatus.encryptionEnabled;
+      const isWeakMode = securityStatus.provider === "embedded";
+      const isStrongMode = securityStatus.provider === "user_password";
       const isLocked = securityStatus.locked;
       return (
         <div className="config-modal-widget config-modal-widget-scrollable config-security-section">
@@ -1177,13 +1178,13 @@ export default function ConfigModal({
             </div>
             <div className="config-dir-path">
               {securityLoaded
-                ? isEncrypted
-                  ? t("config.security.providerEncrypted")
-                  : t("config.security.providerPlaintext")
+                ? isWeakMode
+                  ? t("config.security.providerWeak")
+                  : t("config.security.providerStrong")
                 : t("config.security.loading")}
             </div>
           </div>
-          {isEncrypted && isLocked ? (
+          {isStrongMode && isLocked ? (
             <div className="config-toggle-card config-feature-group">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
@@ -1231,14 +1232,14 @@ export default function ConfigModal({
               </div>
             </div>
           ) : null}
-          {!isEncrypted ? (
+          {isWeakMode ? (
             <div className="config-toggle-card config-feature-group">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
-                  {t("config.security.enablePassword")}
+                  {t("config.security.enableStrongProtection")}
                 </span>
                 <span className="config-toggle-desc">
-                  {t("config.security.passwordHintPlaintext")}
+                  {t("config.security.passwordHintWeak")}
                 </span>
               </div>
               <input
@@ -1282,7 +1283,7 @@ export default function ConfigModal({
                       return;
                     }
                     void Promise.resolve(
-                      onSecurityEnableWithPassword?.(password),
+                      onSecurityEnableStrongProtection?.(password),
                     )
                       .then(() => {
                         setSecurityPasswordDraft("");
@@ -1305,7 +1306,7 @@ export default function ConfigModal({
               </div>
             </div>
           ) : null}
-          {isEncrypted && !isLocked ? (
+          {isStrongMode && !isLocked ? (
             <div className="config-toggle-card config-feature-group">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
@@ -1396,7 +1397,7 @@ export default function ConfigModal({
               </div>
             </div>
           ) : null}
-          {isEncrypted && !isLocked ? (
+          {isStrongMode && !isLocked ? (
             <div className="config-toggle-card config-feature-group">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
@@ -1437,18 +1438,18 @@ export default function ConfigModal({
                   disabled={securityBusy}
                   onClick={() => {
                     openDialog({
-                      title: t("config.security.disableAction"),
-                      message: t("config.security.disableConfirm"),
-                      confirmLabel: t("config.security.disableAction"),
+                      title: t("config.security.enableWeakAction"),
+                      message: t("config.security.enableWeakConfirm"),
+                      confirmLabel: t("config.security.enableWeakAction"),
                       cancelLabel: t("actions.cancel"),
                       onConfirm: () => {
-                        void Promise.resolve(onSecurityDisableEncryption?.())
+                        void Promise.resolve(onSecurityEnableWeakProtection?.())
                           .then(() => {
                             setSecurityPasswordDraft("");
                             setSecurityConfirmPasswordDraft("");
                             pushToast({
                               level: "success",
-                              message: t("config.security.disableSuccess"),
+                              message: t("config.security.enableWeakSuccess"),
                             });
                           })
                           .catch((error) => {
@@ -1461,7 +1462,7 @@ export default function ConfigModal({
                     });
                   }}
                 >
-                  {t("config.security.disableAction")}
+                  {t("config.security.enableWeakAction")}
                 </Button>
               </div>
             </div>

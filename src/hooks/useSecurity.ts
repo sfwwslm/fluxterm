@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   securityChangePassword,
-  securityDisableEncryption,
-  securityEnableWithPassword,
+  securityEnableStrongProtection,
+  securityEnableWeakProtection,
   securityLock,
   securityStatusGet,
   securityUnlock,
@@ -11,9 +11,9 @@ import type { SecurityStatus } from "@/features/security/types";
 import { extractErrorMessage } from "@/shared/errors/appError";
 
 const DEFAULT_SECURITY_STATUS: SecurityStatus = {
-  provider: "plaintext",
+  provider: "embedded",
   locked: false,
-  encryptionEnabled: false,
+  encryptionEnabled: true,
 };
 
 type UseSecurityResult = {
@@ -24,12 +24,12 @@ type UseSecurityResult = {
   refresh: () => Promise<SecurityStatus>;
   unlock: (password: string) => Promise<SecurityStatus>;
   lock: () => Promise<SecurityStatus>;
-  enableWithPassword: (password: string) => Promise<SecurityStatus>;
+  enableStrongProtection: (password: string) => Promise<SecurityStatus>;
   changePassword: (
     currentPassword: string,
     nextPassword: string,
   ) => Promise<SecurityStatus>;
-  disableEncryption: () => Promise<SecurityStatus>;
+  enableWeakProtection: () => Promise<SecurityStatus>;
 };
 
 /** 安全配置与主密码状态管理。 */
@@ -92,10 +92,10 @@ export default function useSecurity(): UseSecurityResult {
     refresh,
     unlock: (password) => runAction(() => securityUnlock(password)),
     lock: () => runAction(() => securityLock()),
-    enableWithPassword: (password) =>
-      runAction(() => securityEnableWithPassword(password)),
+    enableStrongProtection: (password) =>
+      runAction(() => securityEnableStrongProtection(password)),
     changePassword: (currentPassword, nextPassword) =>
       runAction(() => securityChangePassword(currentPassword, nextPassword)),
-    disableEncryption: () => runAction(() => securityDisableEncryption()),
+    enableWeakProtection: () => runAction(() => securityEnableWeakProtection()),
   };
 }

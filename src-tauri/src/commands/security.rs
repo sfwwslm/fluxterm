@@ -1,4 +1,4 @@
-//! 安全状态与主密码命令。
+//! 安全状态与保护模式命令。
 
 use engine::{EngineError, HostProfile};
 use tauri::{AppHandle, State};
@@ -34,7 +34,7 @@ pub fn security_status(
     Ok(crypto.status())
 }
 
-/// 使用当前安全密码解锁已加密的数据。
+/// 使用当前安全密码解锁强保护模式数据。
 #[tauri::command]
 pub fn security_unlock(
     app: AppHandle,
@@ -50,7 +50,7 @@ pub fn security_unlock(
     if provider != "user_password" {
         return Err(EngineError::new(
             "security_unlock_unavailable",
-            "当前未启用主密码加密，无需解锁。",
+            "当前未启用强保护模式，无需解锁。",
         ));
     }
     let session = CryptoService::unlock_user_password(config, &input.password)?;
@@ -64,13 +64,25 @@ pub fn security_lock(
     app: AppHandle,
     security: State<'_, SecurityState>,
 ) -> Result<SecurityStatus, EngineError> {
+    let store = read_profiles(&app)?;
+    let provider = store
+        .secret
+        .as_ref()
+        .map(|config| config.provider.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "embedded".to_string());
+    if provider != "user_password" {
+        return Err(EngineError::new(
+            "security_unlock_unavailable",
+            "当前未启用强保护模式，无需锁定。",
+        ));
+    }
     security.clear_session();
     security_status(app, security)
 }
 
-/// 从明文模式启用主密码加密，并将现有敏感字段统一迁移为密文。
+/// 从弱保护模式切换到强保护模式，并对现有敏感字段统一重加密。
 #[tauri::command]
-pub fn security_enable_with_password(
+pub fn security_enable_strong_protection(
     app: AppHandle,
     security: State<'_, SecurityState>,
     input: SecurityPasswordInput,
@@ -78,18 +90,10 @@ pub fn security_enable_with_password(
     let mut store = read_profiles(&app)?;
     let current_session = security.current_session();
     let current_crypto = CryptoService::new(store.secret.as_ref(), current_session.as_ref())?;
-    if current_crypto.provider_kind() != crate::security::EncryptionProviderKind::Plaintext {
+    if current_crypto.provider_kind() != crate::security::EncryptionProviderKind::Embedded {
         return Err(EngineError::new(
             "security_enable_unavailable",
-            "当前已启用加密，请使用修改密码功能。",
-        ));
-    }
-    if current_session.is_none()
-        && current_crypto.provider_kind() == crate::security::EncryptionProviderKind::UserPassword
-    {
-        return Err(EngineError::new(
-            "security_locked",
-            "当前安全数据已锁定，请先输入安全密码解锁。",
+            "当前已启用强保护模式，请直接修改安全密码。",
         ));
     }
 
@@ -107,7 +111,7 @@ pub fn security_enable_with_password(
     security_status(app, security)
 }
 
-/// 修改当前主密码，并对现有密文执行重加密。
+/// 修改当前强保护模式的主密码，并对现有密文执行重加密。
 #[tauri::command]
 pub fn security_change_password(
     app: AppHandle,
@@ -122,7 +126,7 @@ pub fn security_change_password(
     if !config.provider.trim().eq_ignore_ascii_case("user_password") {
         return Err(EngineError::new(
             "security_change_unavailable",
-            "当前未启用主密码加密，无法修改安全密码。",
+            "当前未启用强保护模式，无法修改安全密码。",
         ));
     }
 
@@ -143,9 +147,9 @@ pub fn security_change_password(
     security_status(app, security)
 }
 
-/// 关闭加密，并将所有敏感字段恢复为明文保存。
+/// 从强保护模式切换回弱保护模式，并使用内置密钥重新加密敏感字段。
 #[tauri::command]
-pub fn security_disable_encryption(
+pub fn security_enable_weak_protection(
     app: AppHandle,
     security: State<'_, SecurityState>,
 ) -> Result<SecurityStatus, EngineError> {
@@ -160,22 +164,23 @@ pub fn security_disable_encryption(
             "当前安全数据已锁定，请先输入安全密码解锁。",
         ));
     }
+    if current_crypto.provider_kind() == crate::security::EncryptionProviderKind::Embedded {
+        return Err(EngineError::new(
+            "security_enable_unavailable",
+            "当前已经处于弱保护模式。",
+        ));
+    }
 
     let profiles_plain = decrypt_profiles(&store, &current_crypto)?;
     let ai_plain = decrypt_ai_settings(&app, &current_crypto)?;
-    let plaintext = CryptoService::plaintext();
+    let weak_config = CryptoService::build_embedded_config();
+    let weak_crypto = CryptoService::embedded();
 
-    store.secret = Some(crate::profile_store::SecretConfig {
-        version: 1,
-        provider: "plaintext".to_string(),
-        active_key_id: None,
-        kdf_salt: None,
-        verify_hash: None,
-    });
-    store.profiles = encrypt_profiles(profiles_plain, &plaintext)?;
+    store.secret = Some(weak_config);
+    store.profiles = encrypt_profiles(profiles_plain, &weak_crypto)?;
     store.updated_at = now_epoch();
     write_profiles(&app, &store)?;
-    write_ai_settings(&app, encrypt_ai_settings(ai_plain, &plaintext)?)?;
+    write_ai_settings(&app, encrypt_ai_settings(ai_plain, &weak_crypto)?)?;
     security.clear_session();
     security_status(app, security)
 }

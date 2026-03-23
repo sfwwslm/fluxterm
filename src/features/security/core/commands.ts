@@ -16,9 +16,9 @@ export function securityLock() {
   return callTauri<SecurityStatus>("security_lock");
 }
 
-/** 启用或更换主密码加密。 */
-export function securityEnableWithPassword(password: string) {
-  return callTauri<SecurityStatus>("security_enable_with_password", {
+/** 切换到强保护模式。 */
+export function securityEnableStrongProtection(password: string) {
+  return callTauri<SecurityStatus>("security_enable_strong_protection", {
     input: { password },
   });
 }
@@ -36,7 +36,7 @@ export function securityChangePassword(
   });
 }
 
-/** 关闭加密，恢复明文保存。 */
-export function securityDisableEncryption() {
-  return callTauri<SecurityStatus>("security_disable_encryption");
+/** 切换到弱保护模式。 */
+export function securityEnableWeakProtection() {
+  return callTauri<SecurityStatus>("security_enable_weak_protection");
 }

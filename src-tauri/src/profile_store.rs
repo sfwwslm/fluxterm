@@ -11,7 +11,7 @@ use crate::config_paths::resolve_profiles_path;
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::utils::write_atomic;
 
-/// 主密码配置。
+/// 敏感数据保护配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretConfig {
     pub version: u32,
@@ -44,8 +44,8 @@ impl Default for ProfileStore {
             ssh_groups: Vec::new(),
             secret: Some(SecretConfig {
                 version: 1,
-                provider: "plaintext".to_string(),
-                active_key_id: None,
+                provider: "embedded".to_string(),
+                active_key_id: Some("embedded-v1".to_string()),
                 kdf_salt: None,
                 verify_hash: None,
             }),
@@ -57,7 +57,7 @@ impl Default for ProfileStore {
 /// 读取配置文件。
 ///
 /// 职责：
-/// 1. 若 profiles.json 不存在，返回默认明文存储结构。
+/// 1. 若 profiles.json 不存在，返回默认弱保护结构。
 /// 2. 反序列化磁盘内容并注入内存。
 pub fn read_profiles(app: &AppHandle) -> Result<ProfileStore, EngineError> {
     let path = profiles_path(app)?;

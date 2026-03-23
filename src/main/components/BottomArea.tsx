@@ -14,6 +14,7 @@ import {
   FiSettings,
   FiTrash2,
 } from "react-icons/fi";
+import type { SecurityProvider } from "@/features/security/types";
 import type { Locale, Translate } from "@/i18n";
 import type {
   QuickCommandGroup,
@@ -81,6 +82,7 @@ type BottomAreaProps = {
   activeAiConfigName: string | null;
   securityEnabled: boolean;
   securityLocked: boolean;
+  securityProvider: SecurityProvider;
   onSecurityAction: () => void;
   locale: Locale;
   t: Translate;
@@ -176,6 +178,7 @@ export default function BottomArea({
   activeAiConfigName,
   securityEnabled,
   securityLocked,
+  securityProvider,
   onSecurityAction,
   locale,
   t,
@@ -689,22 +692,28 @@ export default function BottomArea({
                 <button
                   type="button"
                   className={`statusbar-security-chip ${
-                    securityEnabled
-                      ? securityLocked
-                        ? "locked"
-                        : "unlocked"
-                      : "plaintext"
+                    securityProvider === "embedded"
+                      ? "plaintext"
+                      : securityEnabled
+                        ? securityLocked
+                          ? "locked"
+                          : "unlocked"
+                        : "plaintext"
                   }`.trim()}
                   onClick={onSecurityAction}
                   aria-label={
-                    securityEnabled
-                      ? securityLocked
-                        ? t("status.security.lockedAction")
-                        : t("status.security.unlockedAction")
-                      : t("status.security.plaintextAction")
+                    securityProvider === "embedded"
+                      ? t("status.security.weakAction")
+                      : securityEnabled
+                        ? securityLocked
+                          ? t("status.security.lockedAction")
+                          : t("status.security.unlockedAction")
+                        : t("status.security.plaintextAction")
                   }
                 >
-                  {securityEnabled ? (
+                  {securityProvider === "embedded" ? (
+                    <FiUnlock />
+                  ) : securityEnabled ? (
                     securityLocked ? (
                       <FiLock />
                     ) : (
@@ -714,11 +723,13 @@ export default function BottomArea({
                     <FiUnlock />
                   )}
                   <span>
-                    {securityEnabled
-                      ? securityLocked
-                        ? t("status.security.locked")
-                        : t("status.security.unlocked")
-                      : t("status.security.plaintext")}
+                    {securityProvider === "embedded"
+                      ? t("status.security.weak")
+                      : securityEnabled
+                        ? securityLocked
+                          ? t("status.security.locked")
+                          : t("status.security.unlocked")
+                        : t("status.security.plaintext")}
                   </span>
                 </button>
                 <span className="statusbar-info-chip">

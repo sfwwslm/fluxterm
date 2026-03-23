@@ -557,9 +557,9 @@ export default function AppShell() {
     busy: securityBusy,
     unlock: unlockSecurity,
     lock: lockSecurity,
-    enableWithPassword: enableSecurityWithPassword,
+    enableStrongProtection: enableSecurityWithPassword,
     changePassword: changeSecurityPassword,
-    disableEncryption: disableSecurityEncryption,
+    enableWeakProtection: enableSecurityWeakProtection,
   } = useSecurity();
   const { pushToast, openDialog } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -3422,8 +3422,12 @@ export default function AppShell() {
             activeAiConfigName={aiActiveProvider?.name?.trim() || null}
             securityEnabled={securityStatus.encryptionEnabled}
             securityLocked={securityStatus.locked}
+            securityProvider={securityStatus.provider}
             onSecurityAction={() => {
-              if (securityStatus.encryptionEnabled && !securityStatus.locked) {
+              if (
+                securityStatus.provider === "user_password" &&
+                !securityStatus.locked
+              ) {
                 lockSecurity().catch(() => {});
                 return;
               }
@@ -3541,7 +3545,7 @@ export default function AppShell() {
             await reloadProfiles();
           })
         }
-        onSecurityEnableWithPassword={(password) =>
+        onSecurityEnableStrongProtection={(password) =>
           enableSecurityWithPassword(password).then(async () => {
             await reloadProfiles();
           })
@@ -3553,8 +3557,8 @@ export default function AppShell() {
             },
           )
         }
-        onSecurityDisableEncryption={() =>
-          disableSecurityEncryption().then(async () => {
+        onSecurityEnableWeakProtection={() =>
+          enableSecurityWeakProtection().then(async () => {
             await reloadProfiles();
           })
         }

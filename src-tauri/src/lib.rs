@@ -46,7 +46,7 @@ use crate::commands::resource_monitor::{
     resource_monitor_start_local, resource_monitor_start_ssh, resource_monitor_stop,
 };
 use crate::commands::security::{
-    security_change_password, security_disable_encryption, security_enable_with_password,
+    security_change_password, security_enable_strong_protection, security_enable_weak_protection,
     security_lock, security_status, security_unlock,
 };
 use crate::commands::sftp::{
@@ -141,9 +141,9 @@ pub fn run() {
             security_status,
             security_unlock,
             security_lock,
-            security_enable_with_password,
+            security_enable_strong_protection,
             security_change_password,
-            security_disable_encryption,
+            security_enable_weak_protection,
             ssh_connect,
             ssh_disconnect,
             ssh_host_key_confirm,

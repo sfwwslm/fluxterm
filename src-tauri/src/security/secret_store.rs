@@ -22,7 +22,6 @@ impl<'a> SecretStore<'a> {
     ) -> Result<Option<String>, EngineError> {
         match value {
             Some(raw) if raw.trim().is_empty() => Ok(None),
-            Some(raw) if !self.crypto.encryption_enabled() => Ok(Some(raw)),
             Some(raw) => self.crypto.encrypt_string(&raw).map(Some),
             None => Ok(None),
         }
@@ -35,7 +34,10 @@ impl<'a> SecretStore<'a> {
     ) -> Result<Option<String>, EngineError> {
         match value {
             Some(raw) if raw.trim().is_empty() => Ok(None),
-            Some(raw) if !raw.starts_with("enc:v1:") => Ok(Some(raw)),
+            Some(raw) if !raw.starts_with("enc:v1:") => Err(EngineError::new(
+                "secret_format_unsupported",
+                "凭据格式无效：当前仅支持 enc:v1 密文",
+            )),
             Some(raw) => self.crypto.decrypt_string(&raw).map(Some),
             None => Ok(None),
         }
