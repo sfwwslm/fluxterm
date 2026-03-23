@@ -97,6 +97,7 @@ type UseAppSettingsResult = {
     React.SetStateAction<number>
   >;
   availableShells: LocalShellProfile[];
+  refreshAvailableShells: () => Promise<void>;
   settingsLoaded: boolean;
   saveState: "idle" | "saving" | "saved" | "error";
   saveError: string | null;
@@ -118,6 +119,14 @@ function normalizeThemeId(value: unknown): ThemeId | null {
   if (value === "aurora" || value === "sahara") return "dark";
   if (value === "dawn") return "light";
   return null;
+}
+
+/** 根据系统安装的 shell 列表解析最优默认项。 */
+function resolveDefaultShellId(shells: LocalShellProfile[]) {
+  if (!shells.length) return null;
+  const preferred = shells.find((shell) => shell.id === "powershell");
+  if (preferred) return preferred.id;
+  return shells[0].id;
 }
 
 /**
@@ -175,14 +184,6 @@ export default function useAppSettings({
   const saveTimerRef = useRef<number | null>(null);
   const lastSavedConfigRef = useRef<string>("");
   const pendingShellIdRef = useRef<string | null>(null);
-
-  /** 根据系统安装的 shell 列表解析最优默认项。 */
-  function resolveDefaultShellId(shells: LocalShellProfile[]) {
-    if (!shells.length) return null;
-    const preferred = shells.find((shell) => shell.id === "powershell");
-    if (preferred) return preferred.id;
-    return shells[0].id;
-  }
 
   /** 从磁盘读取全量设置并反填内存状态。 */
   const loadSettings = useCallback(async () => {
@@ -275,6 +276,32 @@ export default function useAppSettings({
     }
   }, [themeIds]);
 
+  /** 重新拉取系统可用的本地 Shell 列表，并在必要时修正当前选中项。 */
+  const refreshAvailableShells = useCallback(async () => {
+    const shells = await invoke<LocalShellProfile[]>("local_shell_list");
+    setAvailableShells(shells);
+    const fallbackId = resolveDefaultShellId(shells);
+    setShellId((current) => {
+      // 手动重新扫描时优先保留用户当前选择；首次启动时则回退到磁盘中的已保存选择。
+      const preferred = current ?? pendingShellIdRef.current;
+      const preferredAvailable =
+        !!preferred && shells.some((shell) => shell.id === preferred);
+      const selected = (preferredAvailable ? preferred : fallbackId) ?? null;
+
+      void debug(
+        JSON.stringify({
+          event: "settings:refresh-shell",
+          savedShellId: preferred ?? null,
+          availableShellIds: shells.map((shell) => shell.id),
+          selectedShellId: selected,
+          fallbackUsed: !!preferred && !preferredAvailable,
+        }),
+      );
+
+      return selected;
+    });
+  }, []);
+
   /** 将最新设置写入磁盘。 */
   async function saveSettings(payload: AppSettings) {
     const dir = await getGlobalConfigDir();
@@ -294,25 +321,7 @@ export default function useAppSettings({
     void (async () => {
       try {
         await loadSettings();
-        const shells = await invoke<LocalShellProfile[]>("local_shell_list");
-        if (!active) return;
-        setAvailableShells(shells);
-        const fallbackId = resolveDefaultShellId(shells);
-        const preferred = pendingShellIdRef.current;
-        const preferredAvailable =
-          !!preferred && shells.some((shell) => shell.id === preferred);
-        const selected = (preferredAvailable ? preferred : fallbackId) ?? null;
-        setShellId(selected);
-
-        void debug(
-          JSON.stringify({
-            event: "settings:init-shell",
-            savedShellId: preferred ?? null,
-            availableShellIds: shells.map((shell) => shell.id),
-            selectedShellId: selected,
-            fallbackUsed: !!preferred && !preferredAvailable,
-          }),
-        );
+        await refreshAvailableShells();
       } catch {
         if (!active) return;
         setAvailableShells([]);
@@ -328,7 +337,7 @@ export default function useAppSettings({
     return () => {
       active = false;
     };
-  }, [loadSettings]);
+  }, [loadSettings, refreshAvailableShells]);
 
   // 自动防抖异步保存。
   useEffect(() => {
@@ -452,6 +461,7 @@ export default function useAppSettings({
     backgroundVideoReplayIntervalSec,
     setBackgroundVideoReplayIntervalSec,
     availableShells,
+    refreshAvailableShells,
     settingsLoaded,
     saveState,
     saveError,

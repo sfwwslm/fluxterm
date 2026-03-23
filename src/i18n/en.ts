@@ -358,6 +358,7 @@ export const en = {
   "host.menu.renameGroup": "Rename Group",
   "host.menu.deleteGroup": "Delete Group",
   "host.menu.importOpenSshConfig": "Openssh Import",
+  "host.menu.rescanLocalShells": "Rescan",
   "host.menu.viewShellPath": "View Path",
   "host.menu.moveTo": "Move",
   "host.moveDialogTitle": "Move Host",

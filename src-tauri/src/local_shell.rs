@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::env;
 use std::io::{Read, Write};
 #[cfg(target_os = "windows")]
-use std::path::Path;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -116,6 +116,69 @@ fn find_in_path(exe: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
+fn push_unique_existing_path(candidates: &mut Vec<String>, path: String) {
+    if !path_exists(&path) {
+        return;
+    }
+    if candidates
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(&path))
+    {
+        return;
+    }
+    candidates.push(path);
+}
+
+#[cfg(target_os = "windows")]
+/// 收集 Windows 下 PowerShell 7 的候选路径，遵循 AppLocal、PATH、Program Files 的优先级。
+fn collect_pwsh_candidates() -> Vec<String> {
+    let mut candidates = Vec::new();
+
+    if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+        let windows_apps = PathBuf::from(local_app_data)
+            .join("Microsoft")
+            .join("WindowsApps");
+        // 先尝试当前用户的 App Execution Alias，再兜底扫描商店包目录，避免把版本目录名写死。
+        push_unique_existing_path(
+            &mut candidates,
+            windows_apps.join("pwsh.exe").to_string_lossy().to_string(),
+        );
+
+        let mut package_paths = std::fs::read_dir(&windows_apps)
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("Microsoft.PowerShell_"))
+            })
+            .map(|path| path.join("pwsh.exe"))
+            .filter(|path| path.is_file())
+            .map(|path| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        package_paths.sort_unstable();
+        for path in package_paths {
+            push_unique_existing_path(&mut candidates, path);
+        }
+    }
+
+    // 如果用户目录下没有可用商店版，再回退到 PATH 中显式暴露的 pwsh。
+    if let Some(pwsh) = find_in_path("pwsh.exe") {
+        push_unique_existing_path(&mut candidates, pwsh);
+    }
+
+    push_unique_existing_path(
+        &mut candidates,
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe".to_string(),
+    );
+
+    candidates
+}
+
+#[cfg(target_os = "windows")]
 /// 解析 `wsl.exe` 输出，兼容 UTF-8/UTF-16LE 两种常见编码。
 fn decode_windows_command_output(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xFF, 0xFE]) {
@@ -191,10 +254,7 @@ fn collect_wsl_distributions(wsl_path: &str) -> Vec<String> {
 fn collect_windows_shells() -> Vec<LocalShellProfile> {
     let mut shells = Vec::new();
 
-    if let Some(pwsh) = find_in_path("pwsh.exe")
-        .or_else(|| Some("C:\\Program Files\\PowerShell\\7\\pwsh.exe".to_string()))
-        .filter(|path| path_exists(path))
-    {
+    if let Some(pwsh) = collect_pwsh_candidates().into_iter().next() {
         shells.push(LocalShellProfile {
             id: "pwsh".to_string(),
             label: "PowerShell 7".to_string(),

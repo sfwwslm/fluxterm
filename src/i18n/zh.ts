@@ -332,6 +332,7 @@ export const zh = {
   "host.menu.renameGroup": "重命名分组",
   "host.menu.deleteGroup": "删除分组",
   "host.menu.importOpenSshConfig": "Openssh 导入",
+  "host.menu.rescanLocalShells": "重新扫描",
   "host.menu.viewShellPath": "查看路径",
   "host.menu.moveTo": "移动",
   "host.moveDialogTitle": "移动主机",

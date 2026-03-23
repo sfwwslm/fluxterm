@@ -10,6 +10,7 @@ import {
   FiFolderPlus,
   FiLoader,
   FiPlus,
+  FiRefreshCw,
   FiServer,
   FiTerminal,
   FiTrash2,
@@ -53,6 +54,7 @@ type HostWidgetProps = {
   localShells: LocalShellProfile[];
   onConnectLocalShell: (shell: LocalShellProfile) => void;
   onOpenLocalShellProfile: (shell: LocalShellProfile) => void;
+  onRefreshLocalShells: () => Promise<void>;
   t: Translate;
 };
 
@@ -75,6 +77,7 @@ export default function HostWidget({
   localShells,
   onConnectLocalShell,
   onOpenLocalShellProfile,
+  onRefreshLocalShells,
   t,
 }: HostWidgetProps) {
   const localShellKey = LOCAL_SHELL_GROUP_VALUE;
@@ -316,6 +319,16 @@ export default function HostWidget({
   /** 本地 Shell 分组标题右键菜单。 */
   function buildLocalShellGroupMenuItems(): ContextMenuItem[] {
     return [
+      {
+        label: t("host.menu.rescanLocalShells"),
+        icon: <FiRefreshCw />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          // 本地 Shell 安装状态可能在应用运行期间变化，这里提供主动重新发现入口。
+          void onRefreshLocalShells();
+        },
+      },
       {
         label: t("host.menu.importOpenSshConfig"),
         icon: <FiServer />,

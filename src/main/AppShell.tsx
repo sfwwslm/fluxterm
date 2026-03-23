@@ -432,6 +432,7 @@ export default function AppShell() {
     backgroundVideoReplayIntervalSec,
     setBackgroundVideoReplayIntervalSec,
     availableShells,
+    refreshAvailableShells,
     settingsLoaded,
     saveState: appSaveState,
     saveError: appSaveError,
@@ -3148,6 +3149,7 @@ export default function AppShell() {
           sessionActions.connectLocalShell(shell, true).catch(() => {});
         },
         onOpenLocalShellProfile: openLocalShellProfile,
+        onRefreshLocalShells: refreshAvailableShells,
         onRefreshList: filesWidgetActions.refreshList,
         onOpenRemoteDir: filesWidgetActions.openRemoteDir,
         onOpenFile: filesWidgetActions.openFile,
@@ -3201,6 +3203,7 @@ export default function AppShell() {
       handleConnectProfile,
       openNewProfile,
       openLocalShellProfile,
+      refreshAvailableShells,
       removeProfile,
       sessionActions,
       filesWidgetActions,
