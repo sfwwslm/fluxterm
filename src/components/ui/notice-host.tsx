@@ -31,7 +31,44 @@ export default function NoticeHost() {
         <div className={dialogOverlayClassName} role="presentation">
           <div className="dialog-card" role="alertdialog" aria-modal="true">
             <div className="dialog-title">{activeDialog.title}</div>
-            <div className="dialog-body">{activeDialog.message}</div>
+            <div
+              className={`dialog-body ${
+                activeDialog.bodyLayout === "details"
+                  ? "dialog-body--details"
+                  : ""
+              }`.trim()}
+            >
+              {activeDialog.bodyLayout === "details" ? (
+                <>
+                  {activeDialog.message ? (
+                    <p className="dialog-body__lead">{activeDialog.message}</p>
+                  ) : null}
+                  <div className="dialog-body__grid">
+                    {(activeDialog.details ?? []).map((detail) => (
+                      <div key={detail.label} className="dialog-body__grid-row">
+                        <span className="dialog-body__label">
+                          {detail.label}
+                        </span>
+                        <span
+                          className={`dialog-body__value ${
+                            detail.tone === "mono"
+                              ? "dialog-body__fingerprint"
+                              : ""
+                          }`.trim()}
+                        >
+                          {detail.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {activeDialog.note ? (
+                    <p className="dialog-body__note">{activeDialog.note}</p>
+                  ) : null}
+                </>
+              ) : (
+                activeDialog.message
+              )}
+            </div>
             <div className="dialog-actions">
               {activeDialog.cancelLabel && (
                 <Button

@@ -587,11 +587,12 @@ export const en = {
   "dialog.sshErrorBody":
     "Unable to establish SSH connection. Check authentication and network.",
   "dialog.sshHostKeyUnknownTitle": "Confirm Host Identity",
-  "dialog.sshHostKeyUnknownBody":
-    "The host {host} is not trusted yet.\nAlgorithm: {algorithm}\nFingerprint: {fingerprint}\nNote: confirm this is the host you intend to connect to.",
+  "dialog.sshHostKeyLabelHost": "Host",
+  "dialog.sshHostKeyLabelAlgorithm": "Algorithm",
+  "dialog.sshHostKeyLabelFingerprint": "Fingerprint",
+  "dialog.sshHostKeyLabelPreviousFingerprint": "Previous Fingerprint",
+  "dialog.sshHostKeyLabelNextFingerprint": "Current Fingerprint",
   "dialog.sshHostKeyMismatchTitle": "Host Fingerprint Changed",
-  "dialog.sshHostKeyMismatchBody":
-    "The host identity for {host} does not match the local record.\nAlgorithm: {algorithm}\nPrevious: {previous}\nCurrent: {next}\nOnly continue if you have verified the host was rebuilt, migrated, or its fingerprint was intentionally changed.",
   "terminal.tabMenu.reconnect": "Reconnect Session",
   "terminal.tabMenu.save": "Save Session",
   "terminal.tabMenu.splitHorizontal": "Split Horizontally",

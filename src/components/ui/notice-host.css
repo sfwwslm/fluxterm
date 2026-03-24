@@ -111,6 +111,51 @@
   white-space: pre-wrap;
 }
 
+.dialog-body--details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.dialog-body__lead {
+  margin: 0;
+}
+
+.dialog-body__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dialog-body__grid-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.dialog-body__label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.dialog-body__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dialog-body__fingerprint {
+  font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.dialog-body__note {
+  margin: 0;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: center;

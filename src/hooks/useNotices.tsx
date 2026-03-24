@@ -1,3 +1,4 @@
+import type React from "react";
 import { createContext, useContext } from "react";
 
 export type ToastLevel = "info" | "success" | "error";
@@ -11,7 +12,14 @@ export type ToastPayload = {
 
 export type DialogPayload = {
   title: string;
-  message: string;
+  message: React.ReactNode;
+  bodyLayout?: "plain" | "details";
+  details?: Array<{
+    label: string;
+    value: React.ReactNode;
+    tone?: "default" | "mono";
+  }>;
+  note?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   secondaryLabel?: string;

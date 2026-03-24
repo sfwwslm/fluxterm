@@ -552,11 +552,12 @@ export const zh = {
   "dialog.sshErrorTitle": "连接失败",
   "dialog.sshErrorBody": "无法建立 SSH 连接，请检查认证方式与网络状态。",
   "dialog.sshHostKeyUnknownTitle": "确认主机身份",
-  "dialog.sshHostKeyUnknownBody":
-    "目标 {host} 尚未建立信任关系。\n算法：{algorithm}\n指纹：{fingerprint}\n说明：请确认这就是你要连接的主机。",
+  "dialog.sshHostKeyLabelHost": "主机",
+  "dialog.sshHostKeyLabelAlgorithm": "算法",
+  "dialog.sshHostKeyLabelFingerprint": "指纹",
+  "dialog.sshHostKeyLabelPreviousFingerprint": "旧指纹",
+  "dialog.sshHostKeyLabelNextFingerprint": "新指纹",
   "dialog.sshHostKeyMismatchTitle": "主机指纹已变化",
-  "dialog.sshHostKeyMismatchBody":
-    "目标 {host} 的主机身份与本地记录不一致。\n算法：{algorithm}\n旧指纹：{previous}\n新指纹：{next}\n仅在你确认主机已重装、迁移或指纹已变更时继续。",
   "terminal.tabMenu.reconnect": "重新连接会话",
   "terminal.tabMenu.save": "保存会话",
   "terminal.tabMenu.splitHorizontal": "水平拆分",

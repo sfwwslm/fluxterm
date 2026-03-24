@@ -631,22 +631,44 @@ export default function useSessionState({
         // 同一个 profile 同时只显示一个待确认弹窗。
         pendingHostKeyDialogProfilesRef.current[payload.profileId] = true;
         const isMismatch = !!payload.previousFingerprintSha256;
+        const host = `${payload.host}:${payload.port}`;
         openDialog({
           title: isMismatch
             ? t("dialog.sshHostKeyMismatchTitle")
             : t("dialog.sshHostKeyUnknownTitle"),
-          message: isMismatch
-            ? t("dialog.sshHostKeyMismatchBody", {
-                host: `${payload.host}:${payload.port}`,
-                algorithm: payload.keyAlgorithm,
-                previous: payload.previousFingerprintSha256 ?? "-",
-                next: payload.fingerprintSha256,
-              })
-            : t("dialog.sshHostKeyUnknownBody", {
-                host: `${payload.host}:${payload.port}`,
-                algorithm: payload.keyAlgorithm,
-                fingerprint: payload.fingerprintSha256,
-              }),
+          message: "",
+          bodyLayout: "details",
+          details: isMismatch
+            ? [
+                { label: t("dialog.sshHostKeyLabelHost"), value: host },
+                {
+                  label: t("dialog.sshHostKeyLabelAlgorithm"),
+                  value: payload.keyAlgorithm,
+                },
+                {
+                  label: t("dialog.sshHostKeyLabelPreviousFingerprint"),
+                  value: payload.previousFingerprintSha256 ?? "-",
+                  tone: "mono",
+                },
+                {
+                  label: t("dialog.sshHostKeyLabelNextFingerprint"),
+                  value: payload.fingerprintSha256,
+                  tone: "mono",
+                },
+              ]
+            : [
+                { label: t("dialog.sshHostKeyLabelHost"), value: host },
+                {
+                  label: t("dialog.sshHostKeyLabelAlgorithm"),
+                  value: payload.keyAlgorithm,
+                },
+                {
+                  label: t("dialog.sshHostKeyLabelFingerprint"),
+                  value: payload.fingerprintSha256,
+                  tone: "mono",
+                },
+              ],
+          note: "",
           confirmLabel: t("actions.save"),
           cancelLabel: t("actions.cancel"),
           onConfirm: () => {
