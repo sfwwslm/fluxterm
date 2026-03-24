@@ -40,6 +40,7 @@ This repository contains FluxTerm, a Tauri-based terminal app with a Rust backen
 - Rust: Follow standard `rustfmt` conventions.
 - Naming: `PascalCase` for components, `camelCase` for functions and variables.
 - Comments: Follow `cargo doc` conventions so generated docs are clear and readable; do not add meaningless comments.
+- Frontend business UI must include stable, searchable DOM markers for debugging and automation. Prefer `data-page`, `data-ui`, and `data-slot`; use `id` only when global uniqueness is semantically required.
 
 ## Testing Guidelines
 
