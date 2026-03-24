@@ -1,5 +1,6 @@
 import Button from "@/components/ui/button";
 import { useNotices } from "@/hooks/useNotices";
+import { isMacOS } from "@/utils/platform";
 import "@/components/ui/notice-host.css";
 
 /**
@@ -12,6 +13,8 @@ import "@/components/ui/notice-host.css";
 export default function NoticeHost() {
   const { toasts, dialogs, closeDialog } = useNotices();
   const activeDialog = dialogs[dialogs.length - 1] ?? null;
+  const dialogOverlayClassName =
+    `dialog-overlay ${isMacOS() ? "dialog-overlay--macos" : ""}`.trim();
 
   return (
     <>
@@ -25,7 +28,7 @@ export default function NoticeHost() {
       </div>
 
       {activeDialog && (
-        <div className="dialog-overlay" role="presentation">
+        <div className={dialogOverlayClassName} role="presentation">
           <div className="dialog-card" role="alertdialog" aria-modal="true">
             <div className="dialog-title">{activeDialog.title}</div>
             <div className="dialog-body">{activeDialog.message}</div>

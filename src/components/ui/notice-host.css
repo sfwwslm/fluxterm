@@ -70,6 +70,10 @@
   padding: 24px;
 }
 
+.dialog-overlay--macos {
+  top: 0;
+}
+
 .dialog-card {
   width: min(420px, 100%);
   background:
