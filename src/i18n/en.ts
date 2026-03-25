@@ -129,7 +129,7 @@ export const en = {
   "config.app.backgroundVideoReplayIntervalSec": "Replay Interval (sec)",
   "config.app.backgroundImageSurfaceAlpha": "Background Surface Transparency",
   "config.app.backgroundImageSurfaceAlphaHint":
-    "Controls unified transparency for the title bar, widgets, terminal, and footer surfaces, from 1% to 100%. Higher values are more transparent.",
+    "Controls unified transparency for the title bar, widgets, terminal, and footer surfaces.",
   "config.ai.selectionMaxChars": "Selection Max Length",
   "config.ai.selectionMaxCharsHint":
     "Limits how many characters can be sent by Send to AI from the terminal selection menu.",
