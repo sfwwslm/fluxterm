@@ -272,9 +272,7 @@ export default function SubAppRoot() {
     }
 
     const overlay =
-      effectiveThemeId === "light"
-        ? "linear-gradient(0deg, rgba(248, 250, 252, 0.08), rgba(248, 250, 252, 0.08))"
-        : "linear-gradient(0deg, rgba(7, 10, 14, 0.42), rgba(7, 10, 14, 0.42))";
+      "linear-gradient(0deg, rgba(7, 10, 14, 0.42), rgba(7, 10, 14, 0.42))";
     root.style.setProperty("--app-bg-overlay", overlay);
 
     void (async () => {
