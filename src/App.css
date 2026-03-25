@@ -638,6 +638,7 @@ input[type="number"] {
 .widget-slot.empty .widget-body {
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .widget-resizer {
