@@ -167,7 +167,7 @@
 }
 
 .sftp-list {
-  background: var(--surface-base);
+  background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: 12px;
   display: flex;

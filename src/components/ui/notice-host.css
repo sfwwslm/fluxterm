@@ -147,7 +147,7 @@
 }
 
 .dialog-body__fingerprint {
-  font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+  font-family: var(--font-family-mono);
   font-size: 12px;
   line-height: 1.7;
 }

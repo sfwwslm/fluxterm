@@ -14,6 +14,7 @@
 .statusbar-row {
   min-height: 34px;
   height: 34px;
+  width: 100%;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -193,6 +194,7 @@
 .statusbar-ai-chip,
 .statusbar-info-chip,
 .statusbar-link-chip,
+.statusbar-resource-chip,
 .statusbar-transfer-token,
 .statusbar-security-chip {
   display: inline-flex;
@@ -292,17 +294,6 @@
   }
 }
 
-.statusbar-resource-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  background: var(--chrome-status-chip-bg);
-}
-
 .statusbar-resource-chip.muted {
   color: var(--text-muted);
 }
@@ -356,10 +347,6 @@
 .statusbar-resource-empty {
   color: var(--text-muted);
   font-size: 12px;
-}
-
-.statusbar-row {
-  width: 100%;
 }
 
 .quickbar-manager {

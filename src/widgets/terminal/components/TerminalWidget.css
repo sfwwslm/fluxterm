@@ -459,7 +459,7 @@ button.session-tab {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+  font-family: var(--font-family-mono);
   font-size: 13px;
 }
 

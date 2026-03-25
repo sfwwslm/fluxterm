@@ -38,15 +38,37 @@ function resolveSearchDecorations(): SearchDecorations {
   const rootStyle = getComputedStyle(document.documentElement);
   const readVar = (key: string, fallback: string) =>
     rootStyle.getPropertyValue(key).trim() || fallback;
-  const borderWeak = readVar("--border-weak", readVar("--border-soft", ""));
-  const textMuted = readVar("--text-muted", readVar("--text-secondary", ""));
-  const accentSoft = readVar("--accent-soft", readVar("--accent-subtle", ""));
-  const accent = readVar("--accent", readVar("--text-primary", ""));
+  const matchBackground = readVar(
+    "--terminal-search-match-bg",
+    readVar("--warning-soft", ""),
+  );
+  const matchBorder = readVar(
+    "--terminal-search-match-border",
+    readVar("--warning", ""),
+  );
+  const matchOverviewRuler = readVar(
+    "--terminal-search-match-ruler",
+    readVar("--warning", ""),
+  );
+  const activeMatchBackground = readVar(
+    "--terminal-search-active-match-bg",
+    readVar("--accent-soft", ""),
+  );
+  const activeMatchBorder = readVar(
+    "--terminal-search-active-match-border",
+    readVar("--accent", ""),
+  );
+  const activeMatchOverviewRuler = readVar(
+    "--terminal-search-active-match-ruler",
+    readVar("--accent", ""),
+  );
   return {
-    matchBackground: borderWeak,
-    matchOverviewRuler: textMuted,
-    activeMatchBackground: accentSoft,
-    activeMatchColorOverviewRuler: accent,
+    matchBackground,
+    matchBorder,
+    matchOverviewRuler,
+    activeMatchBackground,
+    activeMatchBorder,
+    activeMatchColorOverviewRuler: activeMatchOverviewRuler,
   };
 }
 

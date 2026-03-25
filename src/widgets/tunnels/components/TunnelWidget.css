@@ -9,10 +9,10 @@
 
 .tunnel-form,
 .tunnel-list {
-  border: 1px solid var(--chrome-border-muted);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 10px;
-  background: var(--chrome-surface-2);
+  background: var(--surface-panel);
 }
 
 .tunnel-form {
@@ -20,10 +20,10 @@
 }
 
 .tunnel-session-meta {
-  border: 1px solid var(--chrome-border-muted);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 10px;
-  background: var(--chrome-surface-2);
+  background: var(--surface-panel);
 }
 
 .tunnel-session-title {
@@ -140,8 +140,7 @@
 }
 
 .tunnel-endpoint-card {
-  border: 1px solid
-    color-mix(in srgb, var(--chrome-border-muted) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
   border-radius: 8px;
   padding: 8px;
   background: color-mix(in srgb, var(--surface-header-strong) 14%, transparent);
@@ -187,7 +186,7 @@
 }
 
 .tunnel-warning {
-  color: var(--chrome-danger);
+  color: var(--danger);
   font-size: 12px;
   margin-bottom: 8px;
 }
@@ -204,7 +203,7 @@
 }
 
 .tunnel-item {
-  border: 1px solid var(--chrome-border-muted);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 8px;
   margin-bottom: 8px;

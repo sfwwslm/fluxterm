@@ -3,6 +3,10 @@
  * 职责：集中维护结构化 token 到 CSS 变量的标准键名，降低拼写分散风险。
  */
 export const themeCssVarKeys = {
+  font: {
+    body: "--font-family-body",
+    mono: "--font-family-mono",
+  },
   background: {
     appBase: "--app-bg-base",
     appGradient: "--app-bg-gradient",
@@ -12,6 +16,7 @@ export const themeCssVarKeys = {
   typography: {
     textPrimary: "--text-primary",
     textSecondary: "--text-secondary",
+    textTertiary: "--text-tertiary",
     textMuted: "--text-muted",
     textSoft: "--text-soft",
     textQuiet: "--text-quiet",
@@ -24,9 +29,12 @@ export const themeCssVarKeys = {
     subtle: "--accent-subtle",
   },
   surface: {
+    canvas: "--surface-canvas",
     base: "--surface",
     strong: "--surface-strong",
     alt: "--surface-alt",
+    panel: "--surface-panel",
+    elevated: "--surface-elevated",
     header: "--surface-header",
     headerStrong: "--surface-header-strong",
     menu: "--surface-menu",
@@ -34,7 +42,9 @@ export const themeCssVarKeys = {
   border: {
     weak: "--border-weak",
     soft: "--border-soft",
+    strong: "--border-strong",
     input: "--border-input",
+    focus: "--border-focus",
   },
   button: {
     bg: "--button-bg",
@@ -52,7 +62,12 @@ export const themeCssVarKeys = {
   feedback: {
     success: "--success",
     successSoft: "--success-soft",
+    warning: "--warning",
+    warningSoft: "--warning-soft",
+    info: "--info",
+    infoSoft: "--info-soft",
     danger: "--danger",
+    dangerSoft: "--danger-soft",
   },
   layout: {
     resizerBg: "--resizer-bg",
@@ -63,5 +78,19 @@ export const themeCssVarKeys = {
   effects: {
     shadowStrong: "--shadow-strong",
     brandGlow: "--brand-glow",
+  },
+  terminal: {
+    background: "--terminal-background",
+    foreground: "--terminal-foreground",
+    selectionBackground: "--terminal-selection-background",
+    selectionForeground: "--terminal-selection-foreground",
+    cursor: "--terminal-cursor",
+    cursorAccent: "--terminal-cursor-accent",
+    searchMatchBackground: "--terminal-search-match-bg",
+    searchMatchBorder: "--terminal-search-match-border",
+    searchMatchOverviewRuler: "--terminal-search-match-ruler",
+    searchActiveMatchBackground: "--terminal-search-active-match-bg",
+    searchActiveMatchBorder: "--terminal-search-active-match-border",
+    searchActiveMatchOverviewRuler: "--terminal-search-active-match-ruler",
   },
 } as const;

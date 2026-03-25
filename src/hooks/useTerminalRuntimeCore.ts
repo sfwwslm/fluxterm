@@ -51,16 +51,10 @@ import {
   type TerminalCursorStyle,
 } from "@/constants/terminalCursorStyle";
 import { resolveTerminalHostKeyAction } from "@/hooks/terminalHostShortcuts";
-
-type TerminalTheme = {
-  background: string;
-  foreground: string;
-  selectionBackground: string;
-  cursor: string;
-};
+import type { ResolvedTerminalTheme } from "@/main/theme/buildTerminalTheme";
 
 type UseTerminalRuntimeProps = {
-  theme: TerminalTheme;
+  theme: ResolvedTerminalTheme;
   webLinksEnabled?: boolean;
   selectionAutoCopyEnabled?: boolean;
   scrollback?: number;
@@ -1273,12 +1267,16 @@ export default function useTerminalRuntime({
     const normalizedCursorStyle =
       normalizeTerminalCursorStyle(cursorStyle) ??
       DEFAULT_TERMINAL_CURSOR_STYLE;
+    const terminalFontFamily =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-family-mono")
+        .trim() || '"JetBrains Mono", "Cascadia Mono", monospace';
     const term = new modules.Terminal({
       allowProposedApi: true,
       // 启用终端画布透明通道，使半透明主题背景可透出到底层应用背景图。
       allowTransparency: true,
       convertEol: true,
-      fontFamily: '"JetBrains Mono", "Cascadia Mono", monospace',
+      fontFamily: terminalFontFamily,
       fontSize: 13,
       cursorBlink: true,
       cursorStyle: normalizedCursorStyle,

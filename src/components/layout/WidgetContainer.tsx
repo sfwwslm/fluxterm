@@ -46,7 +46,7 @@ export default function WidgetContainer({
       className={`widget-container ${side} ${collapsed ? "collapsed" : ""}`}
     >
       <div
-        className={`widget-container-body dynamic ${collapsed ? "hidden" : ""}`}
+        className="widget-container-body dynamic"
         style={{
           gridTemplateRows: `repeat(${Math.max(1, slots.length)}, minmax(0, 1fr))`,
         }}

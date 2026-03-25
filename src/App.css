@@ -6,58 +6,68 @@ body,
 }
 
 :root {
-  font-family: "Lexend", "Segoe UI", sans-serif;
+  --font-family-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-family-mono: "JetBrains Mono", "Cascadia Mono", monospace;
   font-size: 15px;
   line-height: 1.5;
   font-weight: 400;
-  color: var(--text-primary);
-  background-color: var(--app-bg-base, #0b0f14);
+  font-family: var(--font-family-body);
+  color: var(--text-primary, #f8fafc);
+  background-color: var(--app-bg-base, #0b1220);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --app-bg-base: #0b0f14;
-  --app-bg-gradient:
-    radial-gradient(circle at 10% 20%, #283a51, transparent 40%),
-    radial-gradient(circle at 85% 0%, #2f1f4b, transparent 35%),
-    linear-gradient(140deg, #0b0f14 0%, #141b24 55%, #10151f 100%);
+  --app-bg-base: #1e1e1e;
+  --app-bg-gradient: linear-gradient(160deg, #1b1b1b 0%, #202020 100%);
   --app-bg-image: none;
   --app-bg-overlay: none;
   --app-bg-image-size: cover;
   --app-bg-image-repeat: no-repeat;
   --app-bg-image-position: center center;
-  --text-primary: #ecf3ff;
-  --text-secondary: #cbd6e8;
-  --text-muted: #8fa7c8;
-  --text-soft: #9bb0cc;
-  --text-quiet: #7f95b6;
-  --accent: #f8d254;
-  --accent-strong: #f8d254;
-  --accent-contrast: #1b1f28;
-  --accent-soft: rgba(248, 210, 84, 0.6);
-  --accent-subtle: rgba(248, 210, 84, 0.18);
-  --surface: rgba(13, 20, 29, 0.86);
-  --surface-strong: rgba(11, 17, 23, 0.92);
-  --surface-alt: rgba(19, 27, 40, 0.8);
-  --surface-header: rgba(20, 30, 44, 0.8);
-  --surface-header-strong: rgba(24, 34, 48, 0.8);
-  --surface-menu: rgba(12, 18, 27, 0.98);
-  --border-weak: rgba(255, 255, 255, 0.08);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #aab8cb;
+  --text-soft: #d7e0ec;
+  --text-quiet: #7b8aa0;
+  --accent: #3794ff;
+  --accent-strong: #5aa8ff;
+  --accent-contrast: #1e1e1e;
+  --accent-soft: rgba(55, 148, 255, 0.26);
+  --accent-subtle: rgba(55, 148, 255, 0.14);
+  --surface-canvas: #161616;
+  --surface: #252526;
+  --surface-strong: #1f1f1f;
+  --surface-alt: #2a2d2e;
+  --surface-panel: #252526;
+  --surface-elevated: #313335;
+  --surface-header: #252526;
+  --surface-header-strong: #1f1f1f;
+  --surface-menu: #252526;
+  --border-weak: rgba(255, 255, 255, 0.09);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --border-input: rgba(255, 255, 255, 0.12);
-  --button-bg: rgba(32, 44, 61, 0.6);
-  --button-bg-strong: rgba(32, 44, 61, 0.8);
-  --button-text: #cbd6e8;
-  --input-bg: rgba(12, 19, 29, 0.9);
-  --input-text: #eef4ff;
-  --tab-bg: rgba(15, 23, 34, 0.8);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-input: rgba(255, 255, 255, 0.14);
+  --border-focus: #3794ff;
+  --button-bg: #2a2d2e;
+  --button-bg-strong: #333639;
+  --button-text: #f8fafc;
+  --input-bg: #1f1f1f;
+  --input-text: #f8fafc;
+  --tab-bg: #2a2d2e;
   --tab-border: rgba(255, 255, 255, 0.12);
-  --success: #7affa2;
-  --success-soft: rgba(122, 255, 162, 0.3);
-  --danger: #ff9a9a;
-  --resizer-bg: rgba(255, 255, 255, 0.04);
-  --progress-gradient: linear-gradient(120deg, #7affa2, #f8d254);
-  --shadow-strong: 0 16px 32px rgba(0, 0, 0, 0.35);
-  --brand-glow: 0 0 12px rgba(248, 210, 84, 0.6);
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.18);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.18);
+  --info: #60a5fa;
+  --info-soft: rgba(96, 165, 250, 0.18);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.18);
+  --resizer-bg: rgba(255, 255, 255, 0.06);
+  --progress-gradient: linear-gradient(120deg, #3794ff, #4ade80);
+  --shadow-strong: 0 18px 38px rgba(0, 0, 0, 0.38);
+  --brand-glow: 0 0 16px rgba(55, 148, 255, 0.16);
   --chrome-titlebar-height: 40px;
   --chrome-titlebar-gap: 16px;
   --chrome-titlebar-inline-start: 12px;
@@ -65,238 +75,187 @@ body,
   --chrome-window-controls-gap: 6px;
   --ui-radius: 10px;
   --ui-ring: var(--accent-soft);
-  --ui-border: var(--border-input);
-  --ui-bg: var(--button-bg-strong);
+  --ui-border: var(--border-strong);
+  --ui-bg: var(--surface-panel);
   --ui-fg: var(--text-primary);
-  --ui-button-bg: color-mix(
-    in srgb,
-    var(--surface-header-strong) 72%,
-    transparent
-  );
-  --ui-button-bg-hover: color-mix(
-    in srgb,
-    var(--surface-header-strong) 82%,
-    transparent
-  );
-  --ui-button-border: color-mix(
-    in srgb,
-    var(--accent-soft) 24%,
-    var(--border-input)
-  );
-  --ui-button-border-hover: color-mix(
-    in srgb,
-    var(--accent-soft) 54%,
-    var(--border-input)
-  );
-  --ui-button-glow: 0 10px 24px color-mix(in srgb, #000 36%, transparent);
-  --ui-button-inner-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent),
-    inset 0 -8px 14px color-mix(in srgb, #000 20%, transparent);
-  --ui-input-bg: color-mix(in srgb, var(--surface-menu) 70%, transparent);
-  --ui-input-bg-hover: color-mix(in srgb, var(--surface-menu) 80%, transparent);
-  --ui-input-border: color-mix(
-    in srgb,
-    var(--accent-soft) 22%,
-    var(--border-input)
-  );
-  --ui-input-border-hover: color-mix(
-    in srgb,
-    var(--accent-soft) 48%,
-    var(--border-input)
-  );
-  --ui-input-glow: 0 10px 22px color-mix(in srgb, #000 34%, transparent);
-  --ui-input-inner-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent),
-    inset 0 -8px 14px color-mix(in srgb, #000 18%, transparent);
+  --ui-button-bg: var(--button-bg);
+  --ui-button-bg-hover: var(--button-bg-strong);
+  --ui-button-border: var(--border-input);
+  --ui-button-border-hover: var(--border-focus);
+  --ui-button-glow: 0 10px 24px rgba(2, 6, 23, 0.16);
+  --ui-button-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --ui-input-bg: var(--input-bg);
+  --ui-input-bg-hover: color-mix(in srgb, var(--input-bg) 92%, white 8%);
+  --ui-input-border: var(--border-input);
+  --ui-input-border-hover: var(--border-focus);
+  --ui-input-glow: 0 10px 22px rgba(2, 6, 23, 0.14);
+  --ui-input-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --chrome-titlebar-bg: var(--surface-header-strong);
   --chrome-widget-bg: var(--surface);
   --chrome-widget-header-bg: var(--surface-header);
-  --chrome-terminal-bg: var(--surface-strong);
-  --chrome-terminal-header-bg: var(--surface-header-strong);
-  --chrome-terminal-pane-bg: color-mix(
-    in srgb,
-    var(--surface) 82%,
-    transparent
-  );
-  --chrome-bottom-bg: color-mix(
-    in srgb,
-    var(--surface-header-strong) 72%,
-    transparent
-  );
-  --chrome-status-chip-bg: color-mix(
-    in srgb,
-    var(--surface-header) 56%,
-    transparent
-  );
+  --chrome-terminal-bg: var(--surface);
+  --chrome-terminal-header-bg: var(--surface-header);
+  --chrome-terminal-pane-bg: var(--surface);
+  --chrome-bottom-bg: var(--surface-header-strong);
+  --chrome-status-chip-bg: var(--surface-header);
   --chrome-modal-bg: var(--surface-menu);
   --chrome-modal-header-bg: var(--surface-header);
-  --chrome-modal-actions-bg: var(--surface);
-  --chrome-modal-overlay-bg: rgba(7, 10, 14, 0.46);
+  --chrome-modal-actions-bg: var(--surface-panel);
+  --chrome-modal-overlay-bg: rgba(2, 6, 23, 0.46);
   --chrome-flyout-menu-bg: var(--surface-menu);
   --chrome-widget-settings-menu-bg: var(--surface-menu);
   --chrome-input-bg: var(--input-bg);
-  --chrome-input-bg-hover: color-mix(in srgb, var(--input-bg) 92%, transparent);
-  --chrome-select-button-bg: color-mix(
-    in srgb,
-    var(--surface-menu) 76%,
-    transparent
-  );
-  --chrome-select-button-bg-hover: color-mix(
-    in srgb,
-    var(--surface-menu) 84%,
-    transparent
-  );
-  --chrome-select-list-bg: color-mix(
-    in srgb,
-    var(--surface-menu) 90%,
-    transparent
-  );
-  --chrome-session-group-bg: color-mix(
-    in srgb,
-    var(--surface-alt) 72%,
-    transparent
-  );
-  --chrome-session-group-title-bg: color-mix(
-    in srgb,
-    var(--surface-header) 70%,
-    transparent
-  );
+  --chrome-input-bg-hover: color-mix(in srgb, var(--input-bg) 92%, white 8%);
+  --chrome-select-button-bg: var(--surface-menu);
+  --chrome-select-button-bg-hover: var(--surface-elevated);
+  --chrome-select-list-bg: var(--surface-menu);
+  --chrome-session-group-bg: var(--surface-alt);
+  --chrome-session-group-title-bg: var(--surface-header);
   --chrome-session-group-item-bg: var(--surface-alt);
   --chrome-session-tab-bg: var(--tab-bg);
-  --chrome-quick-command-widget-bg: color-mix(
-    in srgb,
-    var(--surface) 74%,
-    transparent
-  );
-  --chrome-quick-command-item-bg: color-mix(
-    in srgb,
-    var(--surface-header) 54%,
-    transparent
-  );
+  --chrome-quick-command-widget-bg: var(--surface);
+  --chrome-quick-command-item-bg: var(--surface-header);
   --chrome-surface-alpha: 52%;
+  --chrome-surface-alpha-effective: var(--chrome-surface-alpha);
 }
 
 :root[data-background-image-mode="on"] {
   /* 背景图模式下，所有主要区域共享同一透明度，便于未来做统一用户调节。 */
   --chrome-titlebar-bg: color-mix(
     in srgb,
-    var(--surface-header-strong) var(--chrome-surface-alpha),
+    var(--surface-header-strong) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-widget-bg: color-mix(
     in srgb,
-    var(--surface) var(--chrome-surface-alpha),
+    var(--surface) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-widget-header-bg: color-mix(
     in srgb,
-    var(--surface-header) var(--chrome-surface-alpha),
+    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-terminal-bg: color-mix(
     in srgb,
-    var(--surface-strong) var(--chrome-surface-alpha),
+    var(--surface) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-terminal-header-bg: color-mix(
     in srgb,
-    var(--surface-header-strong) var(--chrome-surface-alpha),
+    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-terminal-pane-bg: color-mix(
     in srgb,
-    var(--surface) var(--chrome-surface-alpha),
+    var(--surface) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-bottom-bg: color-mix(
     in srgb,
-    var(--surface-header-strong) var(--chrome-surface-alpha),
+    var(--surface-header-strong) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-status-chip-bg: color-mix(
     in srgb,
-    var(--surface-header) var(--chrome-surface-alpha),
+    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-modal-bg: color-mix(
     in srgb,
-    var(--surface-menu) var(--chrome-surface-alpha),
+    var(--surface-menu) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-modal-header-bg: color-mix(
     in srgb,
-    var(--surface-header) var(--chrome-surface-alpha),
+    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-modal-actions-bg: color-mix(
     in srgb,
-    var(--surface) var(--chrome-surface-alpha),
+    var(--surface-panel) var(--chrome-surface-alpha-effective),
     transparent
   );
-  --chrome-modal-overlay-bg: rgba(7, 10, 14, 0.32);
+  --chrome-modal-overlay-bg: rgba(2, 6, 23, 0.32);
   --chrome-flyout-menu-bg: color-mix(
     in srgb,
-    var(--surface-menu) var(--chrome-surface-alpha),
+    var(--surface-menu) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-widget-settings-menu-bg: color-mix(
     in srgb,
-    var(--surface-menu) calc(min(100%, var(--chrome-surface-alpha) + 18%)),
+    var(--surface-menu)
+      calc(min(100%, var(--chrome-surface-alpha-effective) + 12%)),
     transparent
   );
   --chrome-input-bg: color-mix(
     in srgb,
-    var(--surface-menu) calc(min(100%, var(--chrome-surface-alpha) + 8%)),
+    var(--surface-menu)
+      calc(min(100%, var(--chrome-surface-alpha-effective) + 8%)),
     transparent
   );
   --chrome-input-bg-hover: color-mix(
     in srgb,
-    var(--surface-menu) calc(min(100%, var(--chrome-surface-alpha) + 14%)),
+    var(--surface-menu)
+      calc(min(100%, var(--chrome-surface-alpha-effective) + 12%)),
     transparent
   );
   --chrome-select-button-bg: color-mix(
     in srgb,
-    var(--surface-menu) var(--chrome-surface-alpha),
+    var(--surface-menu) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-select-button-bg-hover: color-mix(
     in srgb,
-    var(--surface-menu) calc(min(100%, var(--chrome-surface-alpha) + 8%)),
+    var(--surface-menu)
+      calc(min(100%, var(--chrome-surface-alpha-effective) + 8%)),
     transparent
   );
   --chrome-select-list-bg: var(--chrome-flyout-menu-bg);
   --chrome-session-group-bg: color-mix(
     in srgb,
-    var(--surface-alt) var(--chrome-surface-alpha),
+    var(--surface-alt) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-session-group-title-bg: color-mix(
     in srgb,
-    var(--surface-header) var(--chrome-surface-alpha),
+    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-session-group-item-bg: color-mix(
     in srgb,
-    var(--surface-alt) var(--chrome-surface-alpha),
+    var(--surface-alt) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-session-tab-bg: color-mix(
     in srgb,
-    var(--tab-bg) var(--chrome-surface-alpha),
+    var(--tab-bg) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-quick-command-widget-bg: color-mix(
     in srgb,
-    var(--surface) var(--chrome-surface-alpha),
+    var(--surface) var(--chrome-surface-alpha-effective),
     transparent
   );
   --chrome-quick-command-item-bg: color-mix(
     in srgb,
-    var(--surface-header) var(--chrome-surface-alpha),
+    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --ui-input-bg: var(--chrome-input-bg);
   --ui-input-bg-hover: var(--chrome-input-bg-hover);
+}
+
+:root[data-theme="light"] {
+  --ui-button-glow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  --ui-button-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  --ui-input-glow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  --ui-input-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+:root[data-theme="light"][data-background-image-mode="on"] {
+  --chrome-surface-alpha-effective: max(56%, var(--chrome-surface-alpha));
+  --chrome-modal-overlay-bg: rgba(248, 250, 252, 0.08);
 }
 
 * {
@@ -349,13 +308,6 @@ select {
   font-family: inherit;
 }
 
-.select-menu.is-disabled .select-menu-button {
-  opacity: 0.58;
-  filter: saturate(0.72);
-  cursor: not-allowed;
-  transform: none;
-}
-
 .app-shell {
   position: relative;
   z-index: 1;
@@ -363,20 +315,6 @@ select {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: var(--chrome-titlebar-bg);
-  border-bottom: 1px solid var(--border-weak);
-  backdrop-filter: blur(16px);
-}
-
-.top-bar.actions-only {
-  justify-content: flex-end;
 }
 
 .titlebar {
@@ -433,17 +371,19 @@ select {
 .menu-item {
   position: relative;
   padding: 6px 12px;
-  border-radius: 10px;
+  border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
-  transition: 0.2s ease;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .menu-item:hover,
 .menu-item.active {
-  background: var(--accent-subtle);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
+  color: var(--text-primary);
 }
 
 .menu-item.disabled {
@@ -458,38 +398,22 @@ select {
   right: auto;
   transform: none;
   min-width: 168px;
-  background:
-    linear-gradient(
-      140deg,
-      color-mix(in srgb, #ffffff 12%, transparent) 0%,
-      transparent 55%
-    ),
-    linear-gradient(
-      200deg,
-      color-mix(in srgb, var(--accent) 12%, transparent) 0%,
-      transparent 60%
-    ),
-    var(--chrome-flyout-menu-bg);
-  border: 1px solid color-mix(in srgb, #ffffff 20%, var(--border-input));
-  border-radius: 12px;
+  background: var(--chrome-flyout-menu-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
   padding: 6px;
-  box-shadow:
-    0 18px 36px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 30%, transparent),
-    inset 0 -18px 28px color-mix(in srgb, #000 18%, transparent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
   display: flex;
   flex-direction: column;
   gap: 4px;
   z-index: 1000;
-  backdrop-filter: blur(18px) saturate(155%);
-  -webkit-backdrop-filter: blur(18px) saturate(155%);
 }
 
 .menu-sub-item {
   width: 100%;
   text-align: left;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 4px;
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -506,9 +430,9 @@ select {
 }
 
 .menu-sub-item:hover {
-  background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--surface-elevated) 90%, transparent);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .menu-sub-item:disabled {
@@ -523,7 +447,7 @@ select {
 .menu-sub-divider {
   height: 1px;
   margin: 2px 4px;
-  background: color-mix(in srgb, var(--border-input) 84%, transparent);
+  background: var(--border-soft);
 }
 
 .menu-sub-section-title {
@@ -531,24 +455,6 @@ select {
   color: var(--text-muted);
   font-size: 11px;
   letter-spacing: 0.04em;
-}
-
-.menu-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-  width: 100%;
-}
-
-.menu-field span {
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--text-muted) 90%, #ffffff 10%);
-}
-
-.menu-field select {
-  width: 100%;
 }
 
 .menu-sub .ui-button.menu-sub-item {
@@ -587,84 +493,14 @@ select {
 }
 
 .window-control:hover {
-  border-color: var(--accent-soft);
-  color: var(--accent);
-}
-
-.window-control.danger:hover {
-  border-color: var(--danger);
-  color: var(--danger);
+  border-color: var(--border-strong);
+  background: var(--button-bg-strong);
+  color: var(--text-primary);
 }
 
 .window-control:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.widget-toggles {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.widget-toggles button {
-  padding: 8px 14px;
-  background: var(--button-bg);
-  border: 1px solid transparent;
-  color: var(--button-text);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.widget-toggles button.active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.widget-toggles button:hover {
-  border-color: var(--accent-soft);
-}
-
-.top-selects {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.top-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.top-select select {
-  background: var(--chrome-input-bg);
-  color: var(--input-text);
-  border-radius: 8px;
-  border: 1px solid var(--border-input);
-  padding: 4px 8px;
 }
 
 button:disabled {
@@ -706,10 +542,6 @@ button:disabled {
   overflow: auto;
   height: 100%;
   min-height: 0;
-}
-
-/* 小组件滚动容器统一滚动条样式（SFTP/HostWidget 使用其独立样式）。 */
-.widget-body {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
@@ -789,10 +621,6 @@ input[type="number"] {
 
 .widget-container-body.dynamic {
   grid-template-columns: minmax(0, 1fr);
-}
-
-.widget-container-body.hidden {
-  display: none;
 }
 
 .widget-slot {

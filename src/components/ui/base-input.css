@@ -32,6 +32,18 @@
     transform 0.2s ease;
 }
 
+:root[data-theme="light"]
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+        [type="file"]
+      ),
+    textarea
+  ) {
+  text-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
       [type="file"]

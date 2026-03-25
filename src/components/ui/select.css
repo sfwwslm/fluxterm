@@ -41,6 +41,19 @@
   cursor: pointer;
 }
 
+:root[data-theme="light"] .select-menu-button,
+:root[data-theme="light"] .select-menu-list {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="light"] .select-menu-button {
+  text-shadow: none;
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
 .select-menu-button:hover {
   border-color: color-mix(in srgb, var(--accent-soft) 58%, var(--border-input));
   background:
@@ -92,6 +105,10 @@
   color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
   text-shadow: 0 0 10px color-mix(in srgb, var(--accent-soft) 55%, transparent);
   pointer-events: none;
+}
+
+:root[data-theme="light"] .select-menu-arrow {
+  text-shadow: none;
 }
 
 .select-menu-list {

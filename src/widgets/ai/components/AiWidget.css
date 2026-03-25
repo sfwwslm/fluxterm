@@ -5,8 +5,8 @@
   min-height: 0;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--widget-bg) 84%, white 16%) 0%,
-    var(--widget-bg) 28%
+    color-mix(in srgb, var(--surface-panel) 94%, var(--surface-elevated) 6%) 0%,
+    var(--surface) 28%
   );
 }
 
@@ -15,7 +15,7 @@
   gap: 8px;
   align-items: center;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .ai-widget-status {
@@ -37,18 +37,22 @@
 .ai-widget-empty {
   margin: auto 0;
   padding: 14px;
-  border: 1px dashed var(--border-color);
+  border: 1px dashed var(--border-strong);
   border-radius: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
-  background: color-mix(in srgb, var(--widget-bg) 90%, black 10%);
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) 96%,
+    var(--surface-canvas) 4%
+  );
 }
 
 .ai-message {
   max-width: 100%;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-soft);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.45;
@@ -56,17 +60,21 @@
 
 .ai-message.user {
   align-self: flex-end;
-  background: color-mix(in srgb, var(--accent-color) 18%, var(--widget-bg));
-  border-color: color-mix(
+  background: color-mix(
     in srgb,
-    var(--accent-color) 40%,
-    var(--border-color)
+    var(--accent-subtle) 78%,
+    var(--surface-panel)
   );
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-soft));
 }
 
 .ai-message.assistant {
   align-self: stretch;
-  background: color-mix(in srgb, var(--widget-bg) 82%, black 18%);
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) 92%,
+    var(--surface-canvas) 8%
+  );
 }
 
 .ai-message-toolbar {
@@ -140,29 +148,36 @@
 }
 
 .ai-message-body a {
-  color: var(--accent-color);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .ai-message-body code {
-  font-family:
-    "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.95em;
 }
 
 .ai-message-body :not(pre) > code {
   padding: 0.12em 0.36em;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--widget-bg) 70%, black 30%);
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) 84%,
+    var(--surface-canvas) 16%
+  );
 }
 
 .ai-message-body pre {
   overflow-x: auto;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--widget-bg) 72%, black 28%);
+  border: 1px solid var(--border-soft);
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) 88%,
+    var(--surface-canvas) 12%
+  );
 }
 
 .ai-message-body pre code {
@@ -196,7 +211,7 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-color) 72%, white 28%);
+  background: color-mix(in srgb, var(--accent) 72%, white 28%);
   opacity: 0.3;
   animation: ai-message-dot-pulse 1.2s ease-in-out infinite;
 }
@@ -212,7 +227,7 @@
 .ai-message-body blockquote {
   padding-left: 12px;
   border-left: 3px solid
-    color-mix(in srgb, var(--accent-color) 55%, var(--border-color));
+    color-mix(in srgb, var(--accent) 55%, var(--border-soft));
   color: var(--text-secondary);
 }
 
@@ -225,28 +240,28 @@
 .ai-message-body th,
 .ai-message-body td {
   padding: 6px 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-soft);
   text-align: left;
   vertical-align: top;
 }
 
 .ai-message-body th {
-  background: color-mix(in srgb, var(--widget-bg) 76%, white 24%);
+  background: color-mix(in srgb, var(--surface-panel) 80%, white 20%);
 }
 
 .ai-widget-error {
   margin: 0 14px 12px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--danger) 44%, var(--border-color));
-  background: color-mix(in srgb, var(--danger) 12%, var(--widget-bg));
+  border: 1px solid color-mix(in srgb, var(--danger) 44%, var(--border-soft));
+  background: color-mix(in srgb, var(--danger-soft) 72%, var(--surface-panel));
   color: var(--text-primary);
   white-space: pre-wrap;
 }
 
 .ai-widget-input {
   padding: 12px 14px 14px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-soft);
 }
 
 .ai-widget-input-shell {
@@ -321,9 +336,9 @@
 }
 
 .ai-widget-send.secondary {
-  background: color-mix(in srgb, var(--widget-bg) 86%, white 14%);
+  background: color-mix(in srgb, var(--surface-elevated) 86%, white 14%);
   color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-soft);
 }
 
 @keyframes ai-message-dot-pulse {

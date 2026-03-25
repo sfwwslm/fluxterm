@@ -91,8 +91,8 @@ export default function WindowControls({ disabled }: WindowControlsProps) {
         {isMaximized ? <VscChromeRestore /> : <VscChromeMaximize />}
       </Button>
       <Button
-        className="window-control danger"
-        variant="danger"
+        className="window-control"
+        variant="ghost"
         size="icon"
         data-tauri-drag-region="false"
         onClick={handleClose}

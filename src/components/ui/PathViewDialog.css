@@ -9,7 +9,7 @@
   border: 1px solid var(--border-input);
   background: var(--surface-alt);
   color: var(--text-primary);
-  font-family: "JetBrains Mono", "Cascadia Mono", monospace;
+  font-family: var(--font-family-mono);
   font-size: 12px;
   line-height: 1.5;
   word-break: break-all;
