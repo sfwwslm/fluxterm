@@ -218,6 +218,18 @@ function clampBackgroundImageSurfaceAlpha(value: number) {
   );
 }
 
+/** 把内部 surface alpha 映射为用户可理解的透明度百分比。 */
+function toBackgroundTransparencyPercent(surfaceAlpha: number) {
+  const clamped = clampBackgroundImageSurfaceAlpha(surfaceAlpha);
+  return Math.min(100, Math.max(1, Math.round((1 - clamped) * 100)));
+}
+
+/** 把用户设置的透明度百分比映射回内部 surface alpha。 */
+function fromBackgroundTransparencyPercent(percentage: number) {
+  const normalized = Math.min(100, Math.max(1, Math.round(percentage)));
+  return clampBackgroundImageSurfaceAlpha((100 - normalized) / 100);
+}
+
 async function sha256Hex(bytes: Uint8Array) {
   const normalized = new Uint8Array(bytes.byteLength);
   normalized.set(bytes);
@@ -386,6 +398,9 @@ export default function ConfigModal({
     normalizeBackgroundVideoReplayMode(backgroundVideoReplayMode);
   const normalizedBackgroundVideoReplayIntervalSec =
     clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec);
+  const backgroundTransparencyPercent = toBackgroundTransparencyPercent(
+    backgroundImageSurfaceAlpha,
+  );
   const isBackgroundVideoMode = normalizedBackgroundMediaType === "video";
   const selectedBuiltinWallpaper =
     getBuiltinWallpaperByAsset(backgroundImageAsset);
@@ -1135,15 +1150,13 @@ export default function ConfigModal({
             <span className="config-range-control">
               <input
                 type="range"
-                min={MIN_BACKGROUND_IMAGE_SURFACE_ALPHA}
-                max={MAX_BACKGROUND_IMAGE_SURFACE_ALPHA}
-                step={0.01}
-                value={clampBackgroundImageSurfaceAlpha(
-                  backgroundImageSurfaceAlpha,
-                )}
+                min={1}
+                max={100}
+                step={1}
+                value={backgroundTransparencyPercent}
                 onChange={(event) =>
                   onBackgroundImageSurfaceAlphaChange?.(
-                    clampBackgroundImageSurfaceAlpha(
+                    fromBackgroundTransparencyPercent(
                       Number(event.currentTarget.value),
                     ),
                   )
@@ -1151,12 +1164,7 @@ export default function ConfigModal({
                 aria-label={t("config.app.backgroundImageSurfaceAlpha")}
               />
               <span className="config-range-value">
-                {Math.round(
-                  clampBackgroundImageSurfaceAlpha(
-                    backgroundImageSurfaceAlpha,
-                  ) * 100,
-                )}
-                %
+                {backgroundTransparencyPercent}%
               </span>
             </span>
           </label>

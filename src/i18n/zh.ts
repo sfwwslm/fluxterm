@@ -120,7 +120,7 @@ export const zh = {
   "config.app.backgroundVideoReplayIntervalSec": "重播间隔（秒）",
   "config.app.backgroundImageSurfaceAlpha": "背景覆盖层透明度",
   "config.app.backgroundImageSurfaceAlphaHint":
-    "控制标题栏、组件区、终端区和底栏的统一透明度，范围 20% 到 90%。",
+    "控制标题栏、组件区、终端区和底栏的统一透明度，范围 1% 到 100%，数值越大越透明。",
   "config.ai.selectionMaxChars": "选中文本最大长度",
   "config.ai.selectionMaxCharsHint":
     "限制右键“发送给 AI”时允许发送的选中文本字符数。",

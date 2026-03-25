@@ -54,8 +54,8 @@ type AppSettings = {
 };
 
 /** 背景图表面透明度阈值。 */
-export const MIN_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.2;
-export const MAX_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.9;
+export const MIN_BACKGROUND_IMAGE_SURFACE_ALPHA = 0;
+export const MAX_BACKGROUND_IMAGE_SURFACE_ALPHA = 1;
 export const DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA = 0.52;
 
 /** useAppSettings 返回的操作接口。 */

@@ -127,9 +127,9 @@ export const en = {
   "config.app.backgroundVideoReplayMode.single": "Single Play",
   "config.app.backgroundVideoReplayMode.interval": "Replay After Delay",
   "config.app.backgroundVideoReplayIntervalSec": "Replay Interval (sec)",
-  "config.app.backgroundImageSurfaceAlpha": "Background Surface Opacity",
+  "config.app.backgroundImageSurfaceAlpha": "Background Surface Transparency",
   "config.app.backgroundImageSurfaceAlphaHint":
-    "Controls unified opacity for title bar, widgets, terminal, and footer surfaces, from 20% to 90%.",
+    "Controls unified transparency for the title bar, widgets, terminal, and footer surfaces, from 1% to 100%. Higher values are more transparent.",
   "config.ai.selectionMaxChars": "Selection Max Length",
   "config.ai.selectionMaxCharsHint":
     "Limits how many characters can be sent by Send to AI from the terminal selection menu.",
