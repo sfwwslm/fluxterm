@@ -7,12 +7,12 @@
 .context-menu {
   position: fixed;
   background: var(--chrome-flyout-menu-bg);
-  border: 1px solid var(--border-input);
+  border: 1px solid var(--chrome-flyout-border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   padding: 6px;
-  box-shadow: var(--shadow-strong);
+  box-shadow: var(--chrome-flyout-shadow);
 }
 
 .context-menu button {

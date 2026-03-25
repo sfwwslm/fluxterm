@@ -122,14 +122,11 @@
       color-mix(in srgb, #ffffff 12%, transparent) 0%,
       transparent 55%
     ),
-    var(--chrome-select-list-bg);
-  border: 1px solid color-mix(in srgb, #ffffff 18%, var(--border-input));
+    var(--chrome-flyout-menu-bg);
+  border: 1px solid var(--chrome-flyout-border);
   border-radius: 12px;
   padding: 6px;
-  box-shadow:
-    0 18px 36px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 26%, transparent),
-    inset 0 -18px 28px color-mix(in srgb, #000 18%, transparent);
+  box-shadow: var(--chrome-flyout-shadow);
   display: flex;
   flex-direction: column;
   gap: 4px;

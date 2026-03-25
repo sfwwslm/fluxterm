@@ -48,9 +48,9 @@
   min-width: 176px;
   z-index: 2200;
   border-radius: 12px;
-  border: 1px solid var(--border-input);
-  background: var(--chrome-widget-settings-menu-bg);
-  box-shadow: var(--shadow-strong);
+  border: 1px solid var(--chrome-flyout-border);
+  background: var(--chrome-flyout-menu-bg);
+  box-shadow: var(--chrome-flyout-shadow);
   padding: 8px;
   display: flex;
   flex-direction: column;

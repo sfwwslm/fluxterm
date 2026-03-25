@@ -100,21 +100,24 @@ body,
   --chrome-status-chip-bg: var(--surface-header);
   --chrome-modal-bg: var(--surface-menu);
   --chrome-modal-header-bg: var(--surface-header);
-  --chrome-modal-actions-bg: var(--surface-panel);
   --chrome-modal-overlay-bg: rgba(2, 6, 23, 0.46);
   --chrome-flyout-menu-bg: var(--surface-menu);
-  --chrome-widget-settings-menu-bg: var(--surface-menu);
+  --chrome-flyout-border: color-mix(
+    in srgb,
+    var(--text-primary) 18%,
+    var(--border-input)
+  );
+  --chrome-flyout-shadow:
+    0 18px 36px color-mix(in srgb, var(--app-bg-base) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 24%, transparent);
   --chrome-input-bg: var(--input-bg);
   --chrome-input-bg-hover: color-mix(in srgb, var(--input-bg) 92%, white 8%);
   --chrome-select-button-bg: var(--surface-menu);
   --chrome-select-button-bg-hover: var(--surface-elevated);
-  --chrome-select-list-bg: var(--surface-menu);
   --chrome-session-group-bg: var(--surface-alt);
   --chrome-session-group-title-bg: var(--surface-header);
   --chrome-session-group-item-bg: var(--surface-alt);
   --chrome-session-tab-bg: var(--tab-bg);
-  --chrome-quick-command-widget-bg: var(--surface);
-  --chrome-quick-command-item-bg: var(--surface-header);
   --chrome-surface-alpha: 52%;
   --chrome-surface-alpha-effective: var(--chrome-surface-alpha);
 }
@@ -171,23 +174,21 @@ body,
     var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
-  --chrome-modal-actions-bg: color-mix(
-    in srgb,
-    var(--surface-panel) var(--chrome-surface-alpha-effective),
-    transparent
-  );
   --chrome-modal-overlay-bg: rgba(2, 6, 23, 0.32);
   --chrome-flyout-menu-bg: color-mix(
     in srgb,
     var(--surface-menu) var(--chrome-surface-alpha-effective),
     transparent
   );
-  --chrome-widget-settings-menu-bg: color-mix(
+  --chrome-flyout-border: color-mix(
     in srgb,
-    var(--surface-menu)
-      calc(min(100%, var(--chrome-surface-alpha-effective) + 12%)),
-    transparent
+    var(--text-primary) 20%,
+    var(--border-input)
   );
+  --chrome-flyout-shadow:
+    0 18px 36px color-mix(in srgb, var(--app-bg-base) 32%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 30%, transparent),
+    inset 0 -18px 28px color-mix(in srgb, var(--app-bg-base) 18%, transparent);
   --chrome-input-bg: color-mix(
     in srgb,
     var(--surface-menu)
@@ -211,7 +212,6 @@ body,
       calc(min(100%, var(--chrome-surface-alpha-effective) + 8%)),
     transparent
   );
-  --chrome-select-list-bg: var(--chrome-flyout-menu-bg);
   --chrome-session-group-bg: color-mix(
     in srgb,
     var(--surface-alt) var(--chrome-surface-alpha-effective),
@@ -230,16 +230,6 @@ body,
   --chrome-session-tab-bg: color-mix(
     in srgb,
     var(--tab-bg) var(--chrome-surface-alpha-effective),
-    transparent
-  );
-  --chrome-quick-command-widget-bg: color-mix(
-    in srgb,
-    var(--surface) var(--chrome-surface-alpha-effective),
-    transparent
-  );
-  --chrome-quick-command-item-bg: color-mix(
-    in srgb,
-    var(--surface-header) var(--chrome-surface-alpha-effective),
     transparent
   );
   --ui-input-bg: var(--chrome-input-bg);
@@ -399,10 +389,10 @@ select {
   transform: none;
   min-width: 168px;
   background: var(--chrome-flyout-menu-bg);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--chrome-flyout-border);
   border-radius: 8px;
   padding: 6px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--chrome-flyout-shadow);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -584,11 +574,6 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
-}
-
-.modal-actions button.ghost {
-  background: transparent;
-  border-color: var(--border-input);
 }
 
 .empty-hint {
