@@ -1,8 +1,8 @@
 # 文档索引
 
-本目录收录 FluxTerm 的设计文档、能力说明和专题记录。阅读时建议先看架构总览，再按主题进入细节文档。
+本目录收录 FluxTerm 的设计文档、能力说明与专题记录。建议先阅读架构总览，再按主题进入具体设计。
 
-## 推荐阅读顺序
+## 建议阅读顺序
 
 1. [架构总览](../ARCHITECTURE_V1.md)
 2. [窗口与应用模型](./window-app-model.md)
@@ -27,8 +27,8 @@
 
 - [Telemetry / 埋点日志规范](./telemetry-logging-spec.md)
 
-## 性能与专题记录
+## 性能与专题
 
 - [终端性能基准记录](./terminal-performance-benchmark.md)
 - [代理性能基准记录](./proxy-performance-benchmark.md)
-- [主题设计 Token 重构设计](./theme-design-token-refactor-design.md)
+- [主题设计 Token 规范](./theme-design-token-refactor-design.md)
