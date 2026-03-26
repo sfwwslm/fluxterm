@@ -36,7 +36,10 @@ type TerminalPaneTreeProps = {
   }) => void;
   onClosePaneSession: (paneId: string, sessionId: string) => void;
   onResizePaneSplit: (paneId: string, ratio: number) => void;
-  onPaneClick: (sessionId: string, event: MouseEvent<HTMLDivElement>) => void;
+  onPaneMouseDown: (
+    sessionId: string,
+    event: MouseEvent<HTMLDivElement>,
+  ) => void;
   onPaneContextMenu: (
     sessionId: string,
     event: MouseEvent<HTMLDivElement>,
@@ -94,7 +97,7 @@ function PaneNodeView({
   onOpenSessionMenu,
   onClosePaneSession,
   onResizePaneSplit,
-  onPaneClick,
+  onPaneMouseDown,
   onPaneContextMenu,
   autocomplete,
   autocompleteAnchor,
@@ -123,7 +126,7 @@ function PaneNodeView({
             onOpenSessionMenu={onOpenSessionMenu}
             onClosePaneSession={onClosePaneSession}
             onResizePaneSplit={onResizePaneSplit}
-            onPaneClick={onPaneClick}
+            onPaneMouseDown={onPaneMouseDown}
             onPaneContextMenu={onPaneContextMenu}
             autocomplete={autocomplete}
             autocompleteAnchor={autocompleteAnchor}
@@ -156,7 +159,7 @@ function PaneNodeView({
             onOpenSessionMenu={onOpenSessionMenu}
             onClosePaneSession={onClosePaneSession}
             onResizePaneSplit={onResizePaneSplit}
-            onPaneClick={onPaneClick}
+            onPaneMouseDown={onPaneMouseDown}
             onPaneContextMenu={onPaneContextMenu}
             autocomplete={autocomplete}
             autocompleteAnchor={autocompleteAnchor}
@@ -279,7 +282,10 @@ function PaneNodeView({
                   isTerminalReady(sessionId) ? "ready" : ""
                 }`}
                 ref={getTerminalContainerRef(sessionId)}
-                onClick={(event) => onPaneClick(sessionId, event)}
+                onMouseDown={(event) => {
+                  if (event.button !== 0) return;
+                  onPaneMouseDown(sessionId, event);
+                }}
                 onContextMenu={(event) => onPaneContextMenu(sessionId, event)}
               />
               {showAutocomplete && (

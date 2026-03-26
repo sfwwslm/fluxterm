@@ -316,7 +316,7 @@ export default function TerminalWidget({
               onClosePaneSession(paneId, sessionId).catch(() => {});
             }}
             onResizePaneSplit={onResizePaneSplit}
-            onPaneClick={(sessionId, event) => {
+            onPaneMouseDown={(sessionId, event) => {
               onDismissAutocomplete();
               onSwitchSession(sessionId);
               onFocusLineAtPoint(sessionId, event.clientY);
