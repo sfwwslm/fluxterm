@@ -5,6 +5,14 @@ body,
   overflow: hidden;
 }
 
+/* 子应用与悬浮窗口在 ready 前保持透明基线，避免启动时闪出主窗口默认底色。 */
+html[data-window-surface="detached"][data-window-appearance="pending"],
+html[data-window-surface="detached"][data-window-appearance="pending"] body,
+html[data-window-surface="detached"][data-window-appearance="pending"] #root {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 :root {
   --font-family-body: "IBM Plex Sans", "Segoe UI", sans-serif;
   --font-family-mono: "JetBrains Mono", "Cascadia Mono", monospace;

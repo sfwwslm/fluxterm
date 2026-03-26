@@ -34,28 +34,11 @@ import "@/subapps/SubAppShell.css";
 import "@/subapps/proxy/ProxySubApp.css";
 import { callTauri } from "@/shared/tauri/commands";
 import { resolveBackgroundAssetUrl } from "@/features/backgrounds/core/assetResolver";
-
-function resolveBackgroundImageStyle(mode: BackgroundRenderMode) {
-  if (mode === "contain") {
-    return {
-      size: "contain",
-      repeat: "no-repeat",
-      position: "center center",
-    };
-  }
-  if (mode === "tile") {
-    return {
-      size: "auto",
-      repeat: "repeat",
-      position: "left top",
-    };
-  }
-  return {
-    size: "cover",
-    repeat: "no-repeat",
-    position: "center center",
-  };
-}
+import {
+  resolveDetachedBackgroundImageStyle,
+  waitForDetachedBackgroundMediaReady,
+  waitForNextPaint,
+} from "@/shared/detachedWindowAppearance";
 
 function formatMessage(
   message: string,
@@ -265,7 +248,8 @@ export default function SubAppRoot() {
 
     if (!effectiveBackgroundImageEnabled || !effectiveBackgroundImageAsset) {
       applyDefaultBackground();
-      queueMicrotask(() => {
+      void waitForNextPaint(2).then(() => {
+        if (disposed) return;
         setSubAppWindowAppearanceReady(true);
       });
       return;
@@ -286,7 +270,16 @@ export default function SubAppRoot() {
           resolvedAsset.revoke();
           return;
         }
-        const style = resolveBackgroundImageStyle(
+        // 子应用窗口先等背景媒体首帧可用，再显示窗口，避免启动闪屏。
+        await waitForDetachedBackgroundMediaReady(
+          blobUrl,
+          normalizedBackgroundMediaType,
+        );
+        if (disposed) {
+          resolvedAsset.revoke();
+          return;
+        }
+        const style = resolveDetachedBackgroundImageStyle(
           effectiveBackgroundVideoRenderMode,
         );
         root.style.setProperty("--app-bg-image-size", style.size);
@@ -302,10 +295,14 @@ export default function SubAppRoot() {
           setActiveBackgroundMediaType("image");
         }
         applyBackgroundImageMode(true);
+        await waitForNextPaint(2);
+        if (disposed) return;
         setSubAppWindowAppearanceReady(true);
       } catch (error) {
         if (disposed) return;
         applyDefaultBackground();
+        await waitForNextPaint(2);
+        if (disposed) return;
         setSubAppWindowAppearanceReady(true);
         void warn(
           JSON.stringify({
@@ -384,10 +381,17 @@ export default function SubAppRoot() {
   }
 
   useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.windowSurface = "detached";
+    root.dataset.windowAppearance = subAppWindowAppearanceReady
+      ? "ready"
+      : "pending";
     document.body.style.visibility = subAppWindowAppearanceReady
       ? "visible"
       : "hidden";
     return () => {
+      delete root.dataset.windowSurface;
+      delete root.dataset.windowAppearance;
       document.body.style.visibility = "";
     };
   }, [subAppWindowAppearanceReady]);
@@ -397,10 +401,12 @@ export default function SubAppRoot() {
     if (subAppWindowShownRef.current) return;
     subAppWindowShownRef.current = true;
     const current = getCurrentWindow();
-    current
-      .show()
-      .then(() => current.setFocus().catch(() => {}))
-      .catch(() => {});
+    void waitForNextPaint(2).then(() => {
+      current
+        .show()
+        .then(() => current.setFocus().catch(() => {}))
+        .catch(() => {});
+    });
   }, [subAppWindowAppearanceReady]);
 
   return (

@@ -147,7 +147,6 @@ import {
   normalizeBackgroundRenderMode,
   normalizeBackgroundVideoReplayMode,
   type BackgroundMediaType,
-  type BackgroundRenderMode,
 } from "@/constants/backgroundMedia";
 import {
   DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
@@ -159,6 +158,11 @@ import {
   DEFAULT_TERMINAL_WORD_SEPARATORS,
   normalizeTerminalWordSeparators,
 } from "@/constants/terminalWordSeparators";
+import {
+  resolveDetachedBackgroundImageStyle,
+  waitForDetachedBackgroundMediaReady,
+  waitForNextPaint,
+} from "@/shared/detachedWindowAppearance";
 
 const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   profiles: "widget.profiles",
@@ -170,28 +174,6 @@ const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   tunnels: "widget.tunnels",
 };
 const BACKGROUND_IMAGE_TERMINAL_CANVAS_ALPHA = 0;
-
-function resolveBackgroundImageStyle(mode: BackgroundRenderMode) {
-  if (mode === "contain") {
-    return {
-      size: "contain",
-      repeat: "no-repeat",
-      position: "center center",
-    };
-  }
-  if (mode === "tile") {
-    return {
-      size: "auto",
-      repeat: "repeat",
-      position: "left top",
-    };
-  }
-  return {
-    size: "cover",
-    repeat: "no-repeat",
-    position: "center center",
-  };
-}
 
 function clampBackgroundImageSurfaceAlpha(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA;
@@ -694,6 +676,10 @@ export default function AppShell() {
   }, [themeId, activeThemePreset]);
 
   useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  useEffect(() => {
     // 透明度单独走独立链路，确保滑杆拖动时可即时生效，不受主题变量批量更新影响。
     const root = document.documentElement;
     root.style.setProperty(
@@ -747,7 +733,18 @@ export default function AppShell() {
           resolvedAsset.revoke();
           return;
         }
-        const style = resolveBackgroundImageStyle(
+        if (shouldDeferFloatingWindowReveal) {
+          // 悬浮窗口先等背景媒体首帧可用，再解除隐藏，避免启动时白框或纯色占位。
+          await waitForDetachedBackgroundMediaReady(
+            blobUrl,
+            normalizedBackgroundMediaType,
+          );
+          if (disposed) {
+            resolvedAsset.revoke();
+            return;
+          }
+        }
+        const style = resolveDetachedBackgroundImageStyle(
           effectiveBackgroundRenderMode,
         );
         root.style.setProperty("--app-bg-image-size", style.size);
@@ -765,12 +762,16 @@ export default function AppShell() {
         // 仅在背景图真正可读后启用语义层半透明模式，避免加载失败时界面过透。
         applyBackgroundImageMode(true);
         if (shouldDeferFloatingWindowReveal) {
+          await waitForNextPaint(2);
+          if (disposed) return;
           setFloatingWindowAppearanceReady(true);
         }
       } catch (error) {
         if (disposed) return;
         applyDefaultBackground();
         if (shouldDeferFloatingWindowReveal) {
+          await waitForNextPaint(2);
+          if (disposed) return;
           setFloatingWindowAppearanceReady(true);
         }
         void warn(
@@ -852,10 +853,17 @@ export default function AppShell() {
 
   useLayoutEffect(() => {
     if (!shouldDeferFloatingWindowReveal) return;
+    const root = document.documentElement;
+    root.dataset.windowSurface = "detached";
+    root.dataset.windowAppearance = floatingWindowAppearanceReady
+      ? "ready"
+      : "pending";
     document.body.style.visibility = floatingWindowAppearanceReady
       ? "visible"
       : "hidden";
     return () => {
+      delete root.dataset.windowSurface;
+      delete root.dataset.windowAppearance;
       document.body.style.visibility = "";
     };
   }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
@@ -866,10 +874,12 @@ export default function AppShell() {
     if (floatingWindowShownRef.current) return;
     floatingWindowShownRef.current = true;
     const current = getCurrentWindow();
-    current
-      .show()
-      .then(() => current.setFocus().catch(() => {}))
-      .catch(() => {});
+    void waitForNextPaint(2).then(() => {
+      current
+        .show()
+        .then(() => current.setFocus().catch(() => {}))
+        .catch(() => {});
+    });
   }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
 
   const openNewProfile = useCallback(() => {
