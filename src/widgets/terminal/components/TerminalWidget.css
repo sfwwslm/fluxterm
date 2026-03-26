@@ -24,6 +24,11 @@
     var(--danger) var(--chrome-surface-alpha-strong),
     transparent
   );
+  --terminal-banner-disconnect-bg: color-mix(
+    in srgb,
+    var(--danger) 72%,
+    var(--surface-strong)
+  );
   grid-area: center;
   display: flex;
   flex-direction: column;
@@ -395,7 +400,7 @@ button.session-tab {
   right: 1rem;
   padding: 10px 14px;
   border-radius: 10px;
-  background: var(--terminal-danger-strong-bg);
+  background: var(--terminal-banner-disconnect-bg);
   color: var(--accent-contrast);
   font-size: 14px;
   font-weight: 600;
