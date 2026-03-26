@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
-import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
+import type { ConfigSectionKey } from "@/main/config/configNavigation";
 import Menus from "./Menus";
 import WindowControls from "./WindowControls";
 

@@ -4,8 +4,11 @@ import type React from "react";
 import type { Translate } from "@/i18n";
 import type { WidgetSide } from "@/layout/types";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
-import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import Button from "@/components/ui/button";
+import {
+  buildConfigNavigation,
+  type ConfigSectionKey,
+} from "@/main/config/configNavigation";
 
 type MenuAction = {
   type?: "action";
@@ -96,34 +99,18 @@ export default function Menus({
   }, [closeMenus]);
 
   const menuItems = useMemo<MenuItem[]>(() => {
+    const configNavigation = buildConfigNavigation(t);
     const items: MenuItem[] = [
       {
         id: "config",
         label: t("menu.config"),
         // Windows/Web 自定义菜单里的“配置”入口需要与 macOS 的 useMacAppMenu.ts 保持同步，
         // 后续新增或调整配置分组时，两处都要一起修改，避免某个平台缺入口。
-        actions: [
-          {
-            id: "config-app-settings",
-            label: t("config.section.appSettings"),
-            onClick: () => onOpenConfigSection("app-settings"),
-          },
-          {
-            id: "config-ai-settings",
-            label: t("config.section.aiSettings"),
-            onClick: () => onOpenConfigSection("ai-settings"),
-          },
-          {
-            id: "config-session-settings",
-            label: t("config.section.sessionSettings"),
-            onClick: () => onOpenConfigSection("session-settings"),
-          },
-          {
-            id: "config-directory",
-            label: t("config.section.configDirectory"),
-            onClick: () => onOpenConfigSection("config-directory"),
-          },
-        ],
+        actions: configNavigation.menuEntries.map((entry) => ({
+          id: `config-${entry.key}`,
+          label: entry.label,
+          onClick: () => onOpenConfigSection(entry.key),
+        })),
       },
       {
         id: "layout",

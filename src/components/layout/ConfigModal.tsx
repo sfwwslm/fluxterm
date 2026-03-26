@@ -64,24 +64,10 @@ import {
   AI_PROVIDER_PRESETS,
   getAiProviderPreset,
 } from "@/constants/aiProviders";
-
-export type ConfigSectionKey =
-  | "app-settings"
-  | "app-appearance"
-  | "security"
-  | "ai-settings"
-  | "ai-provider-manage"
-  | "ai-provider-quick"
-  | "ai-provider-compat"
-  | "session-settings"
-  | "session-window"
-  | "session-shell"
-  | "config-directory";
-
-export type ConfigSectionItem = {
-  key: ConfigSectionKey;
-  label: string;
-};
+import type {
+  ConfigSectionItem,
+  ConfigSectionKey,
+} from "@/main/config/configNavigation";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -418,7 +404,7 @@ export default function ConfigModal({
   const hasUnsavedHighRiskChanges = isDefaultEditorPathDirty;
 
   useEffect(() => {
-    if (!open || activeSection !== "config-directory") return;
+    if (!open || activeSection !== "app-directory") return;
     getAppConfigDir()
       .then((path) => {
         setConfigDir(normalizeConfigDirectoryPath(path));
@@ -747,8 +733,11 @@ export default function ConfigModal({
   /** 按当前分区选择对应的状态源，保证不同设置域文案一致。 */
   function renderActiveSectionSaveStatus() {
     if (
-      activeSection === "app-settings" ||
-      activeSection === "app-appearance"
+      activeSection === "general" ||
+      activeSection === "language" ||
+      activeSection === "personalization" ||
+      activeSection === "security" ||
+      activeSection === "app-directory"
     ) {
       return renderSaveStatus(appSaveState, appSaveError, onAppSaveRetry);
     }
@@ -793,15 +782,15 @@ export default function ConfigModal({
     onClose();
   }
 
-  // 当前入口只渲染所属配置分组，保证同一模态框内的导航与当前菜单语义一致。
+  // 按统一配置分区渲染内容，标题栏菜单与侧栏导航共用同一套 section key。
   function renderSectionContent() {
-    if (activeSection === "app-settings") {
+    if (activeSection === "general") {
       const defaultEditorProgramName = getProgramNameFromPath(
         defaultEditorPathDraft,
       );
       return (
         <div className="config-modal-widget config-modal-widget-scrollable">
-          <h3>{t("config.section.appSettings")}</h3>
+          <h3>{t("config.section.general")}</h3>
           {renderActiveSectionSaveStatus()}
           <label className="config-toggle-card">
             <div className="config-toggle-copy">
@@ -883,8 +872,87 @@ export default function ConfigModal({
               </div>
             </div>
           </div>
+        </div>
+      );
+    }
+    if (activeSection === "language") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.language")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("settings.language")}
+              </span>
+            </div>
+            <div className="config-select-control">
+              <Select
+                value={locale}
+                options={[
+                  { value: "zh-CN", label: t("language.zh-CN") },
+                  { value: "en-US", label: t("language.en-US") },
+                ]}
+                onChange={(value) => onLocaleChange?.(value as Locale)}
+                aria-label={t("settings.language")}
+              />
+            </div>
+          </label>
+        </div>
+      );
+    }
+    if (activeSection === "personalization") {
+      return (
+        <div className="config-modal-widget config-modal-widget-scrollable">
+          <h3>{t("config.section.personalization")}</h3>
+          {renderActiveSectionSaveStatus()}
+          <label className="config-toggle-card">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">{t("settings.theme")}</span>
+            </div>
+            <div className="config-select-control">
+              <Select
+                value={themeId}
+                options={Object.entries(themes).map(([key, theme]) => ({
+                  value: key,
+                  label: theme.label[locale],
+                }))}
+                onChange={(value) => onThemeChange?.(value as ThemeId)}
+                aria-label={t("settings.theme")}
+              />
+            </div>
+          </label>
+          <label className="config-toggle-card config-range-setting">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.app.backgroundImageSurfaceAlpha")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.app.backgroundImageSurfaceAlphaHint")}
+              </span>
+            </div>
+            <span className="config-range-control">
+              <input
+                type="range"
+                min={1}
+                max={100}
+                step={1}
+                value={backgroundTransparencyPercent}
+                onChange={(event) =>
+                  onBackgroundImageSurfaceAlphaChange?.(
+                    fromBackgroundTransparencyPercent(
+                      Number(event.currentTarget.value),
+                    ),
+                  )
+                }
+                aria-label={t("config.app.backgroundImageSurfaceAlpha")}
+              />
+              <span className="config-range-value">
+                {backgroundTransparencyPercent}%
+              </span>
+            </span>
+          </label>
           <div className="config-toggle-card config-feature-group">
-            {/** 未选择图片时禁用开关，避免“开启但无背景图”的无效状态。 */}
             <label className="config-toggle-head">
               <div className="config-toggle-copy">
                 <span className="config-toggle-title">
@@ -1096,78 +1164,6 @@ export default function ConfigModal({
               </Button>
             </div>
           </div>
-        </div>
-      );
-    }
-    if (activeSection === "app-appearance") {
-      return (
-        <div className="config-modal-widget config-modal-widget-scrollable">
-          <h3>{t("config.section.appAppearance")}</h3>
-          {renderActiveSectionSaveStatus()}
-          <label className="config-toggle-card">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("settings.language")}
-              </span>
-            </div>
-            <div className="config-select-control">
-              <Select
-                value={locale}
-                options={[
-                  { value: "zh-CN", label: t("language.zh-CN") },
-                  { value: "en-US", label: t("language.en-US") },
-                ]}
-                onChange={(value) => onLocaleChange?.(value as Locale)}
-                aria-label={t("settings.language")}
-              />
-            </div>
-          </label>
-          <label className="config-toggle-card">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">{t("settings.theme")}</span>
-            </div>
-            <div className="config-select-control">
-              <Select
-                value={themeId}
-                options={Object.entries(themes).map(([key, theme]) => ({
-                  value: key,
-                  label: theme.label[locale],
-                }))}
-                onChange={(value) => onThemeChange?.(value as ThemeId)}
-                aria-label={t("settings.theme")}
-              />
-            </div>
-          </label>
-          <label className="config-toggle-card config-range-setting">
-            <div className="config-toggle-copy">
-              <span className="config-toggle-title">
-                {t("config.app.backgroundImageSurfaceAlpha")}
-              </span>
-              <span className="config-toggle-desc">
-                {t("config.app.backgroundImageSurfaceAlphaHint")}
-              </span>
-            </div>
-            <span className="config-range-control">
-              <input
-                type="range"
-                min={1}
-                max={100}
-                step={1}
-                value={backgroundTransparencyPercent}
-                onChange={(event) =>
-                  onBackgroundImageSurfaceAlphaChange?.(
-                    fromBackgroundTransparencyPercent(
-                      Number(event.currentTarget.value),
-                    ),
-                  )
-                }
-                aria-label={t("config.app.backgroundImageSurfaceAlpha")}
-              />
-              <span className="config-range-value">
-                {backgroundTransparencyPercent}%
-              </span>
-            </span>
-          </label>
         </div>
       );
     }
@@ -2179,7 +2175,7 @@ export default function ConfigModal({
     return (
       // 右侧配置区统一使用固定高度 + 内部滚动，避免不同分区在内容增长后把模态框继续撑高。
       <div className="config-modal-widget config-modal-widget-scrollable">
-        <h3>{t("config.section.configDirectory")}</h3>
+        <h3>{t("config.section.appDirectory")}</h3>
         <div className="config-dir-card">
           <div className="config-toggle-copy">
             <span className="config-toggle-title">

@@ -18,10 +18,8 @@ import { info, logTelemetry, warn } from "@/shared/logging/telemetry";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { translations, type Translate, type TranslationKey } from "@/i18n";
-import ConfigModal, {
-  type ConfigSectionItem,
-  type ConfigSectionKey,
-} from "@/components/layout/ConfigModal";
+import ConfigModal from "@/components/layout/ConfigModal";
+import type { ConfigSectionKey } from "@/main/config/configNavigation";
 import TitleBar from "@/components/layout/TitleBar";
 import FloatingShell from "@/main/components/FloatingShell";
 import Workspace from "@/main/components/Workspace";
@@ -108,6 +106,10 @@ import { themePresets } from "@/main/theme/themePresets";
 import { buildThemeCssVars } from "@/main/theme/buildThemeCssVars";
 import { buildTerminalTheme } from "@/main/theme/buildTerminalTheme";
 import { buildWidgets } from "@/main/widgets/buildWidgets";
+import {
+  buildConfigNavigation,
+  getScopedConfigNavEntries,
+} from "@/main/config/configNavigation";
 import {
   WIDGET_FILES_CHANNEL,
   type FloatingFilesMessage,
@@ -574,7 +576,7 @@ export default function AppShell() {
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [activeConfigSection, setActiveConfigSection] =
-    useState<ConfigSectionKey>("app-settings");
+    useState<ConfigSectionKey>("general");
   const [footerVisibility, setFooterVisibility] = useState({
     quickbar: true,
     statusbar: true,
@@ -928,190 +930,15 @@ export default function AppShell() {
     setActiveLocalShellProfile(null);
   }
 
-  const configSectionLabels = useMemo(
-    () => ({
-      "app-settings": t("config.section.appSettings"),
-      "app-appearance": t("config.section.appAppearance"),
-      security: t("config.section.security"),
-      "ai-settings": t("config.section.aiSettings"),
-      "ai-provider-manage": t("config.section.aiProviderManage"),
-      "ai-provider-quick": t("config.section.aiProviderQuick"),
-      "ai-provider-compat": t("config.section.aiProviderCompat"),
-      "session-settings": t("config.section.sessionSettings"),
-      "session-window": t("config.section.sessionWindow"),
-      "session-shell": t("config.section.sessionShell"),
-      "config-directory": t("config.section.configDirectory"),
-    }),
-    [t],
+  const configNavigation = useMemo(() => buildConfigNavigation(t), [t]);
+  const configModalNavSections = useMemo(
+    () =>
+      getScopedConfigNavEntries(
+        configNavigation.navEntries,
+        activeConfigSection,
+      ),
+    [activeConfigSection, configNavigation.navEntries],
   );
-
-  const configModalSections = useMemo<ConfigSectionItem[]>(() => {
-    const sectionsByEntry: Record<ConfigSectionKey, ConfigSectionItem[]> = {
-      "app-settings": [
-        {
-          key: "app-settings",
-          label: configSectionLabels["app-settings"],
-        },
-        {
-          key: "app-appearance",
-          label: configSectionLabels["app-appearance"],
-        },
-        {
-          key: "security",
-          label: configSectionLabels.security,
-        },
-      ],
-      "app-appearance": [
-        {
-          key: "app-settings",
-          label: configSectionLabels["app-settings"],
-        },
-        {
-          key: "app-appearance",
-          label: configSectionLabels["app-appearance"],
-        },
-        {
-          key: "security",
-          label: configSectionLabels.security,
-        },
-      ],
-      security: [
-        {
-          key: "app-settings",
-          label: configSectionLabels["app-settings"],
-        },
-        {
-          key: "app-appearance",
-          label: configSectionLabels["app-appearance"],
-        },
-        {
-          key: "security",
-          label: configSectionLabels.security,
-        },
-      ],
-      "ai-settings": [
-        {
-          key: "ai-settings",
-          label: configSectionLabels["ai-settings"],
-        },
-        {
-          key: "ai-provider-quick",
-          label: configSectionLabels["ai-provider-quick"],
-        },
-        {
-          key: "ai-provider-compat",
-          label: configSectionLabels["ai-provider-compat"],
-        },
-        {
-          key: "ai-provider-manage",
-          label: configSectionLabels["ai-provider-manage"],
-        },
-      ],
-      "ai-provider-manage": [
-        {
-          key: "ai-settings",
-          label: configSectionLabels["ai-settings"],
-        },
-        {
-          key: "ai-provider-quick",
-          label: configSectionLabels["ai-provider-quick"],
-        },
-        {
-          key: "ai-provider-compat",
-          label: configSectionLabels["ai-provider-compat"],
-        },
-        {
-          key: "ai-provider-manage",
-          label: configSectionLabels["ai-provider-manage"],
-        },
-      ],
-      "ai-provider-quick": [
-        {
-          key: "ai-settings",
-          label: configSectionLabels["ai-settings"],
-        },
-        {
-          key: "ai-provider-quick",
-          label: configSectionLabels["ai-provider-quick"],
-        },
-        {
-          key: "ai-provider-compat",
-          label: configSectionLabels["ai-provider-compat"],
-        },
-        {
-          key: "ai-provider-manage",
-          label: configSectionLabels["ai-provider-manage"],
-        },
-      ],
-      "ai-provider-compat": [
-        {
-          key: "ai-settings",
-          label: configSectionLabels["ai-settings"],
-        },
-        {
-          key: "ai-provider-quick",
-          label: configSectionLabels["ai-provider-quick"],
-        },
-        {
-          key: "ai-provider-compat",
-          label: configSectionLabels["ai-provider-compat"],
-        },
-        {
-          key: "ai-provider-manage",
-          label: configSectionLabels["ai-provider-manage"],
-        },
-      ],
-      "session-settings": [
-        {
-          key: "session-settings",
-          label: configSectionLabels["session-settings"],
-        },
-        {
-          key: "session-window",
-          label: configSectionLabels["session-window"],
-        },
-        {
-          key: "session-shell",
-          label: configSectionLabels["session-shell"],
-        },
-      ],
-      "session-window": [
-        {
-          key: "session-settings",
-          label: configSectionLabels["session-settings"],
-        },
-        {
-          key: "session-window",
-          label: configSectionLabels["session-window"],
-        },
-        {
-          key: "session-shell",
-          label: configSectionLabels["session-shell"],
-        },
-      ],
-      "session-shell": [
-        {
-          key: "session-settings",
-          label: configSectionLabels["session-settings"],
-        },
-        {
-          key: "session-window",
-          label: configSectionLabels["session-window"],
-        },
-        {
-          key: "session-shell",
-          label: configSectionLabels["session-shell"],
-        },
-      ],
-      "config-directory": [
-        {
-          key: "config-directory",
-          label: configSectionLabels["config-directory"],
-        },
-      ],
-    };
-    return sectionsByEntry[activeConfigSection];
-  }, [activeConfigSection, configSectionLabels]);
 
   /** 打开统一配置模态框，并切换到指定配置分区。 */
   function openConfigSection(section: ConfigSectionKey) {
@@ -3473,7 +3300,7 @@ export default function AppShell() {
       <ConfigModal
         open={configModalOpen}
         activeSection={activeConfigSection}
-        sections={configModalSections}
+        sections={configModalNavSections}
         locale={locale}
         themeId={themeId}
         shellId={shellId}

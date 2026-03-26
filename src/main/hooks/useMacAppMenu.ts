@@ -11,8 +11,11 @@ import { error as logError } from "@/shared/logging/telemetry";
 import type { Translate } from "@/i18n";
 import type { SubAppId, SubAppRuntimeStatus } from "@/subapps/types";
 import { isMacOS } from "@/utils/platform";
-import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import {
+  buildConfigNavigation,
+  type ConfigSectionKey,
+} from "@/main/config/configNavigation";
 
 type UseMacAppMenuOptions = {
   layoutCollapsed: Record<"left" | "right" | "bottom", boolean>;
@@ -111,31 +114,19 @@ async function createConfigMenu(
   onOpenConfigSection: (section: ConfigSectionKey) => void,
   t: Translate,
 ) {
+  const configNavigation = buildConfigNavigation(t);
   return Submenu.new({
     id: "config-menu",
     text: t("menu.config"),
-    items: [
-      await MenuItem.new({
-        id: "config-app-settings",
-        text: t("config.section.appSettings"),
-        action: () => onOpenConfigSection("app-settings"),
-      }),
-      await MenuItem.new({
-        id: "config-ai-settings",
-        text: t("config.section.aiSettings"),
-        action: () => onOpenConfigSection("ai-settings"),
-      }),
-      await MenuItem.new({
-        id: "config-session-settings",
-        text: t("config.section.sessionSettings"),
-        action: () => onOpenConfigSection("session-settings"),
-      }),
-      await MenuItem.new({
-        id: "config-directory",
-        text: t("config.section.configDirectory"),
-        action: () => onOpenConfigSection("config-directory"),
-      }),
-    ],
+    items: await Promise.all(
+      configNavigation.menuEntries.map((entry) =>
+        MenuItem.new({
+          id: `config-${entry.key}`,
+          text: entry.label,
+          action: () => onOpenConfigSection(entry.key),
+        }),
+      ),
+    ),
   });
 }
 

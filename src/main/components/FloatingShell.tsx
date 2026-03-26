@@ -1,8 +1,8 @@
 import type React from "react";
 import type { Translate } from "@/i18n";
-import type { ConfigSectionKey } from "@/components/layout/ConfigModal";
 import type { WidgetKey } from "@/types";
 import type { WidgetSide } from "@/layout/types";
+import type { ConfigSectionKey } from "@/main/config/configNavigation";
 import TitleBar from "@/components/layout/TitleBar";
 import WidgetTitleBar from "@/components/layout/WidgetTitleBar";
 import { isMacOS } from "@/utils/platform";
