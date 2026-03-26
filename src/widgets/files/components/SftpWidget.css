@@ -1,4 +1,34 @@
 .sftp-widget {
+  --sftp-surface-alpha-base: calc(
+    min(100%, var(--chrome-surface-alpha-effective))
+  );
+  --sftp-surface-alpha-raised: calc(
+    min(100%, var(--chrome-surface-alpha-effective) + 8%)
+  );
+  --sftp-surface-alpha-strong: calc(
+    min(100%, var(--chrome-surface-alpha-effective) + 20%)
+  );
+  --sftp-accent-soft-bg: color-mix(
+    in srgb,
+    var(--accent-soft) 22%,
+    transparent
+  );
+  --sftp-accent-subtle-bg: color-mix(
+    in srgb,
+    var(--accent-subtle) 72%,
+    transparent
+  );
+  --sftp-success-soft-bg: color-mix(
+    in srgb,
+    var(--success-soft) 56%,
+    transparent
+  );
+  --sftp-danger-soft-bg: color-mix(in srgb, var(--danger) 18%, transparent);
+  --sftp-neutral-soft-bg: color-mix(
+    in srgb,
+    var(--border-weak) 60%,
+    transparent
+  );
   position: relative;
   display: flex;
   flex-direction: column;
@@ -42,8 +72,16 @@
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--surface-header-strong) 86%, transparent),
-      color-mix(in srgb, var(--surface-menu) 78%, transparent)
+      color-mix(
+        in srgb,
+        var(--surface-header-strong) var(--sftp-surface-alpha-strong),
+        transparent
+      ),
+      color-mix(
+        in srgb,
+        var(--surface-menu) var(--sftp-surface-alpha-raised),
+        transparent
+      )
     ),
     color-mix(in srgb, var(--accent-soft) 12%, transparent);
   color: var(--text-secondary);
@@ -92,7 +130,11 @@
   justify-content: center;
   border-radius: 999px;
   border: 1px solid transparent;
-  background: color-mix(in srgb, var(--surface-header-strong) 74%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-header-strong) var(--sftp-surface-alpha-raised),
+    transparent
+  );
   color: var(--text-muted);
 }
 
@@ -103,31 +145,35 @@
 
 .path-sync-indicator.active {
   color: var(--success);
-  background: color-mix(in srgb, var(--success-soft) 56%, transparent);
+  background: var(--sftp-success-soft-bg);
   border-color: color-mix(in srgb, var(--success) 28%, transparent);
 }
 
 .path-sync-indicator.checking {
   color: color-mix(in srgb, var(--accent) 66%, var(--text-secondary));
-  background: color-mix(in srgb, var(--accent-soft) 28%, transparent);
+  background: var(--sftp-accent-soft-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .path-sync-indicator.paused {
   color: color-mix(in srgb, var(--accent) 78%, var(--text-secondary));
-  background: color-mix(in srgb, var(--accent-subtle) 72%, transparent);
+  background: var(--sftp-accent-subtle-bg);
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .path-sync-indicator.disabled {
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface-header-strong) 72%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-header-strong) var(--sftp-surface-alpha-base),
+    transparent
+  );
   border-color: color-mix(in srgb, var(--border-soft) 86%, transparent);
 }
 
 .path-sync-indicator.unsupported {
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-secondary));
-  background: color-mix(in srgb, var(--border-weak) 58%, transparent);
+  background: var(--sftp-neutral-soft-bg);
   border-color: color-mix(in srgb, var(--border-input) 72%, transparent);
 }
 
@@ -167,7 +213,11 @@
 }
 
 .sftp-list {
-  background: var(--surface);
+  background: color-mix(
+    in srgb,
+    var(--surface) var(--sftp-surface-alpha-base),
+    transparent
+  );
   border: 1px solid var(--border-soft);
   border-radius: 12px;
   display: flex;
@@ -211,7 +261,11 @@
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--text-muted) 72%, transparent),
-    color-mix(in srgb, var(--surface-header-strong) 72%, transparent)
+    color-mix(
+      in srgb,
+      var(--surface-header-strong) var(--sftp-surface-alpha-base),
+      transparent
+    )
   );
   border-radius: 999px;
   border: 2px solid transparent;
@@ -268,13 +322,17 @@
 }
 
 .sftp-table-item:hover {
-  background: var(--surface-alt);
+  background: color-mix(
+    in srgb,
+    var(--surface-alt) var(--sftp-surface-alpha-strong),
+    transparent
+  );
   border-color: transparent;
   border-bottom-color: var(--border-soft);
 }
 
 .sftp-table-item.selected {
-  background: color-mix(in srgb, var(--accent-soft) 16%, transparent);
+  background: var(--sftp-accent-soft-bg);
   border-color: transparent;
   border-bottom-color: var(--border-soft);
 }
@@ -315,7 +373,11 @@
   flex: 0 0 18px;
   border-radius: 6px;
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--surface-alt) 80%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-alt) var(--sftp-surface-alpha-raised),
+    transparent
+  );
 }
 
 .sftp-entry-icon svg {
@@ -325,57 +387,57 @@
 
 .sftp-entry-icon.folder {
   color: color-mix(in srgb, var(--accent) 74%, var(--text-secondary));
-  background: color-mix(in srgb, var(--accent-subtle) 76%, transparent);
+  background: var(--sftp-accent-subtle-bg);
 }
 
 .sftp-entry-icon.link {
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent-soft) 22%, transparent);
+  background: var(--sftp-accent-soft-bg);
 }
 
 .sftp-entry-icon.code {
   color: var(--success);
-  background: color-mix(in srgb, var(--success-soft) 56%, transparent);
+  background: var(--sftp-success-soft-bg);
 }
 
 .sftp-entry-icon.script {
   color: color-mix(in srgb, var(--danger) 68%, var(--accent));
-  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  background: var(--sftp-danger-soft-bg);
 }
 
 .sftp-entry-icon.database {
   color: color-mix(in srgb, var(--accent) 74%, var(--text-primary));
-  background: color-mix(in srgb, var(--accent-subtle) 72%, transparent);
+  background: var(--sftp-accent-subtle-bg);
 }
 
 .sftp-entry-icon.image {
   color: color-mix(in srgb, var(--accent) 64%, var(--text-muted));
-  background: color-mix(in srgb, var(--accent-soft) 28%, transparent);
+  background: var(--sftp-accent-soft-bg);
 }
 
 .sftp-entry-icon.media {
   color: color-mix(in srgb, var(--danger) 76%, var(--text-secondary));
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  background: var(--sftp-danger-soft-bg);
 }
 
 .sftp-entry-icon.archive {
   color: color-mix(in srgb, var(--accent) 70%, var(--text-secondary));
-  background: color-mix(in srgb, var(--accent-subtle) 74%, transparent);
+  background: var(--sftp-accent-subtle-bg);
 }
 
 .sftp-entry-icon.config {
   color: color-mix(in srgb, var(--text-primary) 72%, var(--accent));
-  background: color-mix(in srgb, var(--border-weak) 62%, transparent);
+  background: var(--sftp-neutral-soft-bg);
 }
 
 .sftp-entry-icon.text {
   color: color-mix(in srgb, var(--text-muted) 86%, var(--text-secondary));
-  background: color-mix(in srgb, var(--border-weak) 58%, transparent);
+  background: var(--sftp-neutral-soft-bg);
 }
 
 .sftp-entry-icon.secure {
   color: color-mix(in srgb, var(--danger) 84%, var(--text-secondary));
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  background: var(--sftp-danger-soft-bg);
 }
 
 .sftp-table-item.dir .sftp-cell-name {
