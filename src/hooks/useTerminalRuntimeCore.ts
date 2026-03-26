@@ -202,6 +202,14 @@ type SearchStats = {
   decorations: boolean;
 };
 
+type XtermTerminalInternal = Terminal & {
+  _core?: {
+    coreService?: {
+      isCursorHidden?: boolean;
+    };
+  };
+};
+
 type PromptParseState = {
   carry: string;
 };
@@ -218,6 +226,8 @@ type LinkMenuState = {
 function encodeBinaryInput(data: string) {
   return Array.from(data, (char) => char.charCodeAt(0) & 0xff);
 }
+
+const STREAM_OUTPUT_CURSOR_RESTORE_DELAY_MS = 140;
 
 /** 播放极短提示音，避免引入额外音频资源。 */
 function playBellSound(audioContext: AudioContext) {
@@ -453,6 +463,8 @@ export default function useTerminalRuntime({
     useState<ActiveAutocompleteState | null>(null);
   const activeAutocompleteRef = useRef<ActiveAutocompleteState | null>(null);
   const focusedLineBySessionRef = useRef<Record<string, FocusedLineState>>({});
+  const cursorSuppressTimerRef = useRef<Record<string, number>>({});
+  const cursorSuppressedBySessionRef = useRef<Record<string, boolean>>({});
   const selectionAutoCopyTimerRef = useRef<Record<string, number>>({});
   const promptParseStateRef = useRef<Record<string, PromptParseState>>({});
   const workingDirectoryBySessionRef = useRef<Record<string, string>>({});
@@ -1159,6 +1171,47 @@ export default function useTerminalRuntime({
     bundle.terminal.options.cursorBlink = enabled;
   }
 
+  /**
+   * 直接切换 xterm 的 cursor hidden 状态，模拟 PowerShell 等终端在流式输出时
+   * “正文不显示光标、回到 prompt 再显示”的行为。
+   */
+  function syncCursorHidden(sessionId: string, hidden: boolean) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return;
+    const internalTerminal = bundle.terminal as XtermTerminalInternal;
+    const coreService = internalTerminal._core?.coreService;
+    if (!coreService) return;
+    if (coreService.isCursorHidden === hidden) return;
+    coreService.isCursorHidden = hidden;
+    const cursorRow = bundle.terminal.buffer.active.cursorY;
+    bundle.terminal.refresh(cursorRow, cursorRow);
+  }
+
+  function disposeCursorSuppressTimer(sessionId: string) {
+    const timer = cursorSuppressTimerRef.current[sessionId];
+    if (!timer) return;
+    window.clearTimeout(timer);
+    delete cursorSuppressTimerRef.current[sessionId];
+  }
+
+  function restoreCursorAfterStreamingOutput(sessionId: string) {
+    disposeCursorSuppressTimer(sessionId);
+    if (!cursorSuppressedBySessionRef.current[sessionId]) return;
+    delete cursorSuppressedBySessionRef.current[sessionId];
+    syncCursorHidden(sessionId, false);
+  }
+
+  function suppressCursorDuringStreamingOutput(sessionId: string) {
+    const bundle = terminalsRef.current[sessionId];
+    if (!bundle) return;
+    cursorSuppressedBySessionRef.current[sessionId] = true;
+    syncCursorHidden(sessionId, true);
+    disposeCursorSuppressTimer(sessionId);
+    cursorSuppressTimerRef.current[sessionId] = window.setTimeout(() => {
+      restoreCursorAfterStreamingOutput(sessionId);
+    }, STREAM_OUTPUT_CURSOR_RESTORE_DELAY_MS);
+  }
+
   function getAbsoluteCursorLine(terminal: Terminal) {
     return terminal.buffer.active.baseY + terminal.buffer.active.cursorY;
   }
@@ -1379,6 +1432,7 @@ export default function useTerminalRuntime({
 
     bundle.disposables.push(
       term.onKey(({ domEvent }) => {
+        restoreCursorAfterStreamingOutput(sessionId);
         if (focusedLineBySessionRef.current[sessionId]) {
           syncCursorBlink(sessionId, true);
         }
@@ -1392,6 +1446,7 @@ export default function useTerminalRuntime({
 
     bundle.disposables.push(
       term.onData((data) => {
+        restoreCursorAfterStreamingOutput(sessionId);
         // 聚焦行只用于“查看/复制这一行”。
         // 一旦用户继续键盘输入，就恢复提示符光标闪烁，表示输入焦点仍在 shell prompt。
         if (focusedLineBySessionRef.current[sessionId]) {
@@ -1506,6 +1561,12 @@ export default function useTerminalRuntime({
     );
 
     bundle.disposables.push(
+      term.onWriteParsed(() => {
+        suppressCursorDuringStreamingOutput(sessionId);
+      }),
+    );
+
+    bundle.disposables.push(
       term.onBinary((data) => {
         handlersRef.current
           .sendSessionInput(sessionId, {
@@ -1587,6 +1648,8 @@ export default function useTerminalRuntime({
     }
     delete commandCaptureMetaRef.current[sessionId];
     delete activeCommandCaptureBySessionRef.current[sessionId];
+    disposeCursorSuppressTimer(sessionId);
+    delete cursorSuppressedBySessionRef.current[sessionId];
     disposeSelectionAutoCopyTimer(sessionId);
     disposeFocusedLine(sessionId);
     disposePromptParseState(sessionId);
