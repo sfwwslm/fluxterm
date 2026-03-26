@@ -207,6 +207,19 @@ type XtermTerminalInternal = Terminal & {
     coreService?: {
       isCursorHidden?: boolean;
     };
+    screenElement?: HTMLElement;
+    _renderService?: {
+      dimensions?: {
+        css?: {
+          cell?: {
+            height?: number;
+          };
+          canvas?: {
+            height?: number;
+          };
+        };
+      };
+    };
   };
 };
 
@@ -1270,12 +1283,28 @@ export default function useTerminalRuntime({
   }
 
   function resolveBufferLineFromPoint(bundle: TerminalBundle, clientY: number) {
-    const rect = bundle.host.getBoundingClientRect();
+    const internalTerminal = bundle.terminal as XtermTerminalInternal;
+    const screenElement =
+      internalTerminal._core?.screenElement ??
+      bundle.host.querySelector(".xterm-screen");
+    const rect = (screenElement ?? bundle.host).getBoundingClientRect();
     if (rect.height <= 0 || bundle.terminal.rows <= 0) return null;
     if (clientY < rect.top || clientY > rect.bottom) return null;
-    const relativeY = clientY - rect.top;
-    const rowHeight = rect.height / bundle.terminal.rows;
+    const renderDimensions =
+      internalTerminal._core?._renderService?.dimensions?.css;
+    const rowHeight =
+      renderDimensions?.cell?.height && renderDimensions.cell.height > 0
+        ? renderDimensions.cell.height
+        : rect.height / bundle.terminal.rows;
     if (rowHeight <= 0) return null;
+    const canvasHeight =
+      renderDimensions?.canvas?.height && renderDimensions.canvas.height > 0
+        ? renderDimensions.canvas.height
+        : rect.height;
+    const relativeY = Math.min(
+      Math.max(0, clientY - rect.top),
+      Math.max(0, canvasHeight - 1),
+    );
     const viewportRow = Math.max(
       0,
       Math.min(bundle.terminal.rows - 1, Math.floor(relativeY / rowHeight)),
