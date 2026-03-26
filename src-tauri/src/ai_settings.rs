@@ -21,6 +21,7 @@ const DEFAULT_SESSION_RECENT_OUTPUT_MAX_SNIPPETS: usize = 4;
 const DEFAULT_SELECTION_RECENT_OUTPUT_MAX_CHARS: usize = 600;
 const DEFAULT_SELECTION_RECENT_OUTPUT_MAX_SNIPPETS: usize = 2;
 const DEFAULT_REQUEST_CACHE_TTL_MS: u64 = 15_000;
+const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 20_000;
 const DEFAULT_DEBUG_LOGGING_ENABLED: bool = true;
 const CURRENT_AI_SETTINGS_VERSION: u32 = 1;
 
@@ -41,6 +42,8 @@ pub struct AiSettings {
     pub selection_recent_output_max_snippets: usize,
     #[serde(default = "default_request_cache_ttl_ms")]
     pub request_cache_ttl_ms: u64,
+    #[serde(default = "default_request_timeout_ms")]
+    pub request_timeout_ms: u64,
     #[serde(default = "default_debug_logging_enabled")]
     pub debug_logging_enabled: bool,
     #[serde(default)]
@@ -107,6 +110,7 @@ pub struct AiSettingsView {
     pub selection_recent_output_max_chars: usize,
     pub selection_recent_output_max_snippets: usize,
     pub request_cache_ttl_ms: u64,
+    pub request_timeout_ms: u64,
     pub debug_logging_enabled: bool,
     pub active_provider_id: String,
     pub providers: Vec<AiProviderView>,
@@ -135,6 +139,7 @@ pub struct AiSettingsSaveInput {
     pub selection_recent_output_max_chars: usize,
     pub selection_recent_output_max_snippets: usize,
     pub request_cache_ttl_ms: u64,
+    pub request_timeout_ms: u64,
     pub debug_logging_enabled: bool,
     pub active_provider_id: String,
     pub providers: Vec<AiProviderInput>,
@@ -268,6 +273,10 @@ fn default_request_cache_ttl_ms() -> u64 {
     DEFAULT_REQUEST_CACHE_TTL_MS
 }
 
+fn default_request_timeout_ms() -> u64 {
+    DEFAULT_REQUEST_TIMEOUT_MS
+}
+
 fn default_debug_logging_enabled() -> bool {
     DEFAULT_DEBUG_LOGGING_ENABLED
 }
@@ -281,6 +290,7 @@ fn default_ai_settings() -> AiSettings {
         selection_recent_output_max_chars: default_selection_recent_output_max_chars(),
         selection_recent_output_max_snippets: default_selection_recent_output_max_snippets(),
         request_cache_ttl_ms: default_request_cache_ttl_ms(),
+        request_timeout_ms: default_request_timeout_ms(),
         debug_logging_enabled: default_debug_logging_enabled(),
         active_provider_id: String::new(),
         providers: Vec::new(),
@@ -300,10 +310,11 @@ fn validate_ai_settings(mut settings: AiSettings) -> Result<AiSettings, EngineEr
         || settings.selection_recent_output_max_chars == 0
         || settings.selection_recent_output_max_snippets == 0
         || settings.request_cache_ttl_ms == 0
+        || settings.request_timeout_ms == 0
     {
         return Err(EngineError::new(
             "ai_settings_invalid",
-            "终端 AI 配置文件中的上下文预算与缓存 TTL 必须大于 0",
+            "终端 AI 配置文件中的上下文预算、缓存 TTL 与请求超时必须大于 0",
         ));
     }
 
@@ -357,6 +368,7 @@ fn build_settings_view(settings: AiSettings) -> AiSettingsView {
         selection_recent_output_max_chars: settings.selection_recent_output_max_chars,
         selection_recent_output_max_snippets: settings.selection_recent_output_max_snippets,
         request_cache_ttl_ms: settings.request_cache_ttl_ms,
+        request_timeout_ms: settings.request_timeout_ms,
         debug_logging_enabled: settings.debug_logging_enabled,
         active_provider_id: settings.active_provider_id,
         providers: settings
@@ -419,6 +431,7 @@ fn build_ai_settings_from_input(
         selection_recent_output_max_chars: input.selection_recent_output_max_chars,
         selection_recent_output_max_snippets: input.selection_recent_output_max_snippets,
         request_cache_ttl_ms: input.request_cache_ttl_ms,
+        request_timeout_ms: input.request_timeout_ms,
         debug_logging_enabled: input.debug_logging_enabled,
         active_provider_id: input.active_provider_id,
         providers: next_providers,

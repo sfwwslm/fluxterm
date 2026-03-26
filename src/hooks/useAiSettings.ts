@@ -30,6 +30,7 @@ type UseAiSettingsResult = {
   aiUnavailableReason: string | null;
   selectionMaxChars: number;
   sessionRecentOutputMaxChars: number;
+  requestTimeoutMs: number;
   debugLoggingEnabled: boolean;
   activeProviderId: string;
   providers: AiProviderView[];
@@ -37,6 +38,7 @@ type UseAiSettingsResult = {
   aiSettingsLoaded: boolean;
   setSelectionMaxChars: React.Dispatch<React.SetStateAction<number>>;
   setSessionRecentOutputMaxChars: React.Dispatch<React.SetStateAction<number>>;
+  setRequestTimeoutMs: React.Dispatch<React.SetStateAction<number>>;
   setDebugLoggingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setActiveProviderId: React.Dispatch<React.SetStateAction<string>>;
   updateProviderName: (providerId: string, value: string) => void;
@@ -68,6 +70,8 @@ type UseAiSettingsResult = {
 
 const MIN_AI_TEXT_LIMIT = 100;
 const MAX_AI_TEXT_LIMIT = 20_000;
+const MIN_AI_REQUEST_TIMEOUT_MS = 1_000;
+const MAX_AI_REQUEST_TIMEOUT_MS = 120_000;
 
 const DEFAULT_AI_SETTINGS: AiSettingsView = {
   version: 1,
@@ -77,6 +81,7 @@ const DEFAULT_AI_SETTINGS: AiSettingsView = {
   selectionRecentOutputMaxChars: 600,
   selectionRecentOutputMaxSnippets: 2,
   requestCacheTtlMs: 15000,
+  requestTimeoutMs: 20000,
   debugLoggingEnabled: true,
   activeProviderId: "",
   providers: [],
@@ -86,6 +91,13 @@ function normalizeTextLimit(value: number) {
   return Math.max(
     MIN_AI_TEXT_LIMIT,
     Math.min(MAX_AI_TEXT_LIMIT, Math.round(value)),
+  );
+}
+
+function normalizeRequestTimeoutMs(value: number) {
+  return Math.max(
+    MIN_AI_REQUEST_TIMEOUT_MS,
+    Math.min(MAX_AI_REQUEST_TIMEOUT_MS, Math.round(value)),
   );
 }
 
@@ -109,6 +121,7 @@ function buildSaveInput(
   source: {
     selectionMaxChars: number;
     sessionRecentOutputMaxChars: number;
+    requestTimeoutMs: number;
     debugLoggingEnabled: boolean;
     activeProviderId: string;
     providers: AiProviderView[];
@@ -126,6 +139,7 @@ function buildSaveInput(
     selectionRecentOutputMaxSnippets:
       lastLoaded.selectionRecentOutputMaxSnippets,
     requestCacheTtlMs: lastLoaded.requestCacheTtlMs,
+    requestTimeoutMs: normalizeRequestTimeoutMs(source.requestTimeoutMs),
     debugLoggingEnabled: source.debugLoggingEnabled,
     activeProviderId: source.activeProviderId,
     providers: source.providers.map<AiProviderInput>((provider) => ({
@@ -174,6 +188,9 @@ export default function useAiSettings(): UseAiSettingsResult {
   );
   const [sessionRecentOutputMaxChars, setSessionRecentOutputMaxChars] =
     useState(DEFAULT_AI_SETTINGS.sessionRecentOutputMaxChars);
+  const [requestTimeoutMs, setRequestTimeoutMs] = useState(
+    DEFAULT_AI_SETTINGS.requestTimeoutMs,
+  );
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(
     DEFAULT_AI_SETTINGS.debugLoggingEnabled,
   );
@@ -214,6 +231,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         lastLoadedViewRef.current = settings;
         setSelectionMaxChars(settings.selectionMaxChars);
         setSessionRecentOutputMaxChars(settings.sessionRecentOutputMaxChars);
+        setRequestTimeoutMs(settings.requestTimeoutMs);
         setDebugLoggingEnabled(settings.debugLoggingEnabled);
         setActiveProviderId(settings.activeProviderId);
         setProviders(settings.providers);
@@ -222,6 +240,7 @@ export default function useAiSettings(): UseAiSettingsResult {
             {
               selectionMaxChars: settings.selectionMaxChars,
               sessionRecentOutputMaxChars: settings.sessionRecentOutputMaxChars,
+              requestTimeoutMs: settings.requestTimeoutMs,
               debugLoggingEnabled: settings.debugLoggingEnabled,
               activeProviderId: settings.activeProviderId,
               providers: settings.providers,
@@ -259,6 +278,7 @@ export default function useAiSettings(): UseAiSettingsResult {
       {
         selectionMaxChars,
         sessionRecentOutputMaxChars,
+        requestTimeoutMs,
         debugLoggingEnabled,
         activeProviderId,
         providers,
@@ -310,6 +330,7 @@ export default function useAiSettings(): UseAiSettingsResult {
   }, [
     selectionMaxChars,
     sessionRecentOutputMaxChars,
+    requestTimeoutMs,
     debugLoggingEnabled,
     activeProviderId,
     providers,
@@ -349,6 +370,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         {
           selectionMaxChars,
           sessionRecentOutputMaxChars,
+          requestTimeoutMs,
           debugLoggingEnabled,
           activeProviderId,
           providers,
@@ -416,6 +438,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         {
           selectionMaxChars,
           sessionRecentOutputMaxChars,
+          requestTimeoutMs,
           debugLoggingEnabled,
           activeProviderId,
           providers: nextProviders,
@@ -469,6 +492,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         {
           selectionMaxChars,
           sessionRecentOutputMaxChars,
+          requestTimeoutMs,
           debugLoggingEnabled,
           activeProviderId,
           providers: nextProviders,
@@ -531,6 +555,7 @@ export default function useAiSettings(): UseAiSettingsResult {
       {
         selectionMaxChars,
         sessionRecentOutputMaxChars,
+        requestTimeoutMs,
         debugLoggingEnabled,
         activeProviderId,
         providers,
@@ -554,6 +579,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     sessionRecentOutputMaxChars: normalizeTextLimit(
       sessionRecentOutputMaxChars,
     ),
+    requestTimeoutMs: normalizeRequestTimeoutMs(requestTimeoutMs),
     debugLoggingEnabled,
     activeProviderId,
     providers,
@@ -561,6 +587,7 @@ export default function useAiSettings(): UseAiSettingsResult {
     aiSettingsLoaded,
     setSelectionMaxChars,
     setSessionRecentOutputMaxChars,
+    setRequestTimeoutMs,
     setDebugLoggingEnabled,
     setActiveProviderId,
     updateProviderName: (providerId, value) => {

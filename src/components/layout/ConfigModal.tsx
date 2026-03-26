@@ -103,6 +103,7 @@ type ConfigModalProps = {
   backgroundVideoReplayIntervalSec?: number;
   aiSelectionMaxChars?: number;
   aiSessionRecentOutputMaxChars?: number;
+  aiRequestTimeoutMs?: number;
   aiDebugLoggingEnabled?: boolean;
   aiActiveProviderId?: string;
   aiProviders?: AiProviderView[];
@@ -136,6 +137,7 @@ type ConfigModalProps = {
   onBackgroundVideoReplayIntervalSecChange?: (value: number) => void;
   onAiSelectionMaxCharsChange?: (value: number) => void;
   onAiSessionRecentOutputMaxCharsChange?: (value: number) => void;
+  onAiRequestTimeoutMsChange?: (value: number) => void;
   onAiDebugLoggingEnabledChange?: (enabled: boolean) => void;
   onAiActiveProviderIdChange?: (value: string) => void;
   onAiPresetProviderCreate?: (input: {
@@ -250,6 +252,7 @@ export default function ConfigModal({
   backgroundVideoReplayIntervalSec = 8,
   aiSelectionMaxChars = 1500,
   aiSessionRecentOutputMaxChars = 1200,
+  aiRequestTimeoutMs = 20000,
   aiDebugLoggingEnabled = true,
   aiActiveProviderId = "",
   aiProviders = [],
@@ -285,6 +288,7 @@ export default function ConfigModal({
   onBackgroundVideoReplayIntervalSecChange,
   onAiSelectionMaxCharsChange,
   onAiSessionRecentOutputMaxCharsChange,
+  onAiRequestTimeoutMsChange,
   onAiDebugLoggingEnabledChange,
   onAiActiveProviderIdChange,
   onAiPresetProviderCreate,
@@ -333,6 +337,9 @@ export default function ConfigModal({
     aiSessionRecentOutputMaxCharsDraft,
     setAiSessionRecentOutputMaxCharsDraft,
   ] = useState(() => String(aiSessionRecentOutputMaxChars));
+  const [aiRequestTimeoutMsDraft, setAiRequestTimeoutMsDraft] = useState(() =>
+    String(aiRequestTimeoutMs),
+  );
   // 数字输入使用本地草稿字符串，允许用户先清空再继续输入。
   const [scrollbackDraft, setScrollbackDraft] = useState(() =>
     String(scrollback),
@@ -434,6 +441,10 @@ export default function ConfigModal({
       String(aiSessionRecentOutputMaxChars),
     );
   }, [aiSessionRecentOutputMaxChars]);
+
+  useEffect(() => {
+    setAiRequestTimeoutMsDraft(String(aiRequestTimeoutMs));
+  }, [aiRequestTimeoutMs]);
 
   useEffect(() => {
     setScrollbackDraft(String(scrollback));
@@ -621,6 +632,20 @@ export default function ConfigModal({
       return;
     }
     onAiSessionRecentOutputMaxCharsChange?.(next);
+  }
+
+  function commitAiRequestTimeoutMsDraft() {
+    const value = aiRequestTimeoutMsDraft.trim();
+    if (!value) {
+      setAiRequestTimeoutMsDraft(String(aiRequestTimeoutMs));
+      return;
+    }
+    const next = Number(value);
+    if (!Number.isFinite(next)) {
+      setAiRequestTimeoutMsDraft(String(aiRequestTimeoutMs));
+      return;
+    }
+    onAiRequestTimeoutMsChange?.(next);
   }
 
   function isProviderNameDuplicate(name: string, excludeId?: string) {
@@ -1585,6 +1610,31 @@ export default function ConfigModal({
                 if (event.key !== "Enter") return;
                 event.preventDefault();
                 commitAiSessionRecentOutputMaxCharsDraft();
+              }}
+            />
+          </div>
+          <div className="config-toggle-card config-feature-group">
+            <div className="config-toggle-copy">
+              <span className="config-toggle-title">
+                {t("config.ai.requestTimeoutMs")}
+              </span>
+              <span className="config-toggle-desc">
+                {t("config.ai.requestTimeoutMsHint")}
+              </span>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="config-number-input"
+              value={aiRequestTimeoutMsDraft}
+              onChange={(event) =>
+                setAiRequestTimeoutMsDraft(event.target.value)
+              }
+              onBlur={commitAiRequestTimeoutMsDraft}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitAiRequestTimeoutMsDraft();
               }}
             />
           </div>

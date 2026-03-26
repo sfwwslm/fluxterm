@@ -22,7 +22,6 @@ use crate::profile_store::{ProfileStore, read_profiles};
 use crate::security::{CryptoService, SecretStore};
 use crate::state::SecurityState;
 
-const DEFAULT_OPENAI_TIMEOUT_MS: u64 = 20_000;
 const MAX_OUTPUT_CHARS: usize = 6_000;
 const MAX_OUTPUT_SNIPPETS: usize = 8;
 
@@ -112,18 +111,6 @@ pub fn read_provider_config_by_id(
     provider_id: Option<&str>,
 ) -> Result<OpenAiClientConfig, EngineError> {
     let ai_settings = read_ai_settings(app)?;
-    let timeout_ms = std::env::var("OPENAI_TIMEOUT_MS")
-        .ok()
-        .map(|value| value.trim().parse::<u64>())
-        .transpose()
-        .map_err(|err| {
-            EngineError::with_detail(
-                "ai_config_invalid",
-                "OPENAI_TIMEOUT_MS 不是合法整数",
-                err.to_string(),
-            )
-        })?
-        .unwrap_or(DEFAULT_OPENAI_TIMEOUT_MS);
     let selected_provider = resolve_provider(&ai_settings, provider_id)?;
     let base_url = selected_provider.base_url.trim().to_string();
     let model = selected_provider.model.trim().to_string();
@@ -139,7 +126,7 @@ pub fn read_provider_config_by_id(
         api_key,
         base_url,
         model,
-        timeout_ms,
+        timeout_ms: ai_settings.request_timeout_ms,
         debug_logging_enabled: ai_settings.debug_logging_enabled,
     })
 }

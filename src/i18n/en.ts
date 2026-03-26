@@ -138,6 +138,9 @@ export const en = {
   "config.ai.sessionRecentOutputMaxChars": "Session Context Length",
   "config.ai.sessionRecentOutputMaxCharsHint":
     "Limits the total recent terminal output characters attached to session chat.",
+  "config.ai.requestTimeoutMs": "AI Request Timeout",
+  "config.ai.requestTimeoutMsHint":
+    "Sets the timeout for a single AI request in milliseconds.",
   "config.ai.activeProvider": "Current Access",
   "config.ai.activeProviderHint":
     "Choose which provider the AI assistant uses.",

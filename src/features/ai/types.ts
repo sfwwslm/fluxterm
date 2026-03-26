@@ -20,6 +20,7 @@ export type AiSettingsView = {
   selectionRecentOutputMaxChars: number;
   selectionRecentOutputMaxSnippets: number;
   requestCacheTtlMs: number;
+  requestTimeoutMs: number;
   debugLoggingEnabled: boolean;
   activeProviderId: string;
   providers: AiProviderView[];
@@ -49,6 +50,7 @@ export type AiSettingsSaveInput = {
   selectionRecentOutputMaxChars: number;
   selectionRecentOutputMaxSnippets: number;
   requestCacheTtlMs: number;
+  requestTimeoutMs: number;
   debugLoggingEnabled: boolean;
   activeProviderId: string;
   providers: AiProviderInput[];

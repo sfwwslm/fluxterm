@@ -129,6 +129,8 @@ export const zh = {
   "config.ai.sessionRecentOutputMaxChars": "会话问答上下文长度",
   "config.ai.sessionRecentOutputMaxCharsHint":
     "限制会话问答附带的最近终端输出总字符数。",
+  "config.ai.requestTimeoutMs": "AI 请求超时",
+  "config.ai.requestTimeoutMsHint": "设置单次 AI 请求的超时时间，单位为毫秒。",
   "config.ai.activeProvider": "当前接入",
   "config.ai.activeProviderHint": "选择 AI 助手当前使用的接入。",
   "config.ai.providerEmpty": "未接入",

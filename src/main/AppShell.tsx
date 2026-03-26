@@ -448,12 +448,14 @@ export default function AppShell() {
     aiUnavailableReason,
     selectionMaxChars: aiSelectionMaxChars,
     sessionRecentOutputMaxChars: aiSessionRecentOutputMaxChars,
+    requestTimeoutMs: aiRequestTimeoutMs,
     debugLoggingEnabled: aiDebugLoggingEnabled,
     activeProviderId: aiActiveProviderId,
     providers: aiProviders,
     activeProvider: aiActiveProvider,
     setSelectionMaxChars: setAiSelectionMaxChars,
     setSessionRecentOutputMaxChars: setAiSessionRecentOutputMaxChars,
+    setRequestTimeoutMs: setAiRequestTimeoutMs,
     setDebugLoggingEnabled: setAiDebugLoggingEnabled,
     setActiveProviderId: setAiActiveProviderId,
     addPresetProviderWithConfig,
@@ -3318,6 +3320,7 @@ export default function AppShell() {
         }
         aiSelectionMaxChars={aiSelectionMaxChars}
         aiSessionRecentOutputMaxChars={aiSessionRecentOutputMaxChars}
+        aiRequestTimeoutMs={aiRequestTimeoutMs}
         aiDebugLoggingEnabled={aiDebugLoggingEnabled}
         aiActiveProviderId={aiActiveProviderId}
         aiProviders={aiProviders}
@@ -3351,6 +3354,7 @@ export default function AppShell() {
         }
         onAiSelectionMaxCharsChange={setAiSelectionMaxChars}
         onAiSessionRecentOutputMaxCharsChange={setAiSessionRecentOutputMaxChars}
+        onAiRequestTimeoutMsChange={setAiRequestTimeoutMs}
         onAiDebugLoggingEnabledChange={setAiDebugLoggingEnabled}
         onAiActiveProviderIdChange={setAiActiveProviderId}
         onAiPresetProviderCreate={addPresetProviderWithConfig}
