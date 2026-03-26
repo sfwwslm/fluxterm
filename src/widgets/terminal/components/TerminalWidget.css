@@ -1,4 +1,29 @@
 .terminal-widget {
+  --terminal-surface-raised-bg: color-mix(
+    in srgb,
+    var(--surface-header-strong) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --terminal-surface-strong-bg: color-mix(
+    in srgb,
+    var(--surface-strong) var(--chrome-surface-alpha-strong),
+    transparent
+  );
+  --terminal-accent-soft-bg: color-mix(
+    in srgb,
+    var(--accent-soft) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --terminal-neutral-soft-bg: color-mix(
+    in srgb,
+    var(--border-weak) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --terminal-danger-strong-bg: color-mix(
+    in srgb,
+    var(--danger) var(--chrome-surface-alpha-strong),
+    transparent
+  );
   grid-area: center;
   display: flex;
   flex-direction: column;
@@ -206,12 +231,12 @@ button.session-tab {
 .terminal-split-handle {
   flex: 0 0 auto;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--border-weak) 82%, transparent);
+  background: var(--terminal-neutral-soft-bg);
   transition: background 0.15s ease;
 }
 
 .terminal-split-handle:hover {
-  background: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: var(--terminal-accent-soft-bg);
 }
 
 .terminal-split-handle-horizontal {
@@ -370,7 +395,7 @@ button.session-tab {
   right: 1rem;
   padding: 10px 14px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--danger) 88%, transparent);
+  background: var(--terminal-danger-strong-bg);
   color: var(--accent-contrast);
   font-size: 14px;
   font-weight: 600;
@@ -392,7 +417,7 @@ button.session-tab {
   padding: 6px;
   border-radius: 10px;
   border: 1px solid var(--border-weak);
-  background: var(--surface-header-strong);
+  background: var(--terminal-surface-raised-bg);
   box-shadow: var(--shadow-strong);
 }
 
@@ -419,7 +444,7 @@ button.session-tab {
   padding: 8px;
   border: 1px solid var(--border-weak);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-header-strong) 84%, transparent);
+  background: var(--terminal-surface-raised-bg);
   box-shadow: var(--shadow-strong);
   backdrop-filter: blur(12px);
 }
@@ -450,7 +475,7 @@ button.session-tab {
 .terminal-autocomplete-item:hover,
 .terminal-autocomplete-item.active {
   border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--terminal-accent-soft-bg);
 }
 
 .terminal-autocomplete-command {
@@ -511,7 +536,7 @@ button.session-tab {
   padding: 0 8px;
   border-radius: 8px;
   border: 1px solid var(--border-input);
-  background: var(--surface-strong);
+  background: var(--terminal-surface-strong-bg);
   color: var(--text-secondary);
   font-size: 12px;
 }

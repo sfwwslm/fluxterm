@@ -1,4 +1,9 @@
 .subapp-shell {
+  --subapp-card-bg: color-mix(
+    in srgb,
+    var(--surface-elevated, #141b24) var(--chrome-surface-alpha-raised),
+    transparent
+  );
   position: relative;
   z-index: 1;
   height: 100vh;
@@ -26,11 +31,7 @@
   padding: 18px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.14));
-  background: color-mix(
-    in srgb,
-    var(--surface-elevated, #141b24) 72%,
-    transparent
-  );
+  background: var(--subapp-card-bg);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
 }
 

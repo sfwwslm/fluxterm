@@ -120,10 +120,20 @@ body,
   --chrome-session-tab-bg: var(--tab-bg);
   --chrome-surface-alpha: 52%;
   --chrome-surface-alpha-effective: var(--chrome-surface-alpha);
+  --chrome-surface-alpha-base: 100%;
+  --chrome-surface-alpha-raised: 100%;
+  --chrome-surface-alpha-strong: 100%;
 }
 
 :root[data-background-image-mode="on"] {
   /* 背景图模式下，所有主要区域共享同一透明度，便于未来做统一用户调节。 */
+  --chrome-surface-alpha-base: var(--chrome-surface-alpha-effective);
+  --chrome-surface-alpha-raised: calc(
+    min(100%, var(--chrome-surface-alpha-effective) + 8%)
+  );
+  --chrome-surface-alpha-strong: calc(
+    min(100%, var(--chrome-surface-alpha-effective) + 20%)
+  );
   --chrome-titlebar-bg: color-mix(
     in srgb,
     var(--surface-header-strong) var(--chrome-surface-alpha-effective),

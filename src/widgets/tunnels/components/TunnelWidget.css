@@ -1,4 +1,34 @@
 .tunnel-widget {
+  --tunnel-surface-bg: color-mix(
+    in srgb,
+    var(--surface-panel) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --tunnel-surface-raised-bg: color-mix(
+    in srgb,
+    var(--surface-header-strong) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --tunnel-neutral-soft-bg: color-mix(
+    in srgb,
+    var(--border-weak) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --tunnel-accent-soft-bg: color-mix(
+    in srgb,
+    var(--accent-soft) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --tunnel-accent-subtle-bg: color-mix(
+    in srgb,
+    var(--accent-subtle) var(--chrome-surface-alpha-strong),
+    transparent
+  );
+  --tunnel-success-soft-bg: color-mix(
+    in srgb,
+    var(--success-soft) var(--chrome-surface-alpha-raised),
+    transparent
+  );
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -12,7 +42,7 @@
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 10px;
-  background: var(--surface-panel);
+  background: var(--tunnel-surface-bg);
 }
 
 .tunnel-form {
@@ -23,7 +53,7 @@
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 10px;
-  background: var(--surface-panel);
+  background: var(--tunnel-surface-bg);
 }
 
 .tunnel-session-title {
@@ -58,7 +88,7 @@
   justify-content: center;
   border-radius: 999px;
   border: 1px solid transparent;
-  background: color-mix(in srgb, var(--surface-header-strong) 74%, transparent);
+  background: var(--tunnel-surface-raised-bg);
   color: var(--text-muted);
 }
 
@@ -69,31 +99,31 @@
 
 .tunnel-session-indicator.active {
   color: var(--success);
-  background: color-mix(in srgb, var(--success-soft) 56%, transparent);
+  background: var(--tunnel-success-soft-bg);
   border-color: color-mix(in srgb, var(--success) 28%, transparent);
 }
 
 .tunnel-session-indicator.checking {
   color: color-mix(in srgb, var(--accent) 66%, var(--text-secondary));
-  background: color-mix(in srgb, var(--accent-soft) 28%, transparent);
+  background: var(--tunnel-accent-soft-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .tunnel-session-indicator.paused {
   color: color-mix(in srgb, var(--accent) 78%, var(--text-secondary));
-  background: color-mix(in srgb, var(--accent-subtle) 72%, transparent);
+  background: var(--tunnel-accent-subtle-bg);
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .tunnel-session-indicator.disabled {
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface-header-strong) 72%, transparent);
+  background: var(--tunnel-surface-raised-bg);
   border-color: color-mix(in srgb, var(--border-soft) 86%, transparent);
 }
 
 .tunnel-session-indicator.unsupported {
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-secondary));
-  background: color-mix(in srgb, var(--border-weak) 58%, transparent);
+  background: var(--tunnel-neutral-soft-bg);
   border-color: color-mix(in srgb, var(--border-input) 72%, transparent);
 }
 
@@ -143,7 +173,11 @@
   border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
   border-radius: 8px;
   padding: 8px;
-  background: color-mix(in srgb, var(--surface-header-strong) 14%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-header-strong) var(--chrome-surface-alpha-base),
+    transparent
+  );
 }
 
 .tunnel-endpoint-title {

@@ -1,12 +1,52 @@
 .ai-widget {
+  --ai-surface-base-bg: color-mix(
+    in srgb,
+    var(--surface-panel) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --ai-surface-raised-bg: color-mix(
+    in srgb,
+    var(--surface-panel) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --ai-surface-strong-bg: color-mix(
+    in srgb,
+    var(--surface-panel) var(--chrome-surface-alpha-strong),
+    transparent
+  );
+  --ai-accent-subtle-bg: color-mix(
+    in srgb,
+    var(--accent-subtle) var(--chrome-surface-alpha-strong),
+    transparent
+  );
+  --ai-danger-soft-bg: color-mix(
+    in srgb,
+    var(--danger-soft) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --ai-accent-strong-bg: color-mix(
+    in srgb,
+    var(--accent) var(--chrome-surface-alpha-strong),
+    transparent
+  );
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--surface-panel) 94%, var(--surface-elevated) 6%) 0%,
-    var(--surface) 28%
+    color-mix(
+        in srgb,
+        var(--surface-panel) var(--chrome-surface-alpha-strong),
+        transparent
+      )
+      0%,
+    color-mix(
+        in srgb,
+        var(--surface) var(--chrome-surface-alpha-base),
+        transparent
+      )
+      28%
   );
 }
 
@@ -41,11 +81,7 @@
   border-radius: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
-  background: color-mix(
-    in srgb,
-    var(--surface-panel) 96%,
-    var(--surface-canvas) 4%
-  );
+  background: var(--ai-surface-strong-bg);
 }
 
 .ai-message {
@@ -60,21 +96,13 @@
 
 .ai-message.user {
   align-self: flex-end;
-  background: color-mix(
-    in srgb,
-    var(--accent-subtle) 78%,
-    var(--surface-panel)
-  );
+  background: var(--ai-accent-subtle-bg);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-soft));
 }
 
 .ai-message.assistant {
   align-self: stretch;
-  background: color-mix(
-    in srgb,
-    var(--surface-panel) 92%,
-    var(--surface-canvas) 8%
-  );
+  background: var(--ai-surface-raised-bg);
 }
 
 .ai-message-toolbar {
@@ -161,11 +189,7 @@
 .ai-message-body :not(pre) > code {
   padding: 0.12em 0.36em;
   border-radius: 6px;
-  background: color-mix(
-    in srgb,
-    var(--surface-panel) 84%,
-    var(--surface-canvas) 16%
-  );
+  background: var(--ai-surface-base-bg);
 }
 
 .ai-message-body pre {
@@ -173,11 +197,7 @@
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border-soft);
-  background: color-mix(
-    in srgb,
-    var(--surface-panel) 88%,
-    var(--surface-canvas) 12%
-  );
+  background: var(--ai-surface-raised-bg);
 }
 
 .ai-message-body pre code {
@@ -211,7 +231,7 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 72%, white 28%);
+  background: var(--ai-accent-strong-bg);
   opacity: 0.3;
   animation: ai-message-dot-pulse 1.2s ease-in-out infinite;
 }
@@ -246,7 +266,7 @@
 }
 
 .ai-message-body th {
-  background: color-mix(in srgb, var(--surface-panel) 80%, white 20%);
+  background: var(--ai-surface-raised-bg);
 }
 
 .ai-widget-error {
@@ -254,7 +274,7 @@
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--danger) 44%, var(--border-soft));
-  background: color-mix(in srgb, var(--danger-soft) 72%, var(--surface-panel));
+  background: var(--ai-danger-soft-bg);
   color: var(--text-primary);
   white-space: pre-wrap;
 }
@@ -336,7 +356,11 @@
 }
 
 .ai-widget-send.secondary {
-  background: color-mix(in srgb, var(--surface-elevated) 86%, white 14%);
+  background: color-mix(
+    in srgb,
+    var(--surface-elevated) var(--chrome-surface-alpha-raised),
+    transparent
+  );
   color: var(--text-primary);
   border: 1px solid var(--border-soft);
 }

@@ -1,4 +1,29 @@
 .proxy-subapp-content {
+  --proxy-surface-base-bg: color-mix(
+    in srgb,
+    var(--surface-strong) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --proxy-surface-raised-bg: color-mix(
+    in srgb,
+    var(--surface-strong) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --proxy-success-soft-bg: color-mix(
+    in srgb,
+    var(--success-soft) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --proxy-warning-soft-bg: color-mix(
+    in srgb,
+    var(--warning-soft) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --proxy-danger-soft-bg: color-mix(
+    in srgb,
+    var(--danger-soft) var(--chrome-surface-alpha-raised),
+    transparent
+  );
   display: flex;
   align-items: stretch;
   justify-content: stretch;
@@ -43,7 +68,7 @@
   border: 1px solid var(--border-weak);
   border-radius: 12px;
   padding: 10px;
-  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+  background: var(--proxy-surface-base-bg);
   display: grid;
   gap: 8px;
 }
@@ -59,7 +84,7 @@
   height: 22px;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--border-weak) 92%, transparent);
-  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  background: var(--proxy-surface-raised-bg);
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
@@ -154,7 +179,7 @@
 .proxy-error {
   border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--danger-soft) 72%, transparent);
+  background: var(--proxy-danger-soft-bg);
   color: var(--danger);
   padding: 8px 10px;
   font-size: 13px;
@@ -174,7 +199,7 @@
 .proxy-item {
   border: 1px solid var(--border-weak);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  background: var(--proxy-surface-raised-bg);
   padding: 10px;
   display: grid;
   gap: 8px;
@@ -207,19 +232,19 @@
 .proxy-status-good {
   color: var(--success);
   border-color: color-mix(in srgb, var(--success) 45%, transparent);
-  background: color-mix(in srgb, var(--success-soft) 78%, transparent);
+  background: var(--proxy-success-soft-bg);
 }
 
 .proxy-status-warn {
   color: var(--warning);
   border-color: color-mix(in srgb, var(--warning) 45%, transparent);
-  background: color-mix(in srgb, var(--warning-soft) 78%, transparent);
+  background: var(--proxy-warning-soft-bg);
 }
 
 .proxy-status-danger {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-  background: color-mix(in srgb, var(--danger-soft) 78%, transparent);
+  background: var(--proxy-danger-soft-bg);
 }
 
 .proxy-status-muted {

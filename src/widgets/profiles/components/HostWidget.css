@@ -1,4 +1,39 @@
 .host-widget {
+  --host-group-bg: color-mix(
+    in srgb,
+    var(--surface-alt) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --host-group-title-bg: color-mix(
+    in srgb,
+    var(--surface-header) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --host-group-item-bg: color-mix(
+    in srgb,
+    var(--surface-alt) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --host-group-item-hover-bg: color-mix(
+    in srgb,
+    var(--surface-alt) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --host-accent-soft-bg: color-mix(
+    in srgb,
+    var(--accent-soft) var(--chrome-surface-alpha-base),
+    transparent
+  );
+  --host-scrollbar-thumb-bg: color-mix(
+    in srgb,
+    var(--text-muted) var(--chrome-surface-alpha-raised),
+    transparent
+  );
+  --host-scrollbar-thumb-hover-bg: color-mix(
+    in srgb,
+    var(--text-primary) var(--chrome-surface-alpha-base),
+    transparent
+  );
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -57,11 +92,7 @@
   gap: 4px;
   border-radius: 12px;
   border: 1px solid var(--border-soft);
-  background: color-mix(
-    in srgb,
-    var(--chrome-session-group-bg) 72%,
-    transparent
-  );
+  background: var(--host-group-bg);
 }
 
 .host-group-title {
@@ -107,7 +138,7 @@
   font-size: 11px;
   color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--host-accent-soft-bg);
 }
 
 .host-connecting-icon {
@@ -148,11 +179,7 @@
   gap: 2px;
   padding: 5px 12px;
   border-radius: 12px;
-  background: color-mix(
-    in srgb,
-    var(--chrome-session-group-item-bg) 68%,
-    transparent
-  );
+  background: var(--host-group-item-bg);
   border: 1px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -163,11 +190,7 @@
   align-items: center;
   padding: 8px 10px;
   border-radius: 8px;
-  background: color-mix(
-    in srgb,
-    var(--chrome-session-group-title-bg) 74%,
-    transparent
-  );
+  background: var(--host-group-title-bg);
   border: 1px solid var(--border-weak);
 }
 
@@ -187,7 +210,7 @@
   border-radius: 12px;
   border-style: dashed;
   border-color: color-mix(in srgb, var(--border-soft) 62%, transparent);
-  background: color-mix(in srgb, var(--surface-alt) 38%, transparent);
+  background: var(--host-group-item-bg);
   color: color-mix(in srgb, var(--text-secondary) 84%, var(--text-muted));
   box-shadow: none;
 }
@@ -198,7 +221,7 @@
 
 .host-list-body .host-root-profile:hover {
   border-color: color-mix(in srgb, var(--border-weak) 78%, var(--accent) 22%);
-  background: color-mix(in srgb, var(--surface-alt) 54%, transparent);
+  background: var(--host-group-item-hover-bg);
   color: var(--text-secondary);
 }
 
@@ -267,9 +290,9 @@
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
-  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  background: var(--host-scrollbar-thumb-bg);
 }
 
 .host-move-dialog .select-menu-list::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
+  background: var(--host-scrollbar-thumb-hover-bg);
 }
