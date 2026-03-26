@@ -3245,7 +3245,6 @@ export default function AppShell() {
             sftpProgressBySession={sftpState.progressBySession}
             onOpenTransfersWidget={handleOpenTransfersWidget}
             activeAiConfigName={aiActiveProvider?.name?.trim() || null}
-            securityEnabled={securityStatus.encryptionEnabled}
             securityLocked={securityStatus.locked}
             securityProvider={securityStatus.provider}
             onSecurityAction={() => {

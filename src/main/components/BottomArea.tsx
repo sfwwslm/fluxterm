@@ -80,7 +80,6 @@ type BottomAreaProps = {
   sftpProgressBySession: Record<string, SftpProgress>;
   onOpenTransfersWidget: () => void;
   activeAiConfigName: string | null;
-  securityEnabled: boolean;
   securityLocked: boolean;
   securityProvider: SecurityProvider;
   onSecurityAction: () => void;
@@ -176,7 +175,6 @@ export default function BottomArea({
   sftpProgressBySession,
   onOpenTransfersWidget,
   activeAiConfigName,
-  securityEnabled,
   securityLocked,
   securityProvider,
   onSecurityAction,
@@ -694,43 +692,33 @@ export default function BottomArea({
                   type="button"
                   className={`statusbar-security-chip ${
                     securityProvider === "embedded"
-                      ? "plaintext"
-                      : securityEnabled
-                        ? securityLocked
-                          ? "locked"
-                          : "unlocked"
-                        : "plaintext"
+                      ? "weak"
+                      : securityLocked
+                        ? "locked"
+                        : "unlocked"
                   }`.trim()}
                   onClick={onSecurityAction}
                   aria-label={
                     securityProvider === "embedded"
                       ? t("status.security.weakAction")
-                      : securityEnabled
-                        ? securityLocked
-                          ? t("status.security.lockedAction")
-                          : t("status.security.unlockedAction")
-                        : t("status.security.plaintextAction")
+                      : securityLocked
+                        ? t("status.security.lockedAction")
+                        : t("status.security.unlockedAction")
                   }
                 >
                   {securityProvider === "embedded" ? (
                     <FiUnlock />
-                  ) : securityEnabled ? (
-                    securityLocked ? (
-                      <FiLock />
-                    ) : (
-                      <FiUnlock />
-                    )
+                  ) : securityLocked ? (
+                    <FiLock />
                   ) : (
                     <FiUnlock />
                   )}
                   <span>
                     {securityProvider === "embedded"
                       ? t("status.security.weak")
-                      : securityEnabled
-                        ? securityLocked
-                          ? t("status.security.locked")
-                          : t("status.security.unlocked")
-                        : t("status.security.plaintext")}
+                      : securityLocked
+                        ? t("status.security.locked")
+                        : t("status.security.unlocked")}
                   </span>
                 </button>
                 <span className="statusbar-info-chip">

@@ -275,7 +275,7 @@
   border-color: color-mix(in srgb, var(--accent) 36%, var(--border-soft));
 }
 
-.statusbar-security-chip.plaintext {
+.statusbar-security-chip.weak {
   color: var(--text-secondary);
 }
 

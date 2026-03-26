@@ -32,7 +32,7 @@ const USER_PASSWORD_SALT_LEN: usize = 16;
 const USER_PASSWORD_DERIVED_LEN: usize = 64;
 
 impl CryptoService {
-    /// 根据当前 secret 配置选择 Provider。
+    /// 根据当前 secret 配置选择 provider。
     pub fn new(
         config: Option<&SecretConfig>,
         session: Option<&UnlockedSecretSession>,
@@ -50,16 +50,15 @@ impl CryptoService {
                     locked: false,
                 })
             }
-            "plaintext" => Err(EngineError::new(
-                "crypto_provider_invalid",
-                "当前配置文件仍使用已移除的明文模式，请重新初始化安全设置。",
-            )),
             "user_password" => {
                 let key_id = config
                     .and_then(|item| item.active_key_id.clone())
                     .filter(|value| !value.trim().is_empty())
                     .ok_or_else(|| {
-                        EngineError::new("crypto_provider_invalid", "主密码配置缺少 keyId")
+                        EngineError::new(
+                            "crypto_provider_invalid",
+                            "Master password config is missing keyId",
+                        )
                     })?;
                 let Some(session) = session.filter(|item| item.key_id == key_id) else {
                     return Ok(Self {
@@ -81,7 +80,7 @@ impl CryptoService {
             }
             _ => Err(EngineError::new(
                 "crypto_provider_invalid",
-                "当前配置文件无效或属于已废弃版本，请删除配置文件后重新初始化。",
+                "Secret config is invalid or from an unsupported legacy version",
             )),
         }
     }
@@ -116,7 +115,7 @@ impl CryptoService {
         if normalized.chars().count() < 4 {
             return Err(EngineError::new(
                 "security_password_too_short",
-                "安全密码至少需要 4 个字符",
+                "Security password must be at least 4 characters",
             ));
         }
         let salt: [u8; USER_PASSWORD_SALT_LEN] = random();
@@ -149,23 +148,37 @@ impl CryptoService {
             .active_key_id
             .clone()
             .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| EngineError::new("crypto_provider_invalid", "主密码配置缺少 keyId"))?;
-        let salt_b64 = config
-            .kdf_salt
-            .as_deref()
-            .ok_or_else(|| EngineError::new("crypto_provider_invalid", "主密码配置缺少 kdfSalt"))?;
+            .ok_or_else(|| {
+                EngineError::new(
+                    "crypto_provider_invalid",
+                    "Master password config is missing keyId",
+                )
+            })?;
+        let salt_b64 = config.kdf_salt.as_deref().ok_or_else(|| {
+            EngineError::new(
+                "crypto_provider_invalid",
+                "Master password config is missing kdfSalt",
+            )
+        })?;
         let verify_hash = config.verify_hash.as_deref().ok_or_else(|| {
-            EngineError::new("crypto_provider_invalid", "主密码配置缺少 verifyHash")
+            EngineError::new(
+                "crypto_provider_invalid",
+                "Master password config is missing verifyHash",
+            )
         })?;
         let salt = BASE64.decode(salt_b64).map_err(|err| {
-            EngineError::with_detail("crypto_provider_invalid", "主密码配置无效", err.to_string())
+            EngineError::with_detail(
+                "crypto_provider_invalid",
+                "Master password config is invalid",
+                err.to_string(),
+            )
         })?;
         let derived = derive_password_material(password.trim(), &salt)?;
         let expected_verify = BASE64.encode(&derived[32..]);
         if expected_verify != verify_hash {
             return Err(EngineError::new(
                 "security_password_invalid",
-                "安全密码不正确",
+                "Security password is incorrect",
             ));
         }
         let mut encryption_key = [0_u8; 32];
@@ -176,12 +189,12 @@ impl CryptoService {
         })
     }
 
-    /// 当前模式是否启用了加密。
+    /// 当前仅支持弱保护和强保护，两者都启用加密。
     pub fn encryption_enabled(&self) -> bool {
         true
     }
 
-    /// 对明文字符串执行加密并返回结构化密文字符串。
+    /// 对输入字符串执行加密并返回结构化密文字符串。
     pub fn encrypt_string(&self, plaintext: &str) -> Result<String, EngineError> {
         let provider = self.require_provider_for_encryption()?;
         let payload = provider.encrypt(plaintext.as_bytes())?;
@@ -195,7 +208,7 @@ impl CryptoService {
         let payload_json = serde_json::to_vec(&serialized).map_err(|err| {
             EngineError::with_detail(
                 "secret_serialize_failed",
-                "无法序列化密文载荷",
+                "Failed to serialize encrypted payload",
                 err.to_string(),
             )
         })?;
@@ -214,40 +227,48 @@ impl CryptoService {
             .ok_or_else(|| {
                 EngineError::new(
                     "secret_format_unsupported",
-                    "凭据格式无效：当前仅支持 enc:v1 密文",
+                    "Unsupported secret format: only enc:v1 payloads are accepted",
                 )
             })?;
         let payload_bytes = BASE64.decode(payload_token).map_err(|err| {
             EngineError::with_detail(
                 "secret_format_invalid",
-                "凭据格式无效：enc:v1 载荷不是合法 Base64",
+                "Invalid secret format: enc:v1 payload is not valid Base64",
                 err.to_string(),
             )
         })?;
         let payload: EncryptedPayload = serde_json::from_slice(&payload_bytes).map_err(|err| {
             EngineError::with_detail(
                 "secret_format_invalid",
-                "凭据格式无效：enc:v1 载荷不是合法 JSON",
+                "Invalid secret format: enc:v1 payload is not valid JSON",
                 err.to_string(),
             )
         })?;
         if payload.algorithm != EncryptionAlgorithm::Aes256Gcm {
             return Err(EngineError::new(
                 "secret_algorithm_unsupported",
-                "不支持的加密算法",
+                "Unsupported encryption algorithm",
             ));
         }
         if payload.provider != provider.kind() || payload.key_id != provider.key_id() {
             return Err(EngineError::new(
                 "secret_provider_mismatch",
-                "当前安全模式无法解密该凭据",
+                "The current security mode cannot decrypt this secret",
             ));
         }
         let nonce = BASE64.decode(payload.nonce).map_err(|err| {
-            EngineError::with_detail("secret_format_invalid", "凭据格式无效", err.to_string())
+            EngineError::with_detail(
+                "secret_format_invalid",
+                "Invalid secret format",
+                err.to_string(),
+            )
         })?;
         let ciphertext = BASE64.decode(payload.ciphertext).map_err(|err| {
-            EngineError::with_detail("secret_format_invalid", "凭据格式无效", err.to_string())
+            EngineError::with_detail(
+                "secret_format_invalid",
+                "Invalid secret format",
+                err.to_string(),
+            )
         })?;
         let plaintext = provider.decrypt(&ProviderCiphertext {
             algorithm: payload.algorithm,
@@ -255,7 +276,11 @@ impl CryptoService {
             ciphertext,
         })?;
         String::from_utf8(plaintext).map_err(|err| {
-            EngineError::with_detail("secret_decrypt_failed", "凭据解密结果无效", err.to_string())
+            EngineError::with_detail(
+                "secret_decrypt_failed",
+                "Decrypted secret is not valid UTF-8",
+                err.to_string(),
+            )
         })
     }
 
@@ -285,7 +310,7 @@ impl CryptoService {
         self.provider.as_ref().ok_or_else(|| {
             EngineError::new(
                 "security_locked",
-                "当前安全数据已锁定，请先输入安全密码解锁。",
+                "Security data is locked. Unlock it with the security password first.",
             )
         })
     }
@@ -294,7 +319,7 @@ impl CryptoService {
         self.provider.as_ref().ok_or_else(|| {
             EngineError::new(
                 "security_locked",
-                "当前安全数据已锁定，请先输入安全密码解锁。",
+                "Security data is locked. Unlock it with the security password first.",
             )
         })
     }
@@ -307,13 +332,13 @@ fn derive_password_material(
     if password.is_empty() {
         return Err(EngineError::new(
             "security_password_required",
-            "安全密码不能为空",
+            "Security password is required",
         ));
     }
     let params = Params::new(64 * 1024, 3, 1, Some(USER_PASSWORD_DERIVED_LEN)).map_err(|err| {
         EngineError::with_detail(
             "crypto_init_failed",
-            "无法初始化主密码派生参数",
+            "Failed to initialize password derivation parameters",
             err.to_string(),
         )
     })?;
@@ -322,7 +347,11 @@ fn derive_password_material(
     argon2
         .hash_password_into(password.as_bytes(), salt, &mut output)
         .map_err(|err| {
-            EngineError::with_detail("crypto_init_failed", "无法派生主密码密钥", err.to_string())
+            EngineError::with_detail(
+                "crypto_init_failed",
+                "Failed to derive master password key material",
+                err.to_string(),
+            )
         })?;
     Ok(output)
 }
@@ -330,6 +359,7 @@ fn derive_password_material(
 #[cfg(test)]
 mod tests {
     use super::{CryptoService, SECRET_TOKEN_PREFIX};
+    use crate::profile_store::SecretConfig;
 
     #[test]
     fn embedded_mode_encrypts_and_decrypts_roundtrip() {
@@ -369,6 +399,19 @@ mod tests {
         let (config, _) =
             CryptoService::build_user_password_config("security-pass").expect("config");
         let result = CryptoService::unlock_user_password(&config, "wrong-pass");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unsupported_provider_is_rejected() {
+        let config = SecretConfig {
+            version: 1,
+            provider: "plaintext".to_string(),
+            active_key_id: None,
+            kdf_salt: None,
+            verify_hash: None,
+        };
+        let result = CryptoService::new(Some(&config), None);
         assert!(result.is_err());
     }
 }
