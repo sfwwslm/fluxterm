@@ -11,6 +11,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getAllWindows, getCurrentWindow } from "@tauri-apps/api/window";
 import type { Locale } from "@/i18n";
+import {
+  FLOATING_WIDGET_WINDOW_HEIGHT,
+  FLOATING_WIDGET_WINDOW_MIN_HEIGHT,
+  FLOATING_WIDGET_WINDOW_MIN_WIDTH,
+  FLOATING_WIDGET_WINDOW_WIDTH,
+} from "@/constants/windows";
 import type { ThemeId, WidgetKey } from "@/types";
 import type {
   FloatingWidgetLayout,
@@ -332,8 +338,10 @@ export default function useFloatingWidgets({
         const win = new WebviewWindow(label, {
           url: `/#widget=${widget}`,
           title: widgetLabels[widget],
-          width: 900,
-          height: 640,
+          width: FLOATING_WIDGET_WINDOW_WIDTH,
+          height: FLOATING_WIDGET_WINDOW_HEIGHT,
+          minWidth: FLOATING_WIDGET_WINDOW_MIN_WIDTH,
+          minHeight: FLOATING_WIDGET_WINDOW_MIN_HEIGHT,
           resizable: true,
           decorations: isMac,
           transparent: !isMac,

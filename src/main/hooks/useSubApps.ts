@@ -15,6 +15,12 @@ import type {
   BackgroundRenderMode,
   BackgroundVideoReplayMode,
 } from "@/constants/backgroundMedia";
+import {
+  SUBAPP_WINDOW_HEIGHT,
+  SUBAPP_WINDOW_MIN_HEIGHT,
+  SUBAPP_WINDOW_MIN_WIDTH,
+  SUBAPP_WINDOW_WIDTH,
+} from "@/constants/windows";
 import { isMacOS } from "@/utils/platform";
 
 type SubAppDefinition = {
@@ -206,10 +212,10 @@ export default function useSubApps({
         const win = new WebviewWindow(label, {
           url: `/#subapp=${id}`,
           title: def.windowTitle,
-          width: 1080,
-          height: 720,
-          minWidth: 860,
-          minHeight: 560,
+          width: SUBAPP_WINDOW_WIDTH,
+          height: SUBAPP_WINDOW_HEIGHT,
+          minWidth: SUBAPP_WINDOW_MIN_WIDTH,
+          minHeight: SUBAPP_WINDOW_MIN_HEIGHT,
           resizable: true,
           decorations: isMac,
           transparent: !isMac,
