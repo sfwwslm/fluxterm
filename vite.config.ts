@@ -29,7 +29,7 @@ const getBuildTime = () => {
 };
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(() => ({
   plugins: [react()],
   define: {
     "import.meta.env.VITE_GIT_HASH": JSON.stringify(getGitHash()),
@@ -64,12 +64,26 @@ export default defineConfig(async () => ({
   },
   build: {
     chunkSizeWarningLimit: 800,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom"],
-          "vendor-markdown": ["react-markdown", "remark-gfm"],
-          "vendor-tauri": ["@tauri-apps/api", "@tauri-apps/plugin-log", "@tauri-apps/plugin-window-state"],
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor-react",
+              test: /node_modules[\\/](react|react-dom)(?:[\\/]|$)/,
+              priority: 30,
+            },
+            {
+              name: "vendor-markdown",
+              test: /node_modules[\\/](react-markdown|remark-gfm)(?:[\\/]|$)/,
+              priority: 20,
+            },
+            {
+              name: "vendor-tauri",
+              test: /node_modules[\\/]@tauri-apps[\\/](api|plugin-log|plugin-window-state)(?:[\\/]|$)/,
+              priority: 10,
+            },
+          ],
         },
       },
     },
