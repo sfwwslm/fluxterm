@@ -77,7 +77,6 @@ type buildWidgetsProps = {
   pickRdpProfile: (profileId: string) => void;
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
   onConnectRdpProfile: (profile: RdpProfile) => Promise<void>;
-  onRefreshRdpProfiles: () => Promise<void>;
   onOpenNewRdpProfile: () => void;
   onOpenEditRdpProfile: (profile: RdpProfile) => void;
   onRemoveRdpProfile: (profile: RdpProfile) => Promise<void>;
@@ -176,7 +175,6 @@ export function buildWidgets(
     pickRdpProfile,
     onConnectProfile,
     onConnectRdpProfile,
-    onRefreshRdpProfiles,
     onOpenNewRdpProfile,
     onOpenEditRdpProfile,
     onRemoveRdpProfile,
@@ -257,7 +255,6 @@ export function buildWidgets(
         connectingProfileId={connectingRdpProfileId}
         onPick={pickRdpProfile}
         onConnectProfile={onConnectRdpProfile}
-        onRefreshProfiles={onRefreshRdpProfiles}
         onOpenNewProfile={onOpenNewRdpProfile}
         onOpenEditProfile={onOpenEditRdpProfile}
         onRemoveProfile={onRemoveRdpProfile}

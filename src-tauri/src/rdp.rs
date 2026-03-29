@@ -5,8 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use engine::EngineError;
 use rdp_core::{
-    ConnectSessionRequest as RuntimeConnectSessionRequest, InputEventPayload as RuntimeInputEvent,
-    RdpRuntime, RuntimeError as RdpRuntimeError, SessionSnapshot as RuntimeSessionSnapshot,
+    RdpRuntime, RuntimeConnectRequest, RuntimeError, RuntimeInputEvent, RuntimePerformanceFlags,
+    RuntimeSessionSnapshot,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -18,6 +18,18 @@ pub enum RdpDisplayMode {
     Fixed,
     #[serde(rename = "window_sync", alias = "windowSync", alias = "WindowSync")]
     WindowSync,
+}
+
+/// RDP 本地显示策略。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum RdpDisplayStrategy {
+    #[default]
+    #[serde(rename = "fit", alias = "Fit")]
+    Fit,
+    #[serde(rename = "cover", alias = "Cover")]
+    Cover,
+    #[serde(rename = "stretch", alias = "Stretch")]
+    Stretch,
 }
 
 /// RDP 剪贴板模式。
@@ -36,6 +48,43 @@ pub struct RdpReconnectPolicy {
     pub max_attempts: u8,
 }
 
+/// RDP 远端体验标志。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RdpPerformanceFlags {
+    #[serde(default = "default_false")]
+    pub wallpaper: bool,
+    #[serde(default = "default_false")]
+    pub full_window_drag: bool,
+    #[serde(default = "default_false")]
+    pub menu_animations: bool,
+    #[serde(default = "default_false")]
+    pub theming: bool,
+    #[serde(default = "default_false")]
+    pub cursor_shadow: bool,
+    #[serde(default = "default_true")]
+    pub cursor_settings: bool,
+    #[serde(default = "default_false")]
+    pub font_smoothing: bool,
+    #[serde(default = "default_false")]
+    pub desktop_composition: bool,
+}
+
+impl Default for RdpPerformanceFlags {
+    fn default() -> Self {
+        Self {
+            wallpaper: false,
+            full_window_drag: false,
+            menu_animations: false,
+            theming: false,
+            cursor_shadow: false,
+            cursor_settings: true,
+            font_smoothing: false,
+            desktop_composition: false,
+        }
+    }
+}
+
 /// RDP Profile。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,10 +99,14 @@ pub struct RdpProfile {
     pub domain: Option<String>,
     pub ignore_certificate: bool,
     pub resolution_mode: RdpDisplayMode,
-    pub width: u32,
-    pub height: u32,
+    #[serde(default)]
+    pub display_strategy: RdpDisplayStrategy,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
     pub clipboard_mode: RdpClipboardMode,
     pub reconnect_policy: RdpReconnectPolicy,
+    #[serde(default)]
+    pub performance_flags: RdpPerformanceFlags,
 }
 
 /// RDP 会话状态。
@@ -129,14 +182,29 @@ impl RdpState {
     pub async fn create_session(
         &self,
         profile: &RdpProfile,
+        initial_size: Option<(u32, u32)>,
     ) -> Result<RdpSessionSnapshot, EngineError> {
+        let (initial_width, initial_height) = initial_size
+            .map(|(width, height)| (width.max(320), height.max(200)))
+            .or_else(|| {
+                profile
+                    .width
+                    .zip(profile.height)
+                    .map(|(width, height)| (width.max(320), height.max(200)))
+            })
+            .ok_or_else(|| {
+                EngineError::new(
+                    "rdp_resolution_required",
+                    "RDP 会话缺少有效分辨率，请重新检查显示模式配置",
+                )
+            })?;
         let snapshot = RdpSessionSnapshot {
             session_id: Uuid::new_v4().to_string(),
             profile_id: profile.id.clone(),
             state: RdpSessionState::Idle,
             created_at: now_epoch(),
-            width: profile.width.max(320),
-            height: profile.height.max(200),
+            width: initial_width,
+            height: initial_height,
             ws_url: None,
             last_error: None,
             certificate_prompt: None,
@@ -168,7 +236,7 @@ impl RdpState {
             .runtime
             .connect_session(
                 session_id,
-                RuntimeConnectSessionRequest {
+                RuntimeConnectRequest {
                     session_id: session_id.to_string(),
                     host: profile.host.clone(),
                     port: profile.port,
@@ -178,6 +246,7 @@ impl RdpState {
                     ignore_certificate: profile.ignore_certificate,
                     width: current.width,
                     height: current.height,
+                    performance_flags: convert_performance_flags(profile.performance_flags.clone()),
                 },
             )
             .await
@@ -349,6 +418,19 @@ fn convert_input(input: RdpInputEvent) -> RuntimeInputEvent {
     }
 }
 
+fn convert_performance_flags(flags: RdpPerformanceFlags) -> RuntimePerformanceFlags {
+    RuntimePerformanceFlags {
+        wallpaper: flags.wallpaper,
+        full_window_drag: flags.full_window_drag,
+        menu_animations: flags.menu_animations,
+        theming: flags.theming,
+        cursor_shadow: flags.cursor_shadow,
+        cursor_settings: flags.cursor_settings,
+        font_smoothing: flags.font_smoothing,
+        desktop_composition: flags.desktop_composition,
+    }
+}
+
 fn now_epoch() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -356,7 +438,15 @@ fn now_epoch() -> u64 {
         .unwrap_or(0)
 }
 
-fn runtime_error(err: RdpRuntimeError) -> EngineError {
+fn default_true() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn runtime_error(err: RuntimeError) -> EngineError {
     if let Some(detail) = err.detail {
         EngineError::with_detail(&err.code, &err.message, detail)
     } else {

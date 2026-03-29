@@ -24,7 +24,7 @@ import type {
   WidgetLayout,
   WidgetGroup,
   WidgetSide,
-  WidgetSlot,
+  WidgetSlotId,
 } from "@/layout/types";
 import type { WidgetKey } from "@/types";
 import { getGlobalConfigDir, getLayoutPath } from "@/shared/config/paths";
@@ -50,7 +50,7 @@ type LayoutState = {
   >;
   setWidgetCollapsed: (side: WidgetSide | "bottom", collapsed: boolean) => void;
   handleToggleSplit: (side: WidgetSide) => void;
-  handleCloseSlot: (slot: WidgetSlot) => void;
+  handleCloseSlot: (slot: WidgetSlotId) => void;
   handleToggleCollapsed: (side: WidgetSide | "bottom") => void;
   startResize: (
     mode: "left" | "right" | "bottom",
@@ -98,7 +98,7 @@ export default function useLayoutState({
   ): Record<string, WidgetGroup> {
     const next: Record<string, WidgetGroup> = {};
     Object.entries(slots).forEach(([slot, group]) => {
-      next[slot as WidgetSlot] = { ...group };
+      next[slot as WidgetSlotId] = { ...group };
     });
     return next;
   }
@@ -181,7 +181,7 @@ export default function useLayoutState({
   }
 
   /** 关闭指定槽位的组件。 */
-  function handleCloseSlot(slot: WidgetSlot) {
+  function handleCloseSlot(slot: WidgetSlotId) {
     if (slot === "bottom") {
       setSlotGroups((prev) => {
         const group = prev.bottom;

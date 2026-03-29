@@ -13,11 +13,7 @@ type WorkerSessionRuntime = {
   textureSize: { width: number; height: number };
   pendingFrames: ArrayBuffer[];
   frameRequest: number | null;
-  fpsCounter: number;
-};
-
-type SessionMetrics = {
-  fps: number;
+  frameVersion: number;
 };
 
 type RdpWireEvent =
@@ -46,7 +42,7 @@ type MainMessage =
       state: "open" | "closed" | "error";
     }
   | { type: "wire-event"; sessionId: string; payload: RdpWireEvent }
-  | { type: "metrics"; metrics: Record<string, SessionMetrics> };
+  | { type: "frame-presented"; sessionId: string; frameVersion: number };
 
 class RdpWorkerContext {
   private renderer: RdpWebGLRenderer | null = null;
@@ -80,6 +76,7 @@ class RdpWorkerContext {
         session.textureSize.width,
         session.textureSize.height,
       );
+      this.notifyFramePresented(session);
     } else {
       this.renderer?.clear();
     }
@@ -168,7 +165,7 @@ class RdpWorkerContext {
         textureSize: { width: 0, height: 0 },
         pendingFrames: [],
         frameRequest: null,
-        fpsCounter: 0,
+        frameVersion: 0,
       };
       this.sessions.set(sessionId, session);
     }
@@ -204,9 +201,22 @@ class RdpWorkerContext {
           session.textureSize.width,
           session.textureSize.height,
         );
-        session.fpsCounter++;
+        this.notifyFramePresented(session);
       }
     });
+  }
+
+  /**
+   * 每次真正提交当前活动会话画面后递增版本号，交给主线程估算可见呈现 FPS。
+   * 注意这里只能说明“渲染链路提交了新画面”，不能直接代表宿主合成和显示器最终上屏次数。
+   */
+  private notifyFramePresented(session: WorkerSessionRuntime) {
+    session.frameVersion += 1;
+    self.postMessage({
+      type: "frame-presented",
+      sessionId: session.sessionId,
+      frameVersion: session.frameVersion,
+    } satisfies MainMessage);
   }
 
   private drawFrame(session: WorkerSessionRuntime, buffer: ArrayBuffer) {
@@ -286,17 +296,6 @@ class RdpWorkerContext {
       }
     }
   }
-
-  public flushMetrics() {
-    const metrics: Record<string, SessionMetrics> = {};
-    for (const [id, session] of this.sessions) {
-      metrics[id] = {
-        fps: session.fpsCounter,
-      };
-      session.fpsCounter = 0;
-    }
-    self.postMessage({ type: "metrics", metrics } satisfies MainMessage);
-  }
 }
 
 let context: RdpWorkerContext | null = null;
@@ -307,7 +306,6 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   switch (data.type) {
     case "init":
       context = new RdpWorkerContext(data.canvas);
-      setInterval(() => context?.flushMetrics(), 1000);
       break;
     case "set-active":
       context?.setActiveSession(data.sessionId);

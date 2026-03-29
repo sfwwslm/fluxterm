@@ -1,9 +1,31 @@
 use serde::{Deserialize, Serialize};
 
+/// RDP 运行时远端体验标志。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimePerformanceFlags {
+    /// 是否显示远端桌面壁纸。
+    pub wallpaper: bool,
+    /// 拖动窗口时是否显示完整内容。
+    pub full_window_drag: bool,
+    /// 是否启用菜单动画。
+    pub menu_animations: bool,
+    /// 是否启用视觉主题。
+    pub theming: bool,
+    /// 是否启用光标阴影。
+    pub cursor_shadow: bool,
+    /// 是否应用远端光标设置。
+    pub cursor_settings: bool,
+    /// 是否启用字体平滑。
+    pub font_smoothing: bool,
+    /// 是否启用桌面组合。
+    pub desktop_composition: bool,
+}
+
 /// 进程内 RDP 会话的连接参数。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConnectSessionRequest {
+pub struct RuntimeConnectRequest {
     /// 唯一的会话 ID。
     pub session_id: String,
     /// 远端 RDP 主机地址。
@@ -22,6 +44,8 @@ pub struct ConnectSessionRequest {
     pub width: u32,
     /// 请求的初始高度。
     pub height: u32,
+    /// 远端体验标志。
+    pub performance_flags: RuntimePerformanceFlags,
 }
 
 /// 运行时 RDP 会话的快照信息。
@@ -29,7 +53,7 @@ pub struct ConnectSessionRequest {
 /// 用于向前端同步当前会话的状态和元数据。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionSnapshot {
+pub struct RuntimeSessionSnapshot {
     /// 会话标识符。
     pub session_id: String,
     /// 配置标识符。
@@ -49,7 +73,7 @@ pub struct SessionSnapshot {
 /// 支持多种输入类型，包括按键、鼠标点击、移动以及滚轮事件。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InputEventPayload {
+pub struct RuntimeInputEvent {
     /// 事件类型 (如 "key_down", "mouse_move", "wheel")。
     pub kind: String,
     /// 鼠标 X 坐标（像素）。

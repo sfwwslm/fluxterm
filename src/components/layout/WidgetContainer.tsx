@@ -2,12 +2,12 @@
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { WidgetKey } from "@/types";
-import type { WidgetSide, WidgetSlot } from "@/layout/types";
+import type { WidgetSide, WidgetSlotId } from "@/layout/types";
 import { MAX_SIDE_SLOTS } from "@/layout/model";
 import WidgetSlotView from "./WidgetSlot";
 
 type SlotData = {
-  slot: WidgetSlot;
+  slot: WidgetSlotId;
   active: WidgetKey | null;
   body: React.ReactNode;
 };
@@ -19,9 +19,9 @@ type WidgetContainerProps = {
   slots: SlotData[];
   available: WidgetKey[];
   labels: Record<WidgetKey, string>;
-  onReplace: (slot: WidgetSlot, key: WidgetKey) => void;
-  onFloat: (slot: WidgetSlot) => void;
-  onCloseWidget: (slot: WidgetSlot) => void;
+  onReplace: (slot: WidgetSlotId, key: WidgetKey) => void;
+  onFloat: (slot: WidgetSlotId) => void;
+  onCloseWidget: (slot: WidgetSlotId) => void;
   onToggleSplit: (side: WidgetSide) => void;
   t: Translate;
 };

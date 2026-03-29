@@ -38,7 +38,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 
 use crate::keyboard::code_to_scancode;
-use crate::protocol::{ConnectSessionRequest, InputEventPayload};
+use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags};
 use crate::session_manager::SessionManager;
 use crate::session_manager::{
     RuntimeCommand, build_rgba_frame_batch_message, build_rgba_frame_message, json_message,
@@ -58,10 +58,11 @@ pub async fn run_ironrdp_session(
     sessions: SessionManager,
     sender: broadcast::Sender<Message>,
     session_id: String,
-    profile: ConnectSessionRequest,
+    profile: RuntimeConnectRequest,
     mut command_rx: mpsc::UnboundedReceiver<RuntimeCommand>,
 ) {
     info!(
+        event = "rdp.runtime.start",
         session_id = %session_id,
         host = %profile.host,
         port = profile.port,
@@ -71,7 +72,7 @@ pub async fn run_ironrdp_session(
     let result = connect_and_run(&sessions, &sender, &session_id, &profile, &mut command_rx).await;
     match result {
         Ok(()) => {
-            info!(session_id = %session_id, "runtime closed");
+            info!(event = "rdp.runtime.closed", session_id = %session_id, "runtime closed");
             let _ = sessions.publish_runtime_state(
                 &session_id,
                 "disconnected",
@@ -79,7 +80,12 @@ pub async fn run_ironrdp_session(
             );
         }
         Err(error) => {
-            error!(session_id = %session_id, error = %error, "runtime error");
+            error!(
+                event = "rdp.runtime.failed",
+                session_id = %session_id,
+                error = %error,
+                "runtime error"
+            );
             let _ = sender.send(json_message(
                 "error",
                 serde_json::json!({
@@ -103,7 +109,7 @@ async fn connect_and_run(
     sessions: &SessionManager,
     sender: &broadcast::Sender<Message>,
     session_id: &str,
-    profile: &ConnectSessionRequest,
+    profile: &RuntimeConnectRequest,
     command_rx: &mut mpsc::UnboundedReceiver<RuntimeCommand>,
 ) -> Result<(), String> {
     let prepared_connection = PreparedConnection::from_request(profile)?;
@@ -111,6 +117,8 @@ async fn connect_and_run(
         .await
         .map_err(|error| format!("tcp connect failed: {error}"))?;
     info!(
+        event = "rdp.runtime.tcp.connected",
+        session_id = %session_id,
         host = %prepared_connection.host,
         port = prepared_connection.port,
         username = %prepared_connection.username,
@@ -142,10 +150,19 @@ async fn connect_and_run(
         ironrdp_tls::upgrade(initial_stream, &prepared_connection.host)
             .await
             .map_err(|error| format!("tls upgrade failed: {error}"))?;
-    info!(host = %prepared_connection.host, "tls upgraded");
+    info!(
+        event = "rdp.runtime.tls.upgraded",
+        session_id = %session_id,
+        host = %prepared_connection.host,
+        "tls upgraded"
+    );
 
     if !prepared_connection.ignore_certificate {
-        warn!("interactive certificate validation is not implemented yet");
+        warn!(
+            event = "rdp.runtime.certificate.interactive_unsupported",
+            session_id = %session_id,
+            "interactive certificate validation is not implemented yet"
+        );
         let _ = sessions.publish_runtime_state(
             session_id,
             "connecting",
@@ -187,6 +204,8 @@ async fn connect_and_run(
         ),
     );
     info!(
+        event = "rdp.runtime.connected",
+        session_id = %session_id,
         host = %prepared_connection.host,
         port = prepared_connection.port,
         width = connection_result.desktop_size.width,
@@ -261,7 +280,13 @@ where
                     }
                     RuntimeCommand::Resize { width, height } => {
                         let (width, height) = MonitorLayoutEntry::adjust_display_size(width.max(320), height.max(200));
-                        info!(width, height, "encode resize");
+                        info!(
+                            event = "rdp.runtime.resize.encoded",
+                            session_id = %session_id,
+                            width,
+                            height,
+                            "encode resize"
+                        );
                         if let Some(response_frame) = active_stage.encode_resize(width, height, Some(100), None) {
                             vec![ActiveStageOutput::ResponseFrame(
                                 response_frame.map_err(|error| format!("encode resize failed: {error}"))?,
@@ -282,7 +307,11 @@ where
                         Vec::new()
                     }
                     RuntimeCommand::Disconnect => {
-                        info!("runtime disconnect requested");
+                        info!(
+                            event = "rdp.runtime.disconnect.requested",
+                            session_id = %session_id,
+                            "runtime disconnect requested"
+                        );
                         for output in active_stage
                             .graceful_shutdown()
                             .map_err(|error| format!("graceful shutdown failed: {error}"))?
@@ -312,6 +341,8 @@ where
                     if !logged_first_frame {
                         logged_first_frame = true;
                         info!(
+                            event = "rdp.runtime.first_frame",
+                            session_id = %session_id,
                             width = u32::from(image.width()),
                             height = u32::from(image.height()),
                             "first graphics frame"
@@ -355,7 +386,13 @@ where
                     else {
                         return Err("deactivation-reactivation did not finalize".to_string());
                     };
-                    info!(width, height, "rdp reactivated");
+                    info!(
+                        event = "rdp.runtime.reactivated",
+                        session_id = %session_id,
+                        width,
+                        height,
+                        "rdp reactivated"
+                    );
                     image = DecodedImage::new(PixelFormat::RgbA32, width, height);
                     logged_first_frame = false;
                 }
@@ -364,6 +401,8 @@ where
                     // 完整实现。这里先按协议显式回 E_ABORT，避免静默忽略导致服务端
                     // 长时间等待；后续待上游实现成熟后再切换为真正的 sideband UDP。
                     warn!(
+                        event = "rdp.runtime.multitransport.declined",
+                        session_id = %session_id,
                         request_id = pdu.request_id,
                         requested_protocol = ?pdu.requested_protocol,
                         "multitransport request received; responding with E_ABORT because UDP transport is not implemented"
@@ -588,7 +627,8 @@ fn build_connector_config(connection: &PreparedConnection) -> connector::Config 
         autologon: false,
         enable_audio_playback: false,
         pointer_software_rendering: false,
-        performance_flags: build_performance_flags(),
+        // 体验标志由前端 Profile 驱动，这里只做协议位映射。
+        performance_flags: build_performance_flags(&connection.performance_flags),
         license_cache: None,
         timezone_info: TimezoneInfo::default(),
         compression_type: None,
@@ -596,9 +636,34 @@ fn build_connector_config(connection: &PreparedConnection) -> connector::Config 
     }
 }
 
-/// 显式声明远端体验标志，避免使用 IronRDP 默认值把整窗拖动关闭。
-fn build_performance_flags() -> PerformanceFlags {
-    PerformanceFlags::DISABLE_MENUANIMATIONS | PerformanceFlags::ENABLE_FONT_SMOOTHING
+/// 将产品层的远端体验配置映射为 RDP 协议性能标志。
+fn build_performance_flags(config: &RuntimePerformanceFlags) -> PerformanceFlags {
+    let mut flags = PerformanceFlags::empty();
+    if !config.wallpaper {
+        flags |= PerformanceFlags::DISABLE_WALLPAPER;
+    }
+    if !config.full_window_drag {
+        flags |= PerformanceFlags::DISABLE_FULLWINDOWDRAG;
+    }
+    if !config.menu_animations {
+        flags |= PerformanceFlags::DISABLE_MENUANIMATIONS;
+    }
+    if !config.theming {
+        flags |= PerformanceFlags::DISABLE_THEMING;
+    }
+    if !config.cursor_shadow {
+        flags |= PerformanceFlags::DISABLE_CURSOR_SHADOW;
+    }
+    if !config.cursor_settings {
+        flags |= PerformanceFlags::DISABLE_CURSORSETTINGS;
+    }
+    if config.font_smoothing {
+        flags |= PerformanceFlags::ENABLE_FONT_SMOOTHING;
+    }
+    if config.desktop_composition {
+        flags |= PerformanceFlags::ENABLE_DESKTOP_COMPOSITION;
+    }
+    flags
 }
 
 /// 运行前收敛的连接参数。
@@ -612,6 +677,7 @@ struct PreparedConnection {
     ignore_certificate: bool,
     width: u32,
     height: u32,
+    performance_flags: RuntimePerformanceFlags,
     server_name: String,
     client_hostname: Option<String>,
     kerberos_config: Option<KerberosConfig>,
@@ -619,7 +685,7 @@ struct PreparedConnection {
 
 impl PreparedConnection {
     /// 从前端连接请求构造干净的认证与连接参数。
-    fn from_request(request: &ConnectSessionRequest) -> Result<Self, String> {
+    fn from_request(request: &RuntimeConnectRequest) -> Result<Self, String> {
         let host = normalize_required_string(request.host.clone(), "host")?;
         let port = request.port;
         let password = request.password.clone();
@@ -644,6 +710,7 @@ impl PreparedConnection {
             ignore_certificate,
             width,
             height,
+            performance_flags: request.performance_flags.clone(),
             client_hostname,
             kerberos_config,
         })
@@ -747,9 +814,14 @@ fn resolve_client_hostname() -> Option<String> {
 /// 1. 鼠标坐标转换与按键状态映射。
 /// 2. 滚轮增量转换。
 /// 3. 键盘扫描码映射与 Unicode 字符输入。
+///
+/// 键盘路径约束：
+/// 1. 可打印单字符且未按下 Ctrl / Alt / Meta 时优先走 Unicode。
+/// 2. 其他键统一尝试走 `KeyboardEvent.code -> scancode` 映射。
+/// 3. 前端需要保证 `key_down` / `key_up` 成对发送，并在失焦时补发释放事件。
 fn translate_input_event(
     database: &mut InputDatabase,
-    input: InputEventPayload,
+    input: RuntimeInputEvent,
 ) -> Vec<FastPathInputEvent> {
     let mut operations = Vec::new();
     match input.kind.as_str() {
@@ -811,8 +883,9 @@ fn translate_input_event(
 
 /// 尝试从输入负载中提取有效的 Unicode 字符。
 ///
-/// 如果按下组合键（Ctrl/Alt/Meta）或输入为控制字符，则返回 `None`。
-fn extract_unicode_char(input: &InputEventPayload) -> Option<char> {
+/// 只有“未按下 Ctrl / Alt / Meta 的单个可打印字符”才会走这条路径；
+/// 其余情况一律回退到扫描码映射，保证控制键、导航键和组合键保持物理键位语义。
+fn extract_unicode_char(input: &RuntimeInputEvent) -> Option<char> {
     if input.ctrl_key.unwrap_or(false)
         || input.alt_key.unwrap_or(false)
         || input.meta_key.unwrap_or(false)
@@ -901,11 +974,13 @@ fn encode_pointer_bitmap_png(
 #[cfg(test)]
 mod tests {
     use ironrdp::pdu::geometry::InclusiveRectangle;
+    use ironrdp::pdu::rdp::client_info::PerformanceFlags;
 
     use super::{
-        encode_multitransport_abort_response, merge_update_rects, normalize_credentials,
-        pointer_bitmap_to_css_cursor, resolve_client_hostname,
+        build_performance_flags, encode_multitransport_abort_response, merge_update_rects,
+        normalize_credentials, pointer_bitmap_to_css_cursor, resolve_client_hostname,
     };
+    use crate::protocol::RuntimePerformanceFlags;
 
     #[test]
     fn normalizes_domain_qualified_username() {
@@ -1004,5 +1079,28 @@ mod tests {
     fn encodes_multitransport_abort_response() {
         let frame = encode_multitransport_abort_response(1001, 1003, 42).expect("encode abort");
         assert!(!frame.is_empty());
+    }
+
+    #[test]
+    fn maps_fluid_profile_to_disabled_visual_flags() {
+        let flags = build_performance_flags(&RuntimePerformanceFlags {
+            wallpaper: false,
+            full_window_drag: false,
+            menu_animations: false,
+            theming: false,
+            cursor_shadow: false,
+            cursor_settings: true,
+            font_smoothing: false,
+            desktop_composition: false,
+        });
+
+        assert!(flags.contains(PerformanceFlags::DISABLE_WALLPAPER));
+        assert!(flags.contains(PerformanceFlags::DISABLE_FULLWINDOWDRAG));
+        assert!(flags.contains(PerformanceFlags::DISABLE_MENUANIMATIONS));
+        assert!(flags.contains(PerformanceFlags::DISABLE_THEMING));
+        assert!(flags.contains(PerformanceFlags::DISABLE_CURSOR_SHADOW));
+        assert!(!flags.contains(PerformanceFlags::DISABLE_CURSORSETTINGS));
+        assert!(!flags.contains(PerformanceFlags::ENABLE_FONT_SMOOTHING));
+        assert!(!flags.contains(PerformanceFlags::ENABLE_DESKTOP_COMPOSITION));
     }
 }

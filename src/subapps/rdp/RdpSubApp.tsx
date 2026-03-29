@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Locale, Translate } from "@/i18n";
-import type { RdpInputEvent, RdpProfile, RdpSessionSnapshot } from "@/types";
+import {
+  createTraceId,
+  logTelemetry,
+  type TelemetryLevel,
+} from "@/shared/logging/telemetry";
+import type {
+  RdpDisplayStrategy,
+  RdpInputEvent,
+  RdpProfile,
+  RdpSessionSnapshot,
+} from "@/types";
 import type { SubAppId } from "@/subapps/types";
 import {
   SUBAPP_LIFECYCLE_CHANNEL,
@@ -48,6 +58,7 @@ type RdpWireEvent =
 type RdpSessionTab = {
   session: RdpSessionSnapshot;
   profile: RdpProfile;
+  traceId: string;
   statusText: string;
   errorMessage: string;
   perf: RdpPerfSnapshot;
@@ -59,14 +70,127 @@ const EMPTY_PERF: RdpPerfSnapshot = {
   bridgeState: "idle",
 };
 
-function getProfileDisplayName(profile: Pick<RdpProfile, "name" | "host">) {
-  return profile.name.trim() || profile.host.trim() || "RDP";
+function getProfileDisplayName(
+  profile: Pick<RdpProfile, "name" | "host">,
+  t: Translate,
+) {
+  return (
+    profile.name.trim() || profile.host.trim() || t("rdp.profile.fallbackName")
+  );
 }
 
 function getSessionResolutionValue(session: RdpSessionSnapshot | null) {
   if (!session) return "--";
   if (session.width <= 0 || session.height <= 0) return "--";
   return `${session.width} × ${session.height}`;
+}
+
+function logRdpSubAppEvent(
+  level: TelemetryLevel,
+  event: string,
+  fields?: Record<string, unknown>,
+) {
+  void logTelemetry(level, event, fields);
+}
+
+/** 读取当前 RDP 视口尺寸，并做基础下限收敛。 */
+function measureSurfaceViewport(surface: HTMLDivElement | null) {
+  if (!surface) return null;
+  const rect = surface.getBoundingClientRect();
+  const width = Math.max(
+    Math.floor(surface.clientWidth || rect.width || 0),
+    320,
+  );
+  const height = Math.max(
+    Math.floor(surface.clientHeight || rect.height || 0),
+    200,
+  );
+  return { width, height };
+}
+
+/** 等待自动开窗后的视口尺寸稳定，避免首屏仍拿到过渡态大小。 */
+async function waitForStableSurfaceViewport(
+  surface: HTMLDivElement | null,
+  minStableFrames = 2,
+  maxFrames = 12,
+) {
+  if (!surface) return null;
+
+  let previous: { width: number; height: number } | null = null;
+  let stableFrames = 0;
+
+  for (let frame = 0; frame < maxFrames; frame += 1) {
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() => resolve()),
+    );
+    const measured = measureSurfaceViewport(surface);
+    if (!measured) continue;
+
+    if (
+      previous &&
+      previous.width === measured.width &&
+      previous.height === measured.height
+    ) {
+      stableFrames += 1;
+      if (stableFrames >= minStableFrames) {
+        return measured;
+      }
+    } else {
+      stableFrames = 0;
+      previous = measured;
+    }
+  }
+
+  return measureSurfaceViewport(surface);
+}
+
+/** 根据显示策略计算远端画面在当前视口中的实际显示区域。 */
+function resolveDisplayedFrameRect(
+  surfaceRect: DOMRect,
+  remoteWidth: number,
+  remoteHeight: number,
+  strategy: RdpDisplayStrategy,
+) {
+  if (strategy === "stretch") {
+    return {
+      left: surfaceRect.left,
+      top: surfaceRect.top,
+      width: surfaceRect.width,
+      height: surfaceRect.height,
+    };
+  }
+
+  const safeRemoteWidth = Math.max(remoteWidth, 1);
+  const safeRemoteHeight = Math.max(remoteHeight, 1);
+  const widthScale = surfaceRect.width / safeRemoteWidth;
+  const heightScale = surfaceRect.height / safeRemoteHeight;
+  const scale =
+    strategy === "cover"
+      ? Math.max(widthScale, heightScale)
+      : Math.min(widthScale, heightScale);
+  const displayedWidth = safeRemoteWidth * scale;
+  const displayedHeight = safeRemoteHeight * scale;
+  const offsetX = (surfaceRect.width - displayedWidth) / 2;
+  const offsetY = (surfaceRect.height - displayedHeight) / 2;
+
+  return {
+    left: surfaceRect.left + offsetX,
+    top: surfaceRect.top + offsetY,
+    width: displayedWidth,
+    height: displayedHeight,
+  };
+}
+
+/** 将配置中的显示策略映射为 canvas 的 object-fit。 */
+function getCanvasObjectFit(strategy: RdpDisplayStrategy) {
+  switch (strategy) {
+    case "cover":
+      return "cover";
+    case "stretch":
+      return "fill";
+    default:
+      return "contain";
+  }
 }
 
 /** RDP 子应用。 */
@@ -84,10 +208,29 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState("");
   const sessionsRef = useRef<RdpSessionTab[]>([]);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const frameVersionBySessionRef = useRef<Record<string, number>>({});
+  const presentedFpsRuntimeRef = useRef<{
+    frameCount: number;
+    windowStartAt: number;
+    lastSeenFrameVersion: number;
+    lastReportedFps: number;
+    rafId: number | null;
+  }>({
+    frameCount: 0,
+    windowStartAt: 0,
+    lastSeenFrameVersion: 0,
+    lastReportedFps: -1,
+    rafId: null,
+  });
 
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
   const activeTab = useMemo(
     () =>
@@ -98,8 +241,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
 
   const activePerf = activeTab?.perf ?? EMPTY_PERF;
   const statusLineText =
-    activeTab?.statusText ??
-    (locale === "zh-CN" ? "当前没有活动会话" : "No active session");
+    activeTab?.statusText ?? t("rdp.status.noActiveSession");
 
   /** 统一更新某个会话标签的状态。 */
   const updateSessionTab = useCallback(
@@ -113,6 +255,26 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     [],
   );
 
+  /** 重置当前活动会话的可见呈现 FPS 采样窗口，避免切换标签后沿用旧计数。 */
+  const resetPresentedFpsSampler = useCallback(
+    (sessionId: string | null) => {
+      const runtime = presentedFpsRuntimeRef.current;
+      runtime.frameCount = 0;
+      runtime.windowStartAt = performance.now();
+      runtime.lastSeenFrameVersion = sessionId
+        ? (frameVersionBySessionRef.current[sessionId] ?? 0)
+        : 0;
+      runtime.lastReportedFps = -1;
+      if (sessionId) {
+        updateSessionTab(sessionId, (tab) => ({
+          ...tab,
+          perf: { ...tab.perf, fps: 0 },
+        }));
+      }
+    },
+    [updateSessionTab],
+  );
+
   /** 处理运行时状态、光标、剪贴板和错误事件。 */
   const handleWireEvent = useCallback(
     (sessionId: string, payload: RdpWireEvent) => {
@@ -122,22 +284,10 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
           statusText:
             payload.message === "desktop resized"
               ? tab.statusText
-              : (payload.message ??
-                (payload.state === "error"
-                  ? locale === "zh-CN"
-                    ? "RDP 会话异常断开"
-                    : "RDP session failed"
-                  : payload.state === "disconnected"
-                    ? locale === "zh-CN"
-                      ? "RDP 会话已断开"
-                      : "RDP session disconnected"
-                    : payload.state)),
+              : (payload.message ?? tab.statusText),
           errorMessage:
             payload.state === "error"
-              ? tab.errorMessage ||
-                (locale === "zh-CN"
-                  ? "远程桌面会话发生异常，请检查运行时日志。"
-                  : "The remote desktop session failed. Check runtime logs.")
+              ? tab.errorMessage || t("rdp.status.sessionErrorHint")
               : tab.errorMessage,
           perf:
             payload.state === "error" || payload.state === "disconnected"
@@ -170,9 +320,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
           ...tab,
           statusText:
             payload.direction === "local-to-remote"
-              ? locale === "zh-CN"
-                ? "已同步本地剪贴板"
-                : "Clipboard synced"
+              ? t("rdp.status.clipboardSynced")
               : payload.text,
         }));
         return;
@@ -181,20 +329,31 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         updateSessionTab(sessionId, (tab) => ({
           ...tab,
           errorMessage: payload.message || payload.code,
-          statusText:
-            locale === "zh-CN" ? "RDP 运行时异常" : "RDP runtime error",
+          statusText: t("rdp.status.runtimeError"),
           perf: { ...tab.perf, bridgeState: "closed" },
         }));
       }
     },
-    [locale, updateSessionTab],
+    [t, updateSessionTab],
   );
 
   /** 保持最新的回调引用，避免 Worker 因依赖变化频繁重启 */
-  const handlersRef = useRef({ locale, updateSessionTab, handleWireEvent });
+  const handlersRef = useRef({
+    locale,
+    t,
+    updateSessionTab,
+    handleWireEvent,
+    resetPresentedFpsSampler,
+  });
   useEffect(() => {
-    handlersRef.current = { locale, updateSessionTab, handleWireEvent };
-  }, [locale, updateSessionTab, handleWireEvent]);
+    handlersRef.current = {
+      locale,
+      t,
+      updateSessionTab,
+      handleWireEvent,
+      resetPresentedFpsSampler,
+    };
+  }, [locale, t, updateSessionTab, handleWireEvent, resetPresentedFpsSampler]);
 
   /** 初始化 Web Worker 和 OffscreenCanvas */
   useEffect(() => {
@@ -209,54 +368,70 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
 
         worker.onmessage = (
           event: MessageEvent<{
-            type: "bridge-state" | "wire-event" | "metrics";
+            type: "bridge-state" | "wire-event" | "frame-presented";
             sessionId: string;
             state?: "open" | "closed" | "error";
             payload?: RdpWireEvent;
-            metrics?: Record<string, { fps: number }>;
+            frameVersion?: number;
           }>,
         ) => {
-          const { type, sessionId, state, payload, metrics } = event.data;
+          const { type, sessionId, state, payload, frameVersion } = event.data;
           const current = handlersRef.current;
 
           if (type === "bridge-state") {
+            const traceId =
+              sessionsRef.current.find(
+                (tab) => tab.session.sessionId === sessionId,
+              )?.traceId ?? null;
+            if (state === "open") {
+              logRdpSubAppEvent("info", "rdp.bridge.open", {
+                traceId,
+                sessionId,
+              });
+            } else if (state === "error") {
+              logRdpSubAppEvent("warn", "rdp.bridge.failed", {
+                traceId,
+                sessionId,
+              });
+            } else {
+              logRdpSubAppEvent("info", "rdp.bridge.close", {
+                traceId,
+                sessionId,
+              });
+            }
             current.updateSessionTab(sessionId, (tab) => ({
               ...tab,
-              statusText:
-                state === "open"
-                  ? current.locale === "zh-CN"
-                    ? "远端画面已连接"
-                    : "Remote surface connected"
-                  : current.locale === "zh-CN"
-                    ? "桥接连接已关闭"
-                    : "Bridge closed",
               perf: {
                 ...tab.perf,
                 bridgeState: state === "error" ? "closed" : (state ?? "closed"),
               },
             }));
+            if (state !== "open") {
+              current.resetPresentedFpsSampler(
+                activeSessionIdRef.current === sessionId ? sessionId : null,
+              );
+            }
           } else if (type === "wire-event" && payload) {
             current.handleWireEvent(sessionId, payload);
-          } else if (type === "metrics" && metrics) {
-            setSessions((prev) =>
-              prev.map((tab) => {
-                const m = metrics[tab.session.sessionId];
-                if (!m) return tab;
-                return {
-                  ...tab,
-                  perf: {
-                    ...tab.perf,
-                    fps: m.fps,
-                  },
-                };
-              }),
-            );
+          } else if (
+            type === "frame-presented" &&
+            typeof frameVersion === "number"
+          ) {
+            frameVersionBySessionRef.current[sessionId] = frameVersion;
           }
         };
 
         workerRef.current = worker;
       } catch (error) {
-        console.error("Failed to initialize RDP Worker:", error);
+        logRdpSubAppEvent("error", "rdp.worker.init.failed", {
+          error:
+            error instanceof Error
+              ? {
+                  message: error.message,
+                  name: error.name,
+                }
+              : { message: String(error) },
+        });
       }
     }
     return () => {
@@ -273,7 +448,74 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
       type: "set-active",
       sessionId: activeSessionId,
     });
-  }, [activeSessionId]);
+    resetPresentedFpsSampler(activeSessionId);
+  }, [activeSessionId, resetPresentedFpsSampler]);
+
+  useEffect(() => {
+    const runtime = presentedFpsRuntimeRef.current;
+
+    /**
+     * 当前 FPS 是“可见呈现估算值”：
+     * 1. 仅在窗口可见、桥接已打开且活动会话画面版本实际变化时计数；
+     * 2. 它比 worker 内部的提交次数更接近用户看到的画面变化频率；
+     * 3. 但它仍无法观测 WebView/Tauri 宿主合成、系统 VSync、显示器刷新和遮挡后的最终上屏结果，
+     *    因此不是严格意义上的“用户肉眼实际看到的真实 FPS”。
+     */
+    const tick = (now: number) => {
+      const sessionId = activeSessionId;
+      if (
+        sessionId &&
+        document.visibilityState === "visible" &&
+        activePerf.bridgeState === "open"
+      ) {
+        const frameVersion = frameVersionBySessionRef.current[sessionId] ?? 0;
+        if (frameVersion !== runtime.lastSeenFrameVersion) {
+          runtime.lastSeenFrameVersion = frameVersion;
+          runtime.frameCount += 1;
+        }
+
+        if (runtime.windowStartAt === 0) {
+          runtime.windowStartAt = now;
+        }
+
+        const elapsed = now - runtime.windowStartAt;
+        if (elapsed >= 1000) {
+          const fps = Math.round((runtime.frameCount * 1000) / elapsed);
+          if (fps !== runtime.lastReportedFps) {
+            updateSessionTab(sessionId, (tab) => ({
+              ...tab,
+              perf: { ...tab.perf, fps },
+            }));
+            runtime.lastReportedFps = fps;
+          }
+          runtime.frameCount = 0;
+          runtime.windowStartAt = now;
+        }
+      } else if (sessionId) {
+        if (runtime.lastReportedFps !== 0) {
+          updateSessionTab(sessionId, (tab) => ({
+            ...tab,
+            perf: { ...tab.perf, fps: 0 },
+          }));
+          runtime.lastReportedFps = 0;
+        }
+        runtime.frameCount = 0;
+        runtime.windowStartAt = now;
+        runtime.lastSeenFrameVersion =
+          frameVersionBySessionRef.current[sessionId] ?? 0;
+      }
+
+      runtime.rafId = window.requestAnimationFrame(tick);
+    };
+
+    runtime.rafId = window.requestAnimationFrame(tick);
+    return () => {
+      if (runtime.rafId !== null) {
+        window.cancelAnimationFrame(runtime.rafId);
+        runtime.rafId = null;
+      }
+    };
+  }, [activePerf.bridgeState, activeSessionId, updateSessionTab]);
 
   /** 从标签栏移除会话，并在需要时切换到邻近会话。 */
   /** 关闭标签后优先切到相邻标签，避免 activeSessionId 悬空。 */
@@ -332,7 +574,9 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     rr.lastRequested = { width, height };
     rr.pending = null;
 
-    void resizeRdpSession(activeTab.session.sessionId, width, height)
+    void resizeRdpSession(activeTab.session.sessionId, width, height, {
+      traceId: activeTab.traceId,
+    })
       .then((next) => {
         updateSessionTab(activeTab.session.sessionId, (tab) => ({
           ...tab,
@@ -426,16 +670,29 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
 
   /** 子应用只消费已保存的 RDP Profile，不再承担 Profile 配置编辑。 */
   const connectFromProfile = useCallback(
-    async (profile: RdpProfile) => {
+    async (profile: RdpProfile, traceId = createTraceId()) => {
       setGlobalError("");
       try {
-        const created = await createRdpSession(profile.id);
-        const connected = await connectRdpSession(created.sessionId);
+        let initialSize: { width: number; height: number } | undefined;
+        if (profile.resolutionMode === "window_sync") {
+          initialSize =
+            (await waitForStableSurfaceViewport(surfaceRef.current)) ??
+            undefined;
+          if (!initialSize) {
+            throw new Error(t("rdp.error.viewportUnavailable"));
+          }
+        }
+        const created = await createRdpSession(profile.id, initialSize, {
+          traceId,
+        });
+        const connected = await connectRdpSession(created.sessionId, {
+          traceId,
+        });
         const newTab: RdpSessionTab = {
           session: connected,
           profile,
-          statusText:
-            locale === "zh-CN" ? "正在等待桥接连接" : "Waiting for bridge",
+          traceId,
+          statusText: t("rdp.status.waitingBridge"),
           errorMessage: "",
           perf: { ...EMPTY_PERF },
           remoteCursor: "crosshair",
@@ -443,29 +700,41 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         setSessions((prev) => [...prev, newTab]);
         setActiveSessionId(connected.sessionId);
       } catch (error) {
+        logRdpSubAppEvent("warn", "rdp.session.launch.failed", {
+          traceId,
+          profileId: profile.id,
+          error:
+            error instanceof Error
+              ? {
+                  message: error.message,
+                  name: error.name,
+                }
+              : { message: String(error) },
+        });
         setGlobalError(error instanceof Error ? error.message : String(error));
       }
     },
-    [locale],
+    [t],
   );
 
   /** 主窗口双击 Profile 后只传 profileId，子应用负责解析并真正建立连接。 */
   const handleConnectProfileById = useCallback(
     async (profileId: string) => {
-      const resolved = (await listRdpProfiles()).find(
+      const traceId = createTraceId();
+      const resolved = (await listRdpProfiles({ traceId })).find(
         (item) => item.id === profileId,
       );
       if (!resolved) {
-        setGlobalError(
-          locale === "zh-CN"
-            ? "找不到要连接的 RDP Profile。"
-            : "Unable to find the requested RDP profile.",
-        );
+        logRdpSubAppEvent("warn", "rdp.profile.resolve.failed", {
+          traceId,
+          profileId,
+        });
+        setGlobalError(t("rdp.error.profileNotFound"));
         return;
       }
-      await connectFromProfile(resolved);
+      await connectFromProfile(resolved, traceId);
     },
-    [connectFromProfile, locale],
+    [connectFromProfile, t],
   );
 
   /** 关闭窗口前统一断开全部会话，避免后端运行时残留。 */
@@ -481,8 +750,12 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
 
       await Promise.allSettled(
         currentSessions.map(async ({ session }) => {
+          const traceId =
+            sessionsRef.current.find(
+              (tab) => tab.session.sessionId === session.sessionId,
+            )?.traceId ?? createTraceId();
           try {
-            await disconnectRdpSession(session.sessionId);
+            await disconnectRdpSession(session.sessionId, { traceId });
           } catch {
             // 忽略单个会话断开失败，尽量继续清理剩余会话。
           } finally {
@@ -520,7 +793,6 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel(SUBAPP_LIFECYCLE_CHANNEL);
-    // 先绑定监听，再上报 ready，避免主窗口在 ready 回调里立即派发的连接命令被首轮挂载吞掉。
     channel.onmessage = (event) => {
       const payload = event.data as SubAppLifecycleMessage | undefined;
       if (!payload) return;
@@ -544,12 +816,6 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         void handleConnectProfileById(payload.profileId);
       }
     };
-    channel.postMessage({
-      type: "subapp:ready",
-      id,
-      label: windowLabel,
-      source: "subapp",
-    } satisfies SubAppLifecycleMessage);
     const onUnload = () => {
       channel.postMessage({
         type: "subapp:closed",
@@ -594,8 +860,11 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   /** 主动关闭某个会话标签，并同步断开后端会话。 */
   async function handleCloseSession(sessionId: string) {
     setGlobalError("");
+    const traceId =
+      sessionsRef.current.find((tab) => tab.session.sessionId === sessionId)
+        ?.traceId ?? createTraceId();
     try {
-      await disconnectRdpSession(sessionId);
+      await disconnectRdpSession(sessionId, { traceId });
       removeSessionTab(sessionId);
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : String(error));
@@ -612,7 +881,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     void sendRdpInput(activeTab.session.sessionId, input).catch(() => {});
   }
 
-  /** 统一构造键盘输入负载。 */
+  /** 前端只做事件采集与字段透传，Unicode / 扫描码分流由后端运行时统一决定。 */
   function buildKeyboardInput(
     kind: "key_down" | "key_up",
     event: React.KeyboardEvent<HTMLDivElement>,
@@ -642,7 +911,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     sendInput(buildKeyboardInput("key_up", event));
   }
 
-  /** 远端画面失焦时补发所有 key_up。 */
+  /** 远端画面失焦时补发所有 key_up，避免修饰键在远端会话中卡住。 */
   function handleSurfaceBlur() {
     if (!activeTab || pressedKeysRef.current.size === 0) return;
     for (const code of pressedKeysRef.current) {
@@ -670,29 +939,37 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
       event.currentTarget.focus();
     }
 
-    // 输入坐标只认会话当前桌面尺寸，避免状态栏分辨率和输入映射读取两套来源。
     const surface = surfaceRef.current;
-    const rect = surface?.getBoundingClientRect();
-    const localX = rect ? event.clientX - rect.left : 0;
-    const localY = rect ? event.clientY - rect.top : 0;
+    const surfaceRect = surface?.getBoundingClientRect();
+    const frameRect =
+      surfaceRect && activeTab.session.width > 0 && activeTab.session.height > 0
+        ? resolveDisplayedFrameRect(
+            surfaceRect,
+            activeTab.session.width,
+            activeTab.session.height,
+            activeTab.profile.displayStrategy,
+          )
+        : null;
+    const localX = frameRect ? event.clientX - frameRect.left : 0;
+    const localY = frameRect ? event.clientY - frameRect.top : 0;
 
     const x =
-      rect && activeTab.session.width > 0
+      frameRect && activeTab.session.width > 0
         ? Math.max(
             0,
             Math.min(
               activeTab.session.width,
-              (localX / rect.width) * activeTab.session.width,
+              (localX / frameRect.width) * activeTab.session.width,
             ),
           )
         : 0;
     const y =
-      rect && activeTab.session.height > 0
+      frameRect && activeTab.session.height > 0
         ? Math.max(
             0,
             Math.min(
               activeTab.session.height,
-              (localY / rect.height) * activeTab.session.height,
+              (localY / frameRect.height) * activeTab.session.height,
             ),
           )
         : 0;
@@ -714,17 +991,11 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
       const next = await decideRdpCertificate(
         activeTab.session.sessionId,
         accept,
+        { traceId: activeTab.traceId },
       );
       updateSessionTab(activeTab.session.sessionId, (tab) => ({
         ...tab,
         session: next,
-        statusText: accept
-          ? locale === "zh-CN"
-            ? "已接受证书"
-            : "Certificate accepted"
-          : locale === "zh-CN"
-            ? "已拒绝证书"
-            : "Certificate rejected",
       }));
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : String(error));
@@ -752,7 +1023,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
                   >
                     <span className={`rdp-tab-dot is-${tab.session.state}`} />
                     <span className="rdp-tab-copy">
-                      {getProfileDisplayName(tab.profile)}
+                      {getProfileDisplayName(tab.profile, t)}
                     </span>
                     <span
                       className="rdp-tab-close"
@@ -793,6 +1064,11 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
               <canvas
                 ref={canvasRef}
                 className={`rdp-canvas ${activeTab ? "" : "is-hidden"}`.trim()}
+                style={{
+                  objectFit: activeTab
+                    ? getCanvasObjectFit(activeTab.profile.displayStrategy)
+                    : "contain",
+                }}
               />
 
               {activeTab?.errorMessage ? (

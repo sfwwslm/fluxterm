@@ -239,13 +239,4 @@ export class RdpWebGLRenderer {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
-
-  public destroy() {
-    const gl = this.gl;
-    if (gl) {
-      if (this.vertexBuffer) gl.deleteBuffer(this.vertexBuffer);
-      if (this.program) gl.deleteProgram(this.program);
-    }
-    this.gl = null;
-  }
 }

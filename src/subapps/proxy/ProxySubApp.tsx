@@ -69,17 +69,6 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel(SUBAPP_LIFECYCLE_CHANNEL);
 
-    const postMessage = (message: SubAppLifecycleMessage) => {
-      channel.postMessage(message);
-    };
-
-    postMessage({
-      type: "subapp:ready",
-      id,
-      label: windowLabel,
-      source: "subapp",
-    });
-
     channel.onmessage = (event) => {
       const payload = event.data as SubAppLifecycleMessage | undefined;
       if (!payload) return;
@@ -103,7 +92,7 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
     };
 
     const onUnload = () => {
-      postMessage({
+      channel.postMessage({
         type: "subapp:closed",
         id,
         label: windowLabel,

@@ -1,7 +1,7 @@
 import type React from "react";
 import type { Translate } from "@/i18n";
 import type { WidgetKey } from "@/types";
-import type { WidgetGroup, WidgetSide, WidgetSlot } from "@/layout/types";
+import type { WidgetGroup, WidgetSide, WidgetSlotId } from "@/layout/types";
 import { sideSlotKey } from "@/layout/model";
 import WidgetContainer from "@/components/layout/WidgetContainer";
 import WidgetSlotView from "@/components/layout/WidgetSlot";
@@ -18,9 +18,9 @@ type WorkspaceProps = {
   leftVisible: boolean;
   rightVisible: boolean;
   bottomVisible: boolean;
-  onReplace: (slot: WidgetSlot, key: WidgetKey) => void;
-  onFloat: (slot: WidgetSlot) => void;
-  onCloseWidget: (slot: WidgetSlot) => void;
+  onReplace: (slot: WidgetSlotId, key: WidgetKey) => void;
+  onFloat: (slot: WidgetSlotId) => void;
+  onCloseWidget: (slot: WidgetSlotId) => void;
   onToggleSplit: (side: WidgetSide) => void;
   onStartResize: (
     mode: "left" | "right" | "bottom",

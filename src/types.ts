@@ -238,6 +238,9 @@ export type ProxyRuntime = {
 /** RDP 分辨率模式。 */
 export type RdpDisplayMode = "fixed" | "window_sync";
 
+/** RDP 本地显示策略。 */
+export type RdpDisplayStrategy = "fit" | "cover" | "stretch";
+
 /** RDP 剪贴板模式。 */
 export type RdpClipboardMode = "disabled" | "text";
 
@@ -245,6 +248,18 @@ export type RdpClipboardMode = "disabled" | "text";
 export type RdpReconnectPolicy = {
   enabled: boolean;
   maxAttempts: number;
+};
+
+/** RDP 远端体验标志。 */
+export type RdpPerformanceFlags = {
+  wallpaper: boolean;
+  fullWindowDrag: boolean;
+  menuAnimations: boolean;
+  theming: boolean;
+  cursorShadow: boolean;
+  cursorSettings: boolean;
+  fontSmoothing: boolean;
+  desktopComposition: boolean;
 };
 
 /** RDP Profile。 */
@@ -259,10 +274,12 @@ export type RdpProfile = {
   domain?: string | null;
   ignoreCertificate: boolean;
   resolutionMode: RdpDisplayMode;
-  width: number;
-  height: number;
+  displayStrategy: RdpDisplayStrategy;
+  width?: number | null;
+  height?: number | null;
   clipboardMode: RdpClipboardMode;
   reconnectPolicy: RdpReconnectPolicy;
+  performanceFlags: RdpPerformanceFlags;
 };
 
 /** RDP 证书确认信息。 */

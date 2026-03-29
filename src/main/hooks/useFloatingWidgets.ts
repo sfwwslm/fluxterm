@@ -18,10 +18,7 @@ import {
   FLOATING_WIDGET_WINDOW_WIDTH,
 } from "@/constants/windows";
 import type { ThemeId, WidgetKey } from "@/types";
-import type {
-  FloatingWidgetLayout,
-  WidgetSlot as LayoutWidgetSlot,
-} from "@/layout/types";
+import type { FloatingWidgetLayout, WidgetSlotId } from "@/layout/types";
 import { isMacOS } from "@/utils/platform";
 
 type useFloatingWidgetsProps = {
@@ -46,7 +43,7 @@ type useFloatingWidgetsProps = {
 
 type FloatingWidgetsState = {
   floatingWidgets: Partial<Record<WidgetKey, boolean>>;
-  handleFloat: (slot: LayoutWidgetSlot) => Promise<void>;
+  handleFloat: (slot: WidgetSlotId) => Promise<void>;
   restoreWidgetFloating: (widget: WidgetKey) => void;
   openAllDevtools: () => void;
 };
@@ -325,7 +322,7 @@ export default function useFloatingWidgets({
   }, [onMainShutdown]);
 
   const openFloatingWindow = useCallback(
-    async (slot: LayoutWidgetSlot, widget: WidgetKey) => {
+    async (slot: WidgetSlotId, widget: WidgetKey) => {
       const existing = floatingWindowRef.current[widget];
       if (existing) {
         await existing.setFocus().catch(() => {});
@@ -414,7 +411,7 @@ export default function useFloatingWidgets({
     if (shuttingDownRef.current) return;
     (
       Object.entries(floatingOrigins) as Array<
-        [string, { origin: LayoutWidgetSlot }]
+        [string, { origin: WidgetSlotId }]
       >
     ).forEach(([widgetKey, value]) => {
       const normalizedWidget = normalizeWidgetKey(widgetKey);
@@ -430,7 +427,7 @@ export default function useFloatingWidgets({
   }, [floatingWidgetKey, floatingOrigins, floatingWidgets, openFloatingWindow]);
 
   const handleFloat = useCallback(
-    async (slot: LayoutWidgetSlot) => {
+    async (slot: WidgetSlotId) => {
       const widget = slotGroups[slot].active;
       if (!widget) return;
       const hasTauriRuntime =

@@ -5,7 +5,8 @@
  * 2. 为每个区域输出工作区栏和会话容器。
  * 3. 处理区域内会话拖拽排序与 split resize 交互。
  */
-import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type React from "react";
+import type { MouseEvent } from "react";
 import { FiBell, FiX } from "react-icons/fi";
 import type { DisconnectReason, SessionPaneNode } from "@/types";
 
@@ -336,7 +337,7 @@ type PaneResizeHandleProps = {
 };
 
 function PaneResizeHandle({ axis, onResize }: PaneResizeHandleProps) {
-  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
     const handle = event.currentTarget;
     const container = handle.parentElement;
@@ -366,7 +367,7 @@ function PaneResizeHandle({ axis, onResize }: PaneResizeHandleProps) {
 }
 
 function handleSessionPointerDown(
-  event: ReactPointerEvent<HTMLElement>,
+  event: React.PointerEvent<HTMLElement>,
   paneId: string,
   sessionId: string,
   onReorderPaneSessions: (

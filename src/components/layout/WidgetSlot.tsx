@@ -1,20 +1,20 @@
 /** 单个组件槽位，负责标题栏操作与面板内容渲染。 */
 import type React from "react";
 import type { Translate } from "@/i18n";
-import type { WidgetSlot as WidgetSlotKey } from "@/layout/types";
+import type { WidgetSlotId } from "@/layout/types";
 import type { WidgetKey } from "@/types";
 import WidgetTitleBar from "./WidgetTitleBar";
 
 type WidgetSlotProps = {
-  slot: WidgetSlotKey;
+  slot: WidgetSlotId;
   active: WidgetKey | null;
   allWidgets: WidgetKey[];
   labels: Record<WidgetKey, string>;
   body: React.ReactNode;
-  onReplace: (slot: WidgetSlotKey, key: WidgetKey) => void;
-  onFloat: (slot: WidgetSlotKey) => void;
-  onClose?: (slot: WidgetSlotKey) => void;
-  onSplit?: (slot: WidgetSlotKey) => void;
+  onReplace: (slot: WidgetSlotId, key: WidgetKey) => void;
+  onFloat: (slot: WidgetSlotId) => void;
+  onClose?: (slot: WidgetSlotId) => void;
+  onSplit?: (slot: WidgetSlotId) => void;
   splitDisabled?: boolean;
   closeDisabled?: boolean;
   t: Translate;

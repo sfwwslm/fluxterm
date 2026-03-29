@@ -1,6 +1,6 @@
 /**
  * RDP 管理组件。
- * 职责：按会话管理面板的交互方式展示 RDP Profile 与分组。
+ * 职责：按连接配置管理面板的交互方式展示 RDP Profile 与分组。
  */
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -10,7 +10,6 @@ import {
   FiLoader,
   FiMonitor,
   FiPlus,
-  FiRefreshCw,
   FiTrash2,
 } from "react-icons/fi";
 import Button from "@/components/ui/button";
@@ -36,7 +35,6 @@ type RdpWidgetProps = {
   onOpenNewProfile: () => void;
   onOpenEditProfile: (profile: RdpProfile) => void;
   onRemoveProfile: (profile: RdpProfile) => Promise<void>;
-  onRefreshProfiles: () => Promise<void>;
   onAddGroup: (groupName: string) => boolean;
   onRenameGroup: (from: string, to: string) => Promise<boolean>;
   onRemoveGroup: (groupName: string) => Promise<boolean>;
@@ -57,7 +55,6 @@ export default function RdpWidget({
   onOpenNewProfile,
   onOpenEditProfile,
   onRemoveProfile,
-  onRefreshProfiles,
   onAddGroup,
   onRenameGroup,
   onRemoveGroup,
@@ -114,7 +111,7 @@ export default function RdpWidget({
     );
   }, [groups, profiles]);
 
-  /** 提取未归入任何分组的根级会话。 */
+  /** 提取未归入任何分组的根级连接配置。 */
   const rootProfiles = useMemo(
     () =>
       profiles.filter((profile) => {
@@ -124,7 +121,7 @@ export default function RdpWidget({
     [profiles],
   );
 
-  /** 判断单个会话是否命中当前搜索条件。 */
+  /** 判断单个连接配置是否命中当前搜索条件。 */
   const matchesProfile = useCallback(
     (profile: RdpProfile) => {
       if (!queryActive) return true;
@@ -142,7 +139,7 @@ export default function RdpWidget({
     [normalizedQuery, queryActive],
   );
 
-  /** 根据搜索条件过滤分组，同时保留命中的子会话。 */
+  /** 根据搜索条件过滤分组，同时保留命中的子连接配置。 */
   const filteredGroups = useMemo(() => {
     if (!queryActive) return customGroups;
     return customGroups
@@ -166,7 +163,7 @@ export default function RdpWidget({
       );
   }, [customGroups, matchesGroup, matchesProfile, queryActive]);
 
-  /** 根据搜索条件过滤根级会话。 */
+  /** 根据搜索条件过滤根级连接配置。 */
   const filteredRootProfiles = useMemo(() => {
     if (!queryActive) return rootProfiles;
     return rootProfiles.filter(matchesProfile);
@@ -184,7 +181,7 @@ export default function RdpWidget({
     [customGroups, t],
   );
 
-  /** 读取当前待移动会话的原始分组，用于禁用重复目标。 */
+  /** 读取当前待移动连接配置的原始分组，用于禁用重复目标。 */
   const currentMoveGroupValue = useMemo(() => {
     if (!moveDialog) return ROOT_PROFILE_GROUP_VALUE;
     return moveDialog.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE;
@@ -204,7 +201,7 @@ export default function RdpWidget({
     return null;
   }
 
-  /** 统计某个分组下的会话数量，用于删除前确认。 */
+  /** 统计某个分组下的连接配置数量，用于删除前确认。 */
   function getGroupProfileCount(groupName: string) {
     return profiles.filter(
       (profile) =>
@@ -249,20 +246,7 @@ export default function RdpWidget({
     setGroupDialog({ mode: "add", initialValue: "" });
   }
 
-  /** 刷新 RDP profile 与分组数据。 */
-  async function handleRefreshProfiles() {
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      await onRefreshProfiles();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** 删除指定会话，并在失败时向面板回填错误信息。 */
+  /** 删除指定连接配置，并在失败时向面板回填错误信息。 */
   async function handleRemoveProfile(profile: RdpProfile) {
     setBusy(true);
     setErrorMessage(null);
@@ -275,7 +259,7 @@ export default function RdpWidget({
     }
   }
 
-  /** 发起远程桌面连接，重复点击当前连接中的会话时直接忽略。 */
+  /** 发起远程桌面连接，重复点击当前连接中的配置时直接忽略。 */
   async function handleConnect(profile: RdpProfile) {
     if (connectingProfileId === profile.id) return;
     setErrorMessage(null);
@@ -317,7 +301,7 @@ export default function RdpWidget({
     }
   }
 
-  /** 将当前待移动会话保存到目标分组。 */
+  /** 将当前待移动连接配置保存到目标分组。 */
   async function handleMoveProfile() {
     if (!moveDialog) return;
     setBusy(true);
@@ -345,21 +329,12 @@ export default function RdpWidget({
         onClick: openAddGroupDialog,
       },
       {
-        label: t("profile.menu.new"),
+        label: t("rdp.menu.new"),
         icon: <FiPlus />,
         disabled: busy,
         onClick: () => {
           setMenu(null);
           onOpenNewProfile();
-        },
-      },
-      {
-        label: t("actions.refresh"),
-        icon: <FiRefreshCw />,
-        disabled: busy,
-        onClick: () => {
-          setMenu(null);
-          void handleRefreshProfiles();
         },
       },
     ];
@@ -369,7 +344,7 @@ export default function RdpWidget({
   function buildGroupMenuItems(groupLabel: string): ContextMenuItem[] {
     return [
       {
-        label: t("profile.menu.new"),
+        label: t("rdp.menu.new"),
         icon: <FiPlus />,
         disabled: busy,
         onClick: () => {
@@ -413,7 +388,7 @@ export default function RdpWidget({
     ];
   }
 
-  /** 构建单个会话条目的右键菜单。 */
+  /** 构建单个连接配置条目的右键菜单。 */
   function buildProfileMenuItems(profile: RdpProfile): ContextMenuItem[] {
     return [
       {
@@ -551,16 +526,7 @@ export default function RdpWidget({
           ))}
           {!profiles.length ? (
             <div className="rdp-empty-hint" data-ui="rdp-widget-empty">
-              <strong>{t("rdp.widget.empty")}</strong>
-              <span>{t("rdp.widget.hint")}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onOpenNewProfile}
-                disabled={busy}
-              >
-                {t("actions.new")}
-              </Button>
+              {t("rdp.widget.emptyHint")}
             </div>
           ) : null}
           {profiles.length > 0 &&

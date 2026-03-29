@@ -401,15 +401,29 @@ export default function SubAppRoot() {
   useEffect(() => {
     if (!subAppWindowAppearanceReady) return;
     if (subAppWindowShownRef.current) return;
+    if (!subAppId) return;
     subAppWindowShownRef.current = true;
     const current = getCurrentWindow();
+    const label = createSubAppWindowLabel(subAppId);
     void waitForNextPaint(2).then(() => {
       current
         .show()
-        .then(() => current.setFocus().catch(() => {}))
+        .then(async () => {
+          // 只有窗口真正显示后才声明 ready，避免主窗口在隐藏状态下提前派发后续命令。
+          await current.setFocus().catch(() => {});
+          if (typeof BroadcastChannel === "undefined") return;
+          const channel = new BroadcastChannel(SUBAPP_LIFECYCLE_CHANNEL);
+          channel.postMessage({
+            type: "subapp:ready",
+            id: subAppId,
+            label,
+            source: "subapp",
+          } satisfies SubAppLifecycleMessage);
+          channel.close();
+        })
         .catch(() => {});
     });
-  }, [subAppWindowAppearanceReady]);
+  }, [subAppId, subAppWindowAppearanceReady]);
 
   return (
     <>

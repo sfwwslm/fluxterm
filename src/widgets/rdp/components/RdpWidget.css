@@ -223,6 +223,17 @@
   color: var(--text-secondary, rgba(255, 255, 255, 0.72));
 }
 
+.rdp-empty-hint {
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
 .rdp-move-dialog {
   display: flex;
   flex-direction: column;

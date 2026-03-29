@@ -22,7 +22,7 @@ use tokio::sync::{Mutex, broadcast};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::protocol::SessionSnapshot;
+use crate::protocol::RuntimeSessionSnapshot;
 use crate::session_manager::{SessionManager, json_message};
 use crate::{RuntimeError, RuntimeResult};
 
@@ -100,6 +100,11 @@ impl BridgeServer {
             base_url: format!("ws://{}", addr),
             token,
         };
+        info!(
+            event = "rdp.bridge.server.ready",
+            base_url = %info.base_url,
+            "rdp bridge server is listening on loopback"
+        );
         *inner = Some(info.clone());
         Ok(info)
     }
@@ -120,6 +125,11 @@ async fn handle_bridge_ws(
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     if query.token != state.token {
+        warn!(
+            event = "rdp.bridge.auth.failed",
+            session_id = %session_id,
+            "bridge token mismatch"
+        );
         return Err((
             StatusCode::UNAUTHORIZED,
             "RDP bridge token 不匹配".to_string(),
@@ -128,6 +138,12 @@ async fn handle_bridge_ws(
     let (snapshot, rx) = match state.sessions.subscribe(&session_id) {
         Ok(result) => result,
         Err(error) => {
+            warn!(
+                event = "rdp.bridge.subscribe.failed",
+                session_id = %session_id,
+                error_code = %error.code,
+                "bridge session subscription failed"
+            );
             return Err((StatusCode::NOT_FOUND, error.detail.unwrap_or(error.message)));
         }
     };
@@ -137,7 +153,7 @@ async fn handle_bridge_ws(
 /// 单个 WebSocket 连接的消息循环任务。
 async fn run_bridge_socket(
     mut socket: WebSocket,
-    snapshot: SessionSnapshot,
+    snapshot: RuntimeSessionSnapshot,
     mut rx: broadcast::Receiver<axum::extract::ws::Message>,
 ) {
     info!(session_id = %snapshot.session_id, state = %snapshot.state, "bridge open");

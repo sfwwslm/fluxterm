@@ -1,3 +1,19 @@
+//! 浏览器键盘事件到 RDP 扫描码的映射。
+//!
+//! 该模块只负责 `KeyboardEvent.code -> RDP Scancode` 这条稳定映射链，
+//! 用于处理物理键位语义明确的控制键、导航键、功能键和小键盘。
+//!
+//! 设计约束：
+//!
+//! 1. 前端负责采集 `keydown` / `keyup`、传递 `code` / `key` 和修饰键状态，
+//!    并在失焦时补发 `key_up`
+//! 2. 运行时优先使用 `KeyboardEvent.code` 解析扫描码，因为它表示物理键位，
+//!    不受键盘布局切换影响
+//! 3. 可打印单字符输入是否走 Unicode，不在本模块决定，而由
+//!    `ironrdp_runtime::extract_unicode_char` 统一判断
+//! 4. 本模块维护的映射表应覆盖主键区、控制键、导航键、功能键和小键盘，
+//!    避免按单个异常键位零散打补丁
+
 use ironrdp::input::Scancode;
 
 /// 内部键盘扫描码表项，用于将浏览器 `KeyboardEvent.code` 映射到 RDP 协议使用的 scancode。
@@ -19,6 +35,7 @@ pub fn code_to_scancode(code: &str) -> Option<Scancode> {
 /// 浏览器 `KeyboardEvent.code` 到 RDP Scancode 的映射表。
 ///
 /// 遵循标准 PS/2 Set 1 扫描码转换规则，包括 Extended 位处理。
+/// 这里仅表达“该物理键位对应哪个扫描码”，不负责 Unicode 字符输入判断。
 pub const KEYBOARD_SCANCODE_TABLE: &[KeyboardScancodeEntry] = &[
     KeyboardScancodeEntry {
         code: "Escape",

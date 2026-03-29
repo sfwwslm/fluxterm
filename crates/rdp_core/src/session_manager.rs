@@ -9,16 +9,17 @@ use std::sync::{Arc, Mutex};
 use axum::extract::ws::Message;
 use serde_json::json;
 use tokio::sync::{broadcast, mpsc};
+use tracing::info;
 
 use crate::ironrdp_runtime::run_ironrdp_session;
-use crate::protocol::{ConnectSessionRequest, InputEventPayload, SessionSnapshot};
+use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimeSessionSnapshot};
 use crate::{RuntimeError, RuntimeResult};
 
 /// 发送给 RDP 会话运行时的控制命令。
 #[derive(Debug)]
 pub enum RuntimeCommand {
     /// 转发键盘或鼠标输入。
-    Input(InputEventPayload),
+    Input(RuntimeInputEvent),
     /// 请求调整桌面分辨率。
     Resize { width: u32, height: u32 },
     /// 同步剪贴板内容。
@@ -39,7 +40,7 @@ pub struct SessionManager {
 #[derive(Debug, Clone)]
 struct SessionRuntime {
     /// 会话的当前状态快照。
-    snapshot: SessionSnapshot,
+    snapshot: RuntimeSessionSnapshot,
     /// 用于向该会话的所有桥接客户端广播消息的频道。
     sender: broadcast::Sender<Message>,
     /// 用于向异步 RDP 协议任务发送控制命令的频道。
@@ -50,13 +51,19 @@ impl SessionManager {
     /// 初始化一个新的会话记录。
     ///
     /// 如果会话 ID 已存在，则返回现有会话的快照。
-    pub fn create_session(&self, session_id: String, profile_id: String) -> SessionSnapshot {
+    pub fn create_session(&self, session_id: String, profile_id: String) -> RuntimeSessionSnapshot {
         let mut inner = self.inner.lock().expect("session manager mutex poisoned");
         if let Some(runtime) = inner.get(&session_id) {
+            info!(
+                event = "rdp.session.create.reused",
+                session_id = %session_id,
+                profile_id = %runtime.snapshot.profile_id,
+                "reusing existing session snapshot"
+            );
             return runtime.snapshot.clone();
         }
         let (sender, _) = broadcast::channel(512);
-        let snapshot = SessionSnapshot {
+        let snapshot = RuntimeSessionSnapshot {
             session_id: session_id.clone(),
             profile_id,
             state: "idle".to_string(),
@@ -72,6 +79,14 @@ impl SessionManager {
                 command_tx: None,
             },
         );
+        info!(
+            event = "rdp.session.create.success",
+            session_id = %snapshot.session_id,
+            profile_id = %snapshot.profile_id,
+            width = snapshot.width,
+            height = snapshot.height,
+            "created in-process RDP session"
+        );
         snapshot
     }
 
@@ -81,9 +96,9 @@ impl SessionManager {
     pub fn connect_session(
         &self,
         session_id: &str,
-        profile: ConnectSessionRequest,
+        profile: RuntimeConnectRequest,
         ws_url: String,
-    ) -> RuntimeResult<SessionSnapshot> {
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         let mut inner = self.inner.lock().map_err(lock_error)?;
         let runtime = inner
             .get_mut(session_id)
@@ -94,6 +109,14 @@ impl SessionManager {
         runtime.snapshot.height = profile.height.max(200);
         runtime.snapshot.ws_url = Some(ws_url);
         runtime.command_tx = Some(command_tx);
+        info!(
+            event = "rdp.session.connect.start",
+            session_id = %session_id,
+            profile_id = %runtime.snapshot.profile_id,
+            width = runtime.snapshot.width,
+            height = runtime.snapshot.height,
+            "starting RDP runtime task"
+        );
         send_state_message(
             &runtime.sender,
             "connecting",
@@ -109,7 +132,7 @@ impl SessionManager {
     }
 
     /// 断开指定的 RDP 会话并清理其资源。
-    pub fn disconnect_session(&self, session_id: &str) -> RuntimeResult<SessionSnapshot> {
+    pub fn disconnect_session(&self, session_id: &str) -> RuntimeResult<RuntimeSessionSnapshot> {
         let snapshot = {
             let mut inner = self.inner.lock().map_err(lock_error)?;
             let runtime = inner
@@ -117,6 +140,11 @@ impl SessionManager {
                 .ok_or_else(session_not_found_error)?;
             send_runtime_command(&runtime.command_tx, RuntimeCommand::Disconnect);
             set_runtime_state(runtime, "disconnected");
+            info!(
+                event = "rdp.session.disconnect.success",
+                session_id = %session_id,
+                "disconnect requested and session marked closed"
+            );
             send_state_message(&runtime.sender, "disconnected", "session closed");
             runtime.snapshot.clone()
         };
@@ -130,13 +158,20 @@ impl SessionManager {
         session_id: &str,
         width: u32,
         height: u32,
-    ) -> RuntimeResult<SessionSnapshot> {
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         let mut inner = self.inner.lock().map_err(lock_error)?;
         let runtime = inner
             .get_mut(session_id)
             .ok_or_else(session_not_found_error)?;
         runtime.snapshot.width = width.max(320);
         runtime.snapshot.height = height.max(200);
+        info!(
+            event = "rdp.session.resize.start",
+            session_id = %session_id,
+            width = runtime.snapshot.width,
+            height = runtime.snapshot.height,
+            "forwarding resize request to runtime"
+        );
         send_runtime_command(
             &runtime.command_tx,
             RuntimeCommand::Resize {
@@ -157,7 +192,7 @@ impl SessionManager {
     }
 
     /// 向远端会话转发输入事件。
-    pub fn send_input(&self, session_id: &str, input: InputEventPayload) -> RuntimeResult<()> {
+    pub fn send_input(&self, session_id: &str, input: RuntimeInputEvent) -> RuntimeResult<()> {
         let inner = self.inner.lock().map_err(lock_error)?;
         let runtime = inner.get(session_id).ok_or_else(session_not_found_error)?;
         send_runtime_command(&runtime.command_tx, RuntimeCommand::Input(input.clone()));
@@ -174,6 +209,12 @@ impl SessionManager {
     pub fn set_clipboard(&self, session_id: &str, text: String) -> RuntimeResult<()> {
         let inner = self.inner.lock().map_err(lock_error)?;
         let runtime = inner.get(session_id).ok_or_else(session_not_found_error)?;
+        info!(
+            event = "rdp.session.clipboard.forwarded",
+            session_id = %session_id,
+            text_len = text.chars().count(),
+            "forwarding clipboard text to runtime"
+        );
         send_runtime_command(&runtime.command_tx, RuntimeCommand::Clipboard(text.clone()));
         let _ = runtime.sender.send(json_message(
             "clipboard",
@@ -190,11 +231,17 @@ impl SessionManager {
         &self,
         session_id: &str,
         accept: bool,
-    ) -> RuntimeResult<SessionSnapshot> {
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         let mut inner = self.inner.lock().map_err(lock_error)?;
         let runtime = inner
             .get_mut(session_id)
             .ok_or_else(session_not_found_error)?;
+        info!(
+            event = "rdp.session.certificate.decision",
+            session_id = %session_id,
+            accept = accept,
+            "received certificate decision from frontend"
+        );
         send_runtime_command(&runtime.command_tx, RuntimeCommand::CertificateDecision);
         set_runtime_state(runtime, if accept { "connecting" } else { "disconnected" });
         let _ = runtime.sender.send(json_message(
@@ -211,7 +258,7 @@ impl SessionManager {
     pub fn subscribe(
         &self,
         session_id: &str,
-    ) -> RuntimeResult<(SessionSnapshot, broadcast::Receiver<Message>)> {
+    ) -> RuntimeResult<(RuntimeSessionSnapshot, broadcast::Receiver<Message>)> {
         let inner = self.inner.lock().map_err(lock_error)?;
         let runtime = inner.get(session_id).ok_or_else(session_not_found_error)?;
         Ok((runtime.snapshot.clone(), runtime.sender.subscribe()))
@@ -221,13 +268,24 @@ impl SessionManager {
     pub fn remove_session(&self, session_id: &str) -> RuntimeResult<()> {
         let mut inner = self.inner.lock().map_err(lock_error)?;
         inner.remove(session_id);
+        info!(
+            event = "rdp.session.remove.success",
+            session_id = %session_id,
+            "removed session from manager"
+        );
         Ok(())
     }
 
     /// 强制清空所有活动会话。
     pub fn clear(&self) -> RuntimeResult<()> {
         let mut inner = self.inner.lock().map_err(lock_error)?;
+        let count = inner.len();
         inner.clear();
+        info!(
+            event = "rdp.session.clear.success",
+            count = count,
+            "cleared all managed RDP sessions"
+        );
         Ok(())
     }
 
@@ -246,6 +304,12 @@ impl SessionManager {
             .get_mut(session_id)
             .ok_or_else(session_not_found_error)?;
         set_runtime_state(runtime, state);
+        info!(
+            event = "rdp.runtime.state.updated",
+            session_id = %session_id,
+            state = %state,
+            "publishing runtime state update"
+        );
         send_state_message(&runtime.sender, state, &message.into());
         Ok(())
     }

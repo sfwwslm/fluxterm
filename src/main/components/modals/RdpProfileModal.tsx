@@ -3,9 +3,15 @@ import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import { ROOT_PROFILE_GROUP_VALUE } from "@/constants/hostGroups";
-import type { Translate } from "@/i18n";
+import type { Translate, TranslationKey } from "@/i18n";
 import { saveRdpProfile } from "@/features/rdp/core/commands";
-import type { RdpProfile } from "@/types";
+import { translateAppError } from "@/shared/errors/appError";
+import type {
+  RdpDisplayStrategy,
+  RdpPerformanceFlags,
+  RdpProfile,
+} from "@/types";
+import "@/main/components/modals/ProfileModal.css";
 import "@/main/components/modals/RdpProfileModal.css";
 
 type RdpProfileModalProps = {
@@ -30,6 +36,91 @@ const RDP_RESOLUTION_PRESETS = [
   { value: "2560x1440", width: 2560, height: 1440 },
 ] as const;
 
+type RdpPerformancePreset = "fluid" | "balanced" | "quality" | "custom";
+
+const RDP_PERFORMANCE_PRESETS: Record<
+  Exclude<RdpPerformancePreset, "custom">,
+  RdpPerformanceFlags
+> = {
+  fluid: {
+    wallpaper: false,
+    fullWindowDrag: false,
+    menuAnimations: false,
+    theming: false,
+    cursorShadow: false,
+    cursorSettings: true,
+    fontSmoothing: false,
+    desktopComposition: false,
+  },
+  balanced: {
+    wallpaper: false,
+    fullWindowDrag: true,
+    menuAnimations: false,
+    theming: true,
+    cursorShadow: true,
+    cursorSettings: true,
+    fontSmoothing: true,
+    desktopComposition: false,
+  },
+  quality: {
+    wallpaper: true,
+    fullWindowDrag: true,
+    menuAnimations: true,
+    theming: true,
+    cursorShadow: true,
+    cursorSettings: true,
+    fontSmoothing: true,
+    desktopComposition: true,
+  },
+};
+
+const RDP_PERFORMANCE_FLAG_FIELDS: Array<{
+  key: keyof RdpPerformanceFlags;
+  labelKey: TranslationKey;
+  hintKey: TranslationKey;
+}> = [
+  {
+    key: "wallpaper",
+    labelKey: "rdp.performance.flag.wallpaper",
+    hintKey: "rdp.performance.flag.wallpaperHint",
+  },
+  {
+    key: "fullWindowDrag",
+    labelKey: "rdp.performance.flag.fullWindowDrag",
+    hintKey: "rdp.performance.flag.fullWindowDragHint",
+  },
+  {
+    key: "menuAnimations",
+    labelKey: "rdp.performance.flag.menuAnimations",
+    hintKey: "rdp.performance.flag.menuAnimationsHint",
+  },
+  {
+    key: "theming",
+    labelKey: "rdp.performance.flag.theming",
+    hintKey: "rdp.performance.flag.themingHint",
+  },
+  {
+    key: "cursorShadow",
+    labelKey: "rdp.performance.flag.cursorShadow",
+    hintKey: "rdp.performance.flag.cursorShadowHint",
+  },
+  {
+    key: "cursorSettings",
+    labelKey: "rdp.performance.flag.cursorSettings",
+    hintKey: "rdp.performance.flag.cursorSettingsHint",
+  },
+  {
+    key: "fontSmoothing",
+    labelKey: "rdp.performance.flag.fontSmoothing",
+    hintKey: "rdp.performance.flag.fontSmoothingHint",
+  },
+  {
+    key: "desktopComposition",
+    labelKey: "rdp.performance.flag.desktopComposition",
+    hintKey: "rdp.performance.flag.desktopCompositionHint",
+  },
+];
+
 const DEFAULT_RDP_PROFILE: RdpProfile = {
   id: "",
   name: "",
@@ -41,20 +132,87 @@ const DEFAULT_RDP_PROFILE: RdpProfile = {
   domain: "",
   ignoreCertificate: true,
   resolutionMode: "window_sync",
-  width: 1280,
-  height: 720,
+  displayStrategy: "fit",
+  width: null,
+  height: null,
   clipboardMode: "text",
   reconnectPolicy: {
     enabled: true,
     maxAttempts: 3,
   },
+  performanceFlags: { ...RDP_PERFORMANCE_PRESETS.fluid },
 };
+
+function clonePerformanceFlags(
+  flags?: Partial<RdpPerformanceFlags> | null,
+): RdpPerformanceFlags {
+  return {
+    ...RDP_PERFORMANCE_PRESETS.fluid,
+    ...flags,
+  };
+}
 
 function buildDefaultProfile() {
   return {
     ...DEFAULT_RDP_PROFILE,
+    width: DEFAULT_RDP_PROFILE.width,
+    height: DEFAULT_RDP_PROFILE.height,
     reconnectPolicy: { ...DEFAULT_RDP_PROFILE.reconnectPolicy },
+    performanceFlags: clonePerformanceFlags(
+      DEFAULT_RDP_PROFILE.performanceFlags,
+    ),
   };
+}
+
+function resolvePerformancePreset(
+  flags: RdpPerformanceFlags,
+): RdpPerformancePreset {
+  const matched = (
+    Object.entries(RDP_PERFORMANCE_PRESETS) as Array<
+      [Exclude<RdpPerformancePreset, "custom">, RdpPerformanceFlags]
+    >
+  ).find(([, presetFlags]) =>
+    Object.entries(presetFlags).every(
+      ([key, value]) => flags[key as keyof RdpPerformanceFlags] === value,
+    ),
+  );
+  return matched?.[0] ?? "custom";
+}
+
+/** 保存前优先执行前端字段校验，避免直接暴露后端兜底文案。 */
+function validateDraftProfile(
+  profile: RdpProfile,
+  t: Translate,
+): { message: string; section: RdpProfileSection } | null {
+  if (!profile.name.trim()) {
+    return {
+      message: t("rdp.error.nameRequired"),
+      section: "connection",
+    };
+  }
+  if (!profile.host.trim()) {
+    return {
+      message: t("rdp.error.hostRequired"),
+      section: "connection",
+    };
+  }
+  if (!profile.username.trim()) {
+    return {
+      message: t("rdp.error.usernameRequired"),
+      section: "connection",
+    };
+  }
+  if (
+    profile.resolutionMode === "fixed" &&
+    (!(profile.width && profile.width > 0) ||
+      !(profile.height && profile.height > 0))
+  ) {
+    return {
+      message: t("rdp.error.fixedResolutionRequired"),
+      section: "display",
+    };
+  }
+  return null;
 }
 
 export default function RdpProfileModal({
@@ -79,6 +237,9 @@ export default function RdpProfileModal({
       return {
         ...initialProfile,
         reconnectPolicy: { ...initialProfile.reconnectPolicy },
+        performanceFlags: clonePerformanceFlags(
+          initialProfile.performanceFlags,
+        ),
       };
     }
     return buildDefaultProfile();
@@ -92,6 +253,12 @@ export default function RdpProfileModal({
   }, [open, resolveInitialDraft]);
 
   async function handleSaveProfile() {
+    const validationError = validateDraftProfile(draftProfile, t);
+    if (validationError) {
+      setActiveSection(validationError.section);
+      setErrorMessage(validationError.message);
+      return;
+    }
     setBusy(true);
     setErrorMessage("");
     try {
@@ -100,7 +267,7 @@ export default function RdpProfileModal({
       await onProfilesChange?.();
       onClose();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error));
+      setErrorMessage(translateAppError(error, t));
     } finally {
       setBusy(false);
     }
@@ -152,13 +319,59 @@ export default function RdpProfileModal({
   );
 
   const resolutionPresetValue = useMemo(() => {
+    const width = draftProfile.width ?? 0;
+    const height = draftProfile.height ?? 0;
     const matchedPreset = RDP_RESOLUTION_PRESETS.find(
-      (item) =>
-        item.width === draftProfile.width &&
-        item.height === draftProfile.height,
+      (item) => item.width === width && item.height === height,
     );
     return matchedPreset?.value ?? RDP_RESOLUTION_CUSTOM_VALUE;
   }, [draftProfile.height, draftProfile.width]);
+
+  const displayStrategyOptions = useMemo(
+    () => [
+      {
+        value: "fit",
+        label: t("rdp.displayStrategy.fit"),
+      },
+      {
+        value: "cover",
+        label: t("rdp.displayStrategy.cover"),
+      },
+      {
+        value: "stretch",
+        label: t("rdp.displayStrategy.stretch"),
+      },
+    ],
+    [t],
+  );
+
+  const performancePresetOptions = useMemo(
+    () => [
+      {
+        value: "fluid",
+        label: t("rdp.performance.preset.fluid"),
+      },
+      {
+        value: "balanced",
+        label: t("rdp.performance.preset.balanced"),
+      },
+      {
+        value: "quality",
+        label: t("rdp.performance.preset.quality"),
+      },
+      {
+        value: "custom",
+        label: t("rdp.performance.preset.custom"),
+        disabled: true,
+      },
+    ],
+    [t],
+  );
+
+  const performancePresetValue = useMemo(
+    () => resolvePerformancePreset(draftProfile.performanceFlags),
+    [draftProfile.performanceFlags],
+  );
 
   return (
     <Modal
@@ -167,7 +380,7 @@ export default function RdpProfileModal({
       title={t("rdp.config.title")}
       closeLabel={t("actions.close")}
       onClose={onClose}
-      bodyClassName="rdp-profile-modal-body"
+      bodyClassName="profile-modal-body"
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -185,30 +398,27 @@ export default function RdpProfileModal({
       }
     >
       <div className="rdp-profile-modal" data-ui="rdp-profile-modal">
-        <aside className="rdp-profile-modal-nav" data-slot="rdp-profile-nav">
-          <div className="rdp-profile-modal-menu">
+        <div className="profile-modal-layout">
+          <nav className="profile-modal-nav" data-slot="rdp-profile-nav">
             {sectionItems.map((section) => (
-              <Button
+              <button
                 key={section.key}
-                className={`rdp-profile-modal-menu-item ${
-                  section.key === activeSection ? "is-active" : ""
+                type="button"
+                className={`profile-modal-nav-item ${
+                  section.key === activeSection ? "active" : ""
                 }`}
-                variant="ghost"
-                size="sm"
                 onClick={() => setActiveSection(section.key)}
               >
                 {section.label}
-              </Button>
+              </button>
             ))}
-          </div>
-        </aside>
-        <div
-          className="rdp-profile-modal-content"
-          data-slot="rdp-profile-content"
-        >
-          <div className="rdp-profile-modal-scroll">
-            {activeSection === "connection" ? (
-              <section className="rdp-profile-modal-section">
+          </nav>
+          <section
+            className="profile-modal-content"
+            data-slot="rdp-profile-content"
+          >
+            <div className="profile-settings-page">
+              {activeSection === "connection" ? (
                 <div className="host-editor">
                   <div className="form-row">
                     <label className="form-label">
@@ -317,134 +527,234 @@ export default function RdpProfileModal({
                     />
                   </div>
                 </div>
-              </section>
-            ) : null}
+              ) : null}
 
-            {activeSection === "display" ? (
-              <section className="rdp-profile-modal-section">
-                <div className="rdp-profile-group-card">
-                  <div className="host-editor">
-                    <div className="form-row">
-                      <label className="form-label">
-                        {t("rdp.form.resolutionMode")}
-                      </label>
-                      <div className="config-select-control rdp-profile-select-control">
-                        <Select
-                          value={draftProfile.resolutionMode}
-                          options={resolutionModeOptions}
-                          aria-label={t("rdp.form.resolutionMode")}
-                          onChange={(value) =>
-                            setDraftProfile((prev) => ({
-                              ...prev,
-                              resolutionMode:
-                                value as RdpProfile["resolutionMode"],
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  {draftProfile.resolutionMode === "fixed" ? (
-                    <div className="rdp-profile-group-body host-editor">
+              {activeSection === "display" ? (
+                <>
+                  <section className="profile-settings-section rdp-profile-settings-group">
+                    <div className="profile-settings-section-body host-editor rdp-profile-group-head">
                       <div className="form-row">
                         <label className="form-label">
-                          {t("rdp.form.fixedResolution")}
+                          {t("rdp.form.resolutionMode")}
                         </label>
-                        <Select
-                          value={resolutionPresetValue}
-                          options={resolutionPresetOptions}
-                          aria-label={t("rdp.form.fixedResolution")}
-                          onChange={(value) => {
-                            if (value === RDP_RESOLUTION_CUSTOM_VALUE) {
-                              return;
+                        <div className="config-select-control rdp-profile-select-control">
+                          <Select
+                            value={draftProfile.resolutionMode}
+                            options={resolutionModeOptions}
+                            aria-label={t("rdp.form.resolutionMode")}
+                            onChange={(value) =>
+                              setDraftProfile((prev) => ({
+                                ...prev,
+                                resolutionMode:
+                                  value as RdpProfile["resolutionMode"],
+                                width:
+                                  value === "fixed"
+                                    ? (prev.width ?? 1920)
+                                    : null,
+                                height:
+                                  value === "fixed"
+                                    ? (prev.height ?? 1080)
+                                    : null,
+                              }))
                             }
-                            const preset = RDP_RESOLUTION_PRESETS.find(
-                              (item) => item.value === value,
-                            );
-                            if (!preset) return;
-                            setDraftProfile((prev) => ({
-                              ...prev,
-                              width: preset.width,
-                              height: preset.height,
-                            }));
-                          }}
-                        />
+                          />
+                        </div>
                       </div>
-                      {resolutionPresetValue === RDP_RESOLUTION_CUSTOM_VALUE ? (
-                        <>
-                          <div className="form-row">
-                            <label className="form-label">
-                              {t("rdp.form.width")}
-                            </label>
-                            <input
-                              inputMode="numeric"
-                              value={String(draftProfile.width)}
-                              onChange={(event) =>
-                                setDraftProfile((prev) => ({
-                                  ...prev,
-                                  width: Number(
-                                    event.target.value.replace(/[^\d]/g, "") ||
-                                      "1280",
-                                  ),
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="form-row">
-                            <label className="form-label">
-                              {t("rdp.form.height")}
-                            </label>
-                            <input
-                              inputMode="numeric"
-                              value={String(draftProfile.height)}
-                              onChange={(event) =>
-                                setDraftProfile((prev) => ({
-                                  ...prev,
-                                  height: Number(
-                                    event.target.value.replace(/[^\d]/g, "") ||
-                                      "720",
-                                  ),
-                                }))
-                              }
-                            />
-                          </div>
-                        </>
-                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
+                    {draftProfile.resolutionMode === "fixed" ? (
+                      <div className="rdp-profile-group-body host-editor">
+                        <div className="form-row">
+                          <label className="form-label">
+                            {t("rdp.form.fixedResolution")}
+                          </label>
+                          <Select
+                            value={resolutionPresetValue}
+                            options={resolutionPresetOptions}
+                            aria-label={t("rdp.form.fixedResolution")}
+                            onChange={(value) => {
+                              if (value === RDP_RESOLUTION_CUSTOM_VALUE) {
+                                return;
+                              }
+                              const preset = RDP_RESOLUTION_PRESETS.find(
+                                (item) => item.value === value,
+                              );
+                              if (!preset) return;
+                              setDraftProfile((prev) => ({
+                                ...prev,
+                                width: preset.width,
+                                height: preset.height,
+                              }));
+                            }}
+                          />
+                        </div>
+                        {resolutionPresetValue ===
+                        RDP_RESOLUTION_CUSTOM_VALUE ? (
+                          <>
+                            <div className="form-row">
+                              <label className="form-label">
+                                {t("rdp.form.width")}
+                              </label>
+                              <input
+                                inputMode="numeric"
+                                value={String(draftProfile.width ?? "")}
+                                onChange={(event) =>
+                                  setDraftProfile((prev) => ({
+                                    ...prev,
+                                    width: Number(
+                                      event.target.value.replace(
+                                        /[^\d]/g,
+                                        "",
+                                      ) || "0",
+                                    ),
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="form-row">
+                              <label className="form-label">
+                                {t("rdp.form.height")}
+                              </label>
+                              <input
+                                inputMode="numeric"
+                                value={String(draftProfile.height ?? "")}
+                                onChange={(event) =>
+                                  setDraftProfile((prev) => ({
+                                    ...prev,
+                                    height: Number(
+                                      event.target.value.replace(
+                                        /[^\d]/g,
+                                        "",
+                                      ) || "0",
+                                    ),
+                                  }))
+                                }
+                              />
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </section>
+                  <section className="profile-settings-section rdp-profile-settings-group">
+                    <div className="rdp-profile-group-card">
+                      <div className="profile-settings-section-body host-editor rdp-profile-group-head">
+                        <div className="form-row">
+                          <label className="form-label">
+                            {t("rdp.form.displayStrategy")}
+                          </label>
+                          <Select
+                            value={draftProfile.displayStrategy}
+                            options={displayStrategyOptions}
+                            aria-label={t("rdp.form.displayStrategy")}
+                            onChange={(value) =>
+                              setDraftProfile((prev) => ({
+                                ...prev,
+                                displayStrategy: value as RdpDisplayStrategy,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="profile-form-hint">
+                          {t("rdp.displayStrategy.hint")}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                  <section className="profile-settings-section rdp-profile-settings-group rdp-profile-settings-group-unified">
+                    <div className="rdp-profile-group-card">
+                      <div className="profile-settings-section-body host-editor rdp-profile-group-head">
+                        <div className="form-row">
+                          <label className="form-label">
+                            {t("rdp.form.performancePreset")}
+                          </label>
+                          <Select
+                            value={performancePresetValue}
+                            options={performancePresetOptions}
+                            aria-label={t("rdp.form.performancePreset")}
+                            onChange={(value) => {
+                              if (value === "custom") return;
+                              setDraftProfile((prev) => ({
+                                ...prev,
+                                performanceFlags: {
+                                  ...RDP_PERFORMANCE_PRESETS[
+                                    value as Exclude<
+                                      RdpPerformancePreset,
+                                      "custom"
+                                    >
+                                  ],
+                                },
+                              }));
+                            }}
+                          />
+                        </div>
+                        <div className="profile-form-hint">
+                          {t("rdp.performance.presetHint")}
+                        </div>
+                      </div>
+                      <div className="rdp-profile-group-body rdp-performance-flags">
+                        {RDP_PERFORMANCE_FLAG_FIELDS.map((field) => (
+                          <label className="config-toggle-card" key={field.key}>
+                            <div className="config-toggle-copy">
+                              <span className="config-toggle-title">
+                                {t(field.labelKey)}
+                              </span>
+                              <span className="config-toggle-desc">
+                                {t(field.hintKey)}
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={draftProfile.performanceFlags[field.key]}
+                              onChange={(event) =>
+                                setDraftProfile((prev) => ({
+                                  ...prev,
+                                  performanceFlags: {
+                                    ...prev.performanceFlags,
+                                    [field.key]: event.target.checked,
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                </>
+              ) : null}
 
-            {activeSection === "security" ? (
-              <section className="rdp-profile-modal-section">
-                <label className="config-toggle-card">
-                  <div className="config-toggle-copy">
-                    <span className="config-toggle-title">
-                      {t("rdp.form.ignoreCertificate")}
-                    </span>
-                    <span className="config-toggle-desc">
-                      {t("rdp.security.ignoreCertificateHint")}
-                    </span>
+              {activeSection === "security" ? (
+                <section className="profile-settings-section">
+                  <div className="profile-settings-section-body">
+                    <label className="config-toggle-card">
+                      <div className="config-toggle-copy">
+                        <span className="config-toggle-title">
+                          {t("rdp.form.ignoreCertificate")}
+                        </span>
+                        <span className="config-toggle-desc">
+                          {t("rdp.security.ignoreCertificateHint")}
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={draftProfile.ignoreCertificate}
+                        onChange={(event) =>
+                          setDraftProfile((prev) => ({
+                            ...prev,
+                            ignoreCertificate: event.target.checked,
+                          }))
+                        }
+                      />
+                    </label>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={draftProfile.ignoreCertificate}
-                    onChange={(event) =>
-                      setDraftProfile((prev) => ({
-                        ...prev,
-                        ignoreCertificate: event.target.checked,
-                      }))
-                    }
-                  />
-                </label>
-              </section>
-            ) : null}
+                </section>
+              ) : null}
 
-            {errorMessage ? (
-              <div className="rdp-profile-modal-error">{errorMessage}</div>
-            ) : null}
-          </div>
+              {errorMessage ? (
+                <div className="rdp-profile-modal-error">{errorMessage}</div>
+              ) : null}
+            </div>
+          </section>
         </div>
       </div>
     </Modal>

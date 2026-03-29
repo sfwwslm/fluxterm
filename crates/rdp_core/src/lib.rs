@@ -11,7 +11,9 @@ mod session_manager;
 
 use std::sync::Arc;
 
-pub use protocol::{ConnectSessionRequest, InputEventPayload, SessionSnapshot};
+pub use protocol::{
+    RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags, RuntimeSessionSnapshot,
+};
 use thiserror::Error;
 
 use crate::bridge::BridgeServer;
@@ -88,7 +90,7 @@ impl RdpRuntime {
         &self,
         session_id: String,
         profile_id: String,
-    ) -> RuntimeResult<SessionSnapshot> {
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         let _ = self.bridge.ensure_ready(self.sessions.clone()).await?;
         Ok(self.sessions.create_session(session_id, profile_id))
     }
@@ -102,8 +104,8 @@ impl RdpRuntime {
     pub async fn connect_session(
         &self,
         session_id: &str,
-        request: ConnectSessionRequest,
-    ) -> RuntimeResult<SessionSnapshot> {
+        request: RuntimeConnectRequest,
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         let bridge = self.bridge.ensure_ready(self.sessions.clone()).await?;
         let ws_url = format!(
             "{}/v1/bridge/{}?token={}",
@@ -113,7 +115,7 @@ impl RdpRuntime {
     }
 
     /// 断开指定的 RDP 会话。
-    pub fn disconnect_session(&self, session_id: &str) -> RuntimeResult<SessionSnapshot> {
+    pub fn disconnect_session(&self, session_id: &str) -> RuntimeResult<RuntimeSessionSnapshot> {
         self.sessions.disconnect_session(session_id)
     }
 
@@ -125,12 +127,12 @@ impl RdpRuntime {
         session_id: &str,
         width: u32,
         height: u32,
-    ) -> RuntimeResult<SessionSnapshot> {
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         self.sessions.resize_session(session_id, width, height)
     }
 
     /// 向远端会话发送键盘或鼠标输入事件。
-    pub fn send_input(&self, session_id: &str, input: InputEventPayload) -> RuntimeResult<()> {
+    pub fn send_input(&self, session_id: &str, input: RuntimeInputEvent) -> RuntimeResult<()> {
         self.sessions.send_input(session_id, input)
     }
 
@@ -144,7 +146,7 @@ impl RdpRuntime {
         &self,
         session_id: &str,
         accept: bool,
-    ) -> RuntimeResult<SessionSnapshot> {
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
         self.sessions.decide_certificate(session_id, accept)
     }
 

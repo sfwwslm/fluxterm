@@ -54,7 +54,7 @@ import useAppUpdater from "@/main/hooks/useAppUpdater";
 import useQuickBarState from "@/main/hooks/useQuickBarState";
 import useSubApps from "@/main/hooks/useSubApps";
 import { moveWidgetToSlot, widgetKeys } from "@/layout/model";
-import type { WidgetSlot as LayoutWidgetSlot } from "@/layout/types";
+import type { WidgetSlotId } from "@/layout/types";
 import type {
   HostProfile,
   LocalShellConfig,
@@ -1588,7 +1588,7 @@ export default function AppShell() {
   }
 
   const isMainSlotVisible = useCallback(
-    (slot: LayoutWidgetSlot) => {
+    (slot: WidgetSlotId) => {
       if (slot === "bottom") return !layoutCollapsed.bottom;
       return slot.startsWith("left:")
         ? !layoutCollapsed.left
@@ -1612,7 +1612,7 @@ export default function AppShell() {
     if (floatingWidgets.files) return true;
     return Object.entries(slotGroups).some(
       ([slot, group]) =>
-        isMainSlotVisible(slot as LayoutWidgetSlot) && group.active === "files",
+        isMainSlotVisible(slot as WidgetSlotId) && group.active === "files",
     );
   }, [floatingWidgetKey, floatingWidgets.files, isMainSlotVisible, slotGroups]);
 
@@ -3238,7 +3238,6 @@ export default function AppShell() {
         pickRdpProfile: setActiveRdpProfileId,
         onConnectProfile: handleConnectProfile,
         onConnectRdpProfile: handleConnectRdpProfile,
-        onRefreshRdpProfiles: () => refreshRdpProfiles().then(() => {}),
         onOpenNewRdpProfile: openNewRdpProfileModal,
         onOpenEditRdpProfile: openEditRdpProfileModal,
         onRemoveRdpProfile: handleRemoveRdpProfile,
@@ -3331,7 +3330,6 @@ export default function AppShell() {
       pushToast,
       t,
       pickProfile,
-      refreshRdpProfiles,
       addGroup,
       renameGroup,
       removeGroup,
@@ -3356,7 +3354,7 @@ export default function AppShell() {
     ],
   );
 
-  function handleSlotReplace(slot: LayoutWidgetSlot, key: WidgetKey) {
+  function handleSlotReplace(slot: WidgetSlotId, key: WidgetKey) {
     // UI 候选列表已经做过过滤，这里再做一次防守式保护，
     // 避免未来新增入口时把“已存在或已浮动”的组件重新塞回主窗口。
     if (!availableWidgets.includes(key)) return;

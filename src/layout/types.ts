@@ -2,7 +2,7 @@
 import type { WidgetKey } from "@/types";
 
 /** 组件槽位标识。 */
-export type WidgetSlot = `${WidgetSide}:${number}` | "bottom";
+export type WidgetSlotId = `${WidgetSide}:${number}` | "bottom";
 
 /** 左右区域标识。 */
 export type WidgetSide = "left" | "right";
@@ -17,7 +17,7 @@ export type FloatingWidgetLayout = Partial<
   Record<
     WidgetKey,
     {
-      origin: WidgetSlot;
+      origin: WidgetSlotId;
     }
   >
 >;

@@ -5,7 +5,7 @@ import type {
   WidgetLayout,
   WidgetGroup,
   WidgetSide,
-  WidgetSlot,
+  WidgetSlotId,
 } from "./types";
 
 /** 每侧最大槽位数量。 */
@@ -49,7 +49,7 @@ export const defaultWidgetLayout: WidgetLayout = {
 };
 
 /** 创建侧边槽位 key。 */
-export function sideSlotKey(side: WidgetSide, index: number): WidgetSlot {
+export function sideSlotKey(side: WidgetSide, index: number): WidgetSlotId {
   return `${side}:${index}`;
 }
 
@@ -86,7 +86,7 @@ export function getSideSlotKeys(
 export function cloneSlots(slots: Record<string, WidgetGroup>) {
   const next: Record<string, WidgetGroup> = {};
   Object.entries(slots).forEach(([slot, group]) => {
-    next[slot as WidgetSlot] = { ...group };
+    next[slot as WidgetSlotId] = { ...group };
   });
   return next;
 }
@@ -188,7 +188,7 @@ export function normalizeWidgetLayout(raw: unknown): WidgetLayout | null {
 export function moveWidgetToSlot(
   slots: Record<string, WidgetGroup>,
   widget: WidgetKey,
-  target: WidgetSlot,
+  target: WidgetSlotId,
 ) {
   const next = cloneSlots(slots);
   Object.values(next).forEach((group) => {
@@ -219,7 +219,7 @@ export function increaseSideSlots(
 /** 关闭槽位中当前激活组件。 */
 export function closeActiveWidgetInSlot(
   slots: Record<string, WidgetGroup>,
-  slot: WidgetSlot,
+  slot: WidgetSlotId,
 ) {
   const next = cloneSlots(slots);
   const group = next[slot];
@@ -275,7 +275,7 @@ function dedupeActiveWidgets(slots: Record<string, WidgetGroup>) {
   const orderedKeys = [
     ...getSideSlotKeys(next, "left"),
     ...getSideSlotKeys(next, "right"),
-    "bottom" as WidgetSlot,
+    "bottom" as WidgetSlotId,
   ];
   orderedKeys.forEach((slot) => {
     const group = next[slot];
