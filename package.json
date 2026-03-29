@@ -4,6 +4,7 @@
   "version": "0.1.0-beta.11",
   "type": "module",
   "scripts": {
+    "version:set": "node scripts/set-version.mjs",
     "dev": "vite",
     "build": "tauri build",
     "build:fast": "tauri build -- --profile fast-release",
