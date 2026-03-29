@@ -1892,7 +1892,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
 name = "engine"
-version = "0.1.0-beta.11"
+version = "0.1.0-beta.12"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2167,7 +2167,7 @@ dependencies = [
 
 [[package]]
 name = "fluxterm"
-version = "0.1.0-beta.11"
+version = "0.1.0-beta.12"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2",
@@ -4529,7 +4529,7 @@ dependencies = [
 
 [[package]]
 name = "openai"
-version = "0.1.0-beta.11"
+version = "0.1.0-beta.12"
 dependencies = [
  "log",
  "reqwest 0.12.28",
@@ -5753,7 +5753,7 @@ dependencies = [
 
 [[package]]
 name = "rdp_core"
-version = "0.1.0-beta.11"
+version = "0.1.0-beta.12"
 dependencies = [
  "axum",
  "base64 0.22.1",
