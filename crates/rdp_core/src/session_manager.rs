@@ -15,6 +15,10 @@ use crate::ironrdp_runtime::run_ironrdp_session;
 use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimeSessionSnapshot};
 use crate::{RuntimeError, RuntimeResult};
 
+const RGBA_FRAME_HEADER_LEN: usize = 25;
+const RGBA_BATCH_HEADER_LEN: usize = 13;
+const RGBA_BATCH_RECT_HEADER_LEN: usize = 16;
+
 /// 发送给 RDP 会话运行时的控制命令。
 #[derive(Debug)]
 pub enum RuntimeCommand {
@@ -342,18 +346,20 @@ pub fn build_rgba_frame_message<F>(
     pixels_provider: F,
 ) -> Message
 where
-    F: FnOnce(&mut Vec<u8>),
+    F: FnOnce(&mut [u8]),
 {
     let pixel_count = (width * height * 4) as usize;
-    let mut bytes = Vec::with_capacity(25 + pixel_count);
-    bytes.push(1);
-    bytes.extend_from_slice(&x.to_le_bytes());
-    bytes.extend_from_slice(&y.to_le_bytes());
-    bytes.extend_from_slice(&width.to_le_bytes());
-    bytes.extend_from_slice(&height.to_le_bytes());
-    bytes.extend_from_slice(&surface_width.to_le_bytes());
-    bytes.extend_from_slice(&surface_height.to_le_bytes());
-    pixels_provider(&mut bytes);
+    // 热路径优化：按最终长度一次性分配发送缓冲，避免 header/pixel 追加过程反复扩容。
+    let bytes = allocate_exact_message_buffer(RGBA_FRAME_HEADER_LEN + pixel_count, |bytes| {
+        bytes[0] = 1;
+        bytes[1..5].copy_from_slice(&x.to_le_bytes());
+        bytes[5..9].copy_from_slice(&y.to_le_bytes());
+        bytes[9..13].copy_from_slice(&width.to_le_bytes());
+        bytes[13..17].copy_from_slice(&height.to_le_bytes());
+        bytes[17..21].copy_from_slice(&surface_width.to_le_bytes());
+        bytes[21..25].copy_from_slice(&surface_height.to_le_bytes());
+        pixels_provider(&mut bytes[RGBA_FRAME_HEADER_LEN..]);
+    });
     Message::Binary(bytes.into())
 }
 
@@ -367,30 +373,57 @@ pub fn build_rgba_frame_batch_message<F>(
     mut pixels_provider: F,
 ) -> Message
 where
-    F: FnMut(usize, &mut Vec<u8>),
+    F: FnMut(usize, &mut [u8]),
 {
     let mut total_pixel_bytes = 0;
     for (_, _, width, height) in rects_info {
         total_pixel_bytes += (*width as usize) * (*height as usize) * 4;
     }
 
-    let total_len = 13 + (rects_info.len() * 16) + total_pixel_bytes;
-    let mut bytes = Vec::with_capacity(total_len);
+    let total_len =
+        RGBA_BATCH_HEADER_LEN + (rects_info.len() * RGBA_BATCH_RECT_HEADER_LEN) + total_pixel_bytes;
+    // batch 路径同样直接写入最终消息缓冲，避免 header 和像素区多次拼接。
+    let bytes = allocate_exact_message_buffer(total_len, |bytes| {
+        bytes[0] = 2;
+        bytes[1..5].copy_from_slice(&surface_width.to_le_bytes());
+        bytes[5..9].copy_from_slice(&surface_height.to_le_bytes());
+        bytes[9..13].copy_from_slice(&(rects_info.len() as u32).to_le_bytes());
 
-    bytes.push(2); // Batch type
-    bytes.extend_from_slice(&surface_width.to_le_bytes());
-    bytes.extend_from_slice(&surface_height.to_le_bytes());
-    bytes.extend_from_slice(&(rects_info.len() as u32).to_le_bytes());
-
-    for (i, &(x, y, width, height)) in rects_info.iter().enumerate() {
-        bytes.extend_from_slice(&x.to_le_bytes());
-        bytes.extend_from_slice(&y.to_le_bytes());
-        bytes.extend_from_slice(&width.to_le_bytes());
-        bytes.extend_from_slice(&height.to_le_bytes());
-        pixels_provider(i, &mut bytes);
-    }
+        let mut cursor = RGBA_BATCH_HEADER_LEN;
+        for (i, &(x, y, width, height)) in rects_info.iter().enumerate() {
+            let pixel_len = (width as usize) * (height as usize) * 4;
+            bytes[cursor..cursor + 4].copy_from_slice(&x.to_le_bytes());
+            cursor += 4;
+            bytes[cursor..cursor + 4].copy_from_slice(&y.to_le_bytes());
+            cursor += 4;
+            bytes[cursor..cursor + 4].copy_from_slice(&width.to_le_bytes());
+            cursor += 4;
+            bytes[cursor..cursor + 4].copy_from_slice(&height.to_le_bytes());
+            cursor += 4;
+            pixels_provider(i, &mut bytes[cursor..cursor + pixel_len]);
+            cursor += pixel_len;
+        }
+    });
 
     Message::Binary(bytes.into())
+}
+
+/// 按最终长度一次性分配消息缓冲，避免构造阶段重复扩容和边界检查。
+///
+/// 这里使用裸指针写入，是为了跳过零填充；调用方必须保证：
+/// 1. `fill` 会在返回前写满整个切片。
+/// 2. 在 `set_len` 之前不读取任何未初始化内容。
+fn allocate_exact_message_buffer<F>(len: usize, fill: F) -> Vec<u8>
+where
+    F: FnOnce(&mut [u8]),
+{
+    let mut bytes = Vec::with_capacity(len);
+    unsafe {
+        let buffer = std::slice::from_raw_parts_mut(bytes.as_mut_ptr(), len);
+        fill(buffer);
+        bytes.set_len(len);
+    }
+    bytes
 }
 
 fn send_runtime_command(
@@ -422,4 +455,66 @@ fn session_not_found_error() -> RuntimeError {
 
 fn lock_error<T>(_: std::sync::PoisonError<std::sync::MutexGuard<'_, T>>) -> RuntimeError {
     RuntimeError::new("rdp_runtime_poisoned", "RDP 运行时状态损坏")
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::extract::ws::Message;
+
+    use super::{build_rgba_frame_batch_message, build_rgba_frame_message};
+
+    #[test]
+    fn builds_single_rgba_frame_message_with_expected_layout() {
+        let message = build_rgba_frame_message(1, 2, 2, 1, 10, 20, |dest| {
+            dest.copy_from_slice(&[11, 12, 13, 14, 21, 22, 23, 24]);
+        });
+
+        let Message::Binary(bytes) = message else {
+            panic!("expected binary message");
+        };
+
+        assert_eq!(bytes.len(), 25 + 8);
+        assert_eq!(bytes[0], 1);
+        assert_eq!(&bytes[1..5], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[5..9], &2_u32.to_le_bytes());
+        assert_eq!(&bytes[9..13], &2_u32.to_le_bytes());
+        assert_eq!(&bytes[13..17], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[17..21], &10_u32.to_le_bytes());
+        assert_eq!(&bytes[21..25], &20_u32.to_le_bytes());
+        assert_eq!(&bytes[25..], &[11, 12, 13, 14, 21, 22, 23, 24]);
+    }
+
+    #[test]
+    fn builds_batch_rgba_frame_message_with_expected_layout() {
+        let message = build_rgba_frame_batch_message(
+            10,
+            20,
+            &[(1, 2, 1, 1), (3, 4, 1, 1)],
+            |i, dest| match i {
+                0 => dest.copy_from_slice(&[1, 2, 3, 4]),
+                1 => dest.copy_from_slice(&[5, 6, 7, 8]),
+                _ => panic!("unexpected rect index"),
+            },
+        );
+
+        let Message::Binary(bytes) = message else {
+            panic!("expected binary message");
+        };
+
+        assert_eq!(bytes.len(), 13 + 16 * 2 + 8);
+        assert_eq!(bytes[0], 2);
+        assert_eq!(&bytes[1..5], &10_u32.to_le_bytes());
+        assert_eq!(&bytes[5..9], &20_u32.to_le_bytes());
+        assert_eq!(&bytes[9..13], &2_u32.to_le_bytes());
+        assert_eq!(&bytes[13..17], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[17..21], &2_u32.to_le_bytes());
+        assert_eq!(&bytes[21..25], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[25..29], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[29..33], &[1, 2, 3, 4]);
+        assert_eq!(&bytes[33..37], &3_u32.to_le_bytes());
+        assert_eq!(&bytes[37..41], &4_u32.to_le_bytes());
+        assert_eq!(&bytes[41..45], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[45..49], &1_u32.to_le_bytes());
+        assert_eq!(&bytes[49..53], &[5, 6, 7, 8]);
+    }
 }

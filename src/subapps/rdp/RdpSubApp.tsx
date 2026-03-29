@@ -55,6 +55,16 @@ type RdpWireEvent =
   | { type: "input-ack"; kind: string }
   | { type: "error"; code: string; message: string };
 
+type RdpWorkerPerfSnapshot = {
+  frameMessages: number;
+  rectUploads: number;
+  uploadedPixels: number;
+  queueHighWatermark: number;
+  presentCount: number;
+  avgPresentCpuMs: number;
+  windowMs: number;
+};
+
 type RdpSessionTab = {
   session: RdpSessionSnapshot;
   profile: RdpProfile;
@@ -69,6 +79,7 @@ const EMPTY_PERF: RdpPerfSnapshot = {
   fps: 0,
   bridgeState: "idle",
 };
+const RDP_WORKER_PERF_SNAPSHOT_EVENT = "rdp.worker.perf.snapshot";
 
 function getProfileDisplayName(
   profile: Pick<RdpProfile, "name" | "host">,
@@ -368,14 +379,20 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
 
         worker.onmessage = (
           event: MessageEvent<{
-            type: "bridge-state" | "wire-event" | "frame-presented";
+            type:
+              | "bridge-state"
+              | "wire-event"
+              | "frame-presented"
+              | "perf-snapshot";
             sessionId: string;
             state?: "open" | "closed" | "error";
             payload?: RdpWireEvent;
             frameVersion?: number;
+            perf?: RdpWorkerPerfSnapshot;
           }>,
         ) => {
-          const { type, sessionId, state, payload, frameVersion } = event.data;
+          const { type, sessionId, state, payload, frameVersion, perf } =
+            event.data;
           const current = handlersRef.current;
 
           if (type === "bridge-state") {
@@ -418,6 +435,21 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
             typeof frameVersion === "number"
           ) {
             frameVersionBySessionRef.current[sessionId] = frameVersion;
+          } else if (type === "perf-snapshot" && perf) {
+            const tab = sessionsRef.current.find(
+              (item) => item.session.sessionId === sessionId,
+            );
+            logRdpSubAppEvent("debug", RDP_WORKER_PERF_SNAPSHOT_EVENT, {
+              traceId: tab?.traceId ?? null,
+              sessionId,
+              frameMessages: perf.frameMessages,
+              rectUploads: perf.rectUploads,
+              uploadedPixels: perf.uploadedPixels,
+              queueHighWatermark: perf.queueHighWatermark,
+              presentCount: perf.presentCount,
+              avgPresentCpuMs: perf.avgPresentCpuMs,
+              windowMs: perf.windowMs,
+            });
           }
         };
 

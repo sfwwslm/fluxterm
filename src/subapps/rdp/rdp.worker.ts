@@ -15,6 +15,17 @@ type WorkerSessionRuntime = {
   frameRequest: number | null;
   frameVersion: number;
   needsPresent: boolean;
+  perf: WorkerPerfCounters;
+};
+
+type WorkerPerfCounters = {
+  windowStartAt: number;
+  frameMessages: number;
+  rectUploads: number;
+  uploadedPixels: number;
+  queueHighWatermark: number;
+  presentCount: number;
+  presentCpuTimeMs: number;
 };
 
 type RdpWireEvent =
@@ -43,7 +54,18 @@ type MainMessage =
       state: "open" | "closed" | "error";
     }
   | { type: "wire-event"; sessionId: string; payload: RdpWireEvent }
-  | { type: "frame-presented"; sessionId: string; frameVersion: number };
+  | { type: "frame-presented"; sessionId: string; frameVersion: number }
+  | { type: "perf-snapshot"; sessionId: string; perf: WorkerPerfSnapshot };
+
+type WorkerPerfSnapshot = {
+  frameMessages: number;
+  rectUploads: number;
+  uploadedPixels: number;
+  queueHighWatermark: number;
+  presentCount: number;
+  avgPresentCpuMs: number;
+  windowMs: number;
+};
 
 class RdpWorkerContext {
   private renderer: RdpWebGLRenderer | null = null;
@@ -168,6 +190,7 @@ class RdpWorkerContext {
         frameRequest: null,
         frameVersion: 0,
         needsPresent: false,
+        perf: this.createPerfCounters(),
       };
       this.sessions.set(sessionId, session);
     }
@@ -179,6 +202,11 @@ class RdpWorkerContext {
     if (!session) return;
     session.pendingFrames.push(buffer);
     session.needsPresent = true;
+    session.perf.frameMessages += 1;
+    session.perf.queueHighWatermark = Math.max(
+      session.perf.queueHighWatermark,
+      session.pendingFrames.length,
+    );
     this.requestRender(sessionId);
   }
 
@@ -200,14 +228,19 @@ class RdpWorkerContext {
         session.texture &&
         this.renderer
       ) {
+        const commitStartedAt = performance.now();
         this.renderer.commit(
           session.texture,
           session.textureSize.width,
           session.textureSize.height,
         );
+        session.perf.presentCount += 1;
+        session.perf.presentCpuTimeMs += performance.now() - commitStartedAt;
         session.needsPresent = false;
         this.notifyFramePresented(session);
       }
+
+      this.flushPerfSnapshot(session);
     });
   }
 
@@ -260,6 +293,7 @@ class RdpWorkerContext {
         rectHeight,
         pixels,
       );
+      this.recordRectUpload(session, rectWidth, rectHeight);
     } else if (messageType === 2 && view.byteLength >= 13) {
       const surfaceWidth = view.getUint32(1, true);
       const surfaceHeight = view.getUint32(5, true);
@@ -297,9 +331,63 @@ class RdpWorkerContext {
           rectHeight,
           pixels,
         );
+        this.recordRectUpload(session, rectWidth, rectHeight);
         offset += pixelBytes;
       }
     }
+  }
+
+  /** 创建新的 Worker 侧性能计数窗口。 */
+  private createPerfCounters(): WorkerPerfCounters {
+    return {
+      windowStartAt: performance.now(),
+      frameMessages: 0,
+      rectUploads: 0,
+      uploadedPixels: 0,
+      queueHighWatermark: 0,
+      presentCount: 0,
+      presentCpuTimeMs: 0,
+    };
+  }
+
+  /** 记录一次纹理局部上传成本。 */
+  private recordRectUpload(
+    session: WorkerSessionRuntime,
+    rectWidth: number,
+    rectHeight: number,
+  ) {
+    session.perf.rectUploads += 1;
+    session.perf.uploadedPixels += rectWidth * rectHeight;
+  }
+
+  /** 按时间窗口输出 Worker 渲染聚合快照，避免每帧打日志。 */
+  private flushPerfSnapshot(session: WorkerSessionRuntime) {
+    const now = performance.now();
+    const windowMs = now - session.perf.windowStartAt;
+    if (windowMs < 1000) {
+      return;
+    }
+
+    const avgPresentCpuMs =
+      session.perf.presentCount > 0
+        ? session.perf.presentCpuTimeMs / session.perf.presentCount
+        : 0;
+
+    self.postMessage({
+      type: "perf-snapshot",
+      sessionId: session.sessionId,
+      perf: {
+        frameMessages: session.perf.frameMessages,
+        rectUploads: session.perf.rectUploads,
+        uploadedPixels: session.perf.uploadedPixels,
+        queueHighWatermark: session.perf.queueHighWatermark,
+        presentCount: session.perf.presentCount,
+        avgPresentCpuMs: Number(avgPresentCpuMs.toFixed(3)),
+        windowMs: Number(windowMs.toFixed(1)),
+      },
+    } satisfies MainMessage);
+
+    session.perf = this.createPerfCounters();
   }
 }
 

@@ -8,6 +8,8 @@
 //! 3. 运行事件循环，处理网络数据包、解码图像帧并转发用户输入。
 //! 4. 将解码后的 RGBA 画面通过 WebSocket 桥接推送到前端。
 
+use std::time::Instant as StdInstant;
+
 use axum::extract::ws::Message;
 use base64::Engine as _;
 use hostname::get as get_hostname;
@@ -35,7 +37,8 @@ use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{FramedWrite, TokioFramed, split_tokio_framed};
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{error, info, warn};
+use tokio::time::Instant as TokioInstant;
+use tracing::{debug, error, info, warn};
 
 use crate::keyboard::code_to_scancode;
 use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags};
@@ -47,6 +50,70 @@ use crate::session_manager::{
 const FRAGMENT_COLLAPSE_RECT_THRESHOLD: usize = 8;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 2;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
+const GRAPHICS_FLUSH_INTERVAL_BASE_MS: u64 = 12;
+const GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS: u64 = 16;
+const GRAPHICS_FLUSH_INTERVAL_HIGH_MS: u64 = 20;
+const GRAPHICS_FLUSH_MEDIUM_PENDING_RECTS: usize = 3;
+const GRAPHICS_FLUSH_HIGH_PENDING_RECTS: usize = 6;
+const GRAPHICS_FLUSH_MEDIUM_RAW_RECTS: u32 = 80;
+const GRAPHICS_FLUSH_HIGH_RAW_RECTS: u32 = 180;
+const GRAPHICS_FLUSH_MEDIUM_CYCLES: u32 = 350;
+const GRAPHICS_FLUSH_HIGH_CYCLES: u32 = 700;
+const HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD: usize = 4;
+const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 3;
+const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
+const HIGH_PRESSURE_COLLAPSE_RAW_RECTS: u32 = 180;
+const HIGH_PRESSURE_COLLAPSE_CYCLES: u32 = 700;
+const RDP_RUNTIME_RECTS_COLLAPSED_EVENT: &str = "rdp.runtime.rects.collapsed";
+const RDP_RUNTIME_FRAME_PERF_EVENT: &str = "rdp.runtime.frame.perf.snapshot";
+
+#[derive(Debug, Clone)]
+struct FramePerfWindow {
+    started_at: StdInstant,
+    cycles: u32,
+    raw_rects: u32,
+    merged_rects: u32,
+    single_messages: u32,
+    batch_messages: u32,
+    sent_pixels: u64,
+    resize_requests: u32,
+    max_flush_interval_ms: u64,
+    copy_rect_cpu_us: u64,
+    encode_message_cpu_us: u64,
+    broadcast_send_cpu_us: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct CursorCache {
+    cursor: Option<String>,
+    x: Option<u16>,
+    y: Option<u16>,
+}
+
+impl Default for FramePerfWindow {
+    fn default() -> Self {
+        Self {
+            started_at: StdInstant::now(),
+            cycles: 0,
+            raw_rects: 0,
+            merged_rects: 0,
+            single_messages: 0,
+            batch_messages: 0,
+            sent_pixels: 0,
+            resize_requests: 0,
+            max_flush_interval_ms: 0,
+            copy_rect_cpu_us: 0,
+            encode_message_cpu_us: 0,
+            broadcast_send_cpu_us: 0,
+        }
+    }
+}
+
+impl FramePerfWindow {
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
 
 /// 启动并运行单个 RDP 会话的主异步任务。
 ///
@@ -258,9 +325,26 @@ where
     let mut active_stage = ActiveStage::new(connection_result);
     let mut input_db = InputDatabase::new();
     let mut logged_first_frame = false;
+    let mut perf_window = FramePerfWindow::default();
+    let mut pending_graphics_rects = Vec::new();
+    let mut pending_flush_deadline: Option<TokioInstant> = None;
+    let mut pending_flush_started_at: Option<TokioInstant> = None;
+    let mut graphics_rects = Vec::new();
+    let mut cursor_cache = CursorCache::default();
 
     loop {
         let outputs = tokio::select! {
+            _ = async {
+                if let Some(deadline) = pending_flush_deadline {
+                    tokio::time::sleep_until(deadline).await;
+                }
+            }, if pending_flush_deadline.is_some() => {
+                flush_pending_graphics(sender, &image, &mut pending_graphics_rects, &mut perf_window);
+                pending_flush_deadline = None;
+                pending_flush_started_at = None;
+                flush_frame_perf_window(session_id, &mut perf_window);
+                continue;
+            }
             frame = reader.read_pdu() => {
                 let (action, payload) = frame.map_err(|error| format!("read_pdu failed: {error}"))?;
                 active_stage
@@ -283,6 +367,7 @@ where
                         }
                     }
                     RuntimeCommand::Resize { width, height } => {
+                        perf_window.resize_requests += 1;
                         let (width, height) = MonitorLayoutEntry::adjust_display_size(width.max(320), height.max(200));
                         info!(
                             event = "rdp.runtime.resize.encoded",
@@ -334,7 +419,7 @@ where
             }
         };
 
-        let mut graphics_rects = Vec::new();
+        graphics_rects.clear();
         for output in outputs {
             match output {
                 ActiveStageOutput::ResponseFrame(frame) => writer
@@ -355,35 +440,55 @@ where
                     graphics_rects.push(extract_update_rect(&output));
                 }
                 ActiveStageOutput::PointerDefault => {
-                    let _ = sender.send(json_message(
-                        "cursor",
-                        serde_json::json!({ "cursor": "default" }),
-                    ));
+                    send_cursor_if_changed(
+                        sender,
+                        &mut cursor_cache,
+                        CursorCache {
+                            cursor: Some("default".to_string()),
+                            x: None,
+                            y: None,
+                        },
+                    );
                 }
                 ActiveStageOutput::PointerHidden => {
-                    let _ = sender.send(json_message(
-                        "cursor",
-                        serde_json::json!({ "cursor": "none" }),
-                    ));
+                    send_cursor_if_changed(
+                        sender,
+                        &mut cursor_cache,
+                        CursorCache {
+                            cursor: Some("none".to_string()),
+                            x: None,
+                            y: None,
+                        },
+                    );
                 }
                 ActiveStageOutput::PointerPosition { x, y } => {
-                    let _ = sender.send(json_message(
-                        "cursor",
-                        serde_json::json!({
-                            "cursor": "default",
-                            "x": x,
-                            "y": y,
-                        }),
-                    ));
+                    send_cursor_if_changed(
+                        sender,
+                        &mut cursor_cache,
+                        CursorCache {
+                            cursor: Some("default".to_string()),
+                            x: Some(x),
+                            y: Some(y),
+                        },
+                    );
                 }
                 ActiveStageOutput::PointerBitmap(pointer) => {
                     let cursor = pointer_bitmap_to_css_cursor(&pointer);
-                    let _ = sender.send(json_message(
-                        "cursor",
-                        serde_json::json!({ "cursor": cursor }),
-                    ));
+                    send_cursor_if_changed(
+                        sender,
+                        &mut cursor_cache,
+                        CursorCache {
+                            cursor: Some(cursor),
+                            x: None,
+                            y: None,
+                        },
+                    );
                 }
                 ActiveStageOutput::DeactivateAll(sequence) => {
+                    pending_graphics_rects.clear();
+                    pending_flush_deadline = None;
+                    pending_flush_started_at = None;
+                    cursor_cache = CursorCache::default();
                     let Some((width, height)) =
                         complete_deactivation_reactivation(&mut reader, &mut writer, sequence)
                             .await?
@@ -429,38 +534,29 @@ where
             }
         }
 
-        let merged_rects = merge_update_rects(graphics_rects);
-        if merged_rects.len() == 1 {
-            let rect = &merged_rects[0];
-            let _ = sender.send(build_rgba_frame_message(
-                u32::from(rect.left),
-                u32::from(rect.top),
-                u32::from(rect.width()),
-                u32::from(rect.height()),
-                u32::from(image.width()),
-                u32::from(image.height()),
-                |dest| copy_rect_to_vec(&image, rect, dest),
-            ));
-        } else if !merged_rects.is_empty() {
-            let rects_info = merged_rects
-                .iter()
-                .map(|rect| {
-                    (
-                        u32::from(rect.left),
-                        u32::from(rect.top),
-                        u32::from(rect.width()),
-                        u32::from(rect.height()),
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            let _ = sender.send(build_rgba_frame_batch_message(
-                u32::from(image.width()),
-                u32::from(image.height()),
-                &rects_info,
-                |i, dest| copy_rect_to_vec(&image, &merged_rects[i], dest),
-            ));
+        let raw_rect_count = graphics_rects.len();
+        let merged_rects = merge_update_rects(std::mem::take(&mut graphics_rects));
+        perf_window.cycles += 1;
+        perf_window.raw_rects += u32::try_from(raw_rect_count).unwrap_or(u32::MAX);
+        perf_window.merged_rects += u32::try_from(merged_rects.len()).unwrap_or(u32::MAX);
+        if !merged_rects.is_empty() {
+            // 图形更新先进入暂存区，允许一个很短的时间窗把连续到来的脏矩形合并后再发，
+            // 以减少拖窗时的高频单消息、像素拷贝次数和前端逐块上传次数。
+            pending_graphics_rects.extend(merged_rects);
+            pending_graphics_rects =
+                merge_update_rects(std::mem::take(&mut pending_graphics_rects));
+            let flush_interval_ms =
+                select_graphics_flush_interval_ms(&perf_window, pending_graphics_rects.len());
+            perf_window.max_flush_interval_ms =
+                perf_window.max_flush_interval_ms.max(flush_interval_ms);
+            schedule_graphics_flush(
+                &mut pending_flush_deadline,
+                &mut pending_flush_started_at,
+                flush_interval_ms,
+            );
         }
+
+        flush_frame_perf_window(session_id, &mut perf_window);
     }
 }
 
@@ -520,11 +616,11 @@ fn extract_update_rect(output: &ActiveStageOutput) -> InclusiveRectangle {
     }
 }
 
-/// 将脏矩形范围内的像素直接拷贝到目标 Vec 中（无中间分配）。
-fn copy_rect_to_vec(
+/// 将脏矩形范围内的像素直接写入目标切片，避免消息构造阶段的追加开销。
+fn copy_rect_to_slice(
     image: &ironrdp::session::image::DecodedImage,
     rect: &InclusiveRectangle,
-    dest: &mut Vec<u8>,
+    dest: &mut [u8],
 ) {
     let bytes_per_pixel = image.bytes_per_pixel();
     let rect_width = usize::from(rect.width());
@@ -534,19 +630,29 @@ fn copy_rect_to_vec(
     let data = image.data();
     let left = usize::from(rect.left);
     let top = usize::from(rect.top);
+    let total_bytes = rect_height * row_bytes;
+
+    debug_assert_eq!(dest.len(), total_bytes);
 
     // 整行连续区域可直接一次性附加，避免逐行小片拷贝。
     if left == 0 && row_bytes == stride {
         let start = top * stride;
-        let end = start + rect_height * row_bytes;
-        dest.extend_from_slice(&data[start..end]);
+        let end = start + total_bytes;
+        dest.copy_from_slice(&data[start..end]);
         return;
     }
 
-    for row in 0..rect_height {
-        let start = (top + row) * stride + left * bytes_per_pixel;
-        let end = start + row_bytes;
-        dest.extend_from_slice(&data[start..end]);
+    let source_start = top * stride + left * bytes_per_pixel;
+    unsafe {
+        // 热路径优化：逐行矩形无法整体连续时，直接按指针递增做 row copy，
+        // 避免每行重复构造切片、边界检查和乘法计算。
+        let mut src = data.as_ptr().add(source_start);
+        let mut dst = dest.as_mut_ptr();
+        for _ in 0..rect_height {
+            std::ptr::copy_nonoverlapping(src, dst, row_bytes);
+            src = src.add(stride);
+            dst = dst.add(row_bytes);
+        }
     }
 }
 
@@ -611,7 +717,86 @@ fn union_rect(left: &InclusiveRectangle, right: &InclusiveRectangle) -> Inclusiv
 /// 2. Rust 侧逐块拷贝循环次数
 /// 3. 前端 Worker 逐块解析与逐次 `texSubImage2D` 提交次数
 fn maybe_collapse_fragmented_rects(rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle> {
-    if rects.len() < FRAGMENT_COLLAPSE_RECT_THRESHOLD {
+    maybe_collapse_rects(
+        rects,
+        FRAGMENT_COLLAPSE_RECT_THRESHOLD,
+        FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR,
+        FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR,
+        "default",
+    )
+}
+
+/// 在高压场景下进一步放宽收敛阈值，继续用少量 overdraw 换更低的消息数与拷贝次数。
+fn maybe_collapse_flush_rects(
+    rects: Vec<InclusiveRectangle>,
+    perf_window: &FramePerfWindow,
+) -> Vec<InclusiveRectangle> {
+    if rects.len() < HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD
+        || perf_window.raw_rects < HIGH_PRESSURE_COLLAPSE_RAW_RECTS
+            && perf_window.cycles < HIGH_PRESSURE_COLLAPSE_CYCLES
+    {
+        return rects;
+    }
+
+    maybe_collapse_rects(
+        rects,
+        HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD,
+        HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR,
+        HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_DENOMINATOR,
+        "high_pressure_flush",
+    )
+}
+
+/// 按当前负载选择图形合帧窗口，在高压拖窗场景下用更长时间窗压低消息频率。
+fn select_graphics_flush_interval_ms(
+    perf_window: &FramePerfWindow,
+    pending_rect_count: usize,
+) -> u64 {
+    if pending_rect_count >= GRAPHICS_FLUSH_HIGH_PENDING_RECTS
+        || perf_window.raw_rects >= GRAPHICS_FLUSH_HIGH_RAW_RECTS
+        || perf_window.cycles >= GRAPHICS_FLUSH_HIGH_CYCLES
+    {
+        GRAPHICS_FLUSH_INTERVAL_HIGH_MS
+    } else if pending_rect_count >= GRAPHICS_FLUSH_MEDIUM_PENDING_RECTS
+        || perf_window.raw_rects >= GRAPHICS_FLUSH_MEDIUM_RAW_RECTS
+        || perf_window.cycles >= GRAPHICS_FLUSH_MEDIUM_CYCLES
+    {
+        GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS
+    } else {
+        GRAPHICS_FLUSH_INTERVAL_BASE_MS
+    }
+}
+
+/// 根据目标时间窗调度或延后本轮 flush，但不会超过首个脏矩形入队后的最大时间窗。
+fn schedule_graphics_flush(
+    pending_flush_deadline: &mut Option<TokioInstant>,
+    pending_flush_started_at: &mut Option<TokioInstant>,
+    flush_interval_ms: u64,
+) {
+    let now = TokioInstant::now();
+    let start = pending_flush_started_at.get_or_insert(now);
+    let desired_deadline = *start + tokio::time::Duration::from_millis(flush_interval_ms);
+
+    match pending_flush_deadline {
+        Some(current_deadline) if desired_deadline > *current_deadline => {
+            *current_deadline = desired_deadline;
+        }
+        Some(_) => {}
+        None => {
+            *pending_flush_deadline = Some(desired_deadline);
+        }
+    }
+}
+
+/// 按给定阈值判断是否将多块脏矩形主动收敛为单块外接框。
+fn maybe_collapse_rects(
+    rects: Vec<InclusiveRectangle>,
+    rect_threshold: usize,
+    max_overdraw_numerator: u64,
+    max_overdraw_denominator: u64,
+    mode: &'static str,
+) -> Vec<InclusiveRectangle> {
+    if rects.len() < rect_threshold {
         return rects;
     }
 
@@ -622,13 +807,160 @@ fn maybe_collapse_fragmented_rects(rects: Vec<InclusiveRectangle>) -> Vec<Inclus
     let union_area = rect_area(&union);
     let total_area = rects.iter().map(rect_area).sum::<u64>();
 
-    if union_area * FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR
-        <= total_area * FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR
-    {
+    if union_area * max_overdraw_denominator <= total_area * max_overdraw_numerator {
+        debug!(
+            event = RDP_RUNTIME_RECTS_COLLAPSED_EVENT,
+            mode = mode,
+            original_rects = rects.len(),
+            total_area = total_area,
+            union_area = union_area,
+            overdraw_ratio = union_area as f64 / total_area.max(1) as f64,
+            "collapsed fragmented dirty rects into a single bounding rect"
+        );
         vec![union]
     } else {
         rects
     }
+}
+
+/// 将累计的图形更新统一推送给前端，降低高频单矩形消息成本。
+fn flush_pending_graphics(
+    sender: &broadcast::Sender<Message>,
+    image: &DecodedImage,
+    pending_graphics_rects: &mut Vec<InclusiveRectangle>,
+    perf_window: &mut FramePerfWindow,
+) {
+    if pending_graphics_rects.is_empty() {
+        return;
+    }
+
+    // flush 时再做一次高压场景收敛，优先用少量 overdraw 换更少的消息数。
+    let merged_rects =
+        maybe_collapse_flush_rects(std::mem::take(pending_graphics_rects), perf_window);
+    if merged_rects.len() == 1 {
+        let rect = &merged_rects[0];
+        perf_window.single_messages += 1;
+        perf_window.sent_pixels += u64::from(rect.width()) * u64::from(rect.height());
+        let mut copy_rect_cpu_us = 0_u64;
+        let encode_started_at = StdInstant::now();
+        let message = build_rgba_frame_message(
+            u32::from(rect.left),
+            u32::from(rect.top),
+            u32::from(rect.width()),
+            u32::from(rect.height()),
+            u32::from(image.width()),
+            u32::from(image.height()),
+            |dest| {
+                let copy_started_at = StdInstant::now();
+                copy_rect_to_slice(image, rect, dest);
+                copy_rect_cpu_us += elapsed_micros_u64(copy_started_at.elapsed());
+            },
+        );
+        // 这里的 encode 时间既包含消息头写入，也包含把像素写进最终发送缓冲。
+        perf_window.copy_rect_cpu_us += copy_rect_cpu_us;
+        perf_window.encode_message_cpu_us += elapsed_micros_u64(encode_started_at.elapsed());
+        let send_started_at = StdInstant::now();
+        let _ = sender.send(message);
+        perf_window.broadcast_send_cpu_us += elapsed_micros_u64(send_started_at.elapsed());
+    } else {
+        let rects_info = merged_rects
+            .iter()
+            .map(|rect| {
+                (
+                    u32::from(rect.left),
+                    u32::from(rect.top),
+                    u32::from(rect.width()),
+                    u32::from(rect.height()),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        perf_window.batch_messages += 1;
+        perf_window.sent_pixels += merged_rects
+            .iter()
+            .map(|rect| u64::from(rect.width()) * u64::from(rect.height()))
+            .sum::<u64>();
+        let mut copy_rect_cpu_us = 0_u64;
+        let encode_started_at = StdInstant::now();
+        let message = build_rgba_frame_batch_message(
+            u32::from(image.width()),
+            u32::from(image.height()),
+            &rects_info,
+            |i, dest| {
+                let copy_started_at = StdInstant::now();
+                copy_rect_to_slice(image, &merged_rects[i], dest);
+                copy_rect_cpu_us += elapsed_micros_u64(copy_started_at.elapsed());
+            },
+        );
+        perf_window.copy_rect_cpu_us += copy_rect_cpu_us;
+        perf_window.encode_message_cpu_us += elapsed_micros_u64(encode_started_at.elapsed());
+        let send_started_at = StdInstant::now();
+        let _ = sender.send(message);
+        perf_window.broadcast_send_cpu_us += elapsed_micros_u64(send_started_at.elapsed());
+    }
+}
+
+/// 仅在远端光标状态真正变化时才向前端广播，避免高频循环中的重复文本消息。
+fn send_cursor_if_changed(
+    sender: &broadcast::Sender<Message>,
+    cursor_cache: &mut CursorCache,
+    next: CursorCache,
+) {
+    if *cursor_cache == next {
+        return;
+    }
+
+    let cursor = next.cursor.clone().unwrap_or_else(|| "default".to_string());
+    let message = match (next.x, next.y) {
+        (Some(x), Some(y)) => json_message(
+            "cursor",
+            serde_json::json!({
+                "cursor": cursor,
+                "x": x,
+                "y": y,
+            }),
+        ),
+        _ => json_message(
+            "cursor",
+            serde_json::json!({
+                "cursor": cursor,
+            }),
+        ),
+    };
+    let _ = sender.send(message);
+    *cursor_cache = next;
+}
+
+/// 按秒聚合 RDP 图形更新热路径指标，避免逐帧日志影响实际性能。
+fn flush_frame_perf_window(session_id: &str, perf_window: &mut FramePerfWindow) {
+    let elapsed = perf_window.started_at.elapsed();
+    if elapsed.as_millis() < 1_000 {
+        return;
+    }
+
+    debug!(
+        event = RDP_RUNTIME_FRAME_PERF_EVENT,
+        session_id = %session_id,
+        window_ms = elapsed.as_millis() as u64,
+        cycles = perf_window.cycles,
+        raw_rects = perf_window.raw_rects,
+        merged_rects = perf_window.merged_rects,
+        single_messages = perf_window.single_messages,
+        batch_messages = perf_window.batch_messages,
+        sent_pixels = perf_window.sent_pixels,
+        resize_requests = perf_window.resize_requests,
+        max_flush_interval_ms = perf_window.max_flush_interval_ms,
+        copy_rect_cpu_us = perf_window.copy_rect_cpu_us,
+        encode_message_cpu_us = perf_window.encode_message_cpu_us,
+        broadcast_send_cpu_us = perf_window.broadcast_send_cpu_us,
+        "rdp frame pipeline perf snapshot"
+    );
+    perf_window.reset();
+}
+
+/// 将 `Duration` 转成 `u64` 微秒，超出范围时做饱和截断。
+fn elapsed_micros_u64(duration: std::time::Duration) -> u64 {
+    u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
 }
 
 /// 计算矩形覆盖的像素面积。
@@ -1022,8 +1354,11 @@ mod tests {
     use ironrdp::pdu::rdp::client_info::PerformanceFlags;
 
     use super::{
-        build_performance_flags, encode_multitransport_abort_response, merge_update_rects,
+        FramePerfWindow, GRAPHICS_FLUSH_INTERVAL_BASE_MS, GRAPHICS_FLUSH_INTERVAL_HIGH_MS,
+        GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS, build_performance_flags,
+        encode_multitransport_abort_response, maybe_collapse_flush_rects, merge_update_rects,
         normalize_credentials, pointer_bitmap_to_css_cursor, resolve_client_hostname,
+        schedule_graphics_flush, select_graphics_flush_interval_ms,
     };
     use crate::protocol::RuntimePerformanceFlags;
 
@@ -1205,6 +1540,106 @@ mod tests {
         ]);
 
         assert_eq!(merged.len(), 8);
+    }
+
+    #[test]
+    fn selects_longer_flush_interval_under_higher_load() {
+        let idle_window = FramePerfWindow::default();
+        assert_eq!(
+            select_graphics_flush_interval_ms(&idle_window, 1),
+            GRAPHICS_FLUSH_INTERVAL_BASE_MS
+        );
+
+        let medium_window = FramePerfWindow {
+            raw_rects: 120,
+            ..FramePerfWindow::default()
+        };
+        assert_eq!(
+            select_graphics_flush_interval_ms(&medium_window, 2),
+            GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS
+        );
+
+        let high_window = FramePerfWindow {
+            cycles: 900,
+            ..FramePerfWindow::default()
+        };
+        assert_eq!(
+            select_graphics_flush_interval_ms(&high_window, 2),
+            GRAPHICS_FLUSH_INTERVAL_HIGH_MS
+        );
+    }
+
+    #[test]
+    fn reschedules_flush_deadline_without_exceeding_start_based_window() {
+        let mut deadline = None;
+        let mut started_at = None;
+        schedule_graphics_flush(
+            &mut deadline,
+            &mut started_at,
+            GRAPHICS_FLUSH_INTERVAL_BASE_MS,
+        );
+
+        let first_started_at = started_at.expect("flush started");
+        let first_deadline = deadline.expect("flush deadline");
+        assert_eq!(
+            first_deadline.duration_since(first_started_at).as_millis() as u64,
+            GRAPHICS_FLUSH_INTERVAL_BASE_MS
+        );
+
+        schedule_graphics_flush(
+            &mut deadline,
+            &mut started_at,
+            GRAPHICS_FLUSH_INTERVAL_HIGH_MS,
+        );
+        let second_deadline = deadline.expect("rescheduled deadline");
+        assert_eq!(
+            second_deadline.duration_since(first_started_at).as_millis() as u64,
+            GRAPHICS_FLUSH_INTERVAL_HIGH_MS
+        );
+    }
+
+    #[test]
+    fn collapses_flush_rects_more_aggressively_under_high_pressure() {
+        let high_window = FramePerfWindow {
+            raw_rects: 240,
+            ..FramePerfWindow::default()
+        };
+
+        let collapsed = maybe_collapse_flush_rects(
+            vec![
+                InclusiveRectangle {
+                    left: 0,
+                    top: 0,
+                    right: 9,
+                    bottom: 9,
+                },
+                InclusiveRectangle {
+                    left: 18,
+                    top: 0,
+                    right: 27,
+                    bottom: 9,
+                },
+                InclusiveRectangle {
+                    left: 0,
+                    top: 18,
+                    right: 9,
+                    bottom: 27,
+                },
+                InclusiveRectangle {
+                    left: 18,
+                    top: 18,
+                    right: 27,
+                    bottom: 27,
+                },
+            ],
+            &high_window,
+        );
+
+        assert_eq!(collapsed.len(), 1);
+        assert_eq!(collapsed[0].left, 0);
+        assert_eq!(collapsed[0].top, 0);
+        assert_eq!(collapsed[0].right, 27);
+        assert_eq!(collapsed[0].bottom, 27);
     }
 
     #[test]
