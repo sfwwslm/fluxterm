@@ -18,8 +18,8 @@ use openai::OpenAiClientConfig;
 use tauri::{AppHandle, Manager};
 
 use crate::ai_settings::{AiProviderSettings, AiSettings, read_ai_settings};
-use crate::profile_store::{ProfileStore, read_profiles};
 use crate::security::{CryptoService, SecretStore};
+use crate::security_store::read_security_config;
 use crate::state::SecurityState;
 
 const MAX_OUTPUT_CHARS: usize = 6_000;
@@ -142,10 +142,10 @@ fn resolve_provider_api_key(
         .find(|provider| provider.id == provider_id)
         .and_then(|provider| provider.api_key_ref.as_ref())
     {
-        let store = read_profiles(app).unwrap_or_else(|_| ProfileStore::default());
+        let security_config = read_security_config(app)?;
         let security = app.state::<SecurityState>();
         let session = security.current_session();
-        let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+        let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
         let secret_store = SecretStore::new(&crypto);
         return secret_store
             .reveal_optional_string(Some(token.clone()))

@@ -97,21 +97,33 @@ pub fn resolve_global_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError
     Ok(dir.join("global"))
 }
 
-/// 解析终端域配置目录。
-pub fn resolve_terminal_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+/// 解析连接配置根目录。
+pub fn resolve_connections_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
     let dir = resolve_config_root_dir(app)?;
-    Ok(dir.join("terminal"))
+    Ok(dir.join("connections"))
 }
 
-/// 解析 SSH 域配置目录。
-pub fn resolve_terminal_ssh_config_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_terminal_config_dir(app)?;
+/// 解析 SSH 连接配置目录。
+pub fn resolve_ssh_connections_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_connections_config_dir(app)?;
     Ok(dir.join("ssh"))
 }
 
-/// 解析终端域 session 配置文件路径。
+/// 解析 RDP 连接配置目录。
+pub fn resolve_rdp_connections_dir(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_connections_config_dir(app)?;
+    Ok(dir.join("rdp"))
+}
+
+/// 解析应用安全配置文件路径。
+pub fn resolve_security_config_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_global_config_dir(app)?;
+    Ok(dir.join("security.json"))
+}
+
+/// 解析全局 session 配置文件路径。
 pub fn resolve_session_settings_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_terminal_config_dir(app)?;
+    let dir = resolve_global_config_dir(app)?;
     Ok(dir.join("session.json"))
 }
 
@@ -124,12 +136,30 @@ pub fn resolve_ai_settings_path(app: &AppHandle) -> Result<PathBuf, EngineError>
 
 /// 解析应用私有 known_hosts 文件路径。
 pub fn resolve_known_hosts_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_terminal_ssh_config_dir(app)?;
+    let dir = resolve_ssh_connections_dir(app)?;
     Ok(dir.join("known_hosts"))
 }
 
-/// 解析主机配置文件路径。
-pub fn resolve_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
-    let dir = resolve_terminal_config_dir(app)?;
+/// 解析 SSH 主机配置文件路径。
+pub fn resolve_ssh_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_ssh_connections_dir(app)?;
     Ok(dir.join("profiles.json"))
+}
+
+/// 解析 SSH 分组配置文件路径。
+pub fn resolve_ssh_groups_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_ssh_connections_dir(app)?;
+    Ok(dir.join("groups.json"))
+}
+
+/// 解析 RDP 配置文件路径。
+pub fn resolve_rdp_profiles_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_rdp_connections_dir(app)?;
+    Ok(dir.join("profiles.json"))
+}
+
+/// 解析 RDP 分组配置文件路径。
+pub fn resolve_rdp_groups_path(app: &AppHandle) -> Result<PathBuf, EngineError> {
+    let dir = resolve_rdp_connections_dir(app)?;
+    Ok(dir.join("groups.json"))
 }

@@ -9,13 +9,13 @@ use engine::EngineError;
 use rand::random;
 use uuid::Uuid;
 
-use crate::profile_store::SecretConfig;
 use crate::security::provider::EncryptionProvider;
 use crate::security::providers::{EmbeddedProvider, UserPasswordProvider};
 use crate::security::types::{
     EncryptedPayload, EncryptionAlgorithm, EncryptionProviderKind, ProviderCiphertext,
     SecurityStatus,
 };
+use crate::security_store::SecretConfig;
 use crate::state::UnlockedSecretSession;
 
 /// 统一的加密服务入口。
@@ -359,7 +359,7 @@ fn derive_password_material(
 #[cfg(test)]
 mod tests {
     use super::{CryptoService, SECRET_TOKEN_PREFIX};
-    use crate::profile_store::SecretConfig;
+    use crate::security_store::SecretConfig;
 
     #[test]
     fn embedded_mode_encrypts_and_decrypts_roundtrip() {

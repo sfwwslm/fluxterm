@@ -6,11 +6,12 @@ use tauri::{AppHandle, Emitter, State};
 use crate::ai::{AiRuntimeState, register_remote_session};
 use crate::events::build_event_bridge;
 use crate::profile_secrets::decrypt_profile_secrets;
-use crate::profile_store::read_profiles;
 use crate::resource_monitor::ResourceMonitorState;
 use crate::security::{CryptoService, SecretStore};
+use crate::security_store::read_security_config;
 use crate::session_settings::{HostKeyPolicy, read_session_settings};
 use crate::ssh_host_keys::{HostKeyMatchStatus, match_host_key, trust_host_key};
+use crate::ssh_profile_store::read_ssh_profiles;
 use crate::state::{EngineState, SecurityState};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -201,14 +202,15 @@ fn resolve_connect_profile(
     if requested_profile.id.trim().is_empty() {
         return Err(EngineError::new("profile_not_found", "会话配置不存在"));
     }
-    let store = read_profiles(app)?;
+    let store = read_ssh_profiles(app)?;
     let encrypted_profile = store
         .profiles
         .into_iter()
         .find(|item| item.id == requested_profile.id)
         .ok_or_else(|| EngineError::new("profile_not_found", "会话配置不存在"))?;
+    let security_config = read_security_config(app)?;
     let session = security.current_session();
-    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     decrypt_profile_secrets(encrypted_profile, &secret_store)
 }

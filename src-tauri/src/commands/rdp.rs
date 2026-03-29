@@ -4,9 +4,12 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::profile_secrets::{decrypt_rdp_profile_secrets, encrypt_rdp_profile_secrets};
-use crate::profile_store::{read_profiles, write_profiles};
 use crate::rdp::{RdpInputEvent, RdpProfile, RdpSessionSnapshot, RdpState};
+use crate::rdp_profile_store::{
+    read_rdp_groups, read_rdp_profiles, write_rdp_groups, write_rdp_profiles,
+};
 use crate::security::{CryptoService, SecretStore};
+use crate::security_store::read_security_config;
 use crate::state::SecurityState;
 
 use super::profile::{
@@ -16,8 +19,7 @@ use super::profile::{
 #[tauri::command]
 /// 读取 RDP 分组列表。
 pub fn rdp_profile_groups_list(app: AppHandle) -> Result<Vec<String>, EngineError> {
-    let store = read_profiles(&app)?;
-    Ok(dedupe_groups(store.rdp_groups))
+    Ok(dedupe_groups(read_rdp_groups(&app)?))
 }
 
 #[tauri::command]
@@ -26,11 +28,8 @@ pub fn rdp_profile_groups_save(
     app: AppHandle,
     groups: Vec<String>,
 ) -> Result<Vec<String>, EngineError> {
-    let mut store = read_profiles(&app)?;
     let next = validate_and_dedupe_groups(groups)?;
-    store.rdp_groups = next.clone();
-    store.updated_at = now_epoch();
-    write_profiles(&app, &store)?;
+    write_rdp_groups(&app, &next)?;
     Ok(next)
 }
 
@@ -40,12 +39,13 @@ pub fn rdp_profile_list(
     app: AppHandle,
     security: State<'_, SecurityState>,
 ) -> Result<Vec<RdpProfile>, EngineError> {
-    let store = read_profiles(&app)?;
+    let store = read_rdp_profiles(&app)?;
+    let security_config = read_security_config(&app)?;
     let session = security.current_session();
-    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     store
-        .rdp_profiles
+        .profiles
         .into_iter()
         .map(
             |profile| match decrypt_rdp_profile_secrets(profile.clone(), &secret_store) {
@@ -72,9 +72,10 @@ pub fn rdp_profile_save(
     security: State<'_, SecurityState>,
     mut profile: RdpProfile,
 ) -> Result<RdpProfile, EngineError> {
-    let mut store = read_profiles(&app)?;
+    let mut store = read_rdp_profiles(&app)?;
+    let security_config = read_security_config(&app)?;
     let session = security.current_session();
-    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
 
     profile.name = validate_profile_name(profile.name)?;
@@ -100,29 +101,26 @@ pub fn rdp_profile_save(
         profile.height = 720;
     }
     let encrypted = encrypt_rdp_profile_secrets(profile.clone(), &secret_store)?;
-    let existing = store
-        .rdp_profiles
-        .iter_mut()
-        .find(|item| item.id == profile.id);
+    let existing = store.profiles.iter_mut().find(|item| item.id == profile.id);
     if let Some(item) = existing {
         *item = encrypted;
     } else {
-        store.rdp_profiles.push(encrypted);
+        store.profiles.push(encrypted);
     }
     store.updated_at = now_epoch();
-    write_profiles(&app, &store)?;
+    write_rdp_profiles(&app, &store)?;
     Ok(profile)
 }
 
 #[tauri::command]
 /// 删除 RDP Profile。
 pub fn rdp_profile_delete(app: AppHandle, profile_id: String) -> Result<bool, EngineError> {
-    let mut store = read_profiles(&app)?;
-    let before = store.rdp_profiles.len();
-    store.rdp_profiles.retain(|item| item.id != profile_id);
+    let mut store = read_rdp_profiles(&app)?;
+    let before = store.profiles.len();
+    store.profiles.retain(|item| item.id != profile_id);
     store.updated_at = now_epoch();
-    write_profiles(&app, &store)?;
-    Ok(before != store.rdp_profiles.len())
+    write_rdp_profiles(&app, &store)?;
+    Ok(before != store.profiles.len())
 }
 
 #[tauri::command]
@@ -201,12 +199,13 @@ fn load_profile(
     security: &State<'_, SecurityState>,
     profile_id: &str,
 ) -> Result<RdpProfile, EngineError> {
-    let store = read_profiles(app)?;
+    let store = read_rdp_profiles(app)?;
+    let security_config = read_security_config(app)?;
     let session = security.current_session();
-    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     let profile = store
-        .rdp_profiles
+        .profiles
         .into_iter()
         .find(|item| item.id == profile_id)
         .ok_or_else(|| EngineError::new("rdp_profile_not_found", "RDP Profile 不存在"))?;

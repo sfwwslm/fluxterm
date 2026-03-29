@@ -5,8 +5,11 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::profile_secrets::{decrypt_profile_secrets, encrypt_profile_secrets};
-use crate::profile_store::{read_profiles, write_profiles};
 use crate::security::{CryptoService, SecretStore};
+use crate::security_store::read_security_config;
+use crate::ssh_profile_store::{
+    read_ssh_groups, read_ssh_profiles, write_ssh_groups, write_ssh_profiles,
+};
 use crate::state::SecurityState;
 
 const GROUP_NAME_MAX_LENGTH: usize = 12;
@@ -19,9 +22,10 @@ pub fn profile_list(
     app: AppHandle,
     security: State<'_, SecurityState>,
 ) -> Result<Vec<HostProfile>, EngineError> {
-    let store = read_profiles(&app)?;
+    let store = read_ssh_profiles(&app)?;
+    let security_config = read_security_config(&app)?;
     let session = security.current_session();
-    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     store
         .profiles
@@ -45,8 +49,7 @@ pub fn profile_list(
 #[tauri::command]
 /// 读取 SSH 分组列表。
 pub fn profile_groups_list(app: AppHandle) -> Result<Vec<String>, EngineError> {
-    let store = read_profiles(&app)?;
-    Ok(dedupe_groups(store.ssh_groups))
+    Ok(dedupe_groups(read_ssh_groups(&app)?))
 }
 
 #[tauri::command]
@@ -55,11 +58,8 @@ pub fn profile_groups_save(
     app: AppHandle,
     groups: Vec<String>,
 ) -> Result<Vec<String>, EngineError> {
-    let mut store = read_profiles(&app)?;
     let next = validate_and_dedupe_groups(groups)?;
-    store.ssh_groups = next.clone();
-    store.updated_at = now_epoch();
-    write_profiles(&app, &store)?;
+    write_ssh_groups(&app, &next)?;
     Ok(next)
 }
 
@@ -70,9 +70,10 @@ pub fn profile_save(
     security: State<'_, SecurityState>,
     mut profile: HostProfile,
 ) -> Result<HostProfile, EngineError> {
-    let mut store = read_profiles(&app)?;
+    let mut store = read_ssh_profiles(&app)?;
+    let security_config = read_security_config(&app)?;
     let session = security.current_session();
-    let crypto = CryptoService::new(store.secret.as_ref(), session.as_ref())?;
+    let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     profile.name = validate_profile_name(profile.name)?;
     profile.tags = normalize_profile_tags(profile.tags)?;
@@ -90,18 +91,18 @@ pub fn profile_save(
         store.profiles.push(encrypted_profile);
     }
     store.updated_at = now_epoch();
-    write_profiles(&app, &store)?;
+    write_ssh_profiles(&app, &store)?;
     Ok(profile)
 }
 
 #[tauri::command]
 /// 删除指定主机配置。
 pub fn profile_remove(app: AppHandle, profile_id: String) -> Result<bool, EngineError> {
-    let mut store = read_profiles(&app)?;
+    let mut store = read_ssh_profiles(&app)?;
     let before = store.profiles.len();
     store.profiles.retain(|item| item.id != profile_id);
     store.updated_at = now_epoch();
-    write_profiles(&app, &store)?;
+    write_ssh_profiles(&app, &store)?;
     Ok(before != store.profiles.len())
 }
 

@@ -38,7 +38,9 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::commands::profile::{validate_and_dedupe_groups, validate_profile_name};
-use crate::profile_store::{ProfileStore, read_profiles, write_profiles};
+use crate::ssh_profile_store::{
+    SshProfileStore, read_ssh_groups, read_ssh_profiles, write_ssh_groups, write_ssh_profiles,
+};
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 const IMPORT_GROUP_NAME: &str = "OpenSSH";
@@ -71,8 +73,8 @@ pub struct OpensshImportSummary {
     pub error_count: usize,
 }
 
-/// 读取默认 OpenSSH config 并导入为 FluxTerm 会话。
-/// 导入只处理固定路径 `<home>/.ssh/config`，成功后直接写回现有 ProfileStore。
+/// 读取默认 OpenSSH config 并导入为 FluxTerm SSH 配置。
+/// 导入只处理固定路径 `<home>/.ssh/config`，成功后直接写回现有 SSH 配置存储。
 pub fn import_openssh_config(app: &AppHandle) -> Result<OpensshImportSummary, EngineError> {
     let home = app.path().home_dir().map_err(|err| {
         EngineError::with_detail("local_home_failed", "无法获取本机家目录", err.to_string())
@@ -93,8 +95,9 @@ pub fn import_openssh_config(app: &AppHandle) -> Result<OpensshImportSummary, En
     })?;
     let normalized = normalize_config_for_russh(&content);
     let parsed = parse_openssh_config(&content)?;
-    let mut store = read_profiles(app)?;
-    let summary = apply_import(&mut store, &normalized, parsed)?;
+    let mut store = read_ssh_profiles(app)?;
+    let mut groups = read_ssh_groups(app)?;
+    let summary = apply_import(&mut store, &mut groups, &normalized, parsed)?;
     if summary.added_count == 0
         && summary.skipped_count == 0
         && summary.conflict_count == 0
@@ -105,7 +108,8 @@ pub fn import_openssh_config(app: &AppHandle) -> Result<OpensshImportSummary, En
             "未发现可导入的 SSH 主机配置",
         ));
     }
-    write_profiles(app, &store)?;
+    write_ssh_profiles(app, &store)?;
+    write_ssh_groups(app, &groups)?;
     Ok(summary)
 }
 
@@ -168,14 +172,15 @@ fn parse_openssh_config(content: &str) -> Result<ParsedOpensshConfig, EngineErro
     Ok(parsed)
 }
 
-/// 将解析后的 Host 别名解析为完整配置并写入现有 ProfileStore。
+/// 将解析后的 Host 别名解析为完整配置并写入现有 SSH 配置存储。
 /// 判重使用 `name + host + port + username`，同名但目标不同记为冲突而不是覆盖。
 fn apply_import(
-    store: &mut ProfileStore,
+    store: &mut SshProfileStore,
+    groups: &mut Vec<String>,
     content: &str,
     parsed: ParsedOpensshConfig,
 ) -> Result<OpensshImportSummary, EngineError> {
-    ensure_import_group(store)?;
+    ensure_import_group(groups)?;
     let mut summary = OpensshImportSummary {
         added_count: 0,
         skipped_count: 0,
@@ -215,7 +220,7 @@ fn apply_import(
     Ok(summary)
 }
 
-/// 将单个 OpenSSH Host 别名解析为 FluxTerm 会话。
+/// 将单个 OpenSSH Host 别名解析为 FluxTerm SSH 配置。
 /// `russh-config` 负责解析匹配规则、默认值和支持字段的最终生效配置。
 fn map_host_target_to_profile(
     content: &str,
@@ -345,16 +350,15 @@ fn normalize_add_keys_to_agent(value: &AddKeysToAgent) -> String {
 
 /// 确保固定导入分组存在于现有 SSH 分组集合中。
 /// 这里复用现有分组约束和排序逻辑，避免导入链路生成特殊分组格式。
-fn ensure_import_group(store: &mut ProfileStore) -> Result<(), EngineError> {
+fn ensure_import_group(groups: &mut Vec<String>) -> Result<(), EngineError> {
     let next = validate_and_dedupe_groups(
-        store
-            .ssh_groups
+        groups
             .iter()
             .cloned()
             .chain(std::iter::once(IMPORT_GROUP_NAME.to_string()))
             .collect(),
     )?;
-    store.ssh_groups = next;
+    *groups = next;
     Ok(())
 }
 
@@ -416,14 +420,10 @@ fn now_epoch() -> u64 {
 mod tests {
     use super::*;
 
-    fn profile_store_with_profiles(profiles: Vec<HostProfile>) -> ProfileStore {
-        ProfileStore {
+    fn profile_store_with_profiles(profiles: Vec<HostProfile>) -> SshProfileStore {
+        SshProfileStore {
             version: 1,
             updated_at: 0,
-            ssh_groups: Vec::new(),
-            rdp_groups: Vec::new(),
-            rdp_profiles: Vec::new(),
-            secret: None,
             profiles,
         }
     }
@@ -602,6 +602,7 @@ Host prod
             sample_profile("prod", "10.0.0.1", 22, "root"),
             sample_profile("staging", "10.0.0.2", 22, "root"),
         ]);
+        let mut groups = Vec::new();
         let content = normalize_config_for_russh(
             r#"
 Host prod
@@ -620,6 +621,7 @@ Host qa
         );
         let summary = apply_import(
             &mut store,
+            &mut groups,
             &content,
             ParsedOpensshConfig {
                 unsupported_count: 1,
@@ -648,12 +650,7 @@ Host qa
                 error_count: 0,
             }
         );
-        assert!(
-            store
-                .ssh_groups
-                .iter()
-                .any(|item| item == IMPORT_GROUP_NAME)
-        );
+        assert!(groups.iter().any(|item| item == IMPORT_GROUP_NAME));
         assert_eq!(store.profiles.len(), 3);
     }
 

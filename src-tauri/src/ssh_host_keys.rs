@@ -3,7 +3,7 @@
 //! 本模块维护 FluxTerm 自己的 Host Key 记录，不与系统 `~/.ssh/known_hosts` 互相读写。
 //! 当前规则如下：
 //!
-//! - 存储路径位于应用配置目录下的 `terminal/ssh/known_hosts`
+//! - 存储路径位于应用配置目录下的 `connections/ssh/known_hosts`
 //! - 存储格式兼容 OpenSSH 文本行：
 //!   - `host key-type base64-key`
 //!   - `[host]:port key-type base64-key`

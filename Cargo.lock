@@ -5753,7 +5753,7 @@ dependencies = [
 
 [[package]]
 name = "rdp_runtime"
-version = "0.1.0-beta.10"
+version = "0.1.0-beta.11"
 dependencies = [
  "axum",
  "base64 0.22.1",

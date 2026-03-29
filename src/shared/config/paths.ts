@@ -74,7 +74,7 @@ export async function getBackgroundImageAssetPath(asset: string) {
 
 /** 获取 session.json 路径。 */
 export async function getSessionSettingsPath() {
-  const dir = await getTerminalConfigDir();
+  const dir = await getGlobalConfigDir();
   return join(dir, "session.json");
 }
 
