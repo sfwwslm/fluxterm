@@ -14,6 +14,7 @@ type WorkerSessionRuntime = {
   pendingFrames: ArrayBuffer[];
   frameRequest: number | null;
   frameVersion: number;
+  needsPresent: boolean;
 };
 
 type RdpWireEvent =
@@ -166,6 +167,7 @@ class RdpWorkerContext {
         pendingFrames: [],
         frameRequest: null,
         frameVersion: 0,
+        needsPresent: false,
       };
       this.sessions.set(sessionId, session);
     }
@@ -176,6 +178,7 @@ class RdpWorkerContext {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     session.pendingFrames.push(buffer);
+    session.needsPresent = true;
     this.requestRender(sessionId);
   }
 
@@ -193,6 +196,7 @@ class RdpWorkerContext {
 
       if (
         this.activeSessionId === sessionId &&
+        session.needsPresent &&
         session.texture &&
         this.renderer
       ) {
@@ -201,6 +205,7 @@ class RdpWorkerContext {
           session.textureSize.width,
           session.textureSize.height,
         );
+        session.needsPresent = false;
         this.notifyFramePresented(session);
       }
     });
@@ -232,7 +237,7 @@ class RdpWorkerContext {
       const rectHeight = view.getUint32(13, true);
       const surfaceWidth = view.getUint32(17, true);
       const surfaceHeight = view.getUint32(21, true);
-      const pixels = new Uint8ClampedArray(buffer, 25);
+      const pixels = new Uint8Array(buffer, 25);
 
       if (
         !session.texture ||
@@ -283,7 +288,7 @@ class RdpWorkerContext {
         offset += 16;
         const pixelBytes = rectWidth * rectHeight * 4;
         if (offset + pixelBytes > view.byteLength) break;
-        const pixels = new Uint8ClampedArray(buffer, offset, pixelBytes);
+        const pixels = new Uint8Array(buffer, offset, pixelBytes);
         this.renderer.uploadRect(
           session.texture,
           x,

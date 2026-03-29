@@ -14,6 +14,9 @@ export class RdpWebGLRenderer {
   private program: WebGLProgram | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
   private currentTexture: WebGLTexture | null = null;
+  private aPositionLocation: number | null = null;
+  private aTexCoordLocation: number | null = null;
+  private samplerLocation: WebGLUniformLocation | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl", {
@@ -21,7 +24,8 @@ export class RdpWebGLRenderer {
       depth: false, // RDP 画面不涉及深度测试
       stencil: false,
       antialias: false, // 像素对齐画面不需要抗锯齿
-      preserveDrawingBuffer: true, // 必须保留缓冲区以实现脏矩形累积绘制
+      // 最终显示依赖的是持久化纹理而不是 framebuffer 保留，因此不必强制保留绘制缓冲区。
+      preserveDrawingBuffer: false,
     });
     if (!gl) {
       throw new Error("WebGL not supported");
@@ -74,6 +78,16 @@ export class RdpWebGLRenderer {
       throw new Error("Shader link failed");
     }
     this.program = program;
+    this.aPositionLocation = gl.getAttribLocation(program, "aPosition");
+    this.aTexCoordLocation = gl.getAttribLocation(program, "aTexCoord");
+    this.samplerLocation = gl.getUniformLocation(program, "uSampler");
+
+    gl.useProgram(program);
+    if (this.samplerLocation) {
+      gl.uniform1i(this.samplerLocation, 0);
+    }
+    gl.enableVertexAttribArray(this.aPositionLocation);
+    gl.enableVertexAttribArray(this.aTexCoordLocation);
   }
 
   private compileShader(type: number, source: string): WebGLShader {
@@ -200,7 +214,15 @@ export class RdpWebGLRenderer {
    */
   public commit(texture: WebGLTexture, width: number, height: number) {
     const gl = this.gl;
-    if (!gl || !this.program || !this.vertexBuffer) return;
+    if (
+      !gl ||
+      !this.program ||
+      !this.vertexBuffer ||
+      this.aPositionLocation === null ||
+      this.aTexCoordLocation === null
+    ) {
+      return;
+    }
 
     // 动态同步画布尺寸，确保 object-fit: contain 效果正确
     // 注意：修改 canvas.width 会导致 WebGL 上下文状态部分重置，仅在尺寸变化时执行
@@ -215,15 +237,12 @@ export class RdpWebGLRenderer {
     gl.useProgram(this.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 
-    const aPos = gl.getAttribLocation(this.program, "aPosition");
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+    gl.vertexAttribPointer(this.aPositionLocation, 2, gl.FLOAT, false, 16, 0);
 
-    const aTex = gl.getAttribLocation(this.program, "aTexCoord");
-    gl.enableVertexAttribArray(aTex);
-    gl.vertexAttribPointer(aTex, 2, gl.FLOAT, false, 16, 8);
+    gl.vertexAttribPointer(this.aTexCoordLocation, 2, gl.FLOAT, false, 16, 8);
 
     if (this.currentTexture !== texture) {
+      gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
       this.currentTexture = texture;
     }

@@ -44,6 +44,10 @@ use crate::session_manager::{
     RuntimeCommand, build_rgba_frame_batch_message, build_rgba_frame_message, json_message,
 };
 
+const FRAGMENT_COLLAPSE_RECT_THRESHOLD: usize = 8;
+const FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 2;
+const FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
+
 /// 启动并运行单个 RDP 会话的主异步任务。
 ///
 /// 该函数会持续运行直到会话断开或发生错误。
@@ -528,10 +532,19 @@ fn copy_rect_to_vec(
     let stride = image.stride();
     let row_bytes = rect_width * bytes_per_pixel;
     let data = image.data();
+    let left = usize::from(rect.left);
+    let top = usize::from(rect.top);
+
+    // 整行连续区域可直接一次性附加，避免逐行小片拷贝。
+    if left == 0 && row_bytes == stride {
+        let start = top * stride;
+        let end = start + rect_height * row_bytes;
+        dest.extend_from_slice(&data[start..end]);
+        return;
+    }
 
     for row in 0..rect_height {
-        let start =
-            (usize::from(rect.top) + row) * stride + usize::from(rect.left) * bytes_per_pixel;
+        let start = (top + row) * stride + left * bytes_per_pixel;
         let end = start + row_bytes;
         dest.extend_from_slice(&data[start..end]);
     }
@@ -561,7 +574,7 @@ fn merge_update_rects(rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle>
         }
         merged.push(current);
     }
-    merged
+    maybe_collapse_fragmented_rects(merged)
 }
 
 /// 判断两个脏矩形是否相交或边缘相邻。
@@ -589,6 +602,38 @@ fn union_rect(left: &InclusiveRectangle, right: &InclusiveRectangle) -> Inclusiv
         right: left.right.max(right.right),
         bottom: left.bottom.max(right.bottom),
     }
+}
+
+/// 在碎片矩形过多且外接框放大量可控时，主动收敛为单个矩形。
+///
+/// 这样会多传一些未变化像素，但可以显著减少：
+/// 1. WebSocket 批量协议头开销
+/// 2. Rust 侧逐块拷贝循环次数
+/// 3. 前端 Worker 逐块解析与逐次 `texSubImage2D` 提交次数
+fn maybe_collapse_fragmented_rects(rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle> {
+    if rects.len() < FRAGMENT_COLLAPSE_RECT_THRESHOLD {
+        return rects;
+    }
+
+    let union = rects
+        .iter()
+        .skip(1)
+        .fold(rects[0].clone(), |acc, rect| union_rect(&acc, rect));
+    let union_area = rect_area(&union);
+    let total_area = rects.iter().map(rect_area).sum::<u64>();
+
+    if union_area * FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR
+        <= total_area * FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR
+    {
+        vec![union]
+    } else {
+        rects
+    }
+}
+
+/// 计算矩形覆盖的像素面积。
+fn rect_area(rect: &InclusiveRectangle) -> u64 {
+    u64::from(rect.width()) * u64::from(rect.height())
 }
 
 /// 构造用于 IronRDP 建立连接的初始化配置。
@@ -1044,6 +1089,122 @@ mod tests {
         ]);
 
         assert_eq!(merged.len(), 2);
+    }
+
+    #[test]
+    fn collapses_fragmented_rects_when_bounding_box_is_reasonable() {
+        let merged = merge_update_rects(vec![
+            InclusiveRectangle {
+                left: 0,
+                top: 0,
+                right: 9,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 12,
+                top: 0,
+                right: 21,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 24,
+                top: 0,
+                right: 33,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 36,
+                top: 0,
+                right: 45,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 0,
+                top: 12,
+                right: 9,
+                bottom: 21,
+            },
+            InclusiveRectangle {
+                left: 12,
+                top: 12,
+                right: 21,
+                bottom: 21,
+            },
+            InclusiveRectangle {
+                left: 24,
+                top: 12,
+                right: 33,
+                bottom: 21,
+            },
+            InclusiveRectangle {
+                left: 36,
+                top: 12,
+                right: 45,
+                bottom: 21,
+            },
+        ]);
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].left, 0);
+        assert_eq!(merged[0].top, 0);
+        assert_eq!(merged[0].right, 45);
+        assert_eq!(merged[0].bottom, 21);
+    }
+
+    #[test]
+    fn keeps_fragmented_rects_when_bounding_box_would_overdraw_too_much() {
+        let merged = merge_update_rects(vec![
+            InclusiveRectangle {
+                left: 0,
+                top: 0,
+                right: 9,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 100,
+                top: 0,
+                right: 109,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 200,
+                top: 0,
+                right: 209,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 300,
+                top: 0,
+                right: 309,
+                bottom: 9,
+            },
+            InclusiveRectangle {
+                left: 0,
+                top: 100,
+                right: 9,
+                bottom: 109,
+            },
+            InclusiveRectangle {
+                left: 100,
+                top: 100,
+                right: 109,
+                bottom: 109,
+            },
+            InclusiveRectangle {
+                left: 200,
+                top: 100,
+                right: 209,
+                bottom: 109,
+            },
+            InclusiveRectangle {
+                left: 300,
+                top: 100,
+                right: 309,
+                bottom: 109,
+            },
+        ]);
+
+        assert_eq!(merged.len(), 8);
     }
 
     #[test]
