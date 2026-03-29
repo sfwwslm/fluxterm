@@ -55,6 +55,7 @@ type UseSubAppsState = {
   launchSubApp: (id: SubAppId) => Promise<void>;
   focusSubApp: (id: SubAppId) => Promise<void>;
   closeSubApp: (id: SubAppId) => Promise<void>;
+  connectRdpProfile: (profileId: string) => Promise<void>;
   openAllDevtools: () => void;
   notifyMainShutdown: () => Promise<void>;
 };
@@ -72,16 +73,38 @@ export default function useSubApps({
         menuLabel: t("subapp.proxy.menuLabel"),
         windowTitle: t("subapp.proxy.title"),
       },
+      {
+        id: "rdp",
+        menuLabel: t("subapp.rdp.menuLabel"),
+        windowTitle: t("subapp.rdp.title"),
+      },
     ],
     [t],
   );
   const windowRef = useRef<Partial<Record<SubAppId, WebviewWindow>>>({});
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const pendingRdpConnectProfileIdRef = useRef<string | null>(null);
+  const pendingRdpConnectTimerRef = useRef<number | null>(null);
   const [statusById, setStatusById] = useState<
     Record<SubAppId, SubAppRuntimeStatus>
   >({
     proxy: "idle",
+    rdp: "idle",
   });
+  const statusByIdRef = useRef(statusById);
+
+  useEffect(() => {
+    statusByIdRef.current = statusById;
+  }, [statusById]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingRdpConnectTimerRef.current !== null) {
+        window.clearTimeout(pendingRdpConnectTimerRef.current);
+        pendingRdpConnectTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const postLifecycleMessage = useCallback(
     (message: SubAppLifecycleMessage) => {
@@ -114,7 +137,11 @@ export default function useSubApps({
     (id: SubAppId, status: SubAppRuntimeStatus) => {
       setStatusById((prev) => {
         if (prev[id] === status) return prev;
-        return { ...prev, [id]: status };
+        // BroadcastChannel 的 ready 事件到达后，可能会立刻继续派发后续命令。
+        // 这里同步维护 ref，避免首次打开子应用时因为 React 状态尚未提交而漏发待连接请求。
+        const next = { ...prev, [id]: status };
+        statusByIdRef.current = next;
+        return next;
       });
     },
     [],
@@ -123,10 +150,48 @@ export default function useSubApps({
   const clearWindowRuntime = useCallback(
     (id: SubAppId) => {
       delete windowRef.current[id];
+      if (id === "rdp") {
+        if (pendingRdpConnectTimerRef.current !== null) {
+          window.clearTimeout(pendingRdpConnectTimerRef.current);
+          pendingRdpConnectTimerRef.current = null;
+        }
+        pendingRdpConnectProfileIdRef.current = null;
+      }
       setRuntimeStatus(id, "idle");
     },
     [setRuntimeStatus],
   );
+
+  const flushPendingRdpCommands = useCallback(() => {
+    if (statusByIdRef.current.rdp !== "ready") return;
+    const label = createSubAppWindowLabel("rdp");
+    const dispatchPendingConnect = () => {
+      if (statusByIdRef.current.rdp !== "ready") return;
+      if (!pendingRdpConnectProfileIdRef.current) return;
+      postLifecycleMessage({
+        type: "subapp:rdp-connect",
+        source: "main",
+        target: { id: "rdp", label },
+        profileId: pendingRdpConnectProfileIdRef.current,
+      });
+      pendingRdpConnectProfileIdRef.current = null;
+    };
+    if (!pendingRdpConnectProfileIdRef.current) return;
+    if (pendingRdpConnectTimerRef.current !== null) {
+      window.clearTimeout(pendingRdpConnectTimerRef.current);
+      pendingRdpConnectTimerRef.current = null;
+    }
+    if (import.meta.env.DEV) {
+      // dev 模式下 React StrictMode / HMR 会让子应用首轮 effect 抖动，
+      // 延后一次连接指令派发，等子窗口监听稳定后再发送。
+      pendingRdpConnectTimerRef.current = window.setTimeout(() => {
+        pendingRdpConnectTimerRef.current = null;
+        dispatchPendingConnect();
+      }, 300);
+      return;
+    }
+    dispatchPendingConnect();
+  }, [postLifecycleMessage]);
 
   const closeSubApp = useCallback(
     async (id: SubAppId) => {
@@ -157,6 +222,9 @@ export default function useSubApps({
       if (payload.type === "subapp:ready") {
         setRuntimeStatus(payload.id, "ready");
         syncAppearance({ id: payload.id, label: payload.label });
+        if (payload.id === "rdp") {
+          flushPendingRdpCommands();
+        }
         return;
       }
       if (
@@ -176,7 +244,13 @@ export default function useSubApps({
         channelRef.current = null;
       }
     };
-  }, [clearWindowRuntime, closeSubApp, setRuntimeStatus, syncAppearance]);
+  }, [
+    clearWindowRuntime,
+    closeSubApp,
+    flushPendingRdpCommands,
+    setRuntimeStatus,
+    syncAppearance,
+  ]);
 
   useEffect(() => {
     syncAppearance();
@@ -259,6 +333,20 @@ export default function useSubApps({
     return Promise.resolve();
   }, [postLifecycleMessage]);
 
+  /** 主窗口只分发“连接这个 Profile”的意图，实际 RDP runtime 仍由子应用独占。 */
+  const connectRdpProfile = useCallback(
+    async (profileId: string) => {
+      pendingRdpConnectProfileIdRef.current = profileId;
+      if (pendingRdpConnectTimerRef.current !== null) {
+        window.clearTimeout(pendingRdpConnectTimerRef.current);
+        pendingRdpConnectTimerRef.current = null;
+      }
+      await launchSubApp("rdp");
+      flushPendingRdpCommands();
+    },
+    [flushPendingRdpCommands, launchSubApp],
+  );
+
   /** 打开所有已创建子应用窗口的开发者工具，供主窗口 About 面板统一触发。 */
   const openAllDevtools = useCallback(() => {
     (
@@ -293,6 +381,7 @@ export default function useSubApps({
     launchSubApp,
     focusSubApp,
     closeSubApp,
+    connectRdpProfile,
     openAllDevtools,
     notifyMainShutdown,
   };

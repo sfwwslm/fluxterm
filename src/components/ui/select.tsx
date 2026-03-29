@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type React from "react";
+import { createPortal } from "react-dom";
 import "./select.css";
 
 /** 下拉菜单单个选项的元数据。 */
@@ -66,7 +67,15 @@ export default function Select({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const [listStyle, setListStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+    transformOrigin: "top" | "bottom";
+  } | null>(null);
 
   const selectedIndex = useMemo(
     () => options.findIndex((option) => option.value === value),
@@ -89,15 +98,54 @@ export default function Select({
   }, [open, options, selectedIndex]);
 
   useEffect(() => {
+    if (!open) return;
+
+    function updateListStyle() {
+      const trigger = rootRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const openUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(
+        120,
+        Math.min(320, openUpward ? spaceAbove : spaceBelow),
+      );
+      setListStyle({
+        top: openUpward ? rect.top - 6 : rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+        transformOrigin: openUpward ? "bottom" : "top",
+      });
+    }
+
+    updateListStyle();
+    window.addEventListener("resize", updateListStyle);
+    window.addEventListener("scroll", updateListStyle, true);
+    return () => {
+      window.removeEventListener("resize", updateListStyle);
+      window.removeEventListener("scroll", updateListStyle, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
+      if (
+        !rootRef.current.contains(event.target as Node) &&
+        !listRef.current?.contains(event.target as Node)
+      ) {
         setOpen(false);
       }
     };
     const handleOutsideTouch = (event: TouchEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
+      if (
+        !rootRef.current.contains(event.target as Node) &&
+        !listRef.current?.contains(event.target as Node)
+      ) {
         setOpen(false);
       }
     };
@@ -181,28 +229,44 @@ export default function Select({
           ▾
         </span>
       </button>
-      {open && (
-        <div className="select-menu-list" role="listbox" id={listId}>
-          {options.map((option, index) => {
-            const isSelected = option.value === value;
-            const isActive = index === activeIndex;
-            return (
-              <button
-                type="button"
-                key={option.value}
-                role="option"
-                aria-selected={isSelected}
-                className={`select-menu-option ${isSelected ? "is-selected" : ""} ${isActive ? "is-active" : ""}`}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => handleSelect(option)}
-                disabled={option.disabled}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {open && listStyle
+        ? createPortal(
+            <div
+              ref={listRef}
+              className={`select-menu-list ${
+                listStyle.transformOrigin === "bottom" ? "is-upward" : ""
+              }`}
+              role="listbox"
+              id={listId}
+              style={{
+                top: listStyle.top,
+                left: listStyle.left,
+                width: listStyle.width,
+                maxHeight: listStyle.maxHeight,
+              }}
+            >
+              {options.map((option, index) => {
+                const isSelected = option.value === value;
+                const isActive = index === activeIndex;
+                return (
+                  <button
+                    type="button"
+                    key={option.value}
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`select-menu-option ${isSelected ? "is-selected" : ""} ${isActive ? "is-active" : ""}`}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => handleSelect(option)}
+                    disabled={option.disabled}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

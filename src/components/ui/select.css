@@ -112,10 +112,7 @@
 }
 
 .select-menu-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 100%;
+  position: fixed;
   background:
     linear-gradient(
       140deg,
@@ -131,8 +128,13 @@
   flex-direction: column;
   gap: 4px;
   z-index: 1200;
+  overflow-y: auto;
   backdrop-filter: blur(18px) saturate(155%);
   -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
+.select-menu-list.is-upward {
+  transform: translateY(calc(-100% - 12px));
 }
 
 .select-menu-option {

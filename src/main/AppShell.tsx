@@ -28,6 +28,7 @@ import TerminalWidget from "@/widgets/terminal/components/TerminalWidget";
 import AboutModal from "@/main/components/modals/AboutModal";
 import LocalShellProfileModal from "@/main/components/modals/LocalShellProfileModal";
 import ProfileModal from "@/main/components/modals/ProfileModal";
+import RdpProfileModal from "@/main/components/modals/RdpProfileModal";
 import NoticeHost from "@/components/ui/notice-host";
 import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
@@ -59,6 +60,7 @@ import type {
   LocalShellConfig,
   LocalSessionMeta,
   LocalShellProfile,
+  RdpProfile,
   RemoteEditSnapshot,
   SftpEntry,
   TerminalCwdSupport,
@@ -79,6 +81,13 @@ import useSftpController from "@/hooks/useSftpController";
 import useCommandHistoryState from "@/hooks/useCommandHistoryState";
 import useAiState from "@/hooks/useAiState";
 import useSshTunnelState from "@/hooks/useSshTunnelState";
+import {
+  deleteRdpProfile,
+  listRdpProfileGroups,
+  listRdpProfiles,
+  saveRdpProfile,
+  saveRdpProfileGroups,
+} from "@/features/rdp/core/commands";
 import {
   WIDGET_AI_CHANNEL,
   type FloatingAiMessage,
@@ -166,6 +175,7 @@ import {
 
 const widgetLabelKeys: Record<WidgetKey, TranslationKey> = {
   profiles: "widget.profiles",
+  rdp: "widget.rdp",
   files: "widget.files",
   transfers: "widget.transfers",
   events: "widget.events",
@@ -196,6 +206,24 @@ function formatMessage(
 
 function getErrorMessage(error: unknown) {
   return extractErrorMessage(error);
+}
+
+function normalizeRdpGroupName(value: string) {
+  return value.trim();
+}
+
+function dedupeRdpGroups(values: string[]) {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  values.forEach((item) => {
+    const normalized = normalizeRdpGroupName(item);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push(normalized);
+  });
+  return list.sort((a, b) => a.localeCompare(b));
 }
 
 function formatOpenSshImportToast(
@@ -569,6 +597,21 @@ export default function AppShell() {
   const [profileModalMode, setProfileModalMode] = useState<"new" | "edit">(
     "new",
   );
+  const [rdpProfileModalOpen, setRdpProfileModalOpen] = useState(false);
+  const [rdpProfileModalMode, setRdpProfileModalMode] = useState<
+    "new" | "edit"
+  >("new");
+  const [rdpProfileModalProfileId, setRdpProfileModalProfileId] = useState<
+    string | null
+  >(null);
+  const [rdpProfiles, setRdpProfiles] = useState<RdpProfile[]>([]);
+  const [rdpGroups, setRdpGroups] = useState<string[]>([]);
+  const [activeRdpProfileId, setActiveRdpProfileId] = useState<string | null>(
+    null,
+  );
+  const [connectingRdpProfileId, setConnectingRdpProfileId] = useState<
+    string | null
+  >(null);
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
   const [localShellProfileModalOpen, setLocalShellProfileModalOpen] =
     useState(false);
@@ -580,6 +623,7 @@ export default function AppShell() {
     null,
   );
   const latestConnectRequestIdRef = useRef(0);
+  const latestRdpConnectRequestIdRef = useRef(0);
   const isMac = useMemo(() => isMacOS(), []);
 
   const t: Translate = useMemo(
@@ -598,6 +642,7 @@ export default function AppShell() {
     if (!match) return null;
     const value = match[1];
     if (value === "profiles") return "profiles";
+    if (value === "rdp") return "rdp";
     if (value === "files") return "files";
     if (value === "transfers") return "transfers";
     if (value === "events") return "events";
@@ -895,6 +940,55 @@ export default function AppShell() {
     setProfileModalOpen(false);
   }
 
+  const refreshRdpProfiles = useCallback(async () => {
+    const [next, persistedGroups] = await Promise.all([
+      listRdpProfiles(),
+      listRdpProfileGroups(),
+    ]);
+    setRdpProfiles(next);
+    const discoveredGroups = next
+      .map((item) => normalizeRdpGroupName(item.tags?.[0] ?? ""))
+      .filter(Boolean);
+    setRdpGroups(dedupeRdpGroups([...persistedGroups, ...discoveredGroups]));
+    setActiveRdpProfileId((current) => {
+      if (current && next.some((item) => item.id === current)) {
+        return current;
+      }
+      return next[0]?.id ?? null;
+    });
+    return next;
+  }, []);
+
+  const openNewRdpProfileModal = useCallback(() => {
+    setRdpProfileModalMode("new");
+    setRdpProfileModalProfileId(null);
+    setRdpProfileModalOpen(true);
+  }, []);
+
+  const openEditRdpProfileModal = useCallback((profile: RdpProfile) => {
+    setActiveRdpProfileId(profile.id);
+    setRdpProfileModalMode("edit");
+    setRdpProfileModalProfileId(profile.id);
+    setRdpProfileModalOpen(true);
+  }, []);
+
+  function closeRdpProfileModal() {
+    setRdpProfileModalOpen(false);
+    setRdpProfileModalProfileId(null);
+  }
+
+  useEffect(() => {
+    void refreshRdpProfiles().catch(() => {});
+  }, [refreshRdpProfiles]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void refreshRdpProfiles().catch(() => {});
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [refreshRdpProfiles]);
+
   const openLocalShellProfile = useCallback(
     (shell: LocalShellProfile) => {
       setActiveLocalShellProfile(shell);
@@ -961,6 +1055,7 @@ export default function AppShell() {
   const widgetLabels = useMemo(
     () => ({
       profiles: t(widgetLabelKeys.profiles),
+      rdp: t(widgetLabelKeys.rdp),
       files: t(widgetLabelKeys.files),
       transfers: t(widgetLabelKeys.transfers),
       events: t(widgetLabelKeys.events),
@@ -1452,6 +1547,7 @@ export default function AppShell() {
     launchSubApp,
     focusSubApp,
     closeSubApp,
+    connectRdpProfile,
     openAllDevtools: openAllSubAppDevtools,
     notifyMainShutdown,
   } = useSubApps({
@@ -2482,6 +2578,190 @@ export default function AppShell() {
     [pickProfile, saveProfile, sessionActions, t],
   );
 
+  const handleConnectRdpProfile = useCallback(
+    async (profile: RdpProfile) => {
+      const requestId = latestRdpConnectRequestIdRef.current + 1;
+      latestRdpConnectRequestIdRef.current = requestId;
+      setActiveRdpProfileId(profile.id);
+      setConnectingRdpProfileId(profile.id);
+      try {
+        await connectRdpProfile(profile.id);
+      } finally {
+        if (requestId === latestRdpConnectRequestIdRef.current) {
+          setConnectingRdpProfileId(null);
+        }
+      }
+    },
+    [connectRdpProfile],
+  );
+
+  const handleRemoveRdpProfile = useCallback(
+    async (profile: RdpProfile) => {
+      await deleteRdpProfile(profile.id);
+      const next = await refreshRdpProfiles();
+      if (!next.length) {
+        setActiveRdpProfileId(null);
+        return;
+      }
+      if (activeRdpProfileId !== profile.id) {
+        return;
+      }
+      const removedIndex = rdpProfiles.findIndex(
+        (item) => item.id === profile.id,
+      );
+      const fallbackProfile =
+        next[Math.min(removedIndex, next.length - 1)] ?? next[0] ?? null;
+      setActiveRdpProfileId(fallbackProfile?.id ?? null);
+    },
+    [activeRdpProfileId, rdpProfiles, refreshRdpProfiles],
+  );
+
+  const persistRdpGroups = useCallback((nextGroups: string[]) => {
+    setRdpGroups(nextGroups);
+    return saveRdpProfileGroups(nextGroups);
+  }, []);
+
+  const addRdpGroup = useCallback(
+    (groupName: string) => {
+      const normalized = normalizeRdpGroupName(groupName);
+      if (!normalized) return false;
+      if (
+        rdpGroups.some(
+          (item) => item.toLowerCase() === normalized.toLowerCase(),
+        )
+      ) {
+        return false;
+      }
+      const nextGroups = dedupeRdpGroups([...rdpGroups, normalized]);
+      persistRdpGroups(nextGroups).catch(() => {});
+      return true;
+    },
+    [persistRdpGroups, rdpGroups],
+  );
+
+  const renameRdpGroup = useCallback(
+    async (from: string, to: string) => {
+      const source = normalizeRdpGroupName(from);
+      const target = normalizeRdpGroupName(to);
+      if (!source || !target) return false;
+      if (source.toLowerCase() === target.toLowerCase()) return false;
+      if (
+        rdpGroups.some((item) => item.toLowerCase() === target.toLowerCase())
+      ) {
+        return false;
+      }
+      const affected = rdpProfiles.filter(
+        (item) =>
+          normalizeRdpGroupName(item.tags?.[0] ?? "").toLowerCase() ===
+          source.toLowerCase(),
+      );
+      if (!affected.length) {
+        const nextGroups = dedupeRdpGroups(
+          rdpGroups.map((item) =>
+            item.toLowerCase() === source.toLowerCase() ? target : item,
+          ),
+        );
+        await persistRdpGroups(nextGroups);
+        return true;
+      }
+      try {
+        const savedProfiles = await Promise.all(
+          affected.map((item) =>
+            saveRdpProfile({
+              ...item,
+              tags: [target],
+            }),
+          ),
+        );
+        const savedMap = new Map(
+          savedProfiles.map((item) => [item.id, item] as const),
+        );
+        const nextGroups = dedupeRdpGroups(
+          rdpGroups.map((item) =>
+            item.toLowerCase() === source.toLowerCase() ? target : item,
+          ),
+        );
+        await persistRdpGroups(nextGroups);
+        setRdpProfiles((prev) =>
+          prev.map((item) => savedMap.get(item.id) ?? item),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [persistRdpGroups, rdpGroups, rdpProfiles],
+  );
+
+  const removeRdpGroup = useCallback(
+    async (groupName: string) => {
+      const target = normalizeRdpGroupName(groupName);
+      if (!target) return false;
+      const targetKey = target.toLowerCase();
+      const exists = rdpGroups.some((item) => item.toLowerCase() === targetKey);
+      if (!exists) return false;
+      const affected = rdpProfiles.filter(
+        (item) =>
+          normalizeRdpGroupName(item.tags?.[0] ?? "").toLowerCase() ===
+          targetKey,
+      );
+      if (!affected.length) {
+        await persistRdpGroups(
+          rdpGroups.filter((item) => item.toLowerCase() !== targetKey),
+        );
+        return true;
+      }
+      try {
+        const savedProfiles = await Promise.all(
+          affected.map((item) =>
+            saveRdpProfile({
+              ...item,
+              tags: null,
+            }),
+          ),
+        );
+        const savedMap = new Map(
+          savedProfiles.map((item) => [item.id, item] as const),
+        );
+        await persistRdpGroups(
+          rdpGroups.filter((item) => item.toLowerCase() !== targetKey),
+        );
+        setRdpProfiles((prev) =>
+          prev.map((item) => savedMap.get(item.id) ?? item),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [persistRdpGroups, rdpGroups, rdpProfiles],
+  );
+
+  const moveRdpProfileToGroup = useCallback(
+    async (profileId: string, targetGroup: string | null) => {
+      const profile = rdpProfiles.find((item) => item.id === profileId);
+      if (!profile) return false;
+      const nextGroup = normalizeRdpGroupName(targetGroup ?? "");
+      try {
+        const saved = await saveRdpProfile({
+          ...profile,
+          tags: nextGroup ? [nextGroup] : null,
+        });
+        if (nextGroup) {
+          const nextGroups = dedupeRdpGroups([...rdpGroups, nextGroup]);
+          await persistRdpGroups(nextGroups);
+        }
+        setRdpProfiles((prev) =>
+          prev.map((item) => (item.id === saved.id ? saved : item)),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [persistRdpGroups, rdpGroups, rdpProfiles],
+  );
+
   async function handleSaveSessionBuffer(sessionId: string) {
     const session = sessionState.sessions.find(
       (item) => item.sessionId === sessionId,
@@ -2918,9 +3198,13 @@ export default function AppShell() {
     () =>
       buildWidgets({
         profiles,
+        rdpProfiles,
+        rdpGroups,
         sshGroups,
         activeProfileId,
         connectingProfileId,
+        activeRdpProfileId,
+        connectingRdpProfileId,
         availableShells,
         activeSessionId: AiWidgetState.activeSessionId,
         activeSessionState: EventsWidgetState.sessionState,
@@ -2951,7 +3235,17 @@ export default function AppShell() {
         locale,
         t,
         pickProfile,
+        pickRdpProfile: setActiveRdpProfileId,
         onConnectProfile: handleConnectProfile,
+        onConnectRdpProfile: handleConnectRdpProfile,
+        onRefreshRdpProfiles: () => refreshRdpProfiles().then(() => {}),
+        onOpenNewRdpProfile: openNewRdpProfileModal,
+        onOpenEditRdpProfile: openEditRdpProfileModal,
+        onRemoveRdpProfile: handleRemoveRdpProfile,
+        onAddRdpGroup: addRdpGroup,
+        onRenameRdpGroup: renameRdpGroup,
+        onRemoveRdpGroup: removeRdpGroup,
+        onMoveRdpProfileToGroup: moveRdpProfileToGroup,
         onOpenNewProfile: openNewProfile,
         onImportOpenSshConfig: () => {
           importOpenSshConfig()
@@ -3010,9 +3304,13 @@ export default function AppShell() {
       }),
     [
       profiles,
+      rdpProfiles,
+      rdpGroups,
       sshGroups,
       activeProfileId,
       connectingProfileId,
+      activeRdpProfileId,
+      connectingRdpProfileId,
       availableShells,
       AiWidgetActions,
       AiWidgetState,
@@ -3033,12 +3331,21 @@ export default function AppShell() {
       pushToast,
       t,
       pickProfile,
+      refreshRdpProfiles,
       addGroup,
       renameGroup,
       removeGroup,
       moveProfileToGroup,
       handleConnectProfile,
+      handleConnectRdpProfile,
+      handleRemoveRdpProfile,
+      addRdpGroup,
+      renameRdpGroup,
+      removeRdpGroup,
+      moveRdpProfileToGroup,
       openNewProfile,
+      openNewRdpProfileModal,
+      openEditRdpProfileModal,
       openLocalShellProfile,
       refreshAvailableShells,
       removeProfile,
@@ -3306,6 +3613,21 @@ export default function AppShell() {
         onDraftChange={setLocalShellProfileDraft}
         onClose={closeLocalShellProfileModal}
         onSubmit={submitLocalShellProfile}
+        t={t}
+      />
+      <RdpProfileModal
+        open={rdpProfileModalOpen}
+        mode={rdpProfileModalMode}
+        initialProfile={
+          rdpProfileModalMode === "edit"
+            ? (rdpProfiles.find(
+                (item) => item.id === rdpProfileModalProfileId,
+              ) ?? null)
+            : null
+        }
+        groups={rdpGroups}
+        onClose={closeRdpProfileModal}
+        onProfilesChange={() => refreshRdpProfiles().then(() => {})}
         t={t}
       />
       <ConfigModal

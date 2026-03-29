@@ -31,6 +31,9 @@
 
 下一步：
 
-- 评估窗口承载方式
-- 评估接入范围与实现复杂度
-- 补充独立设计文档
+- 已确认使用 `SubApp` 承载
+- 已确认首版采用独立 crate sidecar 方案
+- sidecar 采用原因是当前 `IronRDP` 与主工程安全依赖链存在冲突
+- 当前专用分支已开始验证将运行时回收进 workspace 内的 `crates/rdp_runtime`
+- 当前验证路线保持“独立 crate 管理 RDP”，但不再依赖外部 sidecar 进程
+- 按 `docs/rdp-subapp-design.md` 持续推进实施与记录进度

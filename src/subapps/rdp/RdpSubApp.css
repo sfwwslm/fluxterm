@@ -1,0 +1,309 @@
+.rdp-subapp-shell {
+  overflow: hidden;
+}
+
+.rdp-subapp-content {
+  display: block;
+  height: 100%;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.rdp-layout {
+  display: grid;
+  grid-template-rows: 30px minmax(0, 1fr) 30px;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.rdp-inline-actions button,
+.rdp-cert-actions button {
+  border: 1px solid
+    color-mix(in srgb, var(--accent-500, #4ab0ff) 30%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--accent-500, #4ab0ff) 12%,
+    rgba(10, 14, 20, 0.85)
+  );
+  color: inherit;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.rdp-tabbar {
+  display: block;
+  min-height: 0;
+  height: 30px;
+}
+
+.rdp-tabbar-scroll {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 0;
+  height: 30px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.rdp-tabbar-empty {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 4px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rdp-tab {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  max-width: 240px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px 8px 0 0;
+  background: rgba(8, 12, 20, 0.68);
+  color: inherit;
+  text-align: left;
+}
+
+.rdp-tab.is-active {
+  border-color: color-mix(in srgb, var(--accent-500, #4ab0ff) 45%, transparent);
+  background: linear-gradient(
+    180deg,
+    rgba(22, 30, 41, 0.96),
+    rgba(10, 14, 20, 0.92)
+  );
+}
+
+.rdp-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.rdp-tab-dot.is-connecting,
+.rdp-tab-dot.is-reconnecting {
+  background: #f7bf4f;
+}
+
+.rdp-tab-dot.is-connected {
+  background: #58d68d;
+}
+
+.rdp-tab-dot.is-error {
+  background: #ff7b72;
+}
+
+.rdp-tab-copy {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rdp-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.74);
+  line-height: 1;
+}
+
+.rdp-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rdp-banner {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 4;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 120, 120, 0.28);
+  background: rgba(99, 24, 24, 0.3);
+}
+
+.rdp-surface {
+  position: relative;
+  height: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rdp-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.rdp-canvas.is-hidden {
+  /* 仅隐藏宿主 canvas，OffscreenCanvas 与 Worker 仍可复用，
+     避免每次空态/重连都重建渲染管线。 */
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rdp-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.rdp-empty,
+.rdp-stage-message {
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: linear-gradient(
+    180deg,
+    rgba(6, 8, 12, 0.2),
+    rgba(6, 8, 12, 0.54)
+  );
+}
+
+.rdp-empty strong,
+.rdp-stage-message strong {
+  font-size: 20px;
+}
+
+.rdp-empty span,
+.rdp-stage-message span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.rdp-cert-dialog {
+  inset: auto 18px 18px auto;
+  z-index: 3;
+  width: min(360px, calc(100% - 36px));
+  padding: 14px 16px;
+  background: rgba(99, 24, 24, 0.24);
+  border: 1px solid rgba(255, 120, 120, 0.28);
+  overflow: auto;
+}
+
+.rdp-cert-dialog p {
+  margin: 6px 0;
+  word-break: break-all;
+}
+
+.rdp-inline-actions,
+.rdp-cert-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rdp-statusbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  height: 30px;
+  padding: 0 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rdp-footer-section {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  overflow: hidden;
+}
+
+.rdp-footer-section-center {
+  justify-content: center;
+}
+
+.rdp-footer-section-right {
+  justify-content: flex-end;
+}
+
+.rdp-status-line {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rdp-session-counter {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.45);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rdp-metrics {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.rdp-metrics span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 180px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.45);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  /* 窗口变窄时优先保留最关键的运行状态，避免底栏多块信息互相挤压。 */
+  .rdp-statusbar {
+    grid-template-columns: auto;
+    justify-content: flex-start;
+  }
+
+  .rdp-footer-section-center,
+  .rdp-footer-section-right {
+    display: none;
+  }
+
+  .rdp-footer-section-left {
+    justify-content: flex-start;
+  }
+}

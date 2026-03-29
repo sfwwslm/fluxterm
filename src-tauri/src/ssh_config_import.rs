@@ -421,6 +421,8 @@ mod tests {
             version: 1,
             updated_at: 0,
             ssh_groups: Vec::new(),
+            rdp_groups: Vec::new(),
+            rdp_profiles: Vec::new(),
             secret: None,
             profiles,
         }

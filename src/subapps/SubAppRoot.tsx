@@ -30,8 +30,10 @@ import {
   type SubAppLifecycleMessage,
 } from "@/subapps/core/lifecycle";
 import ProxySubApp from "@/subapps/proxy/ProxySubApp";
+import RdpSubApp from "@/subapps/rdp/RdpSubApp";
 import "@/subapps/SubAppShell.css";
 import "@/subapps/proxy/ProxySubApp.css";
+import "@/subapps/rdp/RdpSubApp.css";
 import { callTauri } from "@/shared/tauri/commands";
 import { resolveBackgroundAssetUrl } from "@/features/backgrounds/core/assetResolver";
 import {
@@ -429,6 +431,8 @@ export default function SubAppRoot() {
       ) : null}
       {subAppId === "proxy" ? (
         <ProxySubApp id={subAppId} locale={effectiveLocale} t={t} />
+      ) : subAppId === "rdp" ? (
+        <RdpSubApp id={subAppId} locale={effectiveLocale} t={t} />
       ) : (
         <div className="subapp-shell">
           <main className="subapp-content">

@@ -1,0 +1,22 @@
+[package]
+name = "rdp_runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
+description = "FluxTerm RDP in-process runtime"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["http1", "json", "tokio", "ws"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
+tracing = "0.1.41"
+uuid = { workspace = true, features = ["v4", "serde"] }
+thiserror = "2.0.18"
+hostname = "0.4.1"
+base64 = "0.22.1"
+png = "0.17.16"
+ironrdp = { git = "https://github.com/sfwwslm/IronRDP", branch = "dev", features = ["session", "input", "graphics", "dvc", "svc", "displaycontrol", "connector"] }
+ironrdp-tls = { git = "https://github.com/sfwwslm/IronRDP", branch = "dev", package = "ironrdp-tls", features = ["rustls"] }
+ironrdp-tokio = { git = "https://github.com/sfwwslm/IronRDP", branch = "dev", package = "ironrdp-tokio", features = ["reqwest"] }

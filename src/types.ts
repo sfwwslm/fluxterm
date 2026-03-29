@@ -235,6 +235,87 @@ export type ProxyRuntime = {
   } | null;
 };
 
+/** RDP 分辨率模式。 */
+export type RdpDisplayMode = "fixed" | "window_sync";
+
+/** RDP 剪贴板模式。 */
+export type RdpClipboardMode = "disabled" | "text";
+
+/** RDP 重连策略。 */
+export type RdpReconnectPolicy = {
+  enabled: boolean;
+  maxAttempts: number;
+};
+
+/** RDP Profile。 */
+export type RdpProfile = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  tags?: string[] | null;
+  passwordRef?: string | null;
+  domain?: string | null;
+  ignoreCertificate: boolean;
+  resolutionMode: RdpDisplayMode;
+  width: number;
+  height: number;
+  clipboardMode: RdpClipboardMode;
+  reconnectPolicy: RdpReconnectPolicy;
+};
+
+/** RDP 证书确认信息。 */
+export type RdpCertificatePrompt = {
+  fingerprint: string;
+  subject: string;
+  issuer: string;
+};
+
+/** RDP 会话状态。 */
+export type RdpSessionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "disconnected"
+  | "error"
+  | "certificate_prompt";
+
+/** RDP 会话快照。 */
+export type RdpSessionSnapshot = {
+  sessionId: string;
+  profileId: string;
+  state: RdpSessionState;
+  createdAt: number;
+  width: number;
+  height: number;
+  wsUrl?: string | null;
+  lastError?: {
+    code: string;
+    message: string;
+    detail?: string | null;
+    details?: string | null;
+  } | null;
+  certificatePrompt?: RdpCertificatePrompt | null;
+};
+
+/** RDP 输入事件。 */
+export type RdpInputEvent = {
+  kind: string;
+  x?: number;
+  y?: number;
+  button?: number;
+  deltaX?: number;
+  deltaY?: number;
+  text?: string;
+  code?: string;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+};
+
 /** SFTP 可用性状态。 */
 export type SftpAvailability =
   | "ready"
@@ -373,6 +454,7 @@ export type CommandHistoryStore = {
 /** 功能面板类型。 */
 export type WidgetKey =
   | "profiles"
+  | "rdp"
   | "files"
   | "transfers"
   | "events"

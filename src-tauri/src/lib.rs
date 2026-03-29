@@ -8,6 +8,7 @@ pub mod local_fs;
 pub mod local_shell;
 pub mod profile_secrets;
 pub mod profile_store;
+pub mod rdp;
 pub mod remote_edit;
 pub mod resource_monitor;
 pub mod security;
@@ -22,6 +23,8 @@ use std::sync::Arc;
 
 use engine::Engine;
 use log::LevelFilter;
+use rustls::crypto::aws_lc_rs;
+use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::ai::{
@@ -39,6 +42,11 @@ use crate::commands::profile::{
     ssh_import_openssh_config,
 };
 use crate::commands::proxy::{proxy_close, proxy_close_all, proxy_list, proxy_open};
+use crate::commands::rdp::{
+    rdp_profile_delete, rdp_profile_groups_list, rdp_profile_groups_save, rdp_profile_list,
+    rdp_profile_save, rdp_session_cert_decide, rdp_session_connect, rdp_session_create,
+    rdp_session_disconnect, rdp_session_resize, rdp_session_send_input, rdp_session_set_clipboard,
+};
 use crate::commands::remote_edit::{
     remote_edit_confirm_upload, remote_edit_dismiss_pending, remote_edit_list, remote_edit_open,
 };
@@ -61,6 +69,7 @@ use crate::commands::tunnel::{
     ssh_tunnel_close, ssh_tunnel_close_all, ssh_tunnel_list, ssh_tunnel_open,
 };
 use crate::local_shell::LocalShellState;
+use crate::rdp::RdpState;
 use crate::remote_edit::RemoteEditState;
 use crate::resource_monitor::ResourceMonitorState;
 use crate::state::{EngineState, SecurityState};
@@ -86,14 +95,23 @@ fn resolve_log_level() -> LevelFilter {
     LevelFilter::Info
 }
 
+/// 在应用启动早期固定安装 rustls 的全局加密提供者。
+///
+/// 当前依赖图会同时带入 `aws-lc-rs` 与 `ring` 相关特性，若不显式选择，
+/// `IronRDP` 在 TLS 升级阶段会触发进程级 panic。
+fn install_rustls_crypto_provider() {
+    let _ = aws_lc_rs::default_provider().install_default();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Err(message) = crate::config_paths::load_dotenv_strict() {
         eprintln!("{message}");
         std::process::exit(1);
     }
+    install_rustls_crypto_provider();
     let log_level = resolve_log_level();
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
@@ -103,6 +121,7 @@ pub fn run() {
         .manage(SecurityState::default())
         .manage(LocalShellState::default())
         .manage(ResourceMonitorState::default())
+        .manage(RdpState::default())
         .manage(RemoteEditState::default())
         .manage(ai::AiRuntimeState::default())
         .plugin(tauri_plugin_dialog::init())
@@ -124,6 +143,14 @@ pub fn run() {
                 })
                 .build(),
         )
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. })
+                && (window.label() == "main" || window.label() == "subapp-rdp")
+            {
+                let rdp = window.app_handle().state::<RdpState>();
+                let _ = rdp.shutdown_runtime();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             profile_list,
             profile_groups_list,
@@ -186,11 +213,34 @@ pub fn run() {
             proxy_close,
             proxy_list,
             proxy_close_all,
+            rdp_profile_groups_list,
+            rdp_profile_groups_save,
+            rdp_profile_list,
+            rdp_profile_save,
+            rdp_profile_delete,
+            rdp_session_create,
+            rdp_session_connect,
+            rdp_session_disconnect,
+            rdp_session_send_input,
+            rdp_session_resize,
+            rdp_session_set_clipboard,
+            rdp_session_cert_decide,
             remote_edit_open,
             remote_edit_list,
             remote_edit_confirm_upload,
             remote_edit_dismiss_pending,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        ]);
+
+    builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                let rdp = app.state::<RdpState>();
+                let _ = rdp.shutdown_runtime();
+            }
+        });
 }

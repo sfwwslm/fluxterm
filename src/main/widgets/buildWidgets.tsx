@@ -10,6 +10,7 @@ import EventsWidget from "@/widgets/events/components/EventsWidget";
 import CommandHistoryWidget from "@/widgets/history/components/CommandHistoryWidget";
 import AiWidget from "@/widgets/ai/components/AiWidget";
 import TunnelWidget from "@/widgets/tunnels/components/TunnelWidget";
+import RdpWidget from "@/widgets/rdp/components/RdpWidget";
 import type { AiChatMessage } from "@/features/ai/types";
 import type { Locale, Translate } from "@/i18n";
 import type {
@@ -19,6 +20,7 @@ import type {
   HostProfile,
   LocalShellProfile,
   LogEntry,
+  RdpProfile,
   WidgetKey,
   SessionStateUi,
   SftpAvailability,
@@ -30,9 +32,13 @@ import type {
 
 type buildWidgetsProps = {
   profiles: HostProfile[];
+  rdpProfiles: RdpProfile[];
+  rdpGroups: string[];
   sshGroups: string[];
   activeProfileId: string | null;
   connectingProfileId: string | null;
+  activeRdpProfileId: string | null;
+  connectingRdpProfileId: string | null;
   availableShells: LocalShellProfile[];
   activeSessionId: string | null;
   activeSessionState: SessionStateUi | null;
@@ -68,7 +74,20 @@ type buildWidgetsProps = {
   locale: Locale;
   t: Translate;
   pickProfile: (profileId: string) => void;
+  pickRdpProfile: (profileId: string) => void;
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
+  onConnectRdpProfile: (profile: RdpProfile) => Promise<void>;
+  onRefreshRdpProfiles: () => Promise<void>;
+  onOpenNewRdpProfile: () => void;
+  onOpenEditRdpProfile: (profile: RdpProfile) => void;
+  onRemoveRdpProfile: (profile: RdpProfile) => Promise<void>;
+  onAddRdpGroup: (groupName: string) => boolean;
+  onRenameRdpGroup: (from: string, to: string) => Promise<boolean>;
+  onRemoveRdpGroup: (groupName: string) => Promise<boolean>;
+  onMoveRdpProfileToGroup: (
+    profileId: string,
+    targetGroup: string | null,
+  ) => Promise<boolean>;
   onOpenNewProfile: () => void;
   onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
@@ -117,9 +136,13 @@ export function buildWidgets(
 ): Record<WidgetKey, React.ReactNode> {
   const {
     profiles,
+    rdpProfiles,
+    rdpGroups,
     sshGroups,
     activeProfileId,
     connectingProfileId,
+    activeRdpProfileId,
+    connectingRdpProfileId,
     availableShells,
     activeSessionId,
     activeSessionState,
@@ -150,7 +173,17 @@ export function buildWidgets(
     locale,
     t,
     pickProfile,
+    pickRdpProfile,
     onConnectProfile,
+    onConnectRdpProfile,
+    onRefreshRdpProfiles,
+    onOpenNewRdpProfile,
+    onOpenEditRdpProfile,
+    onRemoveRdpProfile,
+    onAddRdpGroup,
+    onRenameRdpGroup,
+    onRemoveRdpGroup,
+    onMoveRdpProfileToGroup,
     onOpenNewProfile,
     onImportOpenSshConfig,
     onOpenEditProfile,
@@ -213,6 +246,25 @@ export function buildWidgets(
         onConnectLocalShell={onConnectLocalShell}
         onOpenLocalShellProfile={onOpenLocalShellProfile}
         onRefreshLocalShells={onRefreshLocalShells}
+        t={t}
+      />
+    ),
+    rdp: (
+      <RdpWidget
+        profiles={rdpProfiles}
+        groups={rdpGroups}
+        activeProfileId={activeRdpProfileId}
+        connectingProfileId={connectingRdpProfileId}
+        onPick={pickRdpProfile}
+        onConnectProfile={onConnectRdpProfile}
+        onRefreshProfiles={onRefreshRdpProfiles}
+        onOpenNewProfile={onOpenNewRdpProfile}
+        onOpenEditProfile={onOpenEditRdpProfile}
+        onRemoveProfile={onRemoveRdpProfile}
+        onAddGroup={onAddRdpGroup}
+        onRenameGroup={onRenameRdpGroup}
+        onRemoveGroup={onRemoveRdpGroup}
+        onMoveProfileToGroup={onMoveRdpProfileToGroup}
         t={t}
       />
     ),

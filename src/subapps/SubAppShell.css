@@ -22,8 +22,8 @@
 .subapp-content {
   flex: 1;
   display: grid;
-  place-items: center;
-  padding: 24px;
+  /* place-items: center; */
+  /* padding: 24px; */
 }
 
 .subapp-card {

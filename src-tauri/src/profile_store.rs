@@ -8,6 +8,7 @@ use serde_json::json;
 use tauri::AppHandle;
 
 use crate::config_paths::resolve_profiles_path;
+use crate::rdp::RdpProfile;
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::utils::write_atomic;
 
@@ -32,6 +33,10 @@ pub struct ProfileStore {
     #[serde(default)]
     pub ssh_groups: Vec<String>,
     #[serde(default)]
+    pub rdp_groups: Vec<String>,
+    #[serde(default)]
+    pub rdp_profiles: Vec<RdpProfile>,
+    #[serde(default)]
     pub secret: Option<SecretConfig>,
     pub profiles: Vec<HostProfile>,
 }
@@ -42,6 +47,8 @@ impl Default for ProfileStore {
             version: 1,
             updated_at: now_epoch(),
             ssh_groups: Vec::new(),
+            rdp_groups: Vec::new(),
+            rdp_profiles: Vec::new(),
             secret: Some(SecretConfig {
                 version: 1,
                 provider: "embedded".to_string(),
