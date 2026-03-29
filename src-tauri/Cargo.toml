@@ -20,7 +20,7 @@ tauri-build = { version = "2.5.5", features = [] }
 [dependencies]
 engine = { workspace = true }
 openai = { workspace = true }
-rdp_runtime = { path = "../crates/rdp_runtime" }
+rdp_core = { path = "../crates/rdp_core" }
 
 tauri = { version = "2.10.2", features = ["macos-private-api", "protocol-asset", "tray-icon"] }
 tauri-plugin-log = { version = "2.8.0" }

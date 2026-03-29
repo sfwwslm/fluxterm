@@ -4,7 +4,7 @@
 
 本文档记录当前 FluxTerm RDP 功能在前端侧的职责边界与交互结构，供后续任务直接参考。
 
-本文档只关注当前已经落地的产品与前端架构约束，不重复展开 `rdp_runtime`、桥接协议和 Rust 运行时历史。底层运行时背景请继续参考 [rdp-subapp-design.md](./rdp-subapp-design.md)。
+本文档只关注当前已经落地的产品与前端架构约束，不重复展开 `rdp_core`、桥接协议和 Rust 运行时历史。底层运行时背景请继续参考 [rdp-subapp-design.md](./rdp-subapp-design.md)。
 
 ## 2. 当前结论
 

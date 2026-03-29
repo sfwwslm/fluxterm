@@ -1,5 +1,5 @@
 [package]
-name = "rdp_runtime"
+name = "rdp_core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

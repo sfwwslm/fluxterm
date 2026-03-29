@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use engine::EngineError;
-use rdp_runtime::{
+use rdp_core::{
     ConnectSessionRequest as RuntimeConnectSessionRequest, InputEventPayload as RuntimeInputEvent,
     RdpRuntime, RuntimeError as RdpRuntimeError, SessionSnapshot as RuntimeSessionSnapshot,
 };
