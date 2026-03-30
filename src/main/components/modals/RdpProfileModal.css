@@ -17,6 +17,14 @@
   padding: 20px 22px;
 }
 
+.rdp-profile-modal .profile-settings-section {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .rdp-profile-modal-error {
   color: var(--text-secondary);
   font-size: 12px;
@@ -26,14 +34,6 @@
   margin-top: 12px;
   padding-top: 16px;
   border-top: 1px solid color-mix(in srgb, var(--border-input) 88%, transparent);
-}
-
-.rdp-profile-settings-group {
-  padding: 12px;
-}
-
-.rdp-profile-settings-group-unified {
-  padding: 12px;
 }
 
 .rdp-profile-group-head {
@@ -75,6 +75,10 @@
 .rdp-profile-settings-group-unified .rdp-profile-group-card {
   border: 1px solid color-mix(in srgb, var(--border-input) 88%, transparent);
   border-radius: 14px;
+  background: transparent;
+}
+
+.rdp-profile-settings-single-card .rdp-profile-group-head {
   background: transparent;
 }
 

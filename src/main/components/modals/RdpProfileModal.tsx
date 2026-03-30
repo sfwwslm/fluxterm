@@ -724,8 +724,8 @@ export default function RdpProfileModal({
               ) : null}
 
               {activeSection === "security" ? (
-                <section className="profile-settings-section">
-                  <div className="profile-settings-section-body">
+                <section className="profile-settings-section rdp-profile-settings-single-card">
+                  <div className="profile-settings-section-body rdp-profile-group-head">
                     <label className="config-toggle-card">
                       <div className="config-toggle-copy">
                         <span className="config-toggle-title">
