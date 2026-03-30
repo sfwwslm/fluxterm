@@ -82,6 +82,13 @@
   background: transparent;
 }
 
+.rdp-profile-settings-single-card .config-toggle-card {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
 .rdp-performance-flags {
   display: grid;
   gap: 10px;
