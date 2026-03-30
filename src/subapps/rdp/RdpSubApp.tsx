@@ -62,6 +62,7 @@ type RdpWorkerPerfSnapshot = {
   queueHighWatermark: number;
   presentCount: number;
   avgPresentCpuMs: number;
+  avgUploadRectCpuMs: number;
   windowMs: number;
 };
 
@@ -468,6 +469,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
               queueHighWatermark: perf.queueHighWatermark,
               presentCount: perf.presentCount,
               avgPresentCpuMs: perf.avgPresentCpuMs,
+              avgUploadRectCpuMs: perf.avgUploadRectCpuMs,
               windowMs: perf.windowMs,
             });
           }

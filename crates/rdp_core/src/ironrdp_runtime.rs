@@ -47,20 +47,21 @@ use crate::session_manager::{
     RuntimeCommand, build_rgba_frame_batch_message, build_rgba_frame_message, json_message,
 };
 
-const FRAGMENT_COLLAPSE_RECT_THRESHOLD: usize = 8;
+const FRAGMENT_COLLAPSE_RECT_THRESHOLD: usize = 4;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 2;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
-const GRAPHICS_FLUSH_INTERVAL_BASE_MS: u64 = 12;
-const GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS: u64 = 16;
-const GRAPHICS_FLUSH_INTERVAL_HIGH_MS: u64 = 20;
+const NEAR_RECT_THRESHOLD_PX: i32 = 48;
+const GRAPHICS_FLUSH_INTERVAL_BASE_MS: u64 = 4;
+const GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS: u64 = 8;
+const GRAPHICS_FLUSH_INTERVAL_HIGH_MS: u64 = 12;
 const GRAPHICS_FLUSH_MEDIUM_PENDING_RECTS: usize = 3;
 const GRAPHICS_FLUSH_HIGH_PENDING_RECTS: usize = 6;
 const GRAPHICS_FLUSH_MEDIUM_RAW_RECTS: u32 = 80;
 const GRAPHICS_FLUSH_HIGH_RAW_RECTS: u32 = 180;
 const GRAPHICS_FLUSH_MEDIUM_CYCLES: u32 = 350;
 const GRAPHICS_FLUSH_HIGH_CYCLES: u32 = 700;
-const HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD: usize = 4;
-const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 3;
+const HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD: usize = 3;
+const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 6;
 const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
 const HIGH_PRESSURE_COLLAPSE_RAW_RECTS: u32 = 180;
 const HIGH_PRESSURE_COLLAPSE_CYCLES: u32 = 700;
@@ -78,6 +79,8 @@ struct FramePerfWindow {
     sent_pixels: u64,
     resize_requests: u32,
     max_flush_interval_ms: u64,
+    read_pdu_cpu_us: u64,
+    decode_cpu_us: u64,
     copy_rect_cpu_us: u64,
     encode_message_cpu_us: u64,
     broadcast_send_cpu_us: u64,
@@ -102,6 +105,8 @@ impl Default for FramePerfWindow {
             sent_pixels: 0,
             resize_requests: 0,
             max_flush_interval_ms: 0,
+            read_pdu_cpu_us: 0,
+            decode_cpu_us: 0,
             copy_rect_cpu_us: 0,
             encode_message_cpu_us: 0,
             broadcast_send_cpu_us: 0,
@@ -357,10 +362,16 @@ where
                 continue;
             }
             frame = reader.read_pdu() => {
+                let start = StdInstant::now();
                 let (action, payload) = frame.map_err(|error| format!("read_pdu failed: {error}"))?;
-                active_stage
+                perf_window.read_pdu_cpu_us += elapsed_micros_u64(start.elapsed());
+
+                let start = StdInstant::now();
+                let result = active_stage
                     .process(&mut image, action, &payload)
-                    .map_err(|error| format!("active stage process failed: {error}"))?
+                    .map_err(|error| format!("active stage process failed: {error}"));
+                perf_window.decode_cpu_us += elapsed_micros_u64(start.elapsed());
+                result?
             }
             command = command_rx.recv() => {
                 let Some(command) = command else {
@@ -545,26 +556,42 @@ where
             }
         }
 
-        let raw_rect_count = graphics_rects.len();
-        let merged_rects = merge_update_rects(std::mem::take(&mut graphics_rects));
-        perf_window.cycles += 1;
-        perf_window.raw_rects += u32::try_from(raw_rect_count).unwrap_or(u32::MAX);
-        perf_window.merged_rects += u32::try_from(merged_rects.len()).unwrap_or(u32::MAX);
-        if !merged_rects.is_empty() {
-            // 图形更新先进入暂存区，允许一个很短的时间窗把连续到来的脏矩形合并后再发，
-            // 以减少拖窗时的高频单消息、像素拷贝次数和前端逐块上传次数。
-            pending_graphics_rects.extend(merged_rects);
-            pending_graphics_rects =
-                merge_update_rects(std::mem::take(&mut pending_graphics_rects));
-            let flush_interval_ms =
-                select_graphics_flush_interval_ms(&perf_window, pending_graphics_rects.len());
-            perf_window.max_flush_interval_ms =
-                perf_window.max_flush_interval_ms.max(flush_interval_ms);
-            schedule_graphics_flush(
-                &mut pending_flush_deadline,
-                &mut pending_flush_started_at,
-                flush_interval_ms,
-            );
+        if !graphics_rects.is_empty() {
+            perf_window.cycles += 1;
+            perf_window.raw_rects += u32::try_from(graphics_rects.len()).unwrap_or(u32::MAX);
+
+            let mut current_pdu_area = 0u64;
+            for rect in &graphics_rects {
+                current_pdu_area += rect_area(rect);
+            }
+
+            pending_graphics_rects.extend(std::mem::take(&mut graphics_rects));
+
+            // 如果单次 PDU 处理产生了足够大的面积（如超过 256x256 像素），
+            // 往往意味着一个完整的 UI 动作（如拖窗起始或滚屏）的一部分，
+            // 此时我们选择立即 Flush 而不等待定时器，以降低大动作的视觉延迟并减少画面“截断”感。
+            let should_immediate_flush = current_pdu_area > 65536;
+
+            if should_immediate_flush {
+                flush_pending_graphics(
+                    sender,
+                    &image,
+                    &mut pending_graphics_rects,
+                    &mut perf_window,
+                );
+                pending_flush_deadline = None;
+                pending_flush_started_at = None;
+            } else {
+                let flush_interval_ms =
+                    select_graphics_flush_interval_ms(&perf_window, pending_graphics_rects.len());
+                perf_window.max_flush_interval_ms =
+                    perf_window.max_flush_interval_ms.max(flush_interval_ms);
+                schedule_graphics_flush(
+                    &mut pending_flush_deadline,
+                    &mut pending_flush_started_at,
+                    flush_interval_ms,
+                );
+            }
         }
 
         flush_frame_perf_window(session_id, &mut perf_window);
@@ -667,7 +694,7 @@ fn copy_rect_to_slice(
     }
 }
 
-/// 合并相交或相邻的脏矩形，减少高频拖动时的小块绘制数量。
+/// 合并相交、相邻或临近的脏矩形，减少高频拖动时的小块绘制数量。
 fn merge_update_rects(rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle> {
     let mut pending = rects
         .into_iter()
@@ -681,7 +708,7 @@ fn merge_update_rects(rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle>
     while let Some(mut current) = pending.pop() {
         let mut index = 0;
         while index < pending.len() {
-            if rects_touch_or_overlap(&current, &pending[index]) {
+            if rects_near_or_overlap(&current, &pending[index]) {
                 current = union_rect(&current, &pending[index]);
                 pending.swap_remove(index);
                 index = 0;
@@ -694,8 +721,8 @@ fn merge_update_rects(rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle>
     maybe_collapse_fragmented_rects(merged)
 }
 
-/// 判断两个脏矩形是否相交或边缘相邻。
-fn rects_touch_or_overlap(left: &InclusiveRectangle, right: &InclusiveRectangle) -> bool {
+/// 判断两个脏矩形是否相交、边缘相邻或距离非常接近。
+fn rects_near_or_overlap(left: &InclusiveRectangle, right: &InclusiveRectangle) -> bool {
     let left_left = i32::from(left.left);
     let left_top = i32::from(left.top);
     let left_right = i32::from(left.right);
@@ -705,10 +732,11 @@ fn rects_touch_or_overlap(left: &InclusiveRectangle, right: &InclusiveRectangle)
     let right_right = i32::from(right.right);
     let right_bottom = i32::from(right.bottom);
 
-    left_left <= right_right + 1
-        && left_right + 1 >= right_left
-        && left_top <= right_bottom + 1
-        && left_bottom + 1 >= right_top
+    // 允许 32 像素以内的间隙合并，显著降低拖动窗口时的离散 PDU 数量。
+    left_left <= right_right + NEAR_RECT_THRESHOLD_PX
+        && left_right + NEAR_RECT_THRESHOLD_PX >= right_left
+        && left_top <= right_bottom + NEAR_RECT_THRESHOLD_PX
+        && left_bottom + NEAR_RECT_THRESHOLD_PX >= right_top
 }
 
 /// 计算两个脏矩形的并集。
@@ -845,9 +873,15 @@ fn flush_pending_graphics(
         return;
     }
 
-    // flush 时再做一次高压场景收敛，优先用少量 overdraw 换更少的消息数。
-    let merged_rects =
-        maybe_collapse_flush_rects(std::mem::take(pending_graphics_rects), perf_window);
+    // 第一步：执行空间邻近合并（32px 阈值），将离散的小条带合并为较大的块。
+    let spatial_merged = merge_update_rects(std::mem::take(pending_graphics_rects));
+
+    // 第二步：在高压场景下进一步执行面积收敛，尝试将所有矩形强行塌陷为单块外接矩形。
+    let merged_rects = maybe_collapse_flush_rects(spatial_merged, perf_window);
+
+    // 记录最终发送给前端的矩形数量，这是真实的性能指标。
+    perf_window.merged_rects += u32::try_from(merged_rects.len()).unwrap_or(u32::MAX);
+
     if merged_rects.len() == 1 {
         let rect = &merged_rects[0];
         perf_window.single_messages += 1;
@@ -961,6 +995,8 @@ fn flush_frame_perf_window(session_id: &str, perf_window: &mut FramePerfWindow) 
         sent_pixels = perf_window.sent_pixels,
         resize_requests = perf_window.resize_requests,
         max_flush_interval_ms = perf_window.max_flush_interval_ms,
+        read_pdu_cpu_us = perf_window.read_pdu_cpu_us,
+        decode_cpu_us = perf_window.decode_cpu_us,
         copy_rect_cpu_us = perf_window.copy_rect_cpu_us,
         encode_message_cpu_us = perf_window.encode_message_cpu_us,
         broadcast_send_cpu_us = perf_window.broadcast_send_cpu_us,

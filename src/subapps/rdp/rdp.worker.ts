@@ -28,6 +28,7 @@ type WorkerPerfCounters = {
   queueHighWatermark: number;
   presentCount: number;
   presentCpuTimeMs: number;
+  uploadRectCpuTimeMs: number;
 };
 
 type RdpWireEvent =
@@ -66,6 +67,7 @@ type WorkerPerfSnapshot = {
   queueHighWatermark: number;
   presentCount: number;
   avgPresentCpuMs: number;
+  avgUploadRectCpuMs: number;
   windowMs: number;
 };
 
@@ -323,6 +325,7 @@ class RdpWorkerContext {
         session.textureSize = { width: surfaceWidth, height: surfaceHeight };
       }
 
+      const uploadStartedAt = performance.now();
       this.renderer.uploadRect(
         session.texture,
         x,
@@ -331,7 +334,12 @@ class RdpWorkerContext {
         rectHeight,
         pixels,
       );
-      this.recordRectUpload(session, rectWidth, rectHeight);
+      this.recordRectUpload(
+        session,
+        rectWidth,
+        rectHeight,
+        performance.now() - uploadStartedAt,
+      );
     } else if (messageType === 2 && view.byteLength >= 13) {
       const surfaceWidth = view.getUint32(1, true);
       const surfaceHeight = view.getUint32(5, true);
@@ -361,6 +369,7 @@ class RdpWorkerContext {
         const pixelBytes = rectWidth * rectHeight * 4;
         if (offset + pixelBytes > view.byteLength) break;
         const pixels = new Uint8Array(buffer, offset, pixelBytes);
+        const uploadStartedAt = performance.now();
         this.renderer.uploadRect(
           session.texture,
           x,
@@ -369,7 +378,12 @@ class RdpWorkerContext {
           rectHeight,
           pixels,
         );
-        this.recordRectUpload(session, rectWidth, rectHeight);
+        this.recordRectUpload(
+          session,
+          rectWidth,
+          rectHeight,
+          performance.now() - uploadStartedAt,
+        );
         offset += pixelBytes;
       }
     }
@@ -385,6 +399,7 @@ class RdpWorkerContext {
       queueHighWatermark: 0,
       presentCount: 0,
       presentCpuTimeMs: 0,
+      uploadRectCpuTimeMs: 0,
     };
   }
 
@@ -393,9 +408,11 @@ class RdpWorkerContext {
     session: WorkerSessionRuntime,
     rectWidth: number,
     rectHeight: number,
+    cpuTimeMs: number,
   ) {
     session.perf.rectUploads += 1;
     session.perf.uploadedPixels += rectWidth * rectHeight;
+    session.perf.uploadRectCpuTimeMs += cpuTimeMs;
   }
 
   /** 按时间窗口输出 Worker 渲染聚合快照，避免每帧打日志。 */
@@ -410,6 +427,10 @@ class RdpWorkerContext {
       session.perf.presentCount > 0
         ? session.perf.presentCpuTimeMs / session.perf.presentCount
         : 0;
+    const avgUploadRectCpuMs =
+      session.perf.rectUploads > 0
+        ? session.perf.uploadRectCpuTimeMs / session.perf.rectUploads
+        : 0;
 
     self.postMessage({
       type: "perf-snapshot",
@@ -421,6 +442,7 @@ class RdpWorkerContext {
         queueHighWatermark: session.perf.queueHighWatermark,
         presentCount: session.perf.presentCount,
         avgPresentCpuMs: Number(avgPresentCpuMs.toFixed(3)),
+        avgUploadRectCpuMs: Number(avgUploadRectCpuMs.toFixed(3)),
         windowMs: Number(windowMs.toFixed(1)),
       },
     } satisfies MainMessage);
