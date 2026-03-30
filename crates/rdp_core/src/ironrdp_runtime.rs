@@ -51,15 +51,15 @@ const FRAGMENT_COLLAPSE_RECT_THRESHOLD: usize = 4;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 2;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
 const NEAR_RECT_THRESHOLD_PX: i32 = 160;
-const GRAPHICS_FLUSH_INTERVAL_BASE_MS: u64 = 4;
-const GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS: u64 = 8;
-const GRAPHICS_FLUSH_INTERVAL_HIGH_MS: u64 = 12;
-const GRAPHICS_FLUSH_MEDIUM_PENDING_RECTS: usize = 3;
-const GRAPHICS_FLUSH_HIGH_PENDING_RECTS: usize = 6;
-const GRAPHICS_FLUSH_MEDIUM_RAW_RECTS: u32 = 80;
-const GRAPHICS_FLUSH_HIGH_RAW_RECTS: u32 = 180;
-const GRAPHICS_FLUSH_MEDIUM_CYCLES: u32 = 350;
-const GRAPHICS_FLUSH_HIGH_CYCLES: u32 = 700;
+const GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_BASE_MS: u64 = 10;
+const GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_MEDIUM_MS: u64 = 16;
+const GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_HIGH_MS: u64 = 24;
+const GRAPHICS_FLUSH_ADAPTIVE_MEDIUM_PENDING_RECTS: usize = 3;
+const GRAPHICS_FLUSH_ADAPTIVE_HIGH_PENDING_RECTS: usize = 6;
+const GRAPHICS_FLUSH_ADAPTIVE_MEDIUM_RAW_RECTS: u32 = 100;
+const GRAPHICS_FLUSH_ADAPTIVE_HIGH_RAW_RECTS: u32 = 220;
+const GRAPHICS_FLUSH_ADAPTIVE_MEDIUM_CYCLES: u32 = 120;
+const GRAPHICS_FLUSH_ADAPTIVE_HIGH_CYCLES: u32 = 260;
 const HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD: usize = 3;
 const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 10;
 const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
@@ -79,6 +79,7 @@ struct FramePerfWindow {
     sent_pixels: u64,
     resize_requests: u32,
     max_flush_interval_ms: u64,
+    timeout_flushes: u32,
     read_pdu_cpu_us: u64,
     decode_cpu_us: u64,
     copy_rect_cpu_us: u64,
@@ -105,6 +106,7 @@ impl Default for FramePerfWindow {
             sent_pixels: 0,
             resize_requests: 0,
             max_flush_interval_ms: 0,
+            timeout_flushes: 0,
             read_pdu_cpu_us: 0,
             decode_cpu_us: 0,
             copy_rect_cpu_us: 0,
@@ -349,14 +351,18 @@ where
     let mut cursor_cache = CursorCache::default();
 
     loop {
-        let mut frame_end_received = false;
         let outputs = tokio::select! {
             _ = async {
                 if let Some(deadline) = pending_flush_deadline {
                     tokio::time::sleep_until(deadline).await;
                 }
             }, if pending_flush_deadline.is_some() => {
-                flush_pending_graphics(sender, &image, &mut pending_graphics_rects, &mut perf_window);
+                flush_pending_graphics(
+                    sender,
+                    &image,
+                    &mut pending_graphics_rects,
+                    &mut perf_window,
+                );
                 pending_flush_deadline = None;
                 pending_flush_started_at = None;
                 flush_frame_perf_window(session_id, &mut perf_window);
@@ -554,58 +560,22 @@ where
                     );
                 }
                 ActiveStageOutput::Terminate(_) => return Ok(RuntimeCloseReason::ServerClosed),
-                ActiveStageOutput::FrameEnd => {
-                    frame_end_received = true;
-                }
             }
         }
 
-        if !graphics_rects.is_empty() || frame_end_received {
+        if !graphics_rects.is_empty() {
             perf_window.cycles += 1;
             perf_window.raw_rects += u32::try_from(graphics_rects.len()).unwrap_or(u32::MAX);
-
-            let mut current_pdu_area = 0u64;
-            for rect in &graphics_rects {
-                current_pdu_area += rect_area(rect);
-            }
-
             pending_graphics_rects.extend(std::mem::take(&mut graphics_rects));
-
-            // 抗撕裂核心逻辑：
-            // 1. 如果单次 PDU 面积巨大 (滚屏/拖窗)，为了体感流畅则立即 Flush。
-            // 2. 如果收到了 EGFX 帧结束标记 (EndOfFrame)：
-            //    - 如果当前积压的矩形已经较多（说明一个大动作已基本完成），立即 Flush。
-            //    - 否则，设定一个 6ms 的延迟窗口，给后续碎片 PDU 留出合并机会。
-            let should_immediate_flush = current_pdu_area > 262144
-                || (frame_end_received && pending_graphics_rects.len() >= 2);
-            let should_fast_flush = frame_end_received && !should_immediate_flush;
-
-            if should_immediate_flush {
-                flush_pending_graphics(
-                    sender,
-                    &image,
-                    &mut pending_graphics_rects,
-                    &mut perf_window,
-                );
-                pending_flush_deadline = None;
-                pending_flush_started_at = None;
-            } else {
-                let mut flush_interval_ms =
-                    select_graphics_flush_interval_ms(&perf_window, pending_graphics_rects.len());
-
-                // 如果收到帧结束信号且不满足立即发送条件，则开启 6ms 的合并窗口。
-                if should_fast_flush {
-                    flush_interval_ms = flush_interval_ms.min(6);
-                }
-
-                perf_window.max_flush_interval_ms =
-                    perf_window.max_flush_interval_ms.max(flush_interval_ms);
-                schedule_graphics_flush(
-                    &mut pending_flush_deadline,
-                    &mut pending_flush_started_at,
-                    flush_interval_ms,
-                );
-            }
+            let flush_interval_ms =
+                select_adaptive_flush_interval_ms(&perf_window, pending_graphics_rects.len());
+            perf_window.max_flush_interval_ms =
+                perf_window.max_flush_interval_ms.max(flush_interval_ms);
+            schedule_graphics_flush(
+                &mut pending_flush_deadline,
+                &mut pending_flush_started_at,
+                flush_interval_ms,
+            );
         }
 
         flush_frame_perf_window(session_id, &mut perf_window);
@@ -800,23 +770,23 @@ fn maybe_collapse_flush_rects(
     )
 }
 
-/// 按当前负载选择图形合帧窗口，在高压拖窗场景下用更长时间窗压低消息频率。
-fn select_graphics_flush_interval_ms(
+/// 在 preferred 模式下，根据当前负载动态拉长 flush 时间窗。
+fn select_adaptive_flush_interval_ms(
     perf_window: &FramePerfWindow,
     pending_rect_count: usize,
 ) -> u64 {
-    if pending_rect_count >= GRAPHICS_FLUSH_HIGH_PENDING_RECTS
-        || perf_window.raw_rects >= GRAPHICS_FLUSH_HIGH_RAW_RECTS
-        || perf_window.cycles >= GRAPHICS_FLUSH_HIGH_CYCLES
+    if pending_rect_count >= GRAPHICS_FLUSH_ADAPTIVE_HIGH_PENDING_RECTS
+        || perf_window.raw_rects >= GRAPHICS_FLUSH_ADAPTIVE_HIGH_RAW_RECTS
+        || perf_window.cycles >= GRAPHICS_FLUSH_ADAPTIVE_HIGH_CYCLES
     {
-        GRAPHICS_FLUSH_INTERVAL_HIGH_MS
-    } else if pending_rect_count >= GRAPHICS_FLUSH_MEDIUM_PENDING_RECTS
-        || perf_window.raw_rects >= GRAPHICS_FLUSH_MEDIUM_RAW_RECTS
-        || perf_window.cycles >= GRAPHICS_FLUSH_MEDIUM_CYCLES
+        GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_HIGH_MS
+    } else if pending_rect_count >= GRAPHICS_FLUSH_ADAPTIVE_MEDIUM_PENDING_RECTS
+        || perf_window.raw_rects >= GRAPHICS_FLUSH_ADAPTIVE_MEDIUM_RAW_RECTS
+        || perf_window.cycles >= GRAPHICS_FLUSH_ADAPTIVE_MEDIUM_CYCLES
     {
-        GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS
+        GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_MEDIUM_MS
     } else {
-        GRAPHICS_FLUSH_INTERVAL_BASE_MS
+        GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_BASE_MS
     }
 }
 
@@ -886,6 +856,8 @@ fn flush_pending_graphics(
     if pending_graphics_rects.is_empty() {
         return;
     }
+
+    perf_window.timeout_flushes += 1;
 
     // 第一步：执行空间邻近合并（32px 阈值），将离散的小条带合并为较大的块。
     let spatial_merged = merge_update_rects(std::mem::take(pending_graphics_rects));
@@ -1009,6 +981,7 @@ fn flush_frame_perf_window(session_id: &str, perf_window: &mut FramePerfWindow) 
         sent_pixels = perf_window.sent_pixels,
         resize_requests = perf_window.resize_requests,
         max_flush_interval_ms = perf_window.max_flush_interval_ms,
+        timeout_flushes = perf_window.timeout_flushes,
         read_pdu_cpu_us = perf_window.read_pdu_cpu_us,
         decode_cpu_us = perf_window.decode_cpu_us,
         copy_rect_cpu_us = perf_window.copy_rect_cpu_us,
@@ -1415,11 +1388,11 @@ mod tests {
     use ironrdp::pdu::rdp::client_info::PerformanceFlags;
 
     use super::{
-        FramePerfWindow, GRAPHICS_FLUSH_INTERVAL_BASE_MS, GRAPHICS_FLUSH_INTERVAL_HIGH_MS,
-        GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS, build_performance_flags,
-        encode_multitransport_abort_response, maybe_collapse_flush_rects, merge_update_rects,
-        normalize_credentials, pointer_bitmap_to_css_cursor, resolve_client_hostname,
-        schedule_graphics_flush, select_graphics_flush_interval_ms,
+        FramePerfWindow, GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_BASE_MS,
+        GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_HIGH_MS, GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_MEDIUM_MS,
+        build_performance_flags, encode_multitransport_abort_response, maybe_collapse_flush_rects,
+        merge_update_rects, normalize_credentials, pointer_bitmap_to_css_cursor,
+        resolve_client_hostname, schedule_graphics_flush, select_adaptive_flush_interval_ms,
     };
     use crate::protocol::RuntimePerformanceFlags;
 
@@ -1604,11 +1577,11 @@ mod tests {
     }
 
     #[test]
-    fn selects_longer_flush_interval_under_higher_load() {
+    fn selects_longer_adaptive_flush_interval_under_higher_load() {
         let idle_window = FramePerfWindow::default();
         assert_eq!(
-            select_graphics_flush_interval_ms(&idle_window, 1),
-            GRAPHICS_FLUSH_INTERVAL_BASE_MS
+            select_adaptive_flush_interval_ms(&idle_window, 1),
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_BASE_MS
         );
 
         let medium_window = FramePerfWindow {
@@ -1616,17 +1589,17 @@ mod tests {
             ..FramePerfWindow::default()
         };
         assert_eq!(
-            select_graphics_flush_interval_ms(&medium_window, 2),
-            GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS
+            select_adaptive_flush_interval_ms(&medium_window, 2),
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_MEDIUM_MS
         );
 
         let high_window = FramePerfWindow {
-            cycles: 900,
+            cycles: 300,
             ..FramePerfWindow::default()
         };
         assert_eq!(
-            select_graphics_flush_interval_ms(&high_window, 2),
-            GRAPHICS_FLUSH_INTERVAL_HIGH_MS
+            select_adaptive_flush_interval_ms(&high_window, 2),
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_HIGH_MS
         );
     }
 
@@ -1637,25 +1610,25 @@ mod tests {
         schedule_graphics_flush(
             &mut deadline,
             &mut started_at,
-            GRAPHICS_FLUSH_INTERVAL_BASE_MS,
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_BASE_MS,
         );
 
         let first_started_at = started_at.expect("flush started");
         let first_deadline = deadline.expect("flush deadline");
         assert_eq!(
             first_deadline.duration_since(first_started_at).as_millis() as u64,
-            GRAPHICS_FLUSH_INTERVAL_BASE_MS
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_BASE_MS
         );
 
         schedule_graphics_flush(
             &mut deadline,
             &mut started_at,
-            GRAPHICS_FLUSH_INTERVAL_HIGH_MS,
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_HIGH_MS,
         );
         let second_deadline = deadline.expect("rescheduled deadline");
         assert_eq!(
             second_deadline.duration_since(first_started_at).as_millis() as u64,
-            GRAPHICS_FLUSH_INTERVAL_HIGH_MS
+            GRAPHICS_FLUSH_INTERVAL_ADAPTIVE_HIGH_MS
         );
     }
 
