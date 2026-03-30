@@ -9,6 +9,8 @@ import { RdpWebGLRenderer } from "./WebGLRenderer";
 type WorkerSessionRuntime = {
   sessionId: string;
   ws: WebSocket | null;
+  /** 当前会话最近一次成功发起桥接连接时使用的 URL，用于幂等判定。 */
+  bridgeUrl: string | null;
   texture: WebGLTexture | null;
   textureSize: { width: number; height: number };
   pendingFrames: ArrayBuffer[];
@@ -106,15 +108,32 @@ class RdpWorkerContext {
     this.requestRender(sessionId);
   }
 
+  /** 为指定会话建立桥接连接；若已连到同一地址则直接复用，避免重复附着旧桥接。 */
   public connect(sessionId: string, url: string) {
     const session = this.ensureSession(sessionId);
+    if (
+      session.ws &&
+      session.bridgeUrl === url &&
+      (session.ws.readyState === WebSocket.CONNECTING ||
+        session.ws.readyState === WebSocket.OPEN)
+    ) {
+      return;
+    }
+
     if (session.ws) {
       session.ws.close();
+      session.ws = null;
     }
 
     const ws = new WebSocket(url);
+    session.bridgeUrl = url;
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
+      const currentSession = this.sessions.get(sessionId);
+      if (!currentSession || currentSession.ws !== ws) {
+        ws.close();
+        return;
+      }
       self.postMessage({
         type: "bridge-state",
         sessionId,
@@ -122,6 +141,10 @@ class RdpWorkerContext {
       } satisfies MainMessage);
     };
     ws.onmessage = (event) => {
+      const currentSession = this.sessions.get(sessionId);
+      if (!currentSession || currentSession.ws !== ws) {
+        return;
+      }
       if (typeof event.data === "string") {
         try {
           const payload = JSON.parse(event.data) as RdpWireEvent;
@@ -140,6 +163,11 @@ class RdpWorkerContext {
       }
     };
     ws.onclose = () => {
+      const currentSession = this.sessions.get(sessionId);
+      if (!currentSession || currentSession.ws !== ws) {
+        return;
+      }
+      currentSession.ws = null;
       self.postMessage({
         type: "bridge-state",
         sessionId,
@@ -147,6 +175,10 @@ class RdpWorkerContext {
       } satisfies MainMessage);
     };
     ws.onerror = () => {
+      const currentSession = this.sessions.get(sessionId);
+      if (!currentSession || currentSession.ws !== ws) {
+        return;
+      }
       self.postMessage({
         type: "bridge-state",
         sessionId,
@@ -156,6 +188,7 @@ class RdpWorkerContext {
     session.ws = ws;
   }
 
+  /** 主动断开会话桥接并回收与该会话关联的渲染状态。 */
   public disconnect(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (session) {
@@ -165,6 +198,9 @@ class RdpWorkerContext {
       }
       session.ws?.close();
       session.ws = null;
+      session.bridgeUrl = null;
+      session.pendingFrames = [];
+      session.needsPresent = false;
       if (session.texture) {
         this.renderer?.deleteTexture(session.texture);
         session.texture = null;
@@ -178,12 +214,14 @@ class RdpWorkerContext {
     }
   }
 
+  /** 读取或创建会话运行时容器，集中管理该会话的桥接和渲染状态。 */
   private ensureSession(sessionId: string): WorkerSessionRuntime {
     let session = this.sessions.get(sessionId);
     if (!session) {
       session = {
         sessionId,
         ws: null,
+        bridgeUrl: null,
         texture: null,
         textureSize: { width: 0, height: 0 },
         pendingFrames: [],

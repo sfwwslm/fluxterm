@@ -115,6 +115,12 @@ impl FramePerfWindow {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuntimeCloseReason {
+    UserDisconnected,
+    ServerClosed,
+}
+
 /// 启动并运行单个 RDP 会话的主异步任务。
 ///
 /// 该函数会持续运行直到会话断开或发生错误。
@@ -142,13 +148,18 @@ pub async fn run_ironrdp_session(
     );
     let result = connect_and_run(&sessions, &sender, &session_id, &profile, &mut command_rx).await;
     match result {
-        Ok(()) => {
-            info!(event = "rdp.runtime.closed", session_id = %session_id, "runtime closed");
-            let _ = sessions.publish_runtime_state(
-                &session_id,
-                "disconnected",
-                format!("session {session_id} closed"),
+        Ok(close_reason) => {
+            info!(
+                event = "rdp.runtime.closed",
+                session_id = %session_id,
+                close_reason = ?close_reason,
+                "runtime closed"
             );
+            let message = match close_reason {
+                RuntimeCloseReason::UserDisconnected => format!("session {session_id} closed"),
+                RuntimeCloseReason::ServerClosed => "远端服务器已断开当前 RDP 会话".to_string(),
+            };
+            let _ = sessions.publish_runtime_state(&session_id, "disconnected", message);
         }
         Err(error) => {
             error!(
@@ -182,7 +193,7 @@ async fn connect_and_run(
     session_id: &str,
     profile: &RuntimeConnectRequest,
     command_rx: &mut mpsc::UnboundedReceiver<RuntimeCommand>,
-) -> Result<(), String> {
+) -> Result<RuntimeCloseReason, String> {
     let prepared_connection = PreparedConnection::from_request(profile)?;
     let socket = TcpStream::connect((prepared_connection.host.as_str(), prepared_connection.port))
         .await
@@ -310,7 +321,7 @@ async fn run_active_stage<S>(
     command_rx: &mut mpsc::UnboundedReceiver<RuntimeCommand>,
     framed: TokioFramed<S>,
     connection_result: ConnectionResult,
-) -> Result<(), String>
+) -> Result<RuntimeCloseReason, String>
 where
     S: Send + Sync + Unpin + tokio::io::AsyncRead + tokio::io::AsyncWrite,
 {
@@ -353,7 +364,7 @@ where
             }
             command = command_rx.recv() => {
                 let Some(command) = command else {
-                    return Ok(());
+                    return Ok(RuntimeCloseReason::UserDisconnected);
                 };
                 match command {
                     RuntimeCommand::Input(input) => {
@@ -412,7 +423,7 @@ where
                                     .map_err(|error| format!("write shutdown frame failed: {error}"))?;
                             }
                         }
-                        return Ok(());
+                        return Ok(RuntimeCloseReason::UserDisconnected);
                     }
                     RuntimeCommand::CertificateDecision => Vec::new(),
                 }
@@ -530,7 +541,7 @@ where
                         "Server requested RDP multitransport, but UDP sideband is not implemented; declined request.",
                     );
                 }
-                ActiveStageOutput::Terminate(_) => return Ok(()),
+                ActiveStageOutput::Terminate(_) => return Ok(RuntimeCloseReason::ServerClosed),
             }
         }
 

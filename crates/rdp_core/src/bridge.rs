@@ -147,6 +147,19 @@ async fn handle_bridge_ws(
             return Err((StatusCode::NOT_FOUND, error.detail.unwrap_or(error.message)));
         }
     };
+    if !can_attach_bridge(&snapshot, &query.token) {
+        warn!(
+            event = "rdp.bridge.attach.rejected",
+            session_id = %session_id,
+            state = %snapshot.state,
+            has_ws_url = snapshot.ws_url.is_some(),
+            "bridge attach rejected for inactive session"
+        );
+        return Err((
+            StatusCode::GONE,
+            "RDP 会话桥接已失效，请重新发起连接".to_string(),
+        ));
+    }
     Ok(ws.on_upgrade(move |socket| run_bridge_socket(socket, snapshot, rx)))
 }
 
@@ -163,8 +176,10 @@ async fn run_bridge_socket(
         .send(json_message(
             "state",
             serde_json::json!({
-                "state": "connected",
-                "message": "FluxTerm RDP bridge connected",
+                "state": snapshot.state,
+                "message": format!("FluxTerm RDP bridge attached ({})", snapshot.state),
+                "width": snapshot.width,
+                "height": snapshot.height,
             }),
         ))
         .await;
@@ -215,6 +230,24 @@ async fn run_bridge_socket(
         }
     }
     info!(session_id = %snapshot.session_id, "bridge closed");
+}
+
+/// 判断桥接客户端是否仍允许附着到当前会话。
+///
+/// 约束：
+/// 1. 会话必须仍处于可桥接状态，不能是 `idle` / `disconnected` / `error`。
+/// 2. 会话快照中必须保留当前有效的 `ws_url`。
+/// 3. 入站请求携带的 token 必须与快照中的桥接地址保持一致，避免旧地址复用。
+fn can_attach_bridge(snapshot: &RuntimeSessionSnapshot, token: &str) -> bool {
+    let Some(ws_url) = snapshot.ws_url.as_deref() else {
+        return false;
+    };
+
+    if matches!(snapshot.state.as_str(), "disconnected" | "error" | "idle") {
+        return false;
+    }
+
+    ws_url.contains(&format!("token={token}"))
 }
 
 fn io_error(err: std::io::Error) -> RuntimeError {

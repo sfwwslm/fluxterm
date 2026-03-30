@@ -447,6 +447,10 @@ fn send_state_message(sender: &broadcast::Sender<Message>, state: &str, message:
 
 fn set_runtime_state(runtime: &mut SessionRuntime, state: &str) {
     runtime.snapshot.state = state.to_string();
+    if matches!(state, "disconnected" | "error") {
+        runtime.snapshot.ws_url = None;
+        runtime.command_tx = None;
+    }
 }
 
 fn session_not_found_error() -> RuntimeError {

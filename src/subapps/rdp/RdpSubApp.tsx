@@ -96,6 +96,16 @@ function getSessionResolutionValue(session: RdpSessionSnapshot | null) {
   return `${session.width} × ${session.height}`;
 }
 
+/** 判断当前会话是否仍允许前端重新附着桥接。 */
+function canAttachBridge(
+  session: RdpSessionSnapshot | null | undefined,
+): session is RdpSessionSnapshot & { wsUrl: string } {
+  if (!session?.wsUrl) {
+    return false;
+  }
+  return session.state !== "disconnected" && session.state !== "error";
+}
+
 function logRdpSubAppEvent(
   level: TelemetryLevel,
   event: string,
@@ -253,6 +263,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const activePerf = activeTab?.perf ?? EMPTY_PERF;
   const statusLineText =
     activeTab?.statusText ?? t("rdp.status.noActiveSession");
+  const showDisconnectedOverlay = activeTab?.session.state === "disconnected";
 
   /** 统一更新某个会话标签的状态。 */
   const updateSessionTab = useCallback(
@@ -290,6 +301,14 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const handleWireEvent = useCallback(
     (sessionId: string, payload: RdpWireEvent) => {
       if (payload.type === "state") {
+        const isTerminalState =
+          payload.state === "error" || payload.state === "disconnected";
+        if (isTerminalState) {
+          workerRef.current?.postMessage({
+            type: "disconnect",
+            sessionId,
+          });
+        }
         updateSessionTab(sessionId, (tab) => ({
           ...tab,
           statusText:
@@ -307,6 +326,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
           session: {
             ...tab.session,
             state: payload.state as RdpSessionSnapshot["state"],
+            wsUrl: isTerminalState ? null : tab.session.wsUrl,
             width:
               typeof payload.width === "number"
                 ? payload.width
@@ -687,6 +707,13 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     if (!activeTab) {
       return;
     }
+    if (!canAttachBridge(activeTab.session)) {
+      workerRef.current?.postMessage({
+        type: "disconnect",
+        sessionId: activeTab.session.sessionId,
+      });
+      return;
+    }
 
     workerRef.current?.postMessage({
       type: "connect",
@@ -1045,18 +1072,21 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
             <div className="rdp-tabbar-scroll" data-slot="rdp-tablist">
               {sessions.map((tab) => {
                 const isActive = tab.session.sessionId === activeSessionId;
+                const isDisconnected = tab.session.state === "disconnected";
+                const tabLabel = isDisconnected
+                  ? `${getProfileDisplayName(tab.profile, t)} · ${t("rdp.status.sessionDisconnected")}`
+                  : getProfileDisplayName(tab.profile, t);
                 return (
                   <button
                     key={tab.session.sessionId}
                     type="button"
-                    className={`rdp-tab ${isActive ? "is-active" : ""}`}
+                    className={`rdp-tab ${isActive ? "is-active" : ""} ${isDisconnected ? "is-disconnected" : ""}`.trim()}
                     data-ui="rdp-tab"
                     onClick={() => handleActivateSession(tab.session.sessionId)}
+                    title={tab.statusText}
                   >
                     <span className={`rdp-tab-dot is-${tab.session.state}`} />
-                    <span className="rdp-tab-copy">
-                      {getProfileDisplayName(tab.profile, t)}
-                    </span>
+                    <span className="rdp-tab-copy">{tabLabel}</span>
                     <span
                       className="rdp-tab-close"
                       onClick={(event) => {
@@ -1110,6 +1140,13 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
                 >
                   <strong>{t("rdp.status.error")}</strong>
                   <span>{activeTab.errorMessage}</span>
+                </div>
+              ) : showDisconnectedOverlay ? (
+                <div
+                  className="rdp-overlay rdp-stage-message"
+                  data-ui="rdp-disconnected"
+                >
+                  <strong>{t("rdp.status.sessionDisconnected")}</strong>
                 </div>
               ) : null}
 
