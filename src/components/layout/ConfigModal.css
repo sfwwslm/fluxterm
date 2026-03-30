@@ -139,7 +139,7 @@
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface-menu) 70%, transparent);
+  background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
 }
@@ -180,7 +180,7 @@
 .config-dir-path {
   padding: 12px 14px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-menu) 70%, transparent);
+  background: transparent;
   border: 1px solid var(--border-soft);
   color: var(--text-primary);
   line-height: 1.6;

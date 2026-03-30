@@ -76,13 +76,7 @@
 
 .dialog-card {
   width: min(420px, 100%);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-menu) 80%, transparent),
-      var(--surface-menu)
-    ),
-    color-mix(in srgb, var(--app-bg-base) 86%, transparent);
+  background: transparent;
   border: 1px solid var(--border-soft);
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.45),
