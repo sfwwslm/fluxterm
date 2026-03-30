@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
 import { ROOT_PROFILE_GROUP_VALUE } from "@/constants/hostGroups";
@@ -46,6 +46,7 @@ export default function ProfileModal({
   onSubmit,
   t,
 }: ProfileModalProps) {
+  const formId = useId();
   const autoFilledRef = useRef(false);
   const wasOpenRef = useRef(false);
   const [activeSection, setActiveSection] =
@@ -175,11 +176,29 @@ export default function ProfileModal({
         seconds: (value / 1000).toString(),
       }),
     }));
+    const nameInputId = `${formId}-name`;
+    const terminalTypeSelectId = `${formId}-terminal-type`;
+    const targetSystemSelectId = `${formId}-target-system`;
+    const descriptionInputId = `${formId}-description`;
+    const wordSeparatorsInputId = `${formId}-word-separators`;
+    const groupSelectId = `${formId}-group`;
+    const hostInputId = `${formId}-host`;
+    const portInputId = `${formId}-port`;
+    const usernameInputId = `${formId}-username`;
+    const authTypeSelectId = `${formId}-auth-type`;
+    const passwordInputId = `${formId}-password`;
+    const privateKeyPathInputId = `${formId}-private-key-path`;
+    const privateKeyPassphraseInputId = `${formId}-private-key-passphrase`;
+    const bellModeSelectId = `${formId}-bell-mode`;
+    const bellCooldownSelectId = `${formId}-bell-cooldown`;
 
     const nameRow = (
       <div className="form-row">
-        <label className="form-label">{t("profile.form.name")}</label>
+        <label className="form-label" htmlFor={nameInputId}>
+          {t("profile.form.name")}
+        </label>
         <input
+          id={nameInputId}
           value={draft.name}
           maxLength={PROFILE_NAME_MAX_LENGTH}
           onChange={(event) => {
@@ -199,10 +218,11 @@ export default function ProfileModal({
     const extraSessionRows = (
       <>
         <div className="form-row">
-          <label className="form-label">
+          <label className="form-label" htmlFor={terminalTypeSelectId}>
             {t("profile.sessionTab.terminal")}
           </label>
           <Select
+            id={terminalTypeSelectId}
             value={draft.terminalType ?? "xterm-256color"}
             options={terminalOptions}
             onChange={(value) =>
@@ -212,8 +232,11 @@ export default function ProfileModal({
           />
         </div>
         <div className="form-row">
-          <label className="form-label">{t("profile.sessionTab.system")}</label>
+          <label className="form-label" htmlFor={targetSystemSelectId}>
+            {t("profile.sessionTab.system")}
+          </label>
           <Select
+            id={targetSystemSelectId}
             value={draft.targetSystem ?? "auto"}
             options={systemOptions}
             onChange={(value) =>
@@ -223,10 +246,11 @@ export default function ProfileModal({
           />
         </div>
         <div className="form-row form-row-textarea">
-          <label className="form-label">
+          <label className="form-label" htmlFor={descriptionInputId}>
             {t("profile.sessionTab.description")}
           </label>
           <textarea
+            id={descriptionInputId}
             rows={4}
             value={draft.description ?? ""}
             onChange={(event) =>
@@ -238,56 +262,61 @@ export default function ProfileModal({
     );
 
     const windowRows = (
-      <div className="host-editor">
-        <div className="form-row">
-          <label className="form-label">
-            {t("profile.window.wordSeparators")}
-          </label>
-          <input
-            value={draft.wordSeparators ?? DEFAULT_TERMINAL_WORD_SEPARATORS}
-            onChange={(event) =>
-              onDraftChange({
-                ...draft,
-                wordSeparators: event.target.value,
-              })
-            }
-          />
-          <div className="profile-form-hint">
-            {t("profile.window.wordSeparatorsHint")}
+      <div className="profile-settings-page">
+        <section className="profile-settings-section">
+          <div className="profile-settings-section-body host-editor">
+            <div className="form-row">
+              <label className="form-label" htmlFor={wordSeparatorsInputId}>
+                {t("profile.window.wordSeparators")}
+              </label>
+              <input
+                id={wordSeparatorsInputId}
+                value={draft.wordSeparators ?? DEFAULT_TERMINAL_WORD_SEPARATORS}
+                onChange={(event) =>
+                  onDraftChange({
+                    ...draft,
+                    wordSeparators: event.target.value,
+                  })
+                }
+              />
+              <div className="profile-form-hint">
+                {t("profile.window.wordSeparatorsHint")}
+              </div>
+            </div>
+            <div className="form-row">
+              <span className="form-label">{t("profile.window.presets")}</span>
+              <div className="form-file profile-window-presets">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    onDraftChange({
+                      ...draft,
+                      wordSeparators: TERMINAL_WORD_SEPARATORS_PRESET_A,
+                    })
+                  }
+                >
+                  {t("profile.window.presetA")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    onDraftChange({
+                      ...draft,
+                      wordSeparators: TERMINAL_WORD_SEPARATORS_PRESET_B,
+                    })
+                  }
+                >
+                  {t("profile.window.presetB")}
+                </Button>
+              </div>
+              <div className="profile-form-hint">
+                {t("profile.window.applyHint")}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="form-row">
-          <label className="form-label">{t("profile.window.presets")}</label>
-          <div className="form-file profile-window-presets">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                onDraftChange({
-                  ...draft,
-                  wordSeparators: TERMINAL_WORD_SEPARATORS_PRESET_A,
-                })
-              }
-            >
-              {t("profile.window.presetA")}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                onDraftChange({
-                  ...draft,
-                  wordSeparators: TERMINAL_WORD_SEPARATORS_PRESET_B,
-                })
-              }
-            >
-              {t("profile.window.presetB")}
-            </Button>
-          </div>
-          <div className="profile-form-hint">
-            {t("profile.window.applyHint")}
-          </div>
-        </div>
+        </section>
       </div>
     );
 
@@ -302,10 +331,11 @@ export default function ProfileModal({
           </header>
           <div className="profile-settings-section-body host-editor">
             <div className="form-row">
-              <label className="form-label">
+              <label className="form-label" htmlFor={bellModeSelectId}>
                 {t("profile.terminal.bellMode")}
               </label>
               <Select
+                id={bellModeSelectId}
                 value={draft.bellMode ?? DEFAULT_TERMINAL_BELL_MODE}
                 options={bellModeOptions}
                 onChange={(value) =>
@@ -321,10 +351,11 @@ export default function ProfileModal({
               </div>
             </div>
             <div className="form-row">
-              <label className="form-label">
+              <label className="form-label" htmlFor={bellCooldownSelectId}>
                 {t("profile.terminal.bellCooldown")}
               </label>
               <Select
+                id={bellCooldownSelectId}
                 value={String(
                   draft.bellCooldownMs ?? DEFAULT_TERMINAL_BELL_COOLDOWN_MS,
                 )}
@@ -351,8 +382,11 @@ export default function ProfileModal({
         <div className="host-editor">
           {nameRow}
           <div className="form-row">
-            <label className="form-label">{t("profile.form.group")}</label>
+            <label className="form-label" htmlFor={groupSelectId}>
+              {t("profile.form.group")}
+            </label>
             <Select
+              id={groupSelectId}
               value={draft.tags?.[0]?.trim() || ROOT_PROFILE_GROUP_VALUE}
               options={[
                 {
@@ -374,8 +408,11 @@ export default function ProfileModal({
             />
           </div>
           <div className="form-row">
-            <label className="form-label">{t("profile.form.host")}</label>
+            <label className="form-label" htmlFor={hostInputId}>
+              {t("profile.form.host")}
+            </label>
             <input
+              id={hostInputId}
               value={draft.host}
               onChange={(event) =>
                 onDraftChange({ ...draft, host: event.target.value })
@@ -385,8 +422,11 @@ export default function ProfileModal({
           </div>
           <div className="form-row split">
             <div className="form-inline-field">
-              <label className="form-label">{t("profile.form.port")}</label>
+              <label className="form-label" htmlFor={portInputId}>
+                {t("profile.form.port")}
+              </label>
               <input
+                id={portInputId}
                 type="number"
                 value={draft.port}
                 onChange={(event) =>
@@ -398,8 +438,11 @@ export default function ProfileModal({
               />
             </div>
             <div className="form-inline-field">
-              <label className="form-label">{t("profile.form.username")}</label>
+              <label className="form-label" htmlFor={usernameInputId}>
+                {t("profile.form.username")}
+              </label>
               <input
+                id={usernameInputId}
                 value={draft.username}
                 onChange={(event) =>
                   onDraftChange({ ...draft, username: event.target.value })
@@ -408,8 +451,11 @@ export default function ProfileModal({
             </div>
           </div>
           <div className="form-row">
-            <label className="form-label">{t("profile.form.authType")}</label>
+            <label className="form-label" htmlFor={authTypeSelectId}>
+              {t("profile.form.authType")}
+            </label>
             <Select
+              id={authTypeSelectId}
               value={draft.authType}
               options={[
                 { value: "password", label: t("profile.auth.password") },
@@ -426,8 +472,11 @@ export default function ProfileModal({
           </div>
           {draft.authType === "password" && (
             <div className="form-row">
-              <label className="form-label">{t("profile.form.password")}</label>
+              <label className="form-label" htmlFor={passwordInputId}>
+                {t("profile.form.password")}
+              </label>
               <input
+                id={passwordInputId}
                 type="password"
                 value={draft.passwordRef ?? ""}
                 onChange={(event) =>
@@ -439,11 +488,12 @@ export default function ProfileModal({
           {draft.authType === "privateKey" && (
             <>
               <div className="form-row">
-                <label className="form-label">
+                <label className="form-label" htmlFor={privateKeyPathInputId}>
                   {t("profile.form.privateKeyPath")}
                 </label>
                 <div className="form-file">
                   <input
+                    id={privateKeyPathInputId}
                     value={draft.privateKeyPath ?? ""}
                     placeholder={t("profile.placeholder.privateKeyPath")}
                     readOnly
@@ -460,10 +510,14 @@ export default function ProfileModal({
                 </div>
               </div>
               <div className="form-row">
-                <label className="form-label">
+                <label
+                  className="form-label"
+                  htmlFor={privateKeyPassphraseInputId}
+                >
                   {t("profile.form.privateKeyPassphrase")}
                 </label>
                 <input
+                  id={privateKeyPassphraseInputId}
                   type="password"
                   value={draft.privateKeyPassphraseRef ?? ""}
                   onChange={(event) =>

@@ -17,6 +17,8 @@ type SelectOption = {
 type SelectSize = "sm" | "md";
 
 type SelectProps = {
+  /** 触发按钮的 DOM id，用于与 label 绑定。 */
+  id?: string;
   /** 当前选中的值。 */
   value: string | null;
   /** 选项列表。 */
@@ -56,6 +58,7 @@ function findNextEnabledIndex(
  * 职责：提供基于自定义列表的 Select 交互，支持键盘导航（上下键切换、回车确认）及自动关闭策略。
  */
 export default function Select({
+  id,
   value,
   options,
   placeholder = "-",
@@ -210,6 +213,7 @@ export default function Select({
       ref={rootRef}
     >
       <button
+        id={id}
         type="button"
         className="select-menu-button"
         aria-haspopup="listbox"
