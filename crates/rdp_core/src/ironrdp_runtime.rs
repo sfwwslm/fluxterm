@@ -50,7 +50,7 @@ use crate::session_manager::{
 const FRAGMENT_COLLAPSE_RECT_THRESHOLD: usize = 4;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 2;
 const FRAGMENT_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
-const NEAR_RECT_THRESHOLD_PX: i32 = 48;
+const NEAR_RECT_THRESHOLD_PX: i32 = 160;
 const GRAPHICS_FLUSH_INTERVAL_BASE_MS: u64 = 4;
 const GRAPHICS_FLUSH_INTERVAL_MEDIUM_MS: u64 = 8;
 const GRAPHICS_FLUSH_INTERVAL_HIGH_MS: u64 = 12;
@@ -61,7 +61,7 @@ const GRAPHICS_FLUSH_HIGH_RAW_RECTS: u32 = 180;
 const GRAPHICS_FLUSH_MEDIUM_CYCLES: u32 = 350;
 const GRAPHICS_FLUSH_HIGH_CYCLES: u32 = 700;
 const HIGH_PRESSURE_COLLAPSE_RECT_THRESHOLD: usize = 3;
-const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 6;
+const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_NUMERATOR: u64 = 10;
 const HIGH_PRESSURE_COLLAPSE_MAX_OVERDRAW_DENOMINATOR: u64 = 1;
 const HIGH_PRESSURE_COLLAPSE_RAW_RECTS: u32 = 180;
 const HIGH_PRESSURE_COLLAPSE_CYCLES: u32 = 700;
@@ -349,6 +349,7 @@ where
     let mut cursor_cache = CursorCache::default();
 
     loop {
+        let mut frame_end_received = false;
         let outputs = tokio::select! {
             _ = async {
                 if let Some(deadline) = pending_flush_deadline {
@@ -553,10 +554,13 @@ where
                     );
                 }
                 ActiveStageOutput::Terminate(_) => return Ok(RuntimeCloseReason::ServerClosed),
+                ActiveStageOutput::FrameEnd => {
+                    frame_end_received = true;
+                }
             }
         }
 
-        if !graphics_rects.is_empty() {
+        if !graphics_rects.is_empty() || frame_end_received {
             perf_window.cycles += 1;
             perf_window.raw_rects += u32::try_from(graphics_rects.len()).unwrap_or(u32::MAX);
 
@@ -567,10 +571,14 @@ where
 
             pending_graphics_rects.extend(std::mem::take(&mut graphics_rects));
 
-            // 如果单次 PDU 处理产生了足够大的面积（如超过 256x256 像素），
-            // 往往意味着一个完整的 UI 动作（如拖窗起始或滚屏）的一部分，
-            // 此时我们选择立即 Flush 而不等待定时器，以降低大动作的视觉延迟并减少画面“截断”感。
-            let should_immediate_flush = current_pdu_area > 65536;
+            // 抗撕裂核心逻辑：
+            // 1. 如果单次 PDU 面积巨大 (滚屏/拖窗)，为了体感流畅则立即 Flush。
+            // 2. 如果收到了 EGFX 帧结束标记 (EndOfFrame)：
+            //    - 如果当前积压的矩形已经较多（说明一个大动作已基本完成），立即 Flush。
+            //    - 否则，设定一个 6ms 的延迟窗口，给后续碎片 PDU 留出合并机会。
+            let should_immediate_flush = current_pdu_area > 262144
+                || (frame_end_received && pending_graphics_rects.len() >= 2);
+            let should_fast_flush = frame_end_received && !should_immediate_flush;
 
             if should_immediate_flush {
                 flush_pending_graphics(
@@ -582,8 +590,14 @@ where
                 pending_flush_deadline = None;
                 pending_flush_started_at = None;
             } else {
-                let flush_interval_ms =
+                let mut flush_interval_ms =
                     select_graphics_flush_interval_ms(&perf_window, pending_graphics_rects.len());
+
+                // 如果收到帧结束信号且不满足立即发送条件，则开启 6ms 的合并窗口。
+                if should_fast_flush {
+                    flush_interval_ms = flush_interval_ms.min(6);
+                }
+
                 perf_window.max_flush_interval_ms =
                     perf_window.max_flush_interval_ms.max(flush_interval_ms);
                 schedule_graphics_flush(
