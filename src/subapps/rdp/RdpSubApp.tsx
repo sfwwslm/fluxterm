@@ -19,6 +19,7 @@ import {
   type SubAppLifecycleMessage,
 } from "@/subapps/core/lifecycle";
 import SubAppTitleBar from "@/subapps/components/SubAppTitleBar";
+import Tooltip from "@/components/ui/menu/Tooltip";
 import { isMacOS } from "@/utils/platform";
 import {
   connectRdpSession,
@@ -221,6 +222,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const windowLabel = useMemo(() => createSubAppWindowLabel(id), [id]);
   const closingRef = useRef(false);
   const cleanupInFlightRef = useRef<Promise<void> | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
@@ -229,6 +231,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const [sessions, setSessions] = useState<RdpSessionTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const sessionsRef = useRef<RdpSessionTab[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
   const frameVersionBySessionRef = useRef<Record<string, number>>({});
@@ -265,6 +268,64 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const statusLineText =
     activeTab?.statusText ?? t("rdp.status.noActiveSession");
   const showDisconnectedOverlay = activeTab?.session.state === "disconnected";
+  const canToggleFullscreen = Boolean(
+    activeTab && activeTab.session.state !== "disconnected",
+  );
+
+  const syncFullscreenState = useCallback(() => {
+    setIsFullscreen(document.fullscreenElement === shellRef.current);
+  }, []);
+
+  /** 切换页面级全屏，尽量贴近浏览器 F11 的沉浸式行为。 */
+  const toggleFullscreen = useCallback(async () => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    try {
+      if (document.fullscreenElement === shell) {
+        await document.exitFullscreen();
+      } else {
+        await shell.requestFullscreen();
+      }
+    } catch {
+      // 宿主环境可能拒绝全屏请求，这里保持静默即可。
+    }
+  }, []);
+
+  useEffect(() => {
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+    };
+  }, [syncFullscreenState]);
+
+  useEffect(() => {
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F11") {
+        if (!canToggleFullscreen) return;
+        event.preventDefault();
+        void toggleFullscreen();
+        return;
+      }
+      if (
+        event.key === "Escape" &&
+        document.fullscreenElement === shellRef.current
+      ) {
+        event.preventDefault();
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [canToggleFullscreen, toggleFullscreen]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    surfaceRef.current?.focus();
+  }, [isFullscreen]);
 
   /** 统一更新某个会话标签的状态。 */
   const updateSessionTab = useCallback(
@@ -1064,8 +1125,14 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   }
 
   return (
-    <div className="subapp-shell rdp-subapp-shell" data-page="rdp-subapp">
-      {!isMac ? <SubAppTitleBar title="FluxTerm" t={t} /> : null}
+    <div
+      ref={shellRef}
+      className={`subapp-shell rdp-subapp-shell ${isFullscreen ? "is-fullscreen" : ""}`.trim()}
+      data-page="rdp-subapp"
+    >
+      {!isMac && !isFullscreen ? (
+        <SubAppTitleBar title="FluxTerm" t={t} />
+      ) : null}
       <main className="subapp-content rdp-subapp-content">
         <article className="rdp-layout" data-ui="rdp-layout">
           {/* 顶部栏拆成“可滚动标签区 + 固定操作区”，
@@ -1101,6 +1168,29 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
                   </button>
                 );
               })}
+            </div>
+            <div className="rdp-tabbar-actions" data-slot="rdp-tabbar-actions">
+              <Tooltip
+                content={
+                  <span className="rdp-tooltip-shortcut">
+                    {t("rdp.tooltip.fullscreenShortcut")}
+                  </span>
+                }
+                placement="bottom"
+                disabled={!canToggleFullscreen}
+              >
+                <button
+                  type="button"
+                  className="rdp-fullscreen-toggle"
+                  data-ui="rdp-fullscreen-toggle"
+                  onClick={() => void toggleFullscreen()}
+                  disabled={!canToggleFullscreen}
+                >
+                  {isFullscreen
+                    ? t("rdp.actions.exitFullscreen")
+                    : t("rdp.actions.enterFullscreen")}
+                </button>
+              </Tooltip>
             </div>
           </div>
 

@@ -32,12 +32,15 @@
 }
 
 .rdp-tabbar {
-  display: block;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
   min-height: 0;
   height: 30px;
 }
 
 .rdp-tabbar-scroll {
+  flex: 1 1 auto;
   display: flex;
   align-items: stretch;
   gap: 6px;
@@ -46,6 +49,40 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+}
+
+.rdp-tabbar-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.rdp-fullscreen-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rdp-fullscreen-toggle:hover:not(:disabled),
+.rdp-fullscreen-toggle:focus-visible:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rdp-fullscreen-toggle:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.rdp-tooltip-shortcut {
+  white-space: nowrap;
 }
 
 .rdp-tabbar-empty {
@@ -237,6 +274,25 @@
   height: 30px;
   padding: 0 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rdp-subapp-shell.is-fullscreen .rdp-subapp-content {
+  padding: 0;
+}
+
+.rdp-subapp-shell.is-fullscreen .rdp-layout {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
+.rdp-subapp-shell.is-fullscreen .rdp-tabbar,
+.rdp-subapp-shell.is-fullscreen .rdp-statusbar {
+  display: none;
+}
+
+.rdp-subapp-shell.is-fullscreen .rdp-surface {
+  min-height: 100%;
+  border: 0;
 }
 
 .rdp-footer-section {
