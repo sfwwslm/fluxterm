@@ -54,12 +54,15 @@ export default function ProfileModal({
   const [nameError, setNameError] = useState<string | null>(null);
   const [initialDraftSnapshot, setInitialDraftSnapshot] = useState("");
 
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
   useEffect(() => {
     const becameOpen = open && !wasOpenRef.current;
     wasOpenRef.current = open;
     if (becameOpen) {
       autoFilledRef.current = false;
       queueMicrotask(() => {
+        setShowDiscardConfirm(false);
         setInitialDraftSnapshot(JSON.stringify(draft));
         setActiveSection("session");
         setNameError(null);
@@ -116,12 +119,10 @@ export default function ProfileModal({
   const hasUnsavedChanges =
     open && JSON.stringify(draft) !== initialDraftSnapshot;
 
-  /** 统一处理关闭请求：有未保存草稿时给出放弃确认。 */
+  /** 统一处理关闭请求：有未保存草稿时显示 UI 确认框而非阻塞式系统对话框。 */
   function handleRequestClose() {
-    if (
-      hasUnsavedChanges &&
-      !window.confirm(t("profile.unsavedChangesConfirm"))
-    ) {
+    if (hasUnsavedChanges) {
+      setShowDiscardConfirm(true);
       return;
     }
     onClose();
@@ -595,68 +596,106 @@ export default function ProfileModal({
   }
 
   return (
-    <Modal
-      open={open}
-      title={
-        mode === "new"
-          ? t("profile.modal.newTitle")
-          : t("profile.modal.editTitle")
-      }
-      bodyClassName="profile-modal-body"
-      closeLabel={t("actions.close")}
-      onClose={handleRequestClose}
-      actions={
-        <div className="profile-modal-footer">
-          <Button variant="ghost" onClick={handleRestoreDefaults}>
-            {t("profile.actions.restoreDefaults")}
-          </Button>
-          <div className="profile-modal-footer-actions">
-            <Button
-              className="ghost"
-              variant="ghost"
-              onClick={handleRequestClose}
-            >
-              {t("actions.cancel")}
+    <>
+      <Modal
+        open={open}
+        title={
+          mode === "new"
+            ? t("profile.modal.newTitle")
+            : t("profile.modal.editTitle")
+        }
+        bodyClassName="profile-modal-body"
+        closeLabel={t("actions.close")}
+        onClose={handleRequestClose}
+        actions={
+          <div className="profile-modal-footer">
+            <Button variant="ghost" onClick={handleRestoreDefaults}>
+              {t("profile.actions.restoreDefaults")}
             </Button>
-            <Button
-              className="ghost"
-              variant="ghost"
-              onClick={() => {
-                const errorText = validateProfileName(draft.name);
-                if (errorText) {
-                  setNameError(errorText);
-                  return;
-                }
-                setNameError(null);
-                onSubmit();
-              }}
-              disabled={!canSubmit}
-            >
-              {t("actions.save")}
-            </Button>
+            <div className="profile-modal-footer-actions">
+              <Button
+                className="ghost"
+                variant="ghost"
+                onClick={handleRequestClose}
+              >
+                {t("actions.cancel")}
+              </Button>
+              <Button
+                className="ghost"
+                variant="ghost"
+                onClick={() => {
+                  const errorText = validateProfileName(draft.name);
+                  if (errorText) {
+                    setNameError(errorText);
+                    return;
+                  }
+                  setNameError(null);
+                  onSubmit();
+                }}
+                disabled={!canSubmit}
+              >
+                {t("actions.save")}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="profile-modal">
+          <div className="profile-modal-layout">
+            <nav className="profile-modal-nav">
+              {visibleSections.map((section) => (
+                <button
+                  key={section}
+                  type="button"
+                  className={`profile-modal-nav-item ${activeSection === section ? "active" : ""}`}
+                  onClick={() => setActiveSection(section)}
+                >
+                  {t(`profile.section.${section}`)}
+                </button>
+              ))}
+            </nav>
+            <section className="profile-modal-content">
+              {renderSectionContent()}
+            </section>
           </div>
         </div>
-      }
-    >
-      <div className="profile-modal">
-        <div className="profile-modal-layout">
-          <nav className="profile-modal-nav">
-            {visibleSections.map((section) => (
-              <button
-                key={section}
-                type="button"
-                className={`profile-modal-nav-item ${activeSection === section ? "active" : ""}`}
-                onClick={() => setActiveSection(section)}
+      </Modal>
+
+      {showDiscardConfirm && (
+        <Modal
+          open
+          title={
+            t("profile.unsavedChangesConfirmTitle") || t("actions.confirm")
+          }
+          closeLabel={t("actions.close")}
+          onClose={() => setShowDiscardConfirm(false)}
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDiscardConfirm(false)}
               >
-                {t(`profile.section.${section}`)}
-              </button>
-            ))}
-          </nav>
-          <section className="profile-modal-content">
-            {renderSectionContent()}
-          </section>
-        </div>
-      </div>
-    </Modal>
+                {t("profile.actions.continueEditing") || t("actions.cancel")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowDiscardConfirm(false);
+                  onClose();
+                }}
+              >
+                {t("profile.actions.discardAndClose") || t("actions.ok")}
+              </Button>
+            </>
+          }
+        >
+          <div className="profile-discard-confirm-dialog">
+            <p>{t("profile.unsavedChangesConfirm")}</p>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

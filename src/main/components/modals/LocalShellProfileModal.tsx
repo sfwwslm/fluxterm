@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Translate } from "@/i18n";
 import type { LocalShellConfig, LocalShellProfile } from "@/types";
 import Modal from "@/components/ui/modal/Modal";
@@ -37,15 +37,28 @@ export default function LocalShellProfileModal({
   onSubmit,
   t,
 }: LocalShellProfileModalProps) {
+  const wasOpenRef = useRef(false);
   const [activeSection, setActiveSection] =
     useState<LocalShellSection>("terminal");
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [initialDraftSnapshot, setInitialDraftSnapshot] = useState("");
+
   const normalizedDraft = useMemo(
     () => normalizeLocalShellConfig(draft),
     [draft],
   );
-  const [initialDraftSnapshot] = useState(() =>
-    JSON.stringify(normalizedDraft),
-  );
+
+  useEffect(() => {
+    const becameOpen = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (becameOpen) {
+      queueMicrotask(() => {
+        setShowDiscardConfirm(false);
+        setInitialDraftSnapshot(JSON.stringify(normalizedDraft));
+        setActiveSection("terminal");
+      });
+    }
+  }, [open, normalizedDraft]);
 
   const hasUnsavedChanges =
     open && JSON.stringify(normalizedDraft) !== initialDraftSnapshot;
@@ -87,10 +100,8 @@ export default function LocalShellProfileModal({
   );
 
   function handleRequestClose() {
-    if (
-      hasUnsavedChanges &&
-      !window.confirm(t("profile.unsavedChangesConfirm"))
-    ) {
+    if (hasUnsavedChanges) {
+      setShowDiscardConfirm(true);
       return;
     }
     onClose();
@@ -275,67 +286,105 @@ export default function LocalShellProfileModal({
   }
 
   return (
-    <Modal
-      open={open}
-      title={
-        shell
-          ? t("profile.localShell.modal.title", { name: shell.label })
-          : t("profile.localShell.modal.fallbackTitle")
-      }
-      bodyClassName="profile-modal-body"
-      closeLabel={t("actions.close")}
-      onClose={handleRequestClose}
-      actions={
-        <div className="profile-modal-footer">
-          <Button variant="ghost" onClick={handleRestoreDefaults}>
-            {t("profile.actions.restoreDefaults")}
-          </Button>
-          <div className="profile-modal-footer-actions">
-            <Button variant="ghost" onClick={handleRequestClose}>
-              {t("actions.cancel")}
+    <>
+      <Modal
+        open={open}
+        title={
+          shell
+            ? t("profile.localShell.modal.title", { name: shell.label })
+            : t("profile.localShell.modal.fallbackTitle")
+        }
+        bodyClassName="profile-modal-body"
+        closeLabel={t("actions.close")}
+        onClose={handleRequestClose}
+        actions={
+          <div className="profile-modal-footer">
+            <Button variant="ghost" onClick={handleRestoreDefaults}>
+              {t("profile.actions.restoreDefaults")}
             </Button>
-            <Button variant="ghost" onClick={onSubmit}>
-              {t("actions.save")}
-            </Button>
+            <div className="profile-modal-footer-actions">
+              <Button variant="ghost" onClick={handleRequestClose}>
+                {t("actions.cancel")}
+              </Button>
+              <Button variant="ghost" onClick={onSubmit}>
+                {t("actions.save")}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="profile-modal">
+          <div className="profile-modal-layout">
+            <nav className="profile-modal-nav">
+              <button
+                type="button"
+                className={`profile-modal-nav-item ${activeSection === "terminal" ? "active" : ""}`}
+                onClick={() => setActiveSection("terminal")}
+              >
+                {t("profile.section.terminal")}
+              </button>
+              <button
+                type="button"
+                className={`profile-modal-nav-item ${activeSection === "window" ? "active" : ""}`}
+                onClick={() => setActiveSection("window")}
+              >
+                {t("profile.section.window")}
+              </button>
+            </nav>
+            <section className="profile-modal-content">
+              {shell ? (
+                <div className="profile-settings-page">
+                  <section className="profile-settings-section">
+                    <header className="profile-settings-section-header">
+                      <div>
+                        <h4>{shell.label}</h4>
+                        <p>{shell.path}</p>
+                      </div>
+                    </header>
+                  </section>
+                  {renderSectionContent()}
+                </div>
+              ) : null}
+            </section>
           </div>
         </div>
-      }
-    >
-      <div className="profile-modal">
-        <div className="profile-modal-layout">
-          <nav className="profile-modal-nav">
-            <button
-              type="button"
-              className={`profile-modal-nav-item ${activeSection === "terminal" ? "active" : ""}`}
-              onClick={() => setActiveSection("terminal")}
-            >
-              {t("profile.section.terminal")}
-            </button>
-            <button
-              type="button"
-              className={`profile-modal-nav-item ${activeSection === "window" ? "active" : ""}`}
-              onClick={() => setActiveSection("window")}
-            >
-              {t("profile.section.window")}
-            </button>
-          </nav>
-          <section className="profile-modal-content">
-            {shell ? (
-              <div className="profile-settings-page">
-                <section className="profile-settings-section">
-                  <header className="profile-settings-section-header">
-                    <div>
-                      <h4>{shell.label}</h4>
-                      <p>{shell.path}</p>
-                    </div>
-                  </header>
-                </section>
-                {renderSectionContent()}
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </div>
-    </Modal>
+      </Modal>
+
+      {showDiscardConfirm && (
+        <Modal
+          open
+          title={
+            t("profile.unsavedChangesConfirmTitle") || t("actions.confirm")
+          }
+          closeLabel={t("actions.close")}
+          onClose={() => setShowDiscardConfirm(false)}
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDiscardConfirm(false)}
+              >
+                {t("profile.actions.continueEditing") || t("actions.cancel")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowDiscardConfirm(false);
+                  onClose();
+                }}
+              >
+                {t("profile.actions.discardAndClose") || t("actions.ok")}
+              </Button>
+            </>
+          }
+        >
+          <div className="profile-discard-confirm-dialog">
+            <p>{t("profile.unsavedChangesConfirm")}</p>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

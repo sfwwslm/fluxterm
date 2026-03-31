@@ -791,6 +791,8 @@ export default function ConfigModal({
     return null;
   }
 
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
   function handleClose() {
     // 低风险数值项在关闭前提交，高风险字段改为显式保存并在离开时确认是否丢弃草稿。
     commitAiSelectionMaxCharsDraft();
@@ -798,10 +800,8 @@ export default function ConfigModal({
     commitScrollbackDraft();
     commitResourceMonitorIntervalDraft();
     commitBackgroundVideoReplayIntervalDraft();
-    if (
-      hasUnsavedHighRiskChanges &&
-      !window.confirm(t("config.unsavedChangesConfirm"))
-    ) {
+    if (hasUnsavedHighRiskChanges) {
+      setShowDiscardConfirm(true);
       return;
     }
     onClose();
@@ -2390,6 +2390,41 @@ export default function ConfigModal({
           {renderSectionContent()}
         </section>
       </div>
+      {showDiscardConfirm && (
+        <Modal
+          open
+          title={
+            t("profile.unsavedChangesConfirmTitle") || t("actions.confirm")
+          }
+          closeLabel={t("actions.close")}
+          onClose={() => setShowDiscardConfirm(false)}
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDiscardConfirm(false)}
+              >
+                {t("profile.actions.continueEditing") || t("actions.cancel")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowDiscardConfirm(false);
+                  onClose();
+                }}
+              >
+                {t("profile.actions.discardAndClose") || t("actions.ok")}
+              </Button>
+            </>
+          }
+        >
+          <div className="profile-discard-confirm-dialog">
+            <p>{t("config.unsavedChangesConfirm")}</p>
+          </div>
+        </Modal>
+      )}
     </Modal>
   );
 }
