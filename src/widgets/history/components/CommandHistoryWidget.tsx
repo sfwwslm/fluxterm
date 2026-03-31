@@ -47,6 +47,9 @@ export default function CommandHistoryWidget({
         <input
           className="history-search"
           value={searchQuery}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           onChange={(event) => onSearchQueryChange(event.target.value)}
           placeholder={t("history.searchPlaceholder")}
           type="search"

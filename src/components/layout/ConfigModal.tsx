@@ -828,6 +828,7 @@ export default function ConfigModal({
             </div>
             <input
               type="checkbox"
+              autoComplete="off"
               checked={sftpEnabled}
               onChange={(event) => onSftpEnabledChange?.(event.target.checked)}
             />
@@ -1122,6 +1123,9 @@ export default function ConfigModal({
                       type="text"
                       inputMode="numeric"
                       className="config-number-input"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={backgroundVideoReplayIntervalDraft}
                       onChange={(event) =>
                         setBackgroundVideoReplayIntervalDraft(
@@ -1134,7 +1138,7 @@ export default function ConfigModal({
                         event.preventDefault();
                         commitBackgroundVideoReplayIntervalDraft();
                       }}
-                    />
+                    />{" "}
                   </label>
                 ) : null}
               </>
@@ -1225,6 +1229,7 @@ export default function ConfigModal({
               </div>
               <input
                 type="password"
+                autoComplete="off"
                 className="config-text-input"
                 value={securityPasswordDraft}
                 placeholder={t("config.security.passwordPlaceholder")}
@@ -1273,6 +1278,7 @@ export default function ConfigModal({
               </div>
               <input
                 type="password"
+                autoComplete="off"
                 className="config-text-input"
                 value={securityPasswordDraft}
                 placeholder={t("config.security.passwordPlaceholder")}
@@ -1282,6 +1288,7 @@ export default function ConfigModal({
               />
               <input
                 type="password"
+                autoComplete="off"
                 className="config-text-input"
                 value={securityConfirmPasswordDraft}
                 placeholder={t("config.security.confirmPasswordPlaceholder")}
@@ -1344,6 +1351,7 @@ export default function ConfigModal({
               </div>
               <input
                 type="password"
+                autoComplete="off"
                 className="config-text-input"
                 value={securityCurrentPasswordDraft}
                 placeholder={t("config.security.currentPasswordPlaceholder")}
@@ -1353,6 +1361,7 @@ export default function ConfigModal({
               />
               <input
                 type="password"
+                autoComplete="off"
                 className="config-text-input"
                 value={securityNextPasswordDraft}
                 placeholder={t("config.security.nextPasswordPlaceholder")}
@@ -1362,6 +1371,7 @@ export default function ConfigModal({
               />
               <input
                 type="password"
+                autoComplete="off"
                 className="config-text-input"
                 value={securityNextPasswordConfirmDraft}
                 placeholder={t(
@@ -1576,6 +1586,9 @@ export default function ConfigModal({
               type="text"
               inputMode="numeric"
               className="config-number-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={aiSelectionMaxCharsDraft}
               onChange={(event) =>
                 setAiSelectionMaxCharsDraft(event.target.value)
@@ -1601,6 +1614,9 @@ export default function ConfigModal({
               type="text"
               inputMode="numeric"
               className="config-number-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={aiSessionRecentOutputMaxCharsDraft}
               onChange={(event) =>
                 setAiSessionRecentOutputMaxCharsDraft(event.target.value)
@@ -1626,6 +1642,9 @@ export default function ConfigModal({
               type="text"
               inputMode="numeric"
               className="config-number-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={aiRequestTimeoutMsDraft}
               onChange={(event) =>
                 setAiRequestTimeoutMsDraft(event.target.value)
@@ -1686,6 +1705,9 @@ export default function ConfigModal({
             <input
               type="text"
               className="config-text-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={quickPresetNameDraft}
               placeholder={t("config.ai.providerNamePlaceholder")}
               onChange={(event) => setQuickPresetNameDraft(event.target.value)}
@@ -1720,6 +1742,9 @@ export default function ConfigModal({
             <input
               type="text"
               className="config-text-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={quickPresetModelDraft}
               placeholder={t("config.ai.providerModelPlaceholder")}
               onChange={(event) => setQuickPresetModelDraft(event.target.value)}
@@ -1734,6 +1759,7 @@ export default function ConfigModal({
             <input
               type="password"
               className="config-text-input"
+              autoComplete="off"
               value={quickPresetApiKeyDraft}
               placeholder={t("config.ai.providerApiKeyPlaceholder")}
               onChange={(event) =>
@@ -1818,6 +1844,9 @@ export default function ConfigModal({
             <input
               type="text"
               className="config-text-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={compatibleNameDraft}
               placeholder={t("config.openai.namePlaceholder")}
               onChange={(event) => setCompatibleNameDraft(event.target.value)}
@@ -1832,6 +1861,9 @@ export default function ConfigModal({
             <input
               type="text"
               className="config-text-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={compatibleBaseUrlDraft}
               placeholder={t("config.openai.baseUrlPlaceholder")}
               onChange={(event) =>
@@ -1848,6 +1880,9 @@ export default function ConfigModal({
             <input
               type="text"
               className="config-text-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={compatibleModelDraft}
               placeholder={t("config.openai.modelPlaceholder")}
               onChange={(event) => setCompatibleModelDraft(event.target.value)}
@@ -1862,6 +1897,7 @@ export default function ConfigModal({
             <input
               type="password"
               className="config-text-input"
+              autoComplete="off"
               value={compatibleApiKeyDraft}
               placeholder={t("config.openai.apiKeyPlaceholder")}
               onChange={(event) => setCompatibleApiKeyDraft(event.target.value)}
@@ -2059,6 +2095,9 @@ export default function ConfigModal({
               type="text"
               inputMode="numeric"
               className="config-number-input"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={scrollbackDraft}
               onChange={(event) => {
                 setScrollbackDraft(event.target.value);
@@ -2104,6 +2143,9 @@ export default function ConfigModal({
                 type="text"
                 inputMode="numeric"
                 className="config-number-input"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 value={resourceMonitorIntervalDraft}
                 onChange={(event) => {
                   setResourceMonitorIntervalDraft(event.target.value);

@@ -73,6 +73,9 @@ export default function InputDialog({
           value={value}
           placeholder={placeholder}
           maxLength={maxLength}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           onChange={(event) => {
             setValue(event.target.value);
             // 输入变更后通知外层清理校验错误，避免旧错误文案残留。

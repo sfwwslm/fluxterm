@@ -209,6 +209,9 @@ export default function AiWidget({
             ref={textareaRef}
             className="ai-widget-textarea"
             value={textareaValue}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             onChange={(event) => {
               const nextValue = event.target.value;
               if (keepLocalDraftBuffer) {

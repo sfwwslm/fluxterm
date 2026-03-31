@@ -239,6 +239,9 @@ export default function TunnelWidget({
               <input
                 aria-label={`${t("tunnel.form.local")} ${t("tunnel.form.address")}`}
                 value={bindHost}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => setBindHost(e.target.value)}
               />
               <div className="tunnel-port-field">
@@ -246,6 +249,9 @@ export default function TunnelWidget({
                   aria-label={`${t("tunnel.form.local")} ${t("tunnel.form.port")}`}
                   inputMode="numeric"
                   value={bindPortInput}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   onChange={(e) =>
                     setBindPortInput(e.target.value.replace(/[^\d]/g, ""))
                   }
@@ -262,6 +268,9 @@ export default function TunnelWidget({
                 <input
                   aria-label={`${t("tunnel.form.remote")} ${t("tunnel.form.address")}`}
                   value={targetHost}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   onChange={(e) => setTargetHost(e.target.value)}
                 />
                 <div className="tunnel-port-field">
@@ -269,6 +278,9 @@ export default function TunnelWidget({
                     aria-label={`${t("tunnel.form.remote")} ${t("tunnel.form.port")}`}
                     inputMode="numeric"
                     value={targetPortInput}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(e) =>
                       setTargetPortInput(e.target.value.replace(/[^\d]/g, ""))
                     }

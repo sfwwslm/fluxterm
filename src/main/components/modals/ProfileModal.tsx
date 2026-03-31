@@ -201,6 +201,9 @@ export default function ProfileModal({
           id={nameInputId}
           value={draft.name}
           maxLength={PROFILE_NAME_MAX_LENGTH}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           onChange={(event) => {
             onDraftChange({ ...draft, name: event.target.value });
             if (nameError) {
@@ -253,6 +256,9 @@ export default function ProfileModal({
             id={descriptionInputId}
             rows={4}
             value={draft.description ?? ""}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             onChange={(event) =>
               onDraftChange({ ...draft, description: event.target.value })
             }
@@ -272,6 +278,9 @@ export default function ProfileModal({
               <input
                 id={wordSeparatorsInputId}
                 value={draft.wordSeparators ?? DEFAULT_TERMINAL_WORD_SEPARATORS}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(event) =>
                   onDraftChange({
                     ...draft,
@@ -414,6 +423,9 @@ export default function ProfileModal({
             <input
               id={hostInputId}
               value={draft.host}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               onChange={(event) =>
                 onDraftChange({ ...draft, host: event.target.value })
               }
@@ -429,6 +441,9 @@ export default function ProfileModal({
                 id={portInputId}
                 type="number"
                 value={draft.port}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(event) =>
                   onDraftChange({
                     ...draft,
@@ -444,6 +459,9 @@ export default function ProfileModal({
               <input
                 id={usernameInputId}
                 value={draft.username}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(event) =>
                   onDraftChange({ ...draft, username: event.target.value })
                 }
@@ -479,6 +497,7 @@ export default function ProfileModal({
                 id={passwordInputId}
                 type="password"
                 value={draft.passwordRef ?? ""}
+                autoComplete="off"
                 onChange={(event) =>
                   onDraftChange({ ...draft, passwordRef: event.target.value })
                 }
@@ -496,6 +515,9 @@ export default function ProfileModal({
                     id={privateKeyPathInputId}
                     value={draft.privateKeyPath ?? ""}
                     placeholder={t("profile.placeholder.privateKeyPath")}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     readOnly
                   />
                   <Button
@@ -520,6 +542,7 @@ export default function ProfileModal({
                   id={privateKeyPassphraseInputId}
                   type="password"
                   value={draft.privateKeyPassphraseRef ?? ""}
+                  autoComplete="off"
                   onChange={(event) =>
                     onDraftChange({
                       ...draft,

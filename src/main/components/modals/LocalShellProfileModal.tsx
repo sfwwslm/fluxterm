@@ -114,6 +114,9 @@ export default function LocalShellProfileModal({
                 normalizedDraft.wordSeparators ??
                 DEFAULT_LOCAL_SHELL_CONFIG.wordSeparators
               }
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               onChange={(event) =>
                 onDraftChange({
                   ...draft,

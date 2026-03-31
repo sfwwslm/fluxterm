@@ -426,6 +426,9 @@ export default function RdpProfileModal({
                     </label>
                     <input
                       value={draftProfile.name}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       onChange={(event) =>
                         setDraftProfile((prev) => ({
                           ...prev,
@@ -460,6 +463,9 @@ export default function RdpProfileModal({
                     </label>
                     <input
                       value={draftProfile.host}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       onChange={(event) =>
                         setDraftProfile((prev) => ({
                           ...prev,
@@ -475,6 +481,9 @@ export default function RdpProfileModal({
                     <input
                       inputMode="numeric"
                       value={String(draftProfile.port)}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       onChange={(event) =>
                         setDraftProfile((prev) => ({
                           ...prev,
@@ -491,6 +500,9 @@ export default function RdpProfileModal({
                     </label>
                     <input
                       value={draftProfile.username}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       onChange={(event) =>
                         setDraftProfile((prev) => ({
                           ...prev,
@@ -506,6 +518,7 @@ export default function RdpProfileModal({
                     <input
                       type="password"
                       value={draftProfile.passwordRef ?? ""}
+                      autoComplete="off"
                       onChange={(event) =>
                         setDraftProfile((prev) => ({
                           ...prev,
@@ -518,6 +531,9 @@ export default function RdpProfileModal({
                     <label className="form-label">{t("rdp.form.domain")}</label>
                     <input
                       value={draftProfile.domain ?? ""}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       onChange={(event) =>
                         setDraftProfile((prev) => ({
                           ...prev,
@@ -597,6 +613,9 @@ export default function RdpProfileModal({
                               <input
                                 inputMode="numeric"
                                 value={String(draftProfile.width ?? "")}
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
                                 onChange={(event) =>
                                   setDraftProfile((prev) => ({
                                     ...prev,
@@ -617,6 +636,9 @@ export default function RdpProfileModal({
                               <input
                                 inputMode="numeric"
                                 value={String(draftProfile.height ?? "")}
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
                                 onChange={(event) =>
                                   setDraftProfile((prev) => ({
                                     ...prev,
@@ -704,6 +726,7 @@ export default function RdpProfileModal({
                             </div>
                             <input
                               type="checkbox"
+                              autoComplete="off"
                               checked={draftProfile.performanceFlags[field.key]}
                               onChange={(event) =>
                                 setDraftProfile((prev) => ({

@@ -870,6 +870,9 @@ export default function BottomArea({
                   <span>{t("quickbar.manager.commandLabel")}</span>
                   <input
                     value={selectedCommand.label}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(event) =>
                       onUpdateCommand(selectedCommand.id, {
                         label: event.target.value,
@@ -902,6 +905,9 @@ export default function BottomArea({
                   <span>{t("quickbar.manager.commandText")}</span>
                   <textarea
                     value={selectedCommand.command}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(event) =>
                       onUpdateCommand(selectedCommand.id, {
                         command: event.target.value,
@@ -921,6 +927,7 @@ export default function BottomArea({
             <label className="qm-option">
               <input
                 type="checkbox"
+                autoComplete="off"
                 checked={showGroupTitle}
                 onChange={(event) =>
                   onShowGroupTitleChange(event.target.checked)

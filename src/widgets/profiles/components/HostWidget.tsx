@@ -529,6 +529,9 @@ export default function HostWidget({
             className="host-search"
             placeholder={t("host.searchPlaceholder")}
             value={query}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>

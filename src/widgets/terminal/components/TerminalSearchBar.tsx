@@ -190,6 +190,9 @@ export default function useTerminalSearchBar({
           ref={searchInputRef}
           className={`terminal-search-input ${searchMiss ? "miss" : ""}`}
           value={searchKeyword}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder={t("terminal.search.placeholder")}
           onChange={(event) => {
             setSearchKeyword(event.target.value);

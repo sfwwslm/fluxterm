@@ -433,6 +433,9 @@ export default function RdpWidget({
             data-ui="rdp-search"
             placeholder={t("rdp.searchPlaceholder")}
             value={query}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>

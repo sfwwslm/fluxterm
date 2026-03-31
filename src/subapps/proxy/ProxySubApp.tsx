@@ -350,6 +350,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
               <span>{locale === "zh-CN" ? "搜索" : "Search"}</span>
               <input
                 value={search}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={
                   locale === "zh-CN"
@@ -440,12 +443,21 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
             </label>
             <label>
               <span>{t("proxy.form.name")}</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                value={name}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={(e) => setName(e.target.value)}
+              />
             </label>
             <label>
               <span>{t("proxy.form.bindHost")}</span>
               <input
                 value={bindHost}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => setBindHost(e.target.value)}
               />
             </label>
@@ -454,6 +466,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
               <input
                 inputMode="numeric"
                 value={bindPort}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) =>
                   setBindPort(e.target.value.replace(/[^\d]/g, ""))
                 }
@@ -476,6 +491,9 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
                   <span>{t("proxy.form.username")}</span>
                   <input
                     value={username}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(e) => setUsername(e.target.value)}
                   />
                 </label>
@@ -484,6 +502,7 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
                   <input
                     type="password"
                     value={password}
+                    autoComplete="off"
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </label>
