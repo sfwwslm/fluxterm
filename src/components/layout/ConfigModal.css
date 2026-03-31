@@ -420,7 +420,7 @@
   padding: 18px 16px;
   border: 1px dashed var(--border-soft);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-menu) 62%, transparent);
+  background: transparent;
   color: var(--text-secondary);
   line-height: 1.6;
   text-align: center;
