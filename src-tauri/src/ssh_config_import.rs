@@ -197,21 +197,30 @@ fn apply_import(
                 continue;
             }
         };
-        let duplicate = store.profiles.iter().any(|item| {
-            item.name == mapped.name
-                && item.host == mapped.host
-                && item.port == mapped.port
-                && item.username == mapped.username
+
+        // 仅在 OpenSSH 导入分组内进行判重。
+        // 若其他分组存在同名会话，不应影响 OpenSSH 配置文件中该 alias 的正常导入。
+        let existing_in_group = store.profiles.iter().find(|item| {
+            let is_in_import_group = item
+                .tags
+                .as_ref()
+                .is_some_and(|tags| tags.iter().any(|t| t == IMPORT_GROUP_NAME));
+            item.name == mapped.name && is_in_import_group
         });
-        if duplicate {
-            summary.skipped_count += 1;
+
+        if let Some(item) = existing_in_group {
+            let is_duplicate = item.host == mapped.host
+                && item.port == mapped.port
+                && item.username == mapped.username;
+
+            if is_duplicate {
+                summary.skipped_count += 1;
+            } else {
+                summary.conflict_count += 1;
+            }
             continue;
         }
-        let conflict = store.profiles.iter().any(|item| item.name == mapped.name);
-        if conflict {
-            summary.conflict_count += 1;
-            continue;
-        }
+
         store.profiles.push(mapped);
         summary.added_count += 1;
     }
@@ -599,8 +608,20 @@ Host prod
     #[test]
     fn apply_import_counts_added_skipped_and_conflicts() {
         let mut store = profile_store_with_profiles(vec![
+            // 这个 prod 即使同名但不在 OpenSSH 分组中，不应导致冲突
             sample_profile("prod", "10.0.0.1", 22, "root"),
-            sample_profile("staging", "10.0.0.2", 22, "root"),
+            // 这个 staging 在 OpenSSH 分组中且配置一致，应被跳过 (skipped)
+            {
+                let mut p = sample_profile("staging", "10.0.0.20", 22, "root");
+                p.tags = Some(vec![IMPORT_GROUP_NAME.to_string()]);
+                p
+            },
+            // 这个 qa 在 OpenSSH 分组中但配置不一致，应记为冲突 (conflict)
+            {
+                let mut p = sample_profile("qa", "10.0.0.4", 22, "root");
+                p.tags = Some(vec![IMPORT_GROUP_NAME.to_string()]);
+                p
+            },
         ]);
         let mut groups = Vec::new();
         let content = normalize_config_for_russh(
@@ -643,15 +664,15 @@ Host qa
         assert_eq!(
             summary,
             OpensshImportSummary {
-                added_count: 1,
-                skipped_count: 1,
-                conflict_count: 1,
+                added_count: 1,    // 只有 prod 被添加了 (因为原有的 prod 没在 OpenSSH 分组中)
+                skipped_count: 1,  // staging 配置完全一样且在 OpenSSH 分组中，跳过
+                conflict_count: 1, // qa 在 OpenSSH 分组中但配置变了，记为冲突
                 unsupported_count: 1,
                 error_count: 0,
             }
         );
         assert!(groups.iter().any(|item| item == IMPORT_GROUP_NAME));
-        assert_eq!(store.profiles.len(), 3);
+        assert_eq!(store.profiles.len(), 4); // 初始 3 个 + 新加的 1 个 prod
     }
 
     #[test]
