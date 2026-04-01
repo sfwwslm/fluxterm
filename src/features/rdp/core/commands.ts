@@ -360,6 +360,34 @@ export function setRdpClipboard(
   });
 }
 
+/** 设置 RDP 会话静音状态。 */
+export function setRdpAudioMuted(
+  sessionId: string,
+  muted: boolean,
+  options?: RdpCommandOptions,
+) {
+  const traceId = resolveTraceId(options);
+  return callTauri<void>("rdp_session_set_audio_muted", {
+    sessionId,
+    muted,
+    traceId,
+  });
+}
+
+/** 设置 RDP 会话音量。 */
+export function setRdpAudioVolume(
+  sessionId: string,
+  volume: number,
+  options?: RdpCommandOptions,
+) {
+  const traceId = resolveTraceId(options);
+  return callTauri<void>("rdp_session_set_audio_volume", {
+    sessionId,
+    volume,
+    traceId,
+  });
+}
+
 /** 响应 RDP 证书确认。 */
 export async function decideRdpCertificate(
   sessionId: string,

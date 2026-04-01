@@ -8,11 +8,14 @@ use std::sync::{Arc, Mutex};
 
 use axum::extract::ws::Message;
 use serde_json::json;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::info;
 
+use crate::audio::clamp_audio_volume;
 use crate::ironrdp_runtime::run_ironrdp_session;
-use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimeSessionSnapshot};
+use crate::protocol::{
+    RuntimeAudioState, RuntimeConnectRequest, RuntimeInputEvent, RuntimeSessionSnapshot,
+};
 use crate::{RuntimeError, RuntimeResult};
 
 const RGBA_FRAME_HEADER_LEN: usize = 25;
@@ -28,6 +31,10 @@ pub enum RuntimeCommand {
     Resize { width: u32, height: u32 },
     /// 同步剪贴板内容。
     Clipboard(String),
+    /// 设置会话级静音状态。
+    AudioMute(bool),
+    /// 设置会话级音量。
+    AudioVolume(f32),
     /// 主动断开连接。
     Disconnect,
     /// 响应服务器证书决策请求。
@@ -41,7 +48,7 @@ pub struct SessionManager {
 }
 
 /// 维护单个活动 RDP 会话的所有运行时上下文。
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct SessionRuntime {
     /// 会话的当前状态快照。
     snapshot: RuntimeSessionSnapshot,
@@ -49,6 +56,8 @@ struct SessionRuntime {
     sender: broadcast::Sender<Message>,
     /// 用于向异步 RDP 协议任务发送控制命令的频道。
     command_tx: Option<mpsc::UnboundedSender<RuntimeCommand>>,
+    /// 用于等待异步 RDP 协议任务彻底退出的通知。
+    close_rx: Option<oneshot::Receiver<()>>,
 }
 
 impl SessionManager {
@@ -74,6 +83,10 @@ impl SessionManager {
             width: 1280,
             height: 720,
             ws_url: None,
+            audio_enabled: true,
+            audio_muted: false,
+            audio_volume: 1.0,
+            audio_state: RuntimeAudioState::Idle,
         };
         inner.insert(
             session_id,
@@ -81,6 +94,7 @@ impl SessionManager {
                 snapshot: snapshot.clone(),
                 sender,
                 command_tx: None,
+                close_rx: None,
             },
         );
         info!(
@@ -108,11 +122,14 @@ impl SessionManager {
             .get_mut(session_id)
             .ok_or_else(session_not_found_error)?;
         let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (close_tx, close_rx) = oneshot::channel();
         runtime.snapshot.state = "connecting".to_string();
         runtime.snapshot.width = profile.width.max(320);
         runtime.snapshot.height = profile.height.max(200);
         runtime.snapshot.ws_url = Some(ws_url);
+        runtime.snapshot.audio_state = RuntimeAudioState::Negotiating;
         runtime.command_tx = Some(command_tx);
+        runtime.close_rx = Some(close_rx);
         info!(
             event = "rdp.session.connect.start",
             session_id = %session_id,
@@ -130,28 +147,42 @@ impl SessionManager {
         let session_id = session_id.to_string();
         let sessions = self.clone();
         tokio::spawn(async move {
-            run_ironrdp_session(sessions, sender, session_id, profile, command_rx).await;
+            run_ironrdp_session(sessions, sender, session_id, profile, command_rx, close_tx).await;
         });
         Ok(runtime.snapshot.clone())
     }
 
     /// 断开指定的 RDP 会话并清理其资源。
-    pub fn disconnect_session(&self, session_id: &str) -> RuntimeResult<RuntimeSessionSnapshot> {
-        let snapshot = {
+    pub async fn disconnect_session(
+        &self,
+        session_id: &str,
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
+        let (snapshot, close_rx) = {
             let mut inner = self.inner.lock().map_err(lock_error)?;
             let runtime = inner
                 .get_mut(session_id)
                 .ok_or_else(session_not_found_error)?;
             send_runtime_command(&runtime.command_tx, RuntimeCommand::Disconnect);
             set_runtime_state(runtime, "disconnected");
+            runtime.snapshot.audio_state = RuntimeAudioState::Idle;
             info!(
                 event = "rdp.session.disconnect.success",
                 session_id = %session_id,
                 "disconnect requested and session marked closed"
             );
             send_state_message(&runtime.sender, "disconnected", "session closed");
-            runtime.snapshot.clone()
+            send_audio_state_message(
+                &runtime.sender,
+                runtime.snapshot.audio_state,
+                runtime.snapshot.audio_muted,
+                runtime.snapshot.audio_volume,
+                None,
+            );
+            (runtime.snapshot.clone(), runtime.close_rx.take())
         };
+        if let Some(close_rx) = close_rx {
+            let _ = close_rx.await;
+        }
         self.remove_session(session_id)?;
         Ok(snapshot)
     }
@@ -227,6 +258,50 @@ impl SessionManager {
                 "text": text,
             }),
         ));
+        Ok(())
+    }
+
+    /// 更新会话级静音状态。
+    pub fn set_audio_muted(&self, session_id: &str, muted: bool) -> RuntimeResult<()> {
+        let mut inner = self.inner.lock().map_err(lock_error)?;
+        let runtime = inner
+            .get_mut(session_id)
+            .ok_or_else(session_not_found_error)?;
+        runtime.snapshot.audio_muted = muted;
+        runtime.snapshot.audio_state = match (muted, runtime.snapshot.audio_state) {
+            (true, _) => RuntimeAudioState::Muted,
+            (false, RuntimeAudioState::Muted) => RuntimeAudioState::Negotiating,
+            (false, state) => state,
+        };
+        send_runtime_command(&runtime.command_tx, RuntimeCommand::AudioMute(muted));
+        send_audio_state_message(
+            &runtime.sender,
+            runtime.snapshot.audio_state,
+            runtime.snapshot.audio_muted,
+            runtime.snapshot.audio_volume,
+            None,
+        );
+        Ok(())
+    }
+
+    /// 更新会话级音量。
+    pub fn set_audio_volume(&self, session_id: &str, volume: f32) -> RuntimeResult<()> {
+        let mut inner = self.inner.lock().map_err(lock_error)?;
+        let runtime = inner
+            .get_mut(session_id)
+            .ok_or_else(session_not_found_error)?;
+        runtime.snapshot.audio_volume = clamp_audio_volume(volume);
+        send_runtime_command(
+            &runtime.command_tx,
+            RuntimeCommand::AudioVolume(runtime.snapshot.audio_volume),
+        );
+        send_audio_state_message(
+            &runtime.sender,
+            runtime.snapshot.audio_state,
+            runtime.snapshot.audio_muted,
+            runtime.snapshot.audio_volume,
+            None,
+        );
         Ok(())
     }
 
@@ -315,6 +390,33 @@ impl SessionManager {
             "publishing runtime state update"
         );
         send_state_message(&runtime.sender, state, &message.into());
+        Ok(())
+    }
+
+    /// 回写运行时的最新音频状态，并广播给桥接客户端。
+    pub fn publish_audio_state(
+        &self,
+        session_id: &str,
+        audio_state: RuntimeAudioState,
+        message: Option<String>,
+    ) -> RuntimeResult<()> {
+        let mut inner = self.inner.lock().map_err(lock_error)?;
+        let runtime = inner
+            .get_mut(session_id)
+            .ok_or_else(session_not_found_error)?;
+        runtime.snapshot.audio_state = audio_state;
+        if audio_state == RuntimeAudioState::Muted {
+            runtime.snapshot.audio_muted = true;
+        } else if audio_state == RuntimeAudioState::Playing {
+            runtime.snapshot.audio_muted = false;
+        }
+        send_audio_state_message(
+            &runtime.sender,
+            runtime.snapshot.audio_state,
+            runtime.snapshot.audio_muted,
+            runtime.snapshot.audio_volume,
+            message,
+        );
         Ok(())
     }
 }
@@ -440,6 +542,24 @@ fn send_state_message(sender: &broadcast::Sender<Message>, state: &str, message:
         "state",
         json!({
             "state": state,
+            "message": message,
+        }),
+    ));
+}
+
+fn send_audio_state_message(
+    sender: &broadcast::Sender<Message>,
+    state: RuntimeAudioState,
+    muted: bool,
+    volume: f32,
+    message: Option<String>,
+) {
+    let _ = sender.send(json_message(
+        "audio-state",
+        json!({
+            "state": state,
+            "muted": muted,
+            "volume": volume,
             "message": message,
         }),
     ));

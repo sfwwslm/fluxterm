@@ -1,5 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+/// 运行时音频播放状态。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeAudioState {
+    /// 尚未开始音频协商或当前没有活动音频流。
+    Idle,
+    /// 已启用音频能力，正在等待远端完成协商并开始送流。
+    Negotiating,
+    /// 本地正在播放远端音频。
+    Playing,
+    /// 当前会话处于静音状态。
+    Muted,
+    /// 本地播放初始化失败或播放链路异常。
+    Error,
+}
+
 /// RDP 运行时远端体验标志。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +82,14 @@ pub struct RuntimeSessionSnapshot {
     pub height: u32,
     /// 用于前端 WebGL 连接的 WebSocket URL。
     pub ws_url: Option<String>,
+    /// 当前会话是否开启远端音频输出。
+    pub audio_enabled: bool,
+    /// 当前会话是否静音。
+    pub audio_muted: bool,
+    /// 当前会话音量。
+    pub audio_volume: f32,
+    /// 当前会话音频状态。
+    pub audio_state: RuntimeAudioState,
 }
 
 /// 统一的键盘和鼠标输入事件负载。

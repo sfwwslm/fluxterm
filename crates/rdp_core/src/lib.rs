@@ -3,6 +3,7 @@
 //! `rdp_core` crate 提供了 FluxTerm 进程内 RDP (远程桌面协议) 核心能力。
 //! 它封装了底层 RDP 协议处理、会话管理以及与前端 WebGL 渲染器通信的 WebSocket 桥接。
 
+mod audio;
 mod bridge;
 mod cliprdr;
 mod ironrdp_runtime;
@@ -13,7 +14,8 @@ mod session_manager;
 use std::sync::Arc;
 
 pub use protocol::{
-    RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags, RuntimeSessionSnapshot,
+    RuntimeAudioState, RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags,
+    RuntimeSessionSnapshot,
 };
 use thiserror::Error;
 
@@ -116,8 +118,11 @@ impl RdpRuntime {
     }
 
     /// 断开指定的 RDP 会话。
-    pub fn disconnect_session(&self, session_id: &str) -> RuntimeResult<RuntimeSessionSnapshot> {
-        self.sessions.disconnect_session(session_id)
+    pub async fn disconnect_session(
+        &self,
+        session_id: &str,
+    ) -> RuntimeResult<RuntimeSessionSnapshot> {
+        self.sessions.disconnect_session(session_id).await
     }
 
     /// 动态调整 RDP 会话的分辨率。
@@ -140,6 +145,16 @@ impl RdpRuntime {
     /// 将本地剪贴板文本同步到远程桌面。
     pub fn set_clipboard(&self, session_id: &str, text: String) -> RuntimeResult<()> {
         self.sessions.set_clipboard(session_id, text)
+    }
+
+    /// 设置会话级静音状态。
+    pub fn set_audio_muted(&self, session_id: &str, muted: bool) -> RuntimeResult<()> {
+        self.sessions.set_audio_muted(session_id, muted)
+    }
+
+    /// 设置会话级音量。
+    pub fn set_audio_volume(&self, session_id: &str, volume: f32) -> RuntimeResult<()> {
+        self.sessions.set_audio_volume(session_id, volume)
     }
 
     /// 响应连接过程中的服务器证书决策。

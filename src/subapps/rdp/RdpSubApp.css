@@ -360,6 +360,43 @@
   white-space: nowrap;
 }
 
+.rdp-audio-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.45);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rdp-audio-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rdp-audio-volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.45);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rdp-audio-volume input {
+  width: 88px;
+}
+
 @media (max-width: 980px) {
   /* 窗口变窄时优先保留最关键的运行状态，避免底栏多块信息互相挤压。 */
   .rdp-statusbar {

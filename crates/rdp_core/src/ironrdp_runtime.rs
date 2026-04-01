@@ -31,18 +31,21 @@ use ironrdp::pdu::input::fast_path::FastPathInputEvent;
 use ironrdp::pdu::rdp::capability_sets::MajorPlatformType;
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use ironrdp::pdu::rdp::multitransport::MultitransportResponsePdu;
+use ironrdp::rdpsnd::client::Rdpsnd;
 use ironrdp::session::image::DecodedImage;
 use ironrdp::session::{ActiveStage, ActiveStageOutput};
 use ironrdp_cliprdr::CliprdrClient;
 use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
+use ironrdp_rdpdr::{NoopRdpdrBackend, Rdpdr};
 use ironrdp_tls::extract_tls_server_public_key;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{FramedWrite, TokioFramed, split_tokio_framed};
 use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::Instant as TokioInstant;
 use tracing::{debug, error, info, warn};
 
+use crate::audio::{AudioPlaybackController, AudioProxyEvent};
 use crate::cliprdr::{CliprdrProxyEvent, FluxCliprdrBackend};
 use crate::keyboard::code_to_scancode;
 use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags};
@@ -155,6 +158,7 @@ pub async fn run_ironrdp_session(
     session_id: String,
     profile: RuntimeConnectRequest,
     mut command_rx: mpsc::UnboundedReceiver<RuntimeCommand>,
+    close_tx: oneshot::Sender<()>,
 ) {
     info!(
         event = "rdp.runtime.start",
@@ -196,6 +200,7 @@ pub async fn run_ironrdp_session(
             let _ = sessions.publish_runtime_state(&session_id, "error", "RDP runtime failed");
         }
     }
+    let _ = close_tx.send(());
 }
 
 /// 执行 RDP 建立连接的全过程。
@@ -245,9 +250,21 @@ async fn connect_and_run(
         temp_dir,
     };
     let cliprdr = CliprdrClient::new(Box::new(cliprdr_backend));
+    let (audio_tx, audio_rx) = mpsc::unbounded_channel();
+    let audio_controller = AudioPlaybackController::new(audio_tx);
+    let rdpsnd = Rdpsnd::new(Box::new(audio_controller.create_backend()));
+    let rdpdr = Rdpdr::new(Box::new(NoopRdpdrBackend {}), "FluxTerm".to_string()).with_smartcard(0);
+    info!(
+        event = "rdp.runtime.static_channels",
+        session_id = %session_id,
+        channels = "rdpsnd,rdpdr,drdynvc,cliprdr",
+        "registering static virtual channels"
+    );
 
     let mut connector =
         connector::ClientConnector::new(build_connector_config(&prepared_connection), client_addr)
+            .with_static_channel(rdpsnd)
+            .with_static_channel(rdpdr)
             .with_static_channel(drdynvc)
             .with_static_channel(cliprdr);
 
@@ -313,6 +330,11 @@ async fn connect_and_run(
             prepared_connection.host, prepared_connection.port
         ),
     );
+    let _ = sessions.publish_audio_state(
+        session_id,
+        crate::protocol::RuntimeAudioState::Negotiating,
+        None,
+    );
     info!(
         event = "rdp.runtime.connected",
         session_id = %session_id,
@@ -334,6 +356,8 @@ async fn connect_and_run(
         ctx,
         command_rx,
         cliprdr_rx,
+        audio_rx,
+        audio_controller,
         upgraded_framed,
         connection_result,
     )
@@ -352,6 +376,8 @@ async fn run_active_stage<S>(
     ctx: ActiveStageContext<'_>,
     command_rx: &mut mpsc::UnboundedReceiver<RuntimeCommand>,
     mut cliprdr_rx: mpsc::UnboundedReceiver<CliprdrProxyEvent>,
+    mut audio_rx: mpsc::UnboundedReceiver<AudioProxyEvent>,
+    audio_controller: AudioPlaybackController,
     framed: TokioFramed<S>,
     connection_result: ConnectionResult,
 ) -> Result<RuntimeCloseReason, String>
@@ -484,6 +510,17 @@ where
                     }
                 }
             }
+            audio_event = audio_rx.recv() => {
+                let Some(audio_event) = audio_event else {
+                    continue;
+                };
+                match audio_event {
+                    AudioProxyEvent::StateChanged { state, message } => {
+                        let _ = ctx.sessions.publish_audio_state(ctx.session_id, state, message);
+                        Vec::new()
+                    }
+                }
+            }
             command = command_rx.recv() => {
                 let Some(command) = command else {
                     return Ok(RuntimeCloseReason::UserDisconnected);
@@ -531,6 +568,14 @@ where
                         } else {
                             Vec::new()
                         }
+                    }
+                    RuntimeCommand::AudioMute(muted) => {
+                        audio_controller.set_muted(muted);
+                        Vec::new()
+                    }
+                    RuntimeCommand::AudioVolume(volume) => {
+                        audio_controller.set_volume(volume);
+                        Vec::new()
                     }
                     RuntimeCommand::Disconnect => {
                         info!(
@@ -1146,7 +1191,7 @@ fn build_connector_config(connection: &PreparedConnection) -> connector::Config 
         enable_server_pointer: true,
         request_data: None,
         autologon: false,
-        enable_audio_playback: false,
+        enable_audio_playback: true,
         pointer_software_rendering: false,
         // 体验标志由前端 Profile 驱动，这里只做协议位映射。
         performance_flags: build_performance_flags(&connection.performance_flags),

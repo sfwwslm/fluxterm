@@ -17,7 +17,9 @@ thiserror = "2.0.18"
 hostname = "0.4.1"
 base64 = "0.22.1"
 png = "0.17.16"
-ironrdp = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", features = ["session", "input", "graphics", "dvc", "svc", "displaycontrol", "connector"] }
-ironrdp-tls = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", package = "ironrdp-tls", features = ["rustls"] }
-ironrdp-tokio = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", package = "ironrdp-tokio", features = ["reqwest"] }
-ironrdp-cliprdr = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", package = "ironrdp-cliprdr" }
+ironrdp = { path = "../../target/IronRDP/crates/ironrdp", features = ["session", "input", "graphics", "dvc", "svc", "displaycontrol", "connector", "rdpsnd"] }
+ironrdp-tls = { path = "../../target/IronRDP/crates/ironrdp-tls", package = "ironrdp-tls", features = ["rustls"] }
+ironrdp-tokio = { path = "../../target/IronRDP/crates/ironrdp-tokio", package = "ironrdp-tokio", features = ["reqwest"] }
+ironrdp-cliprdr = { path = "../../target/IronRDP/crates/ironrdp-cliprdr", package = "ironrdp-cliprdr" }
+ironrdp-rdpdr = { path = "../../target/IronRDP/crates/ironrdp-rdpdr", package = "ironrdp-rdpdr" }
+cpal = "0.17"

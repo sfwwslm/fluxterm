@@ -29,6 +29,8 @@ import {
   disconnectRdpSession,
   listRdpProfiles,
   resizeRdpSession,
+  setRdpAudioMuted,
+  setRdpAudioVolume,
   sendRdpInput,
   setRdpClipboard,
 } from "@/features/rdp/core/commands";
@@ -55,6 +57,13 @@ type RdpWireEvent =
     }
   | { type: "cursor"; cursor: string }
   | { type: "clipboard"; direction: string; text: string }
+  | {
+      type: "audio-state";
+      state: RdpSessionSnapshot["audioState"];
+      muted: boolean;
+      volume: number;
+      message?: string;
+    }
   | { type: "input-ack"; kind: string }
   | { type: "error"; code: string; message: string };
 
@@ -98,6 +107,15 @@ function getSessionResolutionValue(session: RdpSessionSnapshot | null) {
   if (!session) return "--";
   if (session.width <= 0 || session.height <= 0) return "--";
   return `${session.width} × ${session.height}`;
+}
+
+function getSessionAudioStateLabel(
+  session: RdpSessionSnapshot | null,
+  t: Translate,
+) {
+  if (!session?.audioEnabled) return t("rdp.audio.state.idle");
+  if (session.audioMuted) return t("rdp.audio.state.muted");
+  return t(`rdp.audio.state.${session.audioState}`);
 }
 
 /** 判断当前会话是否仍允许前端重新附着桥接。 */
@@ -447,6 +465,26 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         updateSessionTab(sessionId, (tab) => ({
           ...tab,
           statusText: t("rdp.status.clipboardSynced"),
+        }));
+        return;
+      }
+      if (payload.type === "audio-state") {
+        updateSessionTab(sessionId, (tab) => ({
+          ...tab,
+          statusText:
+            payload.state === "error"
+              ? (payload.message ?? t("rdp.audio.state.error"))
+              : tab.statusText,
+          errorMessage:
+            payload.state === "error"
+              ? (payload.message ?? tab.errorMessage)
+              : tab.errorMessage,
+          session: {
+            ...tab.session,
+            audioState: payload.state,
+            audioMuted: payload.muted,
+            audioVolume: payload.volume,
+          },
         }));
         return;
       }
@@ -1156,6 +1194,51 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     }
   }
 
+  async function handleToggleAudioMute() {
+    if (!activeTab) return;
+    try {
+      const nextMuted = !activeTab.session.audioMuted;
+      await setRdpAudioMuted(activeTab.session.sessionId, nextMuted, {
+        traceId: activeTab.traceId,
+      });
+      updateSessionTab(activeTab.session.sessionId, (tab) => ({
+        ...tab,
+        session: {
+          ...tab.session,
+          audioMuted: nextMuted,
+          audioState: nextMuted
+            ? "muted"
+            : tab.session.audioState === "muted"
+              ? "negotiating"
+              : tab.session.audioState,
+        },
+      }));
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleAudioVolumeChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    if (!activeTab) return;
+    const nextVolume = Number(event.target.value);
+    try {
+      await setRdpAudioVolume(activeTab.session.sessionId, nextVolume, {
+        traceId: activeTab.traceId,
+      });
+      updateSessionTab(activeTab.session.sessionId, (tab) => ({
+        ...tab,
+        session: {
+          ...tab.session,
+          audioVolume: nextVolume,
+        },
+      }));
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <div
       ref={shellRef}
@@ -1328,6 +1411,32 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
               data-slot="rdp-statusbar-right"
               data-ui="rdp-metrics"
             >
+              <span>
+                {getSessionAudioStateLabel(activeTab?.session ?? null, t)}
+              </span>
+              <button
+                type="button"
+                className="rdp-audio-toggle"
+                data-ui="rdp-audio-toggle"
+                onClick={() => void handleToggleAudioMute()}
+                disabled={!activeTab?.session.audioEnabled}
+              >
+                {activeTab?.session.audioMuted
+                  ? t("rdp.audio.actions.unmute")
+                  : t("rdp.audio.actions.mute")}
+              </button>
+              <label className="rdp-audio-volume" data-ui="rdp-audio-volume">
+                <span>{t("rdp.audio.volume")}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={activeTab?.session.audioVolume ?? 1}
+                  onChange={(event) => void handleAudioVolumeChange(event)}
+                  disabled={!activeTab?.session.audioEnabled}
+                />
+              </label>
               <span>
                 {t("rdp.metrics.fps", { value: String(activePerf.fps) })}
               </span>

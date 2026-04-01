@@ -4,6 +4,9 @@ members = [
     "src-tauri",
     "crates/*",
 ]
+exclude = [
+    "target/IronRDP",
+]
 
 [workspace.package]
 version = "0.1.0-beta.12"

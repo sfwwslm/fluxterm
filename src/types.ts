@@ -299,6 +299,14 @@ export type RdpSessionState =
   | "error"
   | "certificate_prompt";
 
+/** RDP 会话音频状态。 */
+export type RdpSessionAudioState =
+  | "idle"
+  | "negotiating"
+  | "playing"
+  | "muted"
+  | "error";
+
 /** RDP 会话快照。 */
 export type RdpSessionSnapshot = {
   sessionId: string;
@@ -308,6 +316,10 @@ export type RdpSessionSnapshot = {
   width: number;
   height: number;
   wsUrl?: string | null;
+  audioEnabled: boolean;
+  audioMuted: boolean;
+  audioVolume: number;
+  audioState: RdpSessionAudioState;
   lastError?: {
     code: string;
     message: string;
