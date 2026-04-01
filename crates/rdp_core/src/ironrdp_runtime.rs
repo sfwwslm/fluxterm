@@ -18,6 +18,7 @@ use ironrdp::connector::connection_activation::{
 };
 use ironrdp::connector::credssp::KerberosConfig;
 use ironrdp::connector::{self, ConnectionResult, Credentials, Sequence};
+use ironrdp::core::IntoOwned;
 use ironrdp::displaycontrol::client::DisplayControlClient;
 use ironrdp::displaycontrol::pdu::MonitorLayoutEntry;
 use ironrdp::dvc::DrdynvcClient;
@@ -32,6 +33,8 @@ use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use ironrdp::pdu::rdp::multitransport::MultitransportResponsePdu;
 use ironrdp::session::image::DecodedImage;
 use ironrdp::session::{ActiveStage, ActiveStageOutput};
+use ironrdp_cliprdr::CliprdrClient;
+use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
 use ironrdp_tls::extract_tls_server_public_key;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{FramedWrite, TokioFramed, split_tokio_framed};
@@ -40,6 +43,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::time::Instant as TokioInstant;
 use tracing::{debug, error, info, warn};
 
+use crate::cliprdr::{CliprdrProxyEvent, FluxCliprdrBackend};
 use crate::keyboard::code_to_scancode;
 use crate::protocol::{RuntimeConnectRequest, RuntimeInputEvent, RuntimePerformanceFlags};
 use crate::session_manager::SessionManager;
@@ -126,6 +130,13 @@ impl FramePerfWindow {
 enum RuntimeCloseReason {
     UserDisconnected,
     ServerClosed,
+}
+
+struct ActiveStageContext<'a> {
+    sessions: &'a SessionManager,
+    sender: &'a broadcast::Sender<Message>,
+    session_id: &'a str,
+    cliprdr_tx: mpsc::UnboundedSender<CliprdrProxyEvent>,
 }
 
 /// 启动并运行单个 RDP 会话的主异步任务。
@@ -226,9 +237,19 @@ async fn connect_and_run(
     let mut framed = TokioFramed::new(socket);
     let drdynvc =
         DrdynvcClient::new().with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())));
+
+    let (cliprdr_tx, cliprdr_rx) = mpsc::unbounded_channel();
+    let temp_dir = std::env::temp_dir().to_string_lossy().into_owned();
+    let cliprdr_backend = FluxCliprdrBackend {
+        proxy_tx: cliprdr_tx.clone(),
+        temp_dir,
+    };
+    let cliprdr = CliprdrClient::new(Box::new(cliprdr_backend));
+
     let mut connector =
         connector::ClientConnector::new(build_connector_config(&prepared_connection), client_addr)
-            .with_static_channel(drdynvc);
+            .with_static_channel(drdynvc)
+            .with_static_channel(cliprdr);
 
     let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector)
         .await
@@ -302,11 +323,17 @@ async fn connect_and_run(
         "rdp activated"
     );
 
-    run_active_stage(
+    let ctx = ActiveStageContext {
         sessions,
         sender,
         session_id,
+        cliprdr_tx,
+    };
+
+    run_active_stage(
+        ctx,
         command_rx,
+        cliprdr_rx,
         upgraded_framed,
         connection_result,
     )
@@ -322,10 +349,9 @@ async fn connect_and_run(
 /// 4. 监听前端输入并将其转发给 RDP 服务器。
 /// 5. 处理动态调整窗口大小和会话重连/去激活序列。
 async fn run_active_stage<S>(
-    sessions: &SessionManager,
-    sender: &broadcast::Sender<Message>,
-    session_id: &str,
+    ctx: ActiveStageContext<'_>,
     command_rx: &mut mpsc::UnboundedReceiver<RuntimeCommand>,
+    mut cliprdr_rx: mpsc::UnboundedReceiver<CliprdrProxyEvent>,
     framed: TokioFramed<S>,
     connection_result: ConnectionResult,
 ) -> Result<RuntimeCloseReason, String>
@@ -349,6 +375,8 @@ where
     let mut pending_flush_started_at: Option<TokioInstant> = None;
     let mut graphics_rects = Vec::new();
     let mut cursor_cache = CursorCache::default();
+    // 缓存当前本地剪贴板文本，用于响应远端的获取数据请求。
+    let mut current_local_clipboard = String::new();
 
     loop {
         let outputs = tokio::select! {
@@ -358,14 +386,14 @@ where
                 }
             }, if pending_flush_deadline.is_some() => {
                 flush_pending_graphics(
-                    sender,
+                    ctx.sender,
                     &image,
                     &mut pending_graphics_rects,
                     &mut perf_window,
                 );
                 pending_flush_deadline = None;
                 pending_flush_started_at = None;
-                flush_frame_perf_window(session_id, &mut perf_window);
+                flush_frame_perf_window(ctx.session_id, &mut perf_window);
                 continue;
             }
             frame = reader.read_pdu() => {
@@ -379,6 +407,82 @@ where
                     .map_err(|error| format!("active stage process failed: {error}"));
                 perf_window.decode_cpu_us += elapsed_micros_u64(start.elapsed());
                 result?
+            }
+            proxy_event = cliprdr_rx.recv() => {
+                let proxy_event = match proxy_event {
+                    Some(event) => event,
+                    None => continue,
+                };
+                match proxy_event {
+                    CliprdrProxyEvent::NeedInitialSync => {
+                        // 初始握手：告知服务器我们支持文本格式，这会触发服务器后续的主动推送。
+                        debug!(event = "rdp.cliprdr.initial_sync", session_id = %ctx.session_id, "triggering initial clipboard format list");
+                        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                            let formats = [ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)];
+                            let messages = cliprdr.initiate_copy(&formats)
+                                .map_err(|error| format!("cliprdr initial initiate_copy failed: {error}"))?;
+                            let frame = active_stage.process_svc_processor_messages(messages)
+                                .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
+                            vec![ActiveStageOutput::ResponseFrame(frame)]
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                    CliprdrProxyEvent::FormatList(formats) => {
+                        // 远端告知其剪贴板已更新。如果包含文本格式，则主动发起同步。
+                        if formats.iter().any(|f| f.id == ClipboardFormatId::CF_UNICODETEXT) {
+                            if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                                let messages = cliprdr.initiate_paste(ClipboardFormatId::CF_UNICODETEXT)
+                                    .map_err(|error| format!("cliprdr initiate_paste failed: {error}"))?;
+                                let frame = active_stage.process_svc_processor_messages(messages)
+                                    .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
+                                vec![ActiveStageOutput::ResponseFrame(frame)]
+                            } else {
+                                Vec::new()
+                            }
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                    CliprdrProxyEvent::DataRequest(request) => {
+                        // 远端用户在远端系统中执行了“粘贴”，请求本地提供剪贴板数据。
+                        if request.format == ClipboardFormatId::CF_UNICODETEXT {
+                            if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                                // 将 UTF-8 文本编码为 Windows 标准的 UTF-16 (带有 Null 终止符)。
+                                let mut utf16: Vec<u16> = current_local_clipboard.encode_utf16().collect();
+                                utf16.push(0); // Null terminator
+                                let data = utf16.iter().flat_map(|&u| u.to_le_bytes()).collect::<Vec<u8>>();
+                                let response = ironrdp_cliprdr::pdu::FormatDataResponse::new_data(data).into_owned();
+                                let messages = cliprdr.submit_format_data(response)
+                                    .map_err(|error| format!("cliprdr submit_format_data failed: {error}"))?;
+                                let frame = active_stage.process_svc_processor_messages(messages)
+                                    .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
+                                vec![ActiveStageOutput::ResponseFrame(frame)]
+                            } else {
+                                Vec::new()
+                            }
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                    CliprdrProxyEvent::DataResponse(data) => {
+                        // 远端返回了粘贴请求的数据内容。
+                        let utf16: Vec<u16> = data.chunks_exact(2)
+                            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                            .collect();
+                        // 剥离 Null 终止符并转换为 UTF-8 发送给前端。
+                        let end = utf16.iter().position(|&u| u == 0).unwrap_or(utf16.len());
+                        let text = String::from_utf16_lossy(&utf16[..end]);
+                        let _ = ctx.sender.send(json_message(
+                            "clipboard",
+                            serde_json::json!({
+                                "direction": "remote-to-local",
+                                "text": text,
+                            }),
+                        ));
+                        Vec::new()
+                    }
+                }
             }
             command = command_rx.recv() => {
                 let Some(command) = command else {
@@ -400,7 +504,7 @@ where
                         let (width, height) = MonitorLayoutEntry::adjust_display_size(width.max(320), height.max(200));
                         info!(
                             event = "rdp.runtime.resize.encoded",
-                            session_id = %session_id,
+                            session_id = %ctx.session_id,
                             width,
                             height,
                             "encode resize"
@@ -414,20 +518,24 @@ where
                         }
                     }
                     RuntimeCommand::Clipboard(text) => {
-                        let _ = sender.send(json_message(
-                            "clipboard",
-                            serde_json::json!({
-                                "direction": "local-to-remote",
-                                "text": text,
-                                "supported": false,
-                            }),
-                        ));
-                        Vec::new()
+                        // 前端感知到本地剪贴板变化，推送新文本。
+                        current_local_clipboard = text;
+                        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                            // 宣告本地有新的文本内容，触发远端剪贴板状态刷新。
+                            let formats = [ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)];
+                            let messages = cliprdr.initiate_copy(&formats)
+                                .map_err(|error| format!("cliprdr initiate_copy failed: {error}"))?;
+                            let frame = active_stage.process_svc_processor_messages(messages)
+                                .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
+                            vec![ActiveStageOutput::ResponseFrame(frame)]
+                        } else {
+                            Vec::new()
+                        }
                     }
                     RuntimeCommand::Disconnect => {
                         info!(
                             event = "rdp.runtime.disconnect.requested",
-                            session_id = %session_id,
+                            session_id = %ctx.session_id,
                             "runtime disconnect requested"
                         );
                         for output in active_stage
@@ -460,7 +568,7 @@ where
                         logged_first_frame = true;
                         info!(
                             event = "rdp.runtime.first_frame",
-                            session_id = %session_id,
+                            session_id = %ctx.session_id,
                             width = u32::from(image.width()),
                             height = u32::from(image.height()),
                             "first graphics frame"
@@ -470,7 +578,7 @@ where
                 }
                 ActiveStageOutput::PointerDefault => {
                     send_cursor_if_changed(
-                        sender,
+                        ctx.sender,
                         &mut cursor_cache,
                         CursorCache {
                             cursor: Some("default".to_string()),
@@ -481,7 +589,7 @@ where
                 }
                 ActiveStageOutput::PointerHidden => {
                     send_cursor_if_changed(
-                        sender,
+                        ctx.sender,
                         &mut cursor_cache,
                         CursorCache {
                             cursor: Some("none".to_string()),
@@ -492,7 +600,7 @@ where
                 }
                 ActiveStageOutput::PointerPosition { x, y } => {
                     send_cursor_if_changed(
-                        sender,
+                        ctx.sender,
                         &mut cursor_cache,
                         CursorCache {
                             cursor: Some("default".to_string()),
@@ -504,7 +612,7 @@ where
                 ActiveStageOutput::PointerBitmap(pointer) => {
                     let cursor = pointer_bitmap_to_css_cursor(&pointer);
                     send_cursor_if_changed(
-                        sender,
+                        ctx.sender,
                         &mut cursor_cache,
                         CursorCache {
                             cursor: Some(cursor),
@@ -526,13 +634,15 @@ where
                     };
                     info!(
                         event = "rdp.runtime.reactivated",
-                        session_id = %session_id,
+                        session_id = %ctx.session_id,
                         width,
                         height,
                         "rdp reactivated"
                     );
                     image = DecodedImage::new(PixelFormat::RgbA32, width, height);
                     logged_first_frame = false;
+                    // 重激活后，服务器通常会丢失剪贴板上下文，我们需要重新宣告本地支持的格式。
+                    let _ = ctx.cliprdr_tx.send(CliprdrProxyEvent::NeedInitialSync);
                 }
                 ActiveStageOutput::MultitransportRequest(pdu) => {
                     // 上游 IronRDP 当前仍未提供可直接复用的客户端 UDP multitransport
@@ -540,7 +650,7 @@ where
                     // 长时间等待；后续待上游实现成熟后再切换为真正的 sideband UDP。
                     warn!(
                         event = "rdp.runtime.multitransport.declined",
-                        session_id = %session_id,
+                        session_id = %ctx.session_id,
                         request_id = pdu.request_id,
                         requested_protocol = ?pdu.requested_protocol,
                         "multitransport request received; responding with E_ABORT because UDP transport is not implemented"
@@ -553,8 +663,8 @@ where
                     writer.write_all(&response).await.map_err(|error| {
                         format!("write multitransport abort response failed: {error}")
                     })?;
-                    let _ = sessions.publish_runtime_state(
-                        session_id,
+                    let _ = ctx.sessions.publish_runtime_state(
+                        ctx.session_id,
                         "connected",
                         "Server requested RDP multitransport, but UDP sideband is not implemented; declined request.",
                     );
@@ -578,7 +688,7 @@ where
             );
         }
 
-        flush_frame_perf_window(session_id, &mut perf_window);
+        flush_frame_perf_window(ctx.session_id, &mut perf_window);
     }
 }
 

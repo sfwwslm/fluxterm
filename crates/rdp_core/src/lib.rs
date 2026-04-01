@@ -4,6 +4,7 @@
 //! 它封装了底层 RDP 协议处理、会话管理以及与前端 WebGL 渲染器通信的 WebSocket 桥接。
 
 mod bridge;
+mod cliprdr;
 mod ironrdp_runtime;
 mod keyboard;
 mod protocol;

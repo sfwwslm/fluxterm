@@ -20,3 +20,4 @@ png = "0.17.16"
 ironrdp = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", features = ["session", "input", "graphics", "dvc", "svc", "displaycontrol", "connector"] }
 ironrdp-tls = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", package = "ironrdp-tls", features = ["rustls"] }
 ironrdp-tokio = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", package = "ironrdp-tokio", features = ["reqwest"] }
+ironrdp-cliprdr = { git = "https://github.com/sfwwslm/IronRDP", branch = "fluxterm-runtime", package = "ironrdp-cliprdr" }

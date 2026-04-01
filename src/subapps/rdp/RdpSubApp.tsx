@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Locale, Translate } from "@/i18n";
 import {
   createTraceId,
@@ -29,6 +30,7 @@ import {
   listRdpProfiles,
   resizeRdpSession,
   sendRdpInput,
+  setRdpClipboard,
 } from "@/features/rdp/core/commands";
 import "./RdpSubApp.css";
 
@@ -227,6 +229,7 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const workerRef = useRef<Worker | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const pressedKeysRef = useRef<Set<string>>(new Set());
+  const lastSyncTextRef = useRef<string | null>(null);
 
   const [sessions, setSessions] = useState<RdpSessionTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -359,6 +362,34 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     [updateSessionTab],
   );
 
+  /** 同步本地剪贴板到远端。 */
+  const syncLocalClipboardToRemote = useCallback(async () => {
+    if (!activeTab || activePerf.bridgeState !== "open") return;
+    if (activeTab.profile.clipboardMode === "disabled") return;
+
+    try {
+      const text = await readText();
+      if (typeof text === "string" && text !== lastSyncTextRef.current) {
+        lastSyncTextRef.current = text;
+        void setRdpClipboard(activeTab.session.sessionId, text, {
+          traceId: activeTab.traceId,
+        });
+      }
+    } catch {
+      // 忽略剪贴板读取失败
+    }
+  }, [activePerf.bridgeState, activeTab]);
+
+  useEffect(() => {
+    if (!activeSessionId || activePerf.bridgeState !== "open") return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void syncLocalClipboardToRemote();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activePerf.bridgeState, activeSessionId, syncLocalClipboardToRemote]);
+
   /** 处理运行时状态、光标、剪贴板和错误事件。 */
   const handleWireEvent = useCallback(
     (sessionId: string, payload: RdpWireEvent) => {
@@ -409,12 +440,13 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         return;
       }
       if (payload.type === "clipboard") {
+        if (payload.direction === "remote-to-local") {
+          lastSyncTextRef.current = payload.text;
+          void writeText(payload.text);
+        }
         updateSessionTab(sessionId, (tab) => ({
           ...tab,
-          statusText:
-            payload.direction === "local-to-remote"
-              ? t("rdp.status.clipboardSynced")
-              : payload.text,
+          statusText: t("rdp.status.clipboardSynced"),
         }));
         return;
       }
@@ -1208,6 +1240,8 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
               onBlur={handleSurfaceBlur}
+              onFocus={() => void syncLocalClipboardToRemote()}
+              onMouseEnter={() => void syncLocalClipboardToRemote()}
               onMouseDown={(event) => handleMouse("mouse_down", event)}
               onMouseUp={(event) => handleMouse("mouse_up", event)}
               onMouseMove={(event) => handleMouse("mouse_move", event)}
