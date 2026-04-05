@@ -147,8 +147,9 @@ async function createSubAppMenu({
   onCloseSubApp: (id: SubAppId) => void;
   t: Translate;
 }) {
+  const launchableSubApps = subApps.filter((subApp) => subApp.id !== "rdp");
   const launchItems = await Promise.all(
-    subApps.map((subApp) =>
+    launchableSubApps.map((subApp) =>
       MenuItem.new({
         id: `apps-launch-${subApp.id}`,
         text: t("menu.apps.open", { name: subApp.label }),
