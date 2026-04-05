@@ -333,7 +333,8 @@ export const enUsTranslations = {
   "terminal.reconnectHint.manual": "{reason}. Press Enter to reconnect",
   "terminal.reconnectHint.disabled":
     "{reason}. Auto reconnect is off. Press Enter to reconnect",
-  "terminal.reconnectHint.pending": "{reason}. Retry {attempt} in {delay}s",
+  "terminal.reconnectHint.pending":
+    "{reason}. Retry {attempt} in {delay}s. Press Enter to reconnect now",
   "terminal.reconnectHint.connecting": "{reason}. Attempting to reconnect",
   "terminal.reconnectHint.stopped":
     "{reason}. Auto reconnect stopped. Press Enter to reconnect",

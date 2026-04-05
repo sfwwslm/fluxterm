@@ -1416,6 +1416,7 @@ export default function AppShell() {
     isLocalSession: sessionActions.isLocalSession,
     reconnectSession: sessionActions.reconnectSession,
     reconnectLocalShell: sessionActions.reconnectLocalShell,
+    triggerScheduledReconnectNow: sessionActions.triggerScheduledReconnectNow,
     onCommandCaptureChange: (sessionId, capture) => {
       historyState.updateLiveCapture({
         sessionId,

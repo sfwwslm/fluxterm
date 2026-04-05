@@ -142,6 +142,7 @@ type UseSessionStateResult = {
   disconnectSession: (sessionId: string) => Promise<void>;
   reconnectSession: (sessionId: string) => Promise<void>;
   reconnectLocalShell: (sessionId: string) => Promise<void>;
+  triggerScheduledReconnectNow: (sessionId: string) => Promise<void>;
   switchSession: (sessionId: string) => void;
   focusPane: (paneId: string) => void;
   reorderPaneSessions: (
@@ -363,6 +364,20 @@ export default function useSessionState({
       reconnectTimersRef,
       reconnectAttemptsRef,
       setReconnectInfoBySession,
+    });
+  }
+
+  function clearScheduledReconnectCountdown(sessionId: string) {
+    const timer = reconnectTimersRef.current[sessionId];
+    if (timer) {
+      window.clearTimeout(timer);
+    }
+    delete reconnectTimersRef.current[sessionId];
+    setReconnectInfoBySession((prev) => {
+      if (!prev[sessionId]) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
     });
   }
 
@@ -848,6 +863,17 @@ export default function useSessionState({
     });
   }
 
+  async function triggerScheduledReconnectNow(sessionId: string) {
+    if (isLocalSession(sessionId)) return;
+    if (!reconnectTimersRef.current[sessionId]) return;
+    clearScheduledReconnectCountdown(sessionId);
+    setSessionStates((prev) => ({
+      ...prev,
+      [sessionId]: "reconnecting",
+    }));
+    await attemptReconnect(sessionId);
+  }
+
   useEffect(() => {
     connectProfileRef.current = connectProfile;
     disconnectSessionRef.current = disconnectSession;
@@ -1083,6 +1109,7 @@ export default function useSessionState({
     disconnectSession,
     reconnectSession,
     reconnectLocalShell,
+    triggerScheduledReconnectNow,
     switchSession,
     focusPane,
     reorderPaneSessions,

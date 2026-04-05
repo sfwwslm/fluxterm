@@ -56,6 +56,7 @@ export default function useSessionController(
       disconnectSession: raw.disconnectSession,
       reconnectSession: raw.reconnectSession,
       reconnectLocalShell: raw.reconnectLocalShell,
+      triggerScheduledReconnectNow: raw.triggerScheduledReconnectNow,
       switchSession: raw.switchSession,
       focusPane: raw.focusPane,
       reorderPaneSessions: raw.reorderPaneSessions,

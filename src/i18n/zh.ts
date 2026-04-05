@@ -309,7 +309,7 @@ export const zhCnTranslations = {
   "terminal.reconnectHint.manual": "{reason}，按回车重新连接",
   "terminal.reconnectHint.disabled": "{reason}，自动重连已关闭，按回车重新连接",
   "terminal.reconnectHint.pending":
-    "{reason}，将在 {delay} 秒后进行第 {attempt} 次自动重连",
+    "{reason}，将在 {delay} 秒后进行第 {attempt} 次自动重连，按回车立即重连",
   "terminal.reconnectHint.connecting": "{reason}，正在尝试重新连接",
   "terminal.reconnectHint.stopped": "{reason}，自动重连已停止，按回车重新连接",
   "terminal.menu.copy": "复制",

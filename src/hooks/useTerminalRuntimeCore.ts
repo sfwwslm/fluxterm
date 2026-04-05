@@ -92,6 +92,7 @@ type UseTerminalRuntimeProps = {
   isLocalSession: (sessionId: string | null) => boolean;
   reconnectSession: (sessionId: string) => Promise<void>;
   reconnectLocalShell: (sessionId: string) => Promise<void>;
+  triggerScheduledReconnectNow: (sessionId: string) => Promise<void>;
   onCommandCaptureChange?: (
     sessionId: string,
     capture: CommandHistoryLiveCapture,
@@ -446,6 +447,7 @@ export default function useTerminalRuntime({
   isLocalSession,
   reconnectSession,
   reconnectLocalShell,
+  triggerScheduledReconnectNow,
   onCommandCaptureChange,
   onCommandCommit,
   onBell,
@@ -512,6 +514,7 @@ export default function useTerminalRuntime({
     isLocalSession,
     reconnectSession,
     reconnectLocalShell,
+    triggerScheduledReconnectNow,
     onCommandCaptureChange,
     onCommandCommit,
     onBell,
@@ -604,6 +607,7 @@ export default function useTerminalRuntime({
       isLocalSession,
       reconnectSession,
       reconnectLocalShell,
+      triggerScheduledReconnectNow,
       onCommandCaptureChange,
       onCommandCommit,
       onBell,
@@ -613,6 +617,7 @@ export default function useTerminalRuntime({
     resolveBellConfig,
     reconnectLocalShell,
     reconnectSession,
+    triggerScheduledReconnectNow,
     resizeSession,
     setLastCommand,
     onWorkingDirectoryChange,
@@ -1482,8 +1487,8 @@ export default function useTerminalRuntime({
           syncCursorBlink(sessionId, true);
         }
         const state = sessionStatesRef.current[sessionId];
+        const requestReconnect = data.includes("\r") || data.includes("\n");
         if (state === "disconnected") {
-          const requestReconnect = data.includes("\r") || data.includes("\n");
           if (requestReconnect) {
             if (handlersRef.current.isLocalSession(sessionId)) {
               handlersRef.current
@@ -1493,6 +1498,12 @@ export default function useTerminalRuntime({
               handlersRef.current.reconnectSession(sessionId).catch(() => {});
             }
           }
+          return;
+        }
+        if (state === "reconnecting" && requestReconnect) {
+          handlersRef.current
+            .triggerScheduledReconnectNow(sessionId)
+            .catch(() => {});
           return;
         }
         const autocomplete = activeAutocompleteRef.current;
