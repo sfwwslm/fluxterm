@@ -98,6 +98,22 @@ impl SessionContextRecord {
             recent_terminal_output: VecDeque::new(),
         }
     }
+
+    fn from_serial(session: &Session, label: &str, port_path: &str) -> Self {
+        Self {
+            session_id: session.session_id.clone(),
+            session_label: label.to_string(),
+            session_kind: "serial".to_string(),
+            host: Some(port_path.to_string()),
+            username: None,
+            platform: Some(current_platform().to_string()),
+            shell_name: Some("Serial".to_string()),
+            session_state: "connected".to_string(),
+            resource_monitor_status: None,
+            host_key_status: None,
+            recent_terminal_output: VecDeque::new(),
+        }
+    }
 }
 
 /// 读取当前激活的 AI 接入配置。
@@ -206,6 +222,23 @@ pub fn register_local_session(
     store.sessions.insert(
         session.session_id.clone(),
         SessionContextRecord::from_local(session, label, shell_name),
+    );
+    Ok(())
+}
+
+/// 记录串口会话元数据，供后续 AI 上下文消费。
+pub fn register_serial_session(
+    state: &AiRuntimeState,
+    session: &Session,
+    profile: &crate::serial::SerialProfile,
+) -> Result<(), EngineError> {
+    let mut store = state
+        .inner
+        .lock()
+        .map_err(|_| EngineError::new("ai_state_lock_failed", "无法访问 AI 运行时状态"))?;
+    store.sessions.insert(
+        session.session_id.clone(),
+        SessionContextRecord::from_serial(session, &profile.name, &profile.port_path),
     );
     Ok(())
 }

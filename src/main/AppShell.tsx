@@ -29,11 +29,13 @@ import AboutModal from "@/main/components/modals/AboutModal";
 import LocalShellProfileModal from "@/main/components/modals/LocalShellProfileModal";
 import ProfileModal from "@/main/components/modals/ProfileModal";
 import RdpProfileModal from "@/main/components/modals/RdpProfileModal";
+import SerialProfileModal from "@/main/components/modals/SerialProfileModal";
 import NoticeHost from "@/components/ui/notice-host";
 import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import { usePreventBrowserDefaults } from "@/hooks/usePreventBrowserDefaults";
 import useProfiles from "@/hooks/useProfiles";
+import useSerialProfiles from "@/hooks/useSerialProfiles";
 import useAppSettings from "@/hooks/useAppSettings";
 import {
   DEFAULT_BACKGROUND_IMAGE_SURFACE_ALPHA,
@@ -63,6 +65,7 @@ import type {
   LocalShellProfile,
   RdpProfile,
   RemoteEditSnapshot,
+  SerialProfile,
   Session,
   SftpEntry,
   SshConnectStateMap,
@@ -575,6 +578,22 @@ export default function AppShell() {
     moveProfileToGroup,
   } = useProfiles();
   const {
+    serialProfiles,
+    serialGroups,
+    availableSerialPorts,
+    activeSerialProfileId,
+    defaultSerialProfile,
+    pickSerialProfile,
+    refreshSerialProfiles,
+    refreshSerialPorts,
+    saveSerialProfile,
+    removeSerialProfile,
+    addSerialGroup,
+    renameSerialGroup,
+    removeSerialGroup,
+    moveSerialProfileToGroup,
+  } = useSerialProfiles();
+  const {
     status: securityStatus,
     loaded: securityLoaded,
     busy: securityBusy,
@@ -618,6 +637,12 @@ export default function AppShell() {
   const [activeRdpProfileId, setActiveRdpProfileId] = useState<string | null>(
     null,
   );
+  const [serialProfileModalOpen, setSerialProfileModalOpen] = useState(false);
+  const [serialProfileModalMode, setSerialProfileModalMode] = useState<
+    "new" | "edit"
+  >("new");
+  const [serialProfileDraft, setSerialProfileDraft] =
+    useState<SerialProfile>(defaultSerialProfile);
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
   const [localShellProfileModalOpen, setLocalShellProfileModalOpen] =
     useState(false);
@@ -963,6 +988,36 @@ export default function AppShell() {
 
   function closeProfileModal() {
     setProfileModalOpen(false);
+  }
+
+  const openNewSerialProfileModal = useCallback(() => {
+    setSerialProfileModalMode("new");
+    setSerialProfileDraft({
+      ...defaultSerialProfile,
+      id: "",
+    });
+    setSerialProfileModalOpen(true);
+  }, [defaultSerialProfile]);
+
+  const openEditSerialProfileModal = useCallback(
+    (profile: SerialProfile) => {
+      pickSerialProfile(profile.id);
+      setSerialProfileModalMode("edit");
+      setSerialProfileDraft(profile);
+      setSerialProfileModalOpen(true);
+    },
+    [pickSerialProfile],
+  );
+
+  function closeSerialProfileModal() {
+    setSerialProfileModalOpen(false);
+  }
+
+  async function submitSerialProfile() {
+    await saveSerialProfile(serialProfileDraft);
+    setSerialProfileModalOpen(false);
+    await refreshSerialProfiles();
+    await refreshSerialPorts().catch(() => {});
   }
 
   const refreshRdpProfiles = useCallback(async () => {
@@ -2651,6 +2706,14 @@ export default function AppShell() {
     [connectRdpProfile],
   );
 
+  const handleConnectSerialProfile = useCallback(
+    async (profile: SerialProfile) => {
+      pickSerialProfile(profile.id);
+      await sessionActions.connectSerialProfile(profile, true);
+    },
+    [pickSerialProfile, sessionActions],
+  );
+
   const handleCancelConnectProfile = useCallback(
     async (profileId: string) => {
       const runtime = sshConnectRuntimeRef.current[profileId];
@@ -3269,14 +3332,18 @@ export default function AppShell() {
     () =>
       buildWidgets({
         profiles,
+        serialProfiles,
+        serialGroups,
         rdpProfiles,
         rdpGroups,
         sshGroups,
         activeProfileId,
+        activeSerialProfileId,
         sshConnectingProfiles: connectingSshProfiles,
         activeRdpProfileId,
         rdpConnectingProfiles: {} as ConnectingProfileMap,
         availableShells,
+        availableSerialPorts,
         activeSessionId: AiWidgetState.activeSessionId,
         activeSessionState: EventsWidgetState.sessionState,
         activeSessionReason: EventsWidgetState.sessionReason,
@@ -3306,9 +3373,22 @@ export default function AppShell() {
         locale,
         t,
         pickProfile,
+        pickSerialProfile,
         pickRdpProfile: setActiveRdpProfileId,
         onConnectProfile: handleConnectProfile,
         onCancelSshConnectProfile: handleCancelConnectProfile,
+        onConnectSerialProfile: handleConnectSerialProfile,
+        onOpenNewSerialProfile: openNewSerialProfileModal,
+        onOpenEditSerialProfile: openEditSerialProfileModal,
+        onRemoveSerialProfile: async (profile) => {
+          await removeSerialProfile(profile.id);
+          await refreshSerialProfiles();
+        },
+        onAddSerialGroup: addSerialGroup,
+        onRenameSerialGroup: renameSerialGroup,
+        onRemoveSerialGroup: removeSerialGroup,
+        onMoveSerialProfileToGroup: moveSerialProfileToGroup,
+        onRefreshSerialPorts: () => refreshSerialPorts().then(() => {}),
         onConnectRdpProfile: handleConnectRdpProfile,
         onOpenNewRdpProfile: openNewRdpProfileModal,
         onOpenEditRdpProfile: openEditRdpProfileModal,
@@ -3375,13 +3455,17 @@ export default function AppShell() {
       }),
     [
       profiles,
+      serialProfiles,
+      serialGroups,
       rdpProfiles,
       rdpGroups,
       sshGroups,
       activeProfileId,
+      activeSerialProfileId,
       connectingSshProfiles,
       activeRdpProfileId,
       availableShells,
+      availableSerialPorts,
       AiWidgetActions,
       AiWidgetState,
       isFloatingAiWidget,
@@ -3401,12 +3485,23 @@ export default function AppShell() {
       pushToast,
       t,
       pickProfile,
+      pickSerialProfile,
       addGroup,
       renameGroup,
       removeGroup,
       moveProfileToGroup,
       handleConnectProfile,
       handleCancelConnectProfile,
+      handleConnectSerialProfile,
+      openNewSerialProfileModal,
+      openEditSerialProfileModal,
+      removeSerialProfile,
+      refreshSerialProfiles,
+      addSerialGroup,
+      renameSerialGroup,
+      removeSerialGroup,
+      moveSerialProfileToGroup,
+      refreshSerialPorts,
       handleConnectRdpProfile,
       handleRemoveRdpProfile,
       addRdpGroup,
@@ -3683,6 +3778,20 @@ export default function AppShell() {
         onDraftChange={setLocalShellProfileDraft}
         onClose={closeLocalShellProfileModal}
         onSubmit={submitLocalShellProfile}
+        t={t}
+      />
+      <SerialProfileModal
+        open={serialProfileModalOpen}
+        mode={serialProfileModalMode}
+        draft={serialProfileDraft}
+        groups={serialGroups}
+        availablePorts={availableSerialPorts}
+        onDraftChange={setSerialProfileDraft}
+        onClose={closeSerialProfileModal}
+        onSubmit={() => {
+          void submitSerialProfile();
+        }}
+        onRefreshPorts={() => refreshSerialPorts().then(() => {})}
         t={t}
       />
       <RdpProfileModal

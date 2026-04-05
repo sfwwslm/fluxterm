@@ -13,6 +13,7 @@ import type {
   LocalShellProfile,
   LogEntry,
   LogLevel,
+  SerialProfile,
   Session,
   SessionInput,
   SessionStateUi,
@@ -37,6 +38,7 @@ import useSessionWorkspace from "@/hooks/useSessionWorkspace";
 import {
   connectLocalShellCommand,
   connectProfileCommand,
+  connectSerialProfileCommand,
   disconnectSessionCommand,
   reconnectLocalShellCommand,
 } from "@/features/session/core/commands";
@@ -137,6 +139,10 @@ type UseSessionStateResult = {
   ) => Promise<void>;
   connectLocalShell: (
     shell: LocalShellProfile | null,
+    activate?: boolean,
+  ) => Promise<void>;
+  connectSerialProfile: (
+    profile: SerialProfile,
     activate?: boolean,
   ) => Promise<void>;
   disconnectSession: (sessionId: string) => Promise<void>;
@@ -444,12 +450,32 @@ export default function useSessionState({
     [getTerminalSize, shellId],
   );
 
+  const createSerialSession = useCallback(
+    async (profile: SerialProfile) => {
+      const { cols, rows } = getTerminalSize();
+      return await callTauri<Session>("serial_connect", {
+        profile,
+        size: { cols, rows },
+      });
+    },
+    [getTerminalSize],
+  );
+
+  function getLocalSessionKind(sessionId: string | null) {
+    if (!sessionId) return null;
+    return localSessionMetaRef.current[sessionId]?.sessionKind ?? null;
+  }
+
   function sessionCommand(
     sessionId: string,
     sshCommand: string,
-    localCommand: string,
+    localShellCommand: string,
+    serialCommand: string,
   ) {
-    return isLocalSession(sessionId) ? localCommand : sshCommand;
+    const localKind = getLocalSessionKind(sessionId);
+    if (localKind === "serial") return serialCommand;
+    if (localKind === "localShell") return localShellCommand;
+    return sshCommand;
   }
 
   /** 统一发送会话输入；文本与二进制在此分流到对应命令。 */
@@ -467,8 +493,14 @@ export default function useSessionState({
             sessionId,
             "ssh_write_binary",
             "local_shell_write_binary",
+            "serial_write_binary",
           )
-        : sessionCommand(sessionId, "ssh_write", "local_shell_write");
+        : sessionCommand(
+            sessionId,
+            "ssh_write",
+            "local_shell_write",
+            "serial_write",
+          );
     const payload =
       input.kind === "binary"
         ? { sessionId, data: input.data }
@@ -491,7 +523,12 @@ export default function useSessionState({
 
   function resizeSession(sessionId: string, cols: number, rows: number) {
     return callTauri(
-      sessionCommand(sessionId, "ssh_resize", "local_shell_resize"),
+      sessionCommand(
+        sessionId,
+        "ssh_resize",
+        "local_shell_resize",
+        "serial_resize",
+      ),
       {
         sessionId,
         cols,
@@ -819,6 +856,30 @@ export default function useSessionState({
     ],
   );
 
+  const connectSerialProfile = useCallback(
+    async (profile: SerialProfile, activate = false) => {
+      await connectSerialProfileCommand({
+        profile,
+        activate,
+        createSerialSession,
+        localSessionIdsRef,
+        setLocalSessionMeta,
+        setSessions,
+        attachSessionToWorkspace: (sessionId, nextActivate = activate) =>
+          sessionWorkspace.attachSession(
+            sessionId,
+            nextActivate,
+            sessionWorkspace.workspace.root
+              ? { paneId: sessionWorkspace.getActivePaneId() ?? undefined }
+              : undefined,
+          ),
+        setSessionStates,
+        setSessionReasons,
+      });
+    },
+    [createSerialSession, sessionWorkspace],
+  );
+
   async function disconnectSession(sessionId: string) {
     const state = sessionStatesRef.current[sessionId];
     const localSession = isLocalSession(sessionId);
@@ -827,9 +888,16 @@ export default function useSessionState({
       state,
       localSession,
       sendDisconnect: (id, local) =>
-        callTauri(local ? "local_shell_disconnect" : "ssh_disconnect", {
-          sessionId: id,
-        }),
+        callTauri(
+          local
+            ? getLocalSessionKind(id) === "serial"
+              ? "serial_disconnect"
+              : "local_shell_disconnect"
+            : "ssh_disconnect",
+          {
+            sessionId: id,
+          },
+        ),
       detachSessionFromWorkspace: sessionWorkspace.detachSession,
       localSessionIdsRef,
       setLocalSessionMeta,
@@ -842,7 +910,9 @@ export default function useSessionState({
 
   async function reconnectSession(sessionId: string) {
     if (isLocalSession(sessionId)) {
-      await reconnectLocalShell(sessionId);
+      if (getLocalSessionKind(sessionId) === "localShell") {
+        await reconnectLocalShell(sessionId);
+      }
       return;
     }
     setSessionStates((prev) => ({
@@ -853,6 +923,26 @@ export default function useSessionState({
   }
 
   async function reconnectLocalShell(sessionId: string) {
+    const meta = localSessionMetaRef.current[sessionId];
+    if (meta?.sessionKind === "serial") {
+      if (!meta.serialProfile) return;
+      setSessionStates((prev) => ({
+        ...prev,
+        [sessionId]: "reconnecting",
+      }));
+      try {
+        const result = await createSerialSession(meta.serialProfile);
+        replaceSessionConnection(sessionId, result, "connected", {
+          ...meta,
+        });
+      } catch {
+        setSessionStates((prev) => ({
+          ...prev,
+          [sessionId]: "disconnected",
+        }));
+      }
+      return;
+    }
     await reconnectLocalShellCommand({
       sessionId,
       createLocalShellSession,
@@ -952,16 +1042,28 @@ export default function useSessionState({
     let nextSession: Session;
     if (isLocalSession(activeSessionId)) {
       const meta = localSessionMetaRef.current[activeSessionId];
-      nextSession = await createLocalShellSession(meta?.shellId ?? null);
+      if (meta?.sessionKind === "serial") {
+        if (!meta.serialProfile) return;
+        nextSession = await createSerialSession(meta.serialProfile);
+      } else {
+        nextSession = await createLocalShellSession(
+          meta?.shellId ?? null,
+          meta?.launchConfig,
+        );
+      }
       localSessionIdsRef.current.add(nextSession.sessionId);
       setLocalSessionMeta((prev) => ({
         ...prev,
         [nextSession.sessionId]: {
+          sessionKind: meta?.sessionKind ?? "localShell",
           shellId: meta?.shellId ?? null,
           label: meta?.label ?? t("session.local"),
           shellKind: meta?.shellKind ?? "native",
           wslDistribution: meta?.wslDistribution ?? null,
           launchConfig: meta?.launchConfig,
+          serialProfileId: meta?.serialProfileId ?? null,
+          portPath: meta?.portPath ?? null,
+          serialProfile: meta?.serialProfile ?? null,
         },
       }));
       setSessionStates((prev) => ({
@@ -1106,6 +1208,7 @@ export default function useSessionState({
     resizeSession,
     connectProfile,
     connectLocalShell,
+    connectSerialProfile,
     disconnectSession,
     reconnectSession,
     reconnectLocalShell,

@@ -22,6 +22,8 @@ import type {
   LocalShellProfile,
   LogEntry,
   RdpProfile,
+  SerialProfile,
+  SerialPortInfo,
   SshConnectStateMap,
   WidgetKey,
   SessionStateUi,
@@ -34,14 +36,18 @@ import type {
 
 type buildWidgetsProps = {
   profiles: HostProfile[];
+  serialProfiles: SerialProfile[];
+  serialGroups: string[];
   rdpProfiles: RdpProfile[];
   rdpGroups: string[];
   sshGroups: string[];
   activeProfileId: string | null;
+  activeSerialProfileId: string | null;
   sshConnectingProfiles: SshConnectStateMap;
   activeRdpProfileId: string | null;
   rdpConnectingProfiles: ConnectingProfileMap;
   availableShells: LocalShellProfile[];
+  availableSerialPorts: SerialPortInfo[];
   activeSessionId: string | null;
   activeSessionState: SessionStateUi | null;
   activeSessionReason: DisconnectReason | null;
@@ -76,9 +82,22 @@ type buildWidgetsProps = {
   locale: Locale;
   t: Translate;
   pickProfile: (profileId: string) => void;
+  pickSerialProfile: (profileId: string) => void;
   pickRdpProfile: (profileId: string) => void;
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
   onCancelSshConnectProfile: (profileId: string) => Promise<void>;
+  onConnectSerialProfile: (profile: SerialProfile) => Promise<void>;
+  onOpenNewSerialProfile: () => void;
+  onOpenEditSerialProfile: (profile: SerialProfile) => void;
+  onRemoveSerialProfile: (profile: SerialProfile) => Promise<void>;
+  onAddSerialGroup: (groupName: string) => boolean;
+  onRenameSerialGroup: (from: string, to: string) => Promise<boolean>;
+  onRemoveSerialGroup: (groupName: string) => Promise<boolean>;
+  onMoveSerialProfileToGroup: (
+    profileId: string,
+    targetGroup: string | null,
+  ) => Promise<boolean>;
+  onRefreshSerialPorts: () => Promise<void>;
   onConnectRdpProfile: (profile: RdpProfile) => Promise<void>;
   onOpenNewRdpProfile: () => void;
   onOpenEditRdpProfile: (profile: RdpProfile) => void;
@@ -138,14 +157,18 @@ export function buildWidgets(
 ): Record<WidgetKey, React.ReactNode> {
   const {
     profiles,
+    serialProfiles,
+    serialGroups,
     rdpProfiles,
     rdpGroups,
     sshGroups,
     activeProfileId,
+    activeSerialProfileId,
     sshConnectingProfiles,
     activeRdpProfileId,
     rdpConnectingProfiles,
     availableShells,
+    availableSerialPorts,
     activeSessionId,
     activeSessionState,
     activeSessionReason,
@@ -175,9 +198,19 @@ export function buildWidgets(
     locale,
     t,
     pickProfile,
+    pickSerialProfile,
     pickRdpProfile,
     onConnectProfile,
     onCancelSshConnectProfile,
+    onConnectSerialProfile,
+    onOpenNewSerialProfile,
+    onOpenEditSerialProfile,
+    onRemoveSerialProfile,
+    onAddSerialGroup,
+    onRenameSerialGroup,
+    onRemoveSerialGroup,
+    onMoveSerialProfileToGroup,
+    onRefreshSerialPorts,
     onConnectRdpProfile,
     onOpenNewRdpProfile,
     onOpenEditRdpProfile,
@@ -229,10 +262,14 @@ export function buildWidgets(
     profiles: (
       <HostWidget
         profiles={profiles}
+        serialProfiles={serialProfiles}
+        serialGroups={serialGroups}
         sshGroups={sshGroups}
         activeProfileId={activeProfileId}
+        activeSerialProfileId={activeSerialProfileId}
         sshConnectingProfiles={sshConnectingProfiles}
         onPick={pickProfile}
+        onPickSerialProfile={pickSerialProfile}
         onConnectProfile={(profile) => {
           void onConnectProfile(profile);
         }}
@@ -248,9 +285,23 @@ export function buildWidgets(
         onRemoveGroup={onRemoveGroup}
         onMoveProfileToGroup={onMoveProfileToGroup}
         localShells={availableShells}
+        availableSerialPorts={availableSerialPorts}
         onConnectLocalShell={onConnectLocalShell}
         onOpenLocalShellProfile={onOpenLocalShellProfile}
         onRefreshLocalShells={onRefreshLocalShells}
+        onConnectSerialProfile={(profile) => {
+          void onConnectSerialProfile(profile);
+        }}
+        onOpenNewSerialProfile={onOpenNewSerialProfile}
+        onOpenEditSerialProfile={onOpenEditSerialProfile}
+        onRemoveSerialProfile={(profile) => {
+          void onRemoveSerialProfile(profile);
+        }}
+        onAddSerialGroup={onAddSerialGroup}
+        onRenameSerialGroup={onRenameSerialGroup}
+        onRemoveSerialGroup={onRemoveSerialGroup}
+        onMoveSerialProfileToGroup={onMoveSerialProfileToGroup}
+        onRefreshSerialPorts={onRefreshSerialPorts}
         t={t}
       />
     ),

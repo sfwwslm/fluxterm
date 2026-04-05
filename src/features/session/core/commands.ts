@@ -9,6 +9,7 @@ import type {
   LocalShellConfig,
   LocalSessionMeta,
   LocalShellProfile,
+  SerialProfile,
   Session,
   SessionStateUi,
 } from "@/types";
@@ -182,11 +183,63 @@ export async function connectLocalShellCommand({
   setLocalSessionMeta((prev) => ({
     ...prev,
     [session.sessionId]: {
+      sessionKind: "localShell",
       shellId: shellProfile?.id ?? null,
       label: shellProfile?.label ?? t("session.local"),
       shellKind: shellProfile?.kind ?? "native",
       wslDistribution: shellProfile?.wslDistribution ?? null,
       launchConfig,
+      serialProfileId: null,
+      portPath: null,
+      serialProfile: null,
+    },
+  }));
+  setSessions((prev) => prev.concat(session));
+  attachSessionToWorkspace(session.sessionId, activate);
+  setSessionStates((prev) => ({ ...prev, [session.sessionId]: "connected" }));
+  setSessionReasons((prev) => {
+    const next = { ...prev };
+    delete next[session.sessionId];
+    return next;
+  });
+}
+
+type ConnectSerialProfileCommandParams = {
+  profile: SerialProfile;
+  activate?: boolean;
+  createSerialSession: (profile: SerialProfile) => Promise<Session>;
+  localSessionIdsRef: React.RefObject<Set<string>>;
+  setLocalSessionMeta: Setter<Record<string, LocalSessionMeta>>;
+  setSessions: Setter<Session[]>;
+  attachSessionToWorkspace: (sessionId: string, activate?: boolean) => void;
+  setSessionStates: Setter<Record<string, SessionStateUi>>;
+  setSessionReasons: Setter<Record<string, DisconnectReason>>;
+};
+
+/** 建立串口会话并写入前端状态。 */
+export async function connectSerialProfileCommand({
+  profile,
+  activate = false,
+  createSerialSession,
+  localSessionIdsRef,
+  setLocalSessionMeta,
+  setSessions,
+  attachSessionToWorkspace,
+  setSessionStates,
+  setSessionReasons,
+}: ConnectSerialProfileCommandParams) {
+  const session = await createSerialSession(profile);
+  localSessionIdsRef.current.add(session.sessionId);
+  setLocalSessionMeta((prev) => ({
+    ...prev,
+    [session.sessionId]: {
+      sessionKind: "serial",
+      shellId: null,
+      label: profile.name,
+      shellKind: null,
+      serialProfileId: profile.id,
+      portPath: profile.portPath,
+      serialProfile: profile,
     },
   }));
   setSessions((prev) => prev.concat(session));
@@ -308,11 +361,15 @@ export async function reconnectLocalShellCommand({
       meta?.launchConfig,
     );
     replaceSessionConnection(sessionId, result, "connected", {
+      sessionKind: "localShell",
       shellId: meta?.shellId ?? null,
       label: meta?.label ?? t("session.local"),
       shellKind: meta?.shellKind ?? "native",
       wslDistribution: meta?.wslDistribution ?? null,
       launchConfig: meta?.launchConfig,
+      serialProfileId: null,
+      portPath: null,
+      serialProfile: null,
     });
   } catch {
     setSessionStates((prev) => ({

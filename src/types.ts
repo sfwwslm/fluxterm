@@ -57,6 +57,51 @@ export type SshConnectStateMap = Record<string, SshConnectState>;
 /** 连接配置列表中的连接中标记映射。 */
 export type ConnectingProfileMap = Record<string, true>;
 
+/** 串口数据位。 */
+export type SerialDataBits = "five" | "six" | "seven" | "eight";
+
+/** 串口停止位。 */
+export type SerialStopBits = "one" | "two";
+
+/** 串口校验位。 */
+export type SerialParity = "none" | "odd" | "even";
+
+/** 串口流控。 */
+export type SerialFlowControl = "none" | "software" | "hardware";
+
+/** 串口换行策略。 */
+export type SerialLineEnding = "none" | "lf" | "cr" | "crLf";
+
+/** 串口 Profile。 */
+export type SerialProfile = {
+  id: string;
+  name: string;
+  portPath: string;
+  baudRate: number;
+  dataBits?: SerialDataBits | null;
+  stopBits?: SerialStopBits | null;
+  parity?: SerialParity | null;
+  flowControl?: SerialFlowControl | null;
+  charset?: string | null;
+  wordSeparators?: string | null;
+  bellMode?: TerminalBellMode | null;
+  bellCooldownMs?: number | null;
+  localEcho?: boolean | null;
+  lineEnding?: SerialLineEnding | null;
+  tags?: string[] | null;
+  description?: string | null;
+};
+
+/** 串口设备枚举结果。 */
+export type SerialPortInfo = {
+  path: string;
+  portName: string;
+  portType: string;
+  manufacturer?: string | null;
+  product?: string | null;
+  serialNumber?: string | null;
+};
+
 /** 统一的会话输入负载。 */
 export type SessionInput =
   | {
@@ -544,11 +589,15 @@ export type LocalShellConfig = {
 
 /** 本地会话元数据。 */
 export type LocalSessionMeta = {
+  sessionKind: "localShell" | "serial";
   shellId: string | null;
   label: string;
-  shellKind: LocalShellKind;
+  shellKind?: LocalShellKind | null;
   wslDistribution?: string | null;
   launchConfig?: LocalShellConfig;
+  serialProfileId?: string | null;
+  portPath?: string | null;
+  serialProfile?: SerialProfile | null;
 };
 
 /** 快捷命令分组。 */

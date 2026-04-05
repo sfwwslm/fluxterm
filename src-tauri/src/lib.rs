@@ -13,6 +13,8 @@ pub mod remote_edit;
 pub mod resource_monitor;
 pub mod security;
 pub mod security_store;
+pub mod serial;
+pub mod serial_profile_store;
 pub mod session_settings;
 pub mod ssh_config_import;
 pub mod ssh_host_keys;
@@ -59,6 +61,11 @@ use crate::commands::security::{
     security_change_password, security_enable_strong_protection, security_enable_weak_protection,
     security_lock, security_status, security_unlock,
 };
+use crate::commands::serial::{
+    serial_connect, serial_disconnect, serial_port_list, serial_profile_delete,
+    serial_profile_groups_list, serial_profile_groups_save, serial_profile_list,
+    serial_profile_save, serial_resize, serial_write, serial_write_binary,
+};
 use crate::commands::sftp::{
     sftp_cancel_transfer, sftp_download, sftp_download_dir, sftp_home, sftp_list, sftp_mkdir,
     sftp_remove, sftp_rename, sftp_resolve_path, sftp_upload, sftp_upload_batch,
@@ -74,6 +81,7 @@ use crate::local_shell::LocalShellState;
 use crate::rdp::RdpState;
 use crate::remote_edit::RemoteEditState;
 use crate::resource_monitor::ResourceMonitorState;
+use crate::serial::SerialState;
 use crate::state::{EngineState, SecurityState};
 
 fn resolve_log_level() -> LevelFilter {
@@ -122,6 +130,7 @@ pub fn run() {
         })
         .manage(SecurityState::default())
         .manage(LocalShellState::default())
+        .manage(SerialState::default())
         .manage(ResourceMonitorState::default())
         .manage(RdpState::default())
         .manage(RemoteEditState::default())
@@ -196,6 +205,17 @@ pub fn run() {
             local_shell_write,
             local_shell_write_binary,
             local_shell_resize,
+            serial_profile_list,
+            serial_profile_groups_list,
+            serial_profile_groups_save,
+            serial_profile_save,
+            serial_profile_delete,
+            serial_port_list,
+            serial_connect,
+            serial_disconnect,
+            serial_write,
+            serial_write_binary,
+            serial_resize,
             resource_monitor_start_local,
             resource_monitor_start_ssh,
             resource_monitor_stop,

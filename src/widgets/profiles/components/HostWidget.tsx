@@ -19,6 +19,7 @@ import {
 import type {
   HostProfile,
   LocalShellProfile,
+  SerialProfile,
   SshConnectStateMap,
 } from "@/types";
 import type { Translate } from "@/i18n";
@@ -40,12 +41,28 @@ const GROUP_NAME_MAX_LENGTH = 12;
 /** 主机面板需要的上层数据与操作。 */
 type HostWidgetProps = {
   profiles: HostProfile[];
+  serialProfiles: SerialProfile[];
+  serialGroups: string[];
   sshGroups: string[];
   activeProfileId: string | null;
+  activeSerialProfileId: string | null;
   sshConnectingProfiles: SshConnectStateMap;
   onPick: (id: string) => void;
+  onPickSerialProfile: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
   onCancelSshConnectProfile: (profileId: string) => void;
+  onConnectSerialProfile: (profile: SerialProfile) => void;
+  onOpenNewSerialProfile: () => void;
+  onOpenEditSerialProfile: (profile: SerialProfile) => void;
+  onRemoveSerialProfile: (profile: SerialProfile) => void;
+  onAddSerialGroup: (groupName: string) => boolean;
+  onRenameSerialGroup: (from: string, to: string) => Promise<boolean>;
+  onRemoveSerialGroup: (groupName: string) => Promise<boolean>;
+  onMoveSerialProfileToGroup: (
+    profileId: string,
+    targetGroup: string | null,
+  ) => Promise<boolean>;
+  onRefreshSerialPorts: () => Promise<void>;
   onOpenNewProfile: () => void;
   onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
@@ -58,6 +75,7 @@ type HostWidgetProps = {
     targetGroup: string | null,
   ) => Promise<boolean>;
   localShells: LocalShellProfile[];
+  availableSerialPorts: { path: string }[];
   onConnectLocalShell: (shell: LocalShellProfile) => void;
   onOpenLocalShellProfile: (shell: LocalShellProfile) => void;
   onRefreshLocalShells: () => Promise<void>;
@@ -67,12 +85,20 @@ type HostWidgetProps = {
 /** 主机管理与分组列表。 */
 export default function HostWidget({
   profiles,
+  serialProfiles,
   sshGroups,
   activeProfileId,
+  activeSerialProfileId,
   sshConnectingProfiles,
   onPick,
+  onPickSerialProfile,
   onConnectProfile,
   onCancelSshConnectProfile,
+  onConnectSerialProfile,
+  onOpenNewSerialProfile,
+  onOpenEditSerialProfile,
+  onRemoveSerialProfile,
+  onRefreshSerialPorts,
   onOpenNewProfile,
   onImportOpenSshConfig,
   onOpenEditProfile,
@@ -89,6 +115,8 @@ export default function HostWidget({
 }: HostWidgetProps) {
   const localShellKey = LOCAL_SHELL_GROUP_VALUE;
   const localShellLabel = t("host.shellGroup");
+  const serialGroupKey = "__serial_profiles__";
+  const serialGroupLabel = t("serial.groupLabel");
   // 自定义分组以“分组名 -> 主机列表”的结构整理，便于统一渲染和筛选。
   const customGroups = useMemo(() => {
     const map = new Map<string, { label: string; items: HostProfile[] }>();
@@ -178,12 +206,31 @@ export default function HostWidget({
     },
     [normalizedQuery, queryActive],
   );
+  const matchesSerialProfile = useCallback(
+    (profile: SerialProfile) => {
+      if (!queryActive) return true;
+      const text = `${profile.name} ${profile.portPath}`.toLowerCase();
+      return text.includes(normalizedQuery);
+    },
+    [normalizedQuery, queryActive],
+  );
 
   const filteredLocalShells = useMemo(() => {
     if (!queryActive) return localShells;
     if (matchesGroup(localShellLabel)) return localShells;
     return localShells.filter(matchesShell);
   }, [localShellLabel, localShells, matchesGroup, matchesShell, queryActive]);
+  const filteredSerialProfiles = useMemo(() => {
+    if (!queryActive) return serialProfiles;
+    if (matchesGroup(serialGroupLabel)) return serialProfiles;
+    return serialProfiles.filter(matchesSerialProfile);
+  }, [
+    matchesGroup,
+    matchesSerialProfile,
+    queryActive,
+    serialGroupLabel,
+    serialProfiles,
+  ]);
 
   // 搜索时优先保留命中的整组；如果只命中了组内部分主机，则收缩成过滤后的结果。
   const filteredGroups = useMemo(() => {
@@ -213,6 +260,10 @@ export default function HostWidget({
     !queryActive ||
     matchesGroup(localShellLabel) ||
     filteredLocalShells.length > 0;
+  const showSerialGroup =
+    !queryActive ||
+    matchesGroup(serialGroupLabel) ||
+    filteredSerialProfiles.length > 0;
   const filteredRootProfiles = useMemo(() => {
     if (!queryActive) return rootProfiles;
     return rootProfiles.filter(matchesProfile);
@@ -297,6 +348,15 @@ export default function HostWidget({
   function buildRootBlankMenuItems(): ContextMenuItem[] {
     return [
       {
+        label: t("serial.actions.newProfile"),
+        icon: <FiTerminal />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenNewSerialProfile();
+        },
+      },
+      {
         label: t("host.addGroup"),
         icon: <FiFolderPlus />,
         disabled: false,
@@ -318,6 +378,56 @@ export default function HostWidget({
         onClick: () => {
           setMenu(null);
           onOpenNewProfile();
+        },
+      },
+    ];
+  }
+
+  /** 串口分组标题右键菜单。 */
+  function buildSerialGroupMenuItems(): ContextMenuItem[] {
+    return [
+      {
+        label: t("serial.actions.refreshPorts"),
+        icon: <FiRefreshCw />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          void onRefreshSerialPorts();
+        },
+      },
+      {
+        label: t("serial.actions.newProfile"),
+        icon: <FiPlus />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenNewSerialProfile();
+        },
+      },
+    ];
+  }
+
+  /** 单个串口 Profile 右键菜单。 */
+  function buildSerialProfileMenuItems(
+    profile: SerialProfile,
+  ): ContextMenuItem[] {
+    return [
+      {
+        label: t("profile.menu.edit"),
+        icon: <FiEdit2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onOpenEditSerialProfile(profile);
+        },
+      },
+      {
+        label: t("profile.menu.delete"),
+        icon: <FiTrash2 />,
+        disabled: false,
+        onClick: () => {
+          setMenu(null);
+          onRemoveSerialProfile(profile);
         },
       },
     ];
@@ -579,6 +689,56 @@ export default function HostWidget({
             openMenu(event, buildRootBlankMenuItems());
           }}
         >
+          {showSerialGroup && (
+            <div key={serialGroupKey} className="host-group">
+              <Button
+                className={`host-group-title ${
+                  filteredSerialProfiles.length > 0 &&
+                  expandedGroups.has(serialGroupKey)
+                    ? "expanded"
+                    : ""
+                }`}
+                variant="ghost"
+                size="sm"
+                onContextMenu={(event) =>
+                  openMenu(event, buildSerialGroupMenuItems())
+                }
+                onClick={() =>
+                  toggleGroup(serialGroupKey, filteredSerialProfiles.length > 0)
+                }
+              >
+                <span className="host-row-label">
+                  <FiTerminal className="host-row-icon" />
+                  <span>{serialGroupLabel}</span>
+                </span>
+                <em>{filteredSerialProfiles.length}</em>
+              </Button>
+              {(queryActive || expandedGroups.has(serialGroupKey)) && (
+                <div className="host-group-list host-group-list--nested">
+                  {filteredSerialProfiles.map((profile) => (
+                    <Button
+                      key={profile.id}
+                      className={
+                        profile.id === activeSerialProfileId ? "active" : ""
+                      }
+                      variant="ghost"
+                      size="sm"
+                      onContextMenu={(event) =>
+                        openMenu(event, buildSerialProfileMenuItems(profile))
+                      }
+                      onClick={() => onPickSerialProfile(profile.id)}
+                      onDoubleClick={() => onConnectSerialProfile(profile)}
+                    >
+                      <span className="host-row-label">
+                        <FiTerminal className="host-row-icon" />
+                        <span>{profile.name || profile.portPath}</span>
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {showLocalShellGroup && (
             <div key={localShellKey} className="host-group">
               <Button
@@ -699,14 +859,18 @@ export default function HostWidget({
               </span>
             </Button>
           ))}
-          {!profiles.length && localShells.length === 0 && (
-            <div className="empty-hint">{t("host.empty")}</div>
-          )}
+          {!profiles.length &&
+            !serialProfiles.length &&
+            localShells.length === 0 && (
+              <div className="empty-hint">{t("host.empty")}</div>
+            )}
           {(profiles.length > 0 ||
+            serialProfiles.length > 0 ||
             localShells.length > 0 ||
             customGroups.length > 0) &&
             !filteredRootProfiles.length &&
             !filteredGroups.length &&
+            !filteredSerialProfiles.length &&
             !filteredLocalShells.length && (
               <div className="empty-hint">{t("host.noMatch")}</div>
             )}
