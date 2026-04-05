@@ -20,7 +20,7 @@ import Modal from "@/components/ui/modal/Modal";
 import Select from "@/components/ui/select";
 import { ROOT_PROFILE_GROUP_VALUE } from "@/constants/hostGroups";
 import type { Translate } from "@/i18n";
-import type { RdpProfile } from "@/types";
+import type { ConnectingProfileMap, RdpProfile } from "@/types";
 import "@/widgets/rdp/components/RdpWidget.css";
 
 const GROUP_NAME_MAX_LENGTH = 12;
@@ -29,7 +29,7 @@ type RdpWidgetProps = {
   profiles: RdpProfile[];
   groups: string[];
   activeProfileId: string | null;
-  connectingProfileId: string | null;
+  connectingProfiles: ConnectingProfileMap;
   onPick: (id: string) => void;
   onConnectProfile: (profile: RdpProfile) => Promise<void>;
   onOpenNewProfile: () => void;
@@ -49,7 +49,7 @@ export default function RdpWidget({
   profiles,
   groups,
   activeProfileId,
-  connectingProfileId,
+  connectingProfiles,
   onPick,
   onConnectProfile,
   onOpenNewProfile,
@@ -261,7 +261,7 @@ export default function RdpWidget({
 
   /** 发起远程桌面连接，重复点击当前连接中的配置时直接忽略。 */
   async function handleConnect(profile: RdpProfile) {
-    if (connectingProfileId === profile.id) return;
+    if (connectingProfiles[profile.id]) return;
     setErrorMessage(null);
     try {
       await onConnectProfile(profile);
@@ -424,6 +424,16 @@ export default function RdpWidget({
     ];
   }
 
+  function renderConnectingChip(profileId: string) {
+    if (!connectingProfiles[profileId]) return null;
+    return (
+      <span className="rdp-connecting-chip">
+        <FiLoader className="rdp-connecting-icon" />
+        <span>{t("session.connecting")}</span>
+      </span>
+    );
+  }
+
   return (
     <div className="rdp-widget" data-ui="rdp-widget">
       <div className="rdp-list">
@@ -480,18 +490,14 @@ export default function RdpWidget({
                       }
                       onClick={() => onPick(profile.id)}
                       onDoubleClick={() => {
+                        if (connectingProfiles[profile.id]) return;
                         void handleConnect(profile);
                       }}
                     >
                       <span className="rdp-row-label">
                         <FiMonitor className="rdp-row-icon" />
                         <span>{profile.name || profile.host}</span>
-                        {connectingProfileId === profile.id ? (
-                          <span className="rdp-connecting-chip">
-                            <FiLoader className="rdp-connecting-icon" />
-                            <span>{t("session.connecting")}</span>
-                          </span>
-                        ) : null}
+                        {renderConnectingChip(profile.id)}
                       </span>
                     </Button>
                   ))}
@@ -512,18 +518,14 @@ export default function RdpWidget({
               }
               onClick={() => onPick(profile.id)}
               onDoubleClick={() => {
+                if (connectingProfiles[profile.id]) return;
                 void handleConnect(profile);
               }}
             >
               <span className="rdp-row-label">
                 <FiMonitor className="rdp-row-icon" />
                 <span>{profile.name || profile.host}</span>
-                {connectingProfileId === profile.id ? (
-                  <span className="rdp-connecting-chip">
-                    <FiLoader className="rdp-connecting-icon" />
-                    <span>{t("session.connecting")}</span>
-                  </span>
-                ) : null}
+                {renderConnectingChip(profile.id)}
               </span>
             </Button>
           ))}

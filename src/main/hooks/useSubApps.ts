@@ -83,7 +83,7 @@ export default function useSubApps({
   );
   const windowRef = useRef<Partial<Record<SubAppId, WebviewWindow>>>({});
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const pendingRdpConnectProfileIdRef = useRef<string | null>(null);
+  const pendingRdpConnectQueueRef = useRef<string[]>([]);
   const pendingRdpConnectTimerRef = useRef<number | null>(null);
   const [statusById, setStatusById] = useState<
     Record<SubAppId, SubAppRuntimeStatus>
@@ -155,7 +155,7 @@ export default function useSubApps({
           window.clearTimeout(pendingRdpConnectTimerRef.current);
           pendingRdpConnectTimerRef.current = null;
         }
-        pendingRdpConnectProfileIdRef.current = null;
+        pendingRdpConnectQueueRef.current = [];
       }
       setRuntimeStatus(id, "idle");
     },
@@ -165,18 +165,21 @@ export default function useSubApps({
   const flushPendingRdpCommands = useCallback(() => {
     if (statusByIdRef.current.rdp !== "ready") return;
     const label = createSubAppWindowLabel("rdp");
-    const dispatchPendingConnect = () => {
+    const dispatchPendingConnects = () => {
       if (statusByIdRef.current.rdp !== "ready") return;
-      if (!pendingRdpConnectProfileIdRef.current) return;
-      postLifecycleMessage({
-        type: "subapp:rdp-connect",
-        source: "main",
-        target: { id: "rdp", label },
-        profileId: pendingRdpConnectProfileIdRef.current,
+      if (!pendingRdpConnectQueueRef.current.length) return;
+      const queue = [...pendingRdpConnectQueueRef.current];
+      pendingRdpConnectQueueRef.current = [];
+      queue.forEach((profileId) => {
+        postLifecycleMessage({
+          type: "subapp:rdp-connect",
+          source: "main",
+          target: { id: "rdp", label },
+          profileId,
+        });
       });
-      pendingRdpConnectProfileIdRef.current = null;
     };
-    if (!pendingRdpConnectProfileIdRef.current) return;
+    if (!pendingRdpConnectQueueRef.current.length) return;
     if (pendingRdpConnectTimerRef.current !== null) {
       window.clearTimeout(pendingRdpConnectTimerRef.current);
       pendingRdpConnectTimerRef.current = null;
@@ -186,11 +189,11 @@ export default function useSubApps({
       // 延后一次连接指令派发，等子窗口监听稳定后再发送。
       pendingRdpConnectTimerRef.current = window.setTimeout(() => {
         pendingRdpConnectTimerRef.current = null;
-        dispatchPendingConnect();
+        dispatchPendingConnects();
       }, 300);
       return;
     }
-    dispatchPendingConnect();
+    dispatchPendingConnects();
   }, [postLifecycleMessage]);
 
   const closeSubApp = useCallback(
@@ -336,7 +339,12 @@ export default function useSubApps({
   /** 主窗口只分发“连接这个 Profile”的意图，实际 RDP runtime 仍由子应用独占。 */
   const connectRdpProfile = useCallback(
     async (profileId: string) => {
-      pendingRdpConnectProfileIdRef.current = profileId;
+      pendingRdpConnectQueueRef.current = [
+        ...pendingRdpConnectQueueRef.current.filter(
+          (item) => item !== profileId,
+        ),
+        profileId,
+      ];
       if (pendingRdpConnectTimerRef.current !== null) {
         window.clearTimeout(pendingRdpConnectTimerRef.current);
         pendingRdpConnectTimerRef.current = null;

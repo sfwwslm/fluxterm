@@ -56,6 +56,7 @@ import useSubApps from "@/main/hooks/useSubApps";
 import { moveWidgetToSlot, widgetKeys } from "@/layout/model";
 import type { WidgetSlotId } from "@/layout/types";
 import type {
+  ConnectingProfileMap,
   HostProfile,
   LocalShellConfig,
   LocalSessionMeta,
@@ -617,9 +618,6 @@ export default function AppShell() {
   const [activeRdpProfileId, setActiveRdpProfileId] = useState<string | null>(
     null,
   );
-  const [connectingRdpProfileId, setConnectingRdpProfileId] = useState<
-    string | null
-  >(null);
   const [profileDraft, setProfileDraft] = useState<HostProfile>(defaultProfile);
   const [localShellProfileModalOpen, setLocalShellProfileModalOpen] =
     useState(false);
@@ -632,7 +630,6 @@ export default function AppShell() {
   const sshConnectRuntimeRef = useRef<Record<string, PendingSshConnectRuntime>>(
     {},
   );
-  const latestRdpConnectRequestIdRef = useRef(0);
   const nextSshConnectRequestIdRef = useRef(0);
   const isMac = useMemo(() => isMacOS(), []);
 
@@ -2647,17 +2644,8 @@ export default function AppShell() {
 
   const handleConnectRdpProfile = useCallback(
     async (profile: RdpProfile) => {
-      const requestId = latestRdpConnectRequestIdRef.current + 1;
-      latestRdpConnectRequestIdRef.current = requestId;
       setActiveRdpProfileId(profile.id);
-      setConnectingRdpProfileId(profile.id);
-      try {
-        await connectRdpProfile(profile.id);
-      } finally {
-        if (requestId === latestRdpConnectRequestIdRef.current) {
-          setConnectingRdpProfileId(null);
-        }
-      }
+      await connectRdpProfile(profile.id);
     },
     [connectRdpProfile],
   );
@@ -3286,7 +3274,7 @@ export default function AppShell() {
         activeProfileId,
         sshConnectingProfiles: connectingSshProfiles,
         activeRdpProfileId,
-        connectingRdpProfileId,
+        rdpConnectingProfiles: {} as ConnectingProfileMap,
         availableShells,
         activeSessionId: AiWidgetState.activeSessionId,
         activeSessionState: EventsWidgetState.sessionState,
@@ -3392,7 +3380,6 @@ export default function AppShell() {
       activeProfileId,
       connectingSshProfiles,
       activeRdpProfileId,
-      connectingRdpProfileId,
       availableShells,
       AiWidgetActions,
       AiWidgetState,

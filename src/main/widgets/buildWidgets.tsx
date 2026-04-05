@@ -16,6 +16,7 @@ import type { Locale, Translate } from "@/i18n";
 import type {
   CommandHistoryItem,
   CommandHistoryLiveCapture,
+  ConnectingProfileMap,
   DisconnectReason,
   HostProfile,
   LocalShellProfile,
@@ -39,7 +40,7 @@ type buildWidgetsProps = {
   activeProfileId: string | null;
   sshConnectingProfiles: SshConnectStateMap;
   activeRdpProfileId: string | null;
-  connectingRdpProfileId: string | null;
+  rdpConnectingProfiles: ConnectingProfileMap;
   availableShells: LocalShellProfile[];
   activeSessionId: string | null;
   activeSessionState: SessionStateUi | null;
@@ -143,7 +144,7 @@ export function buildWidgets(
     activeProfileId,
     sshConnectingProfiles,
     activeRdpProfileId,
-    connectingRdpProfileId,
+    rdpConnectingProfiles,
     availableShells,
     activeSessionId,
     activeSessionState,
@@ -258,7 +259,7 @@ export function buildWidgets(
         profiles={rdpProfiles}
         groups={rdpGroups}
         activeProfileId={activeRdpProfileId}
-        connectingProfileId={connectingRdpProfileId}
+        connectingProfiles={rdpConnectingProfiles}
         onPick={pickRdpProfile}
         onConnectProfile={onConnectRdpProfile}
         onOpenNewProfile={onOpenNewRdpProfile}

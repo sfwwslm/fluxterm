@@ -54,6 +54,9 @@ export type SshConnectState = {
 /** SSH 配置列表中的连接中状态映射。 */
 export type SshConnectStateMap = Record<string, SshConnectState>;
 
+/** 连接配置列表中的连接中标记映射。 */
+export type ConnectingProfileMap = Record<string, true>;
+
 /** 统一的会话输入负载。 */
 export type SessionInput =
   | {
