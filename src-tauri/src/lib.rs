@@ -145,14 +145,6 @@ pub fn run() {
                 })
                 .build(),
         )
-        .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. })
-                && (window.label() == "main" || window.label() == "subapp-rdp")
-            {
-                let rdp = window.app_handle().state::<RdpState>();
-                let _ = rdp.shutdown_runtime();
-            }
-        })
         .invoke_handler(tauri::generate_handler![
             profile_list,
             profile_groups_list,
@@ -237,10 +229,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if matches!(
-                event,
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
-            ) {
+            if matches!(event, tauri::RunEvent::Exit) {
                 let rdp = app.state::<RdpState>();
                 let _ = rdp.shutdown_runtime();
             }

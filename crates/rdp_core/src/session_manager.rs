@@ -285,11 +285,13 @@ impl SessionManager {
         let mut inner = self.inner.lock().map_err(lock_error)?;
         let count = inner.len();
         inner.clear();
-        info!(
-            event = "rdp.session.clear.success",
-            count = count,
-            "cleared all managed RDP sessions"
-        );
+        if count > 0 {
+            info!(
+                event = "rdp.session.clear.success",
+                count = count,
+                "cleared all managed RDP sessions"
+            );
+        }
         Ok(())
     }
 
