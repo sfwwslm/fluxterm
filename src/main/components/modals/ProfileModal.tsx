@@ -98,6 +98,59 @@ export default function ProfileModal({
     }
   }
 
+  /** 为列表中的某个私钥项选择文件，或追加新的私钥项。 */
+  async function handlePickIdentityFile(index?: number) {
+    try {
+      const selection = await openFileDialog({
+        title: t("profile.form.identityFiles"),
+        multiple: false,
+        directory: false,
+      });
+      if (!selection || Array.isArray(selection)) return;
+      const nextIdentityFiles = [
+        ...(draft.identityFiles?.length
+          ? draft.identityFiles
+          : draft.privateKeyPath
+            ? [draft.privateKeyPath]
+            : []),
+      ];
+      if (
+        typeof index === "number" &&
+        index >= 0 &&
+        index < nextIdentityFiles.length
+      ) {
+        nextIdentityFiles[index] = selection;
+      } else {
+        nextIdentityFiles.push(selection);
+      }
+      onDraftChange({
+        ...draft,
+        identityFiles: nextIdentityFiles,
+        privateKeyPath: nextIdentityFiles[0] ?? null,
+      });
+    } catch {
+      // 忽略选择器异常。
+    }
+  }
+
+  /** 选择附加 known_hosts 文件。 */
+  async function handlePickUserKnownHostsFile() {
+    try {
+      const selection = await openFileDialog({
+        title: t("profile.form.userKnownHostsFile"),
+        multiple: false,
+        directory: false,
+      });
+      if (!selection || Array.isArray(selection)) return;
+      onDraftChange({
+        ...draft,
+        userKnownHostsFile: selection,
+      });
+    } catch {
+      // 忽略选择器异常。
+    }
+  }
+
   const visibleSections = useMemo<ProfileModalSection[]>(
     () => ["session", "terminal", "window", "ssh", "modem"],
     [],
@@ -139,9 +192,15 @@ export default function ProfileModal({
       username: "",
       authType: "password",
       privateKeyPath: null,
+      identityFiles: null,
       privateKeyPassphraseRef: null,
       passwordRef: null,
       knownHost: null,
+      proxyCommand: null,
+      proxyJump: null,
+      addKeysToAgent: null,
+      userKnownHostsFile: null,
+      strictHostKeyChecking: null,
       tags: null,
       terminalType: null,
       targetSystem: null,
@@ -190,8 +249,26 @@ export default function ProfileModal({
     const passwordInputId = `${formId}-password`;
     const privateKeyPathInputId = `${formId}-private-key-path`;
     const privateKeyPassphraseInputId = `${formId}-private-key-passphrase`;
+    const strictHostKeyCheckingSelectId = `${formId}-strict-host-key-checking`;
+    const proxyJumpInputId = `${formId}-proxy-jump`;
+    const proxyCommandInputId = `${formId}-proxy-command`;
+    const userKnownHostsFileInputId = `${formId}-user-known-hosts-file`;
+    const addKeysToAgentInputId = `${formId}-add-keys-to-agent`;
     const bellModeSelectId = `${formId}-bell-mode`;
     const bellCooldownSelectId = `${formId}-bell-cooldown`;
+    const identityFiles = draft.identityFiles?.length
+      ? draft.identityFiles
+      : draft.privateKeyPath
+        ? [draft.privateKeyPath]
+        : [];
+    const strictHostKeyCheckingValue =
+      draft.strictHostKeyChecking === null ||
+      typeof draft.strictHostKeyChecking === "undefined"
+        ? "inherit"
+        : draft.strictHostKeyChecking
+          ? "strict"
+          : "off";
+    const proxyJumpEnabled = Boolean(draft.proxyJump?.trim());
 
     const nameRow = (
       <div className="form-row">
@@ -506,53 +583,26 @@ export default function ProfileModal({
             </div>
           )}
           {draft.authType === "privateKey" && (
-            <>
-              <div className="form-row">
-                <label className="form-label" htmlFor={privateKeyPathInputId}>
-                  {t("profile.form.privateKeyPath")}
-                </label>
-                <div className="form-file">
-                  <input
-                    id={privateKeyPathInputId}
-                    value={draft.privateKeyPath ?? ""}
-                    placeholder={t("profile.placeholder.privateKeyPath")}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    readOnly
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      void handlePickPrivateKey();
-                    }}
-                  >
-                    {t("profile.actions.pickKey")}
-                  </Button>
-                </div>
-              </div>
-              <div className="form-row">
-                <label
-                  className="form-label"
-                  htmlFor={privateKeyPassphraseInputId}
-                >
-                  {t("profile.form.privateKeyPassphrase")}
-                </label>
-                <input
-                  id={privateKeyPassphraseInputId}
-                  type="password"
-                  value={draft.privateKeyPassphraseRef ?? ""}
-                  autoComplete="off"
-                  onChange={(event) =>
-                    onDraftChange({
-                      ...draft,
-                      privateKeyPassphraseRef: event.target.value,
-                    })
-                  }
-                />
-              </div>
-            </>
+            <div className="form-row">
+              <label
+                className="form-label"
+                htmlFor={privateKeyPassphraseInputId}
+              >
+                {t("profile.form.privateKeyPassphrase")}
+              </label>
+              <input
+                id={privateKeyPassphraseInputId}
+                type="password"
+                value={draft.privateKeyPassphraseRef ?? ""}
+                autoComplete="off"
+                onChange={(event) =>
+                  onDraftChange({
+                    ...draft,
+                    privateKeyPassphraseRef: event.target.value,
+                  })
+                }
+              />
+            </div>
           )}
           {extraSessionRows}
         </div>
@@ -578,9 +628,359 @@ export default function ProfileModal({
 
     if (activeSection === "ssh") {
       return (
-        <div className="profile-modal-placeholder">
-          <h4>{t("profile.section.ssh")}</h4>
-          <p>{t("profile.section.sshHint")}</p>
+        <div className="profile-settings-page" data-page="profile-ssh">
+          <section className="profile-settings-section" data-ui="ssh-auth">
+            <header className="profile-settings-section-header">
+              <div>
+                <h4>{t("profile.ssh.group.auth")}</h4>
+                <p>{t("profile.ssh.group.authHint")}</p>
+              </div>
+            </header>
+            <div className="profile-settings-section-body host-editor">
+              {draft.authType === "privateKey" ? (
+                <>
+                  <div className="form-row">
+                    <label
+                      className="form-label"
+                      htmlFor={privateKeyPathInputId}
+                    >
+                      {t("profile.form.privateKeyPath")}
+                    </label>
+                    <div className="form-file">
+                      <input
+                        id={privateKeyPathInputId}
+                        value={draft.privateKeyPath ?? ""}
+                        placeholder={t("profile.placeholder.privateKeyPath")}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        readOnly
+                        data-ui="identity-file-primary"
+                        data-slot="primary-path"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        data-ui="identity-file-pick-primary"
+                        data-slot="pick-primary"
+                        onClick={() => {
+                          void handlePickPrivateKey();
+                        }}
+                      >
+                        {t("profile.actions.pickKey")}
+                      </Button>
+                    </div>
+                    <div className="profile-form-hint">
+                      {t("profile.ssh.identityFilesHint")}
+                    </div>
+                  </div>
+                  <div className="form-row form-row-align-start">
+                    <span className="form-label">
+                      {t("profile.form.identityFiles")}
+                    </span>
+                    <div
+                      className="profile-identity-files"
+                      data-ui="identity-files"
+                    >
+                      {identityFiles.length ? (
+                        identityFiles.map((item, index) => (
+                          <div
+                            key={`${item}-${index}`}
+                            className="profile-identity-file-row"
+                            data-slot={`identity-file-row-${index}`}
+                          >
+                            <input
+                              value={item}
+                              placeholder={t(
+                                "profile.placeholder.privateKeyPath",
+                              )}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              onChange={(event) => {
+                                const next = [...identityFiles];
+                                next[index] = event.target.value;
+                                onDraftChange({
+                                  ...draft,
+                                  identityFiles: next,
+                                  privateKeyPath: next[0] ?? null,
+                                });
+                              }}
+                              data-ui="identity-file-input"
+                              data-slot={`identity-file-${index}`}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-ui="identity-file-pick"
+                              data-slot={`pick-identity-file-${index}`}
+                              onClick={() => {
+                                void handlePickIdentityFile(index);
+                              }}
+                            >
+                              {t("profile.actions.pickKey")}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={index === 0}
+                              data-ui="identity-file-up"
+                              data-slot={`move-up-${index}`}
+                              onClick={() => {
+                                if (index === 0) return;
+                                const next = [...identityFiles];
+                                [next[index - 1], next[index]] = [
+                                  next[index],
+                                  next[index - 1],
+                                ];
+                                onDraftChange({
+                                  ...draft,
+                                  identityFiles: next,
+                                  privateKeyPath: next[0] ?? null,
+                                });
+                              }}
+                            >
+                              {t("profile.actions.moveUp")}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={index === identityFiles.length - 1}
+                              data-ui="identity-file-down"
+                              data-slot={`move-down-${index}`}
+                              onClick={() => {
+                                if (index >= identityFiles.length - 1) return;
+                                const next = [...identityFiles];
+                                [next[index], next[index + 1]] = [
+                                  next[index + 1],
+                                  next[index],
+                                ];
+                                onDraftChange({
+                                  ...draft,
+                                  identityFiles: next,
+                                  privateKeyPath: next[0] ?? null,
+                                });
+                              }}
+                            >
+                              {t("profile.actions.moveDown")}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              data-ui="identity-file-remove"
+                              data-slot={`remove-identity-file-${index}`}
+                              onClick={() => {
+                                const next = identityFiles.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                );
+                                onDraftChange({
+                                  ...draft,
+                                  identityFiles: next.length ? next : null,
+                                  privateKeyPath: next[0] ?? null,
+                                });
+                              }}
+                            >
+                              {t("actions.remove")}
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="profile-form-hint">
+                          {t("profile.ssh.identityFilesEmpty")}
+                        </div>
+                      )}
+                      <div className="profile-identity-files-actions">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-ui="identity-file-add"
+                          data-slot="identity-file-add"
+                          onClick={() => {
+                            void handlePickIdentityFile();
+                          }}
+                        >
+                          {t("profile.actions.addIdentityFile")}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="profile-form-hint">
+                  {t("profile.ssh.identityFilesDisabled")}
+                </div>
+              )}
+            </div>
+          </section>
+          <section className="profile-settings-section" data-ui="ssh-proxy">
+            <header className="profile-settings-section-header">
+              <div>
+                <h4>{t("profile.ssh.group.proxy")}</h4>
+                <p>{t("profile.ssh.group.proxyHint")}</p>
+              </div>
+            </header>
+            <div className="profile-settings-section-body host-editor">
+              <div className="form-row">
+                <label className="form-label" htmlFor={proxyJumpInputId}>
+                  {t("profile.form.proxyJump")}
+                </label>
+                <input
+                  id={proxyJumpInputId}
+                  value={draft.proxyJump ?? ""}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={t("profile.placeholder.proxyJump")}
+                  onChange={(event) =>
+                    onDraftChange({ ...draft, proxyJump: event.target.value })
+                  }
+                  data-ui="proxy-jump"
+                  data-slot="proxy-jump"
+                />
+                <div className="profile-form-hint">
+                  {t("profile.ssh.proxyJumpHint")}
+                </div>
+              </div>
+              <div className="form-row">
+                <label className="form-label" htmlFor={proxyCommandInputId}>
+                  {t("profile.form.proxyCommand")}
+                </label>
+                <input
+                  id={proxyCommandInputId}
+                  value={draft.proxyCommand ?? ""}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={t("profile.placeholder.proxyCommand")}
+                  disabled={proxyJumpEnabled}
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      proxyCommand: event.target.value,
+                    })
+                  }
+                  data-ui="proxy-command"
+                  data-slot="proxy-command"
+                />
+                <div className="profile-form-hint">
+                  {proxyJumpEnabled
+                    ? t("profile.ssh.proxyCommandDisabledHint")
+                    : t("profile.ssh.proxyCommandHint")}
+                </div>
+              </div>
+            </div>
+          </section>
+          <section className="profile-settings-section" data-ui="ssh-host-key">
+            <header className="profile-settings-section-header">
+              <div>
+                <h4>{t("profile.ssh.group.hostKey")}</h4>
+                <p>{t("profile.ssh.group.hostKeyHint")}</p>
+              </div>
+            </header>
+            <div className="profile-settings-section-body host-editor">
+              <div className="form-row">
+                <label
+                  className="form-label"
+                  htmlFor={userKnownHostsFileInputId}
+                >
+                  {t("profile.form.userKnownHostsFile")}
+                </label>
+                <div className="form-file">
+                  <input
+                    id={userKnownHostsFileInputId}
+                    value={draft.userKnownHostsFile ?? ""}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder={t("profile.placeholder.userKnownHostsFile")}
+                    onChange={(event) =>
+                      onDraftChange({
+                        ...draft,
+                        userKnownHostsFile: event.target.value,
+                      })
+                    }
+                    data-ui="user-known-hosts-file"
+                    data-slot="user-known-hosts-file"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    data-ui="user-known-hosts-file-pick"
+                    data-slot="pick-user-known-hosts-file"
+                    onClick={() => {
+                      void handlePickUserKnownHostsFile();
+                    }}
+                  >
+                    {t("profile.actions.pickKey")}
+                  </Button>
+                </div>
+                <div className="profile-form-hint">
+                  {t("profile.ssh.userKnownHostsFileHint")}
+                </div>
+              </div>
+              <div className="form-row">
+                <label
+                  className="form-label"
+                  htmlFor={strictHostKeyCheckingSelectId}
+                >
+                  {t("profile.form.strictHostKeyChecking")}
+                </label>
+                <Select
+                  id={strictHostKeyCheckingSelectId}
+                  value={strictHostKeyCheckingValue}
+                  options={[
+                    {
+                      value: "inherit",
+                      label: t("profile.ssh.strictHostKeyChecking.inherit"),
+                    },
+                    {
+                      value: "strict",
+                      label: t("profile.ssh.strictHostKeyChecking.strict"),
+                    },
+                    {
+                      value: "off",
+                      label: t("profile.ssh.strictHostKeyChecking.off"),
+                    },
+                  ]}
+                  onChange={(value) =>
+                    onDraftChange({
+                      ...draft,
+                      strictHostKeyChecking:
+                        value === "inherit" ? null : value === "strict",
+                    })
+                  }
+                  aria-label={t("profile.form.strictHostKeyChecking")}
+                />
+                <div className="profile-form-hint">
+                  {t("profile.ssh.strictHostKeyCheckingHint")}
+                </div>
+              </div>
+              <div className="form-row">
+                <label className="form-label" htmlFor={addKeysToAgentInputId}>
+                  {t("profile.form.addKeysToAgent")}
+                </label>
+                <input
+                  id={addKeysToAgentInputId}
+                  value={draft.addKeysToAgent ?? ""}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={t("profile.placeholder.addKeysToAgent")}
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      addKeysToAgent: event.target.value,
+                    })
+                  }
+                  data-ui="add-keys-to-agent"
+                  data-slot="add-keys-to-agent"
+                />
+                <div className="profile-form-hint">
+                  {t("profile.ssh.addKeysToAgentHint")}
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       );
     }

@@ -146,6 +146,10 @@
   align-items: start;
 }
 
+.form-row.form-row-align-start {
+  align-items: start;
+}
+
 .profile-form-error {
   grid-column: 2;
   color: var(--danger);
@@ -186,6 +190,28 @@
 
 .profile-window-presets {
   flex-wrap: wrap;
+}
+
+.profile-identity-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-identity-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, auto);
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-identity-file-row input {
+  min-width: 0;
+}
+
+.profile-identity-files-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .profile-modal-placeholder {
@@ -260,6 +286,10 @@
   .form-row.split {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .profile-identity-file-row {
+    grid-template-columns: 1fr;
   }
 
   .form-inline-field {

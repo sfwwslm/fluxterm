@@ -1,6 +1,12 @@
 //! SSH 会话相关命令。
-use engine::{EngineError, ExpectedHostKey, HostProfile, Session, TerminalSize, probe_host_key};
+use std::path::PathBuf;
+
+use engine::{
+    EngineError, ExpectedHostKey, ExpectedHostKeys, HostProfile, Session, TerminalSize,
+    probe_host_key,
+};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::{AiRuntimeState, register_remote_session};
@@ -10,9 +16,12 @@ use crate::resource_monitor::ResourceMonitorState;
 use crate::security::{CryptoService, SecretStore};
 use crate::security_store::read_security_config;
 use crate::session_settings::{HostKeyPolicy, read_session_settings};
-use crate::ssh_host_keys::{HostKeyMatchStatus, match_host_key, trust_host_key};
+use crate::ssh_host_keys::{
+    HostKeyMatch, HostKeyMatchStatus, match_host_key, match_host_key_in_path, trust_host_key,
+};
 use crate::ssh_profile_store::read_ssh_profiles;
 use crate::state::{EngineState, SecurityState};
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,12 +48,43 @@ pub async fn ssh_connect(
     size: TerminalSize,
 ) -> Result<Session, EngineError> {
     let resolved_profile = resolve_connect_profile(&app, &security, &profile)?;
-    let expected_host_key = enforce_host_key_policy(&app, &resolved_profile).await?;
+    if resolved_profile
+        .proxy_command
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ssh.proxy_command.ignored",
+            None,
+            json!({
+                "profileId": resolved_profile.id.clone(),
+                "reason": "not_supported_in_p1",
+            }),
+        );
+    }
+    if resolved_profile
+        .add_keys_to_agent
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        log_telemetry(
+            TelemetryLevel::Info,
+            "ssh.add_keys_to_agent.ignored",
+            None,
+            json!({
+                "profileId": resolved_profile.id.clone(),
+                "reason": "not_supported_in_p1",
+                "value": resolved_profile.add_keys_to_agent.clone(),
+            }),
+        );
+    }
+    let expected_host_keys = resolve_expected_host_keys(&app, &resolved_profile).await?;
     let on_event = build_event_bridge(app.clone());
     let session =
         state
             .engine
-            .connect(resolved_profile.clone(), expected_host_key, size, on_event)?;
+            .connect(resolved_profile.clone(), expected_host_keys, size, on_event)?;
     register_remote_session(&ai_state, &session, &resolved_profile)?;
     Ok(session)
 }
@@ -103,12 +143,38 @@ pub fn ssh_host_key_confirm(
     trust_host_key(&app, &host, port, &key_algorithm, &public_key_base64)
 }
 
+async fn resolve_expected_host_keys(
+    app: &AppHandle,
+    profile: &HostProfile,
+) -> Result<ExpectedHostKeys, EngineError> {
+    let target = enforce_host_key_policy(app, profile).await?;
+    let proxy_jump = if let Some(proxy_jump_profile) = build_proxy_jump_profile(profile)? {
+        enforce_host_key_policy(app, &proxy_jump_profile).await?
+    } else {
+        None
+    };
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "ssh.host_key.policy.resolved",
+        None,
+        json!({
+            "profileId": profile.id,
+            "targetPolicySource": if profile.strict_host_key_checking.is_some() { "profile" } else { "global" },
+            "targetPolicy": host_key_policy_label(resolve_host_key_policy(app, profile)?),
+            "hasUserKnownHostsFile": profile.user_known_hosts_file.as_ref().is_some_and(|value| !value.trim().is_empty()),
+            "hasProxyJump": profile.proxy_jump.as_ref().is_some_and(|value| !value.trim().is_empty()),
+            "hasProxyJumpExpectedHostKey": proxy_jump.is_some(),
+        }),
+    );
+    Ok(ExpectedHostKeys { target, proxy_jump })
+}
+
 async fn enforce_host_key_policy(
     app: &AppHandle,
     profile: &HostProfile,
 ) -> Result<Option<ExpectedHostKey>, EngineError> {
-    let settings = read_session_settings(app)?;
-    if settings.host_key_policy == HostKeyPolicy::Off {
+    let policy = resolve_host_key_policy(app, profile)?;
+    if policy == HostKeyPolicy::Off {
         return Ok(None);
     }
 
@@ -116,15 +182,10 @@ async fn enforce_host_key_policy(
     // ask / strict 的分流都在这里完成，正式握手阶段只负责校验“当前连接拿到的公钥”
     // 是否与本次预检允许通过的公钥一致。
     let probe = probe_host_key(profile).await?;
-    let matched = match_host_key(
-        app,
-        &profile.host,
-        profile.port,
-        &probe.key_algorithm,
-        &probe.public_key_base64,
-    )?;
+    let matched =
+        resolve_host_key_match(app, profile, &probe.key_algorithm, &probe.public_key_base64)?;
 
-    match (settings.host_key_policy, matched.status) {
+    match (policy, matched.status) {
         (_, HostKeyMatchStatus::Trusted) => Ok(Some(ExpectedHostKey {
             public_key_base64: probe.public_key_base64,
             fingerprint_sha256: probe.fingerprint_sha256,
@@ -158,6 +219,123 @@ async fn enforce_host_key_policy(
             ))
         }
         (HostKeyPolicy::Off, _) => Ok(None),
+    }
+}
+
+fn resolve_host_key_policy(
+    app: &AppHandle,
+    profile: &HostProfile,
+) -> Result<HostKeyPolicy, EngineError> {
+    if let Some(strict) = profile.strict_host_key_checking {
+        return Ok(if strict {
+            HostKeyPolicy::Strict
+        } else {
+            HostKeyPolicy::Off
+        });
+    }
+    Ok(read_session_settings(app)?.host_key_policy)
+}
+
+fn resolve_host_key_match(
+    app: &AppHandle,
+    profile: &HostProfile,
+    key_algorithm: &str,
+    public_key_base64: &str,
+) -> Result<HostKeyMatch, EngineError> {
+    let app_match = match_host_key(
+        app,
+        &profile.host,
+        profile.port,
+        key_algorithm,
+        public_key_base64,
+    )?;
+    if matches!(
+        app_match.status,
+        HostKeyMatchStatus::Trusted | HostKeyMatchStatus::Mismatch
+    ) {
+        log_telemetry(
+            TelemetryLevel::Debug,
+            "ssh.host_key.lookup.resolved",
+            None,
+            json!({
+                "profileId": profile.id,
+                "source": "app_known_hosts",
+                "status": host_key_match_label(&app_match.status),
+            }),
+        );
+        return Ok(app_match);
+    }
+
+    let Some(path) = profile
+        .user_known_hosts_file
+        .as_ref()
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty())
+    else {
+        log_telemetry(
+            TelemetryLevel::Debug,
+            "ssh.host_key.lookup.resolved",
+            None,
+            json!({
+                "profileId": profile.id,
+                "source": "none",
+                "status": host_key_match_label(&app_match.status),
+            }),
+        );
+        return Ok(app_match);
+    };
+
+    let external_match = match_host_key_in_path(
+        &PathBuf::from(path),
+        &profile.host,
+        profile.port,
+        key_algorithm,
+        public_key_base64,
+    )?;
+    if matches!(
+        external_match.status,
+        HostKeyMatchStatus::Trusted | HostKeyMatchStatus::Mismatch
+    ) {
+        log_telemetry(
+            TelemetryLevel::Debug,
+            "ssh.host_key.lookup.resolved",
+            None,
+            json!({
+                "profileId": profile.id,
+                "source": "user_known_hosts_file",
+                "status": host_key_match_label(&external_match.status),
+                "path": path,
+            }),
+        );
+        return Ok(external_match);
+    }
+    log_telemetry(
+        TelemetryLevel::Debug,
+        "ssh.host_key.lookup.resolved",
+        None,
+        json!({
+            "profileId": profile.id,
+            "source": "none",
+            "status": host_key_match_label(&app_match.status),
+            "userKnownHostsFileTried": path,
+        }),
+    );
+    Ok(app_match)
+}
+
+fn host_key_policy_label(policy: HostKeyPolicy) -> &'static str {
+    match policy {
+        HostKeyPolicy::Ask => "ask",
+        HostKeyPolicy::Strict => "strict",
+        HostKeyPolicy::Off => "off",
+    }
+}
+
+fn host_key_match_label(status: &HostKeyMatchStatus) -> &'static str {
+    match status {
+        HostKeyMatchStatus::Trusted => "trusted",
+        HostKeyMatchStatus::Unknown => "unknown",
+        HostKeyMatchStatus::Mismatch => "mismatch",
     }
 }
 
@@ -213,4 +391,68 @@ fn resolve_connect_profile(
     let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     decrypt_profile_secrets(encrypted_profile, &secret_store)
+}
+
+fn build_proxy_jump_profile(profile: &HostProfile) -> Result<Option<HostProfile>, EngineError> {
+    let Some(proxy_jump) = parse_proxy_jump_target(profile.proxy_jump.as_deref())? else {
+        return Ok(None);
+    };
+    Ok(Some(HostProfile {
+        id: format!("{}::proxy_jump", profile.id),
+        name: format!("{}::proxy_jump", profile.name),
+        host: proxy_jump.0,
+        port: proxy_jump.1,
+        username: profile.username.clone(),
+        auth_type: profile.auth_type.clone(),
+        private_key_path: profile.private_key_path.clone(),
+        identity_files: profile.identity_files.clone(),
+        private_key_passphrase_ref: profile.private_key_passphrase_ref.clone(),
+        password_ref: profile.password_ref.clone(),
+        known_host: None,
+        proxy_command: None,
+        proxy_jump: None,
+        add_keys_to_agent: None,
+        user_known_hosts_file: profile.user_known_hosts_file.clone(),
+        strict_host_key_checking: profile.strict_host_key_checking,
+        tags: None,
+        terminal_type: None,
+        target_system: None,
+        charset: None,
+        word_separators: None,
+        bell_mode: None,
+        bell_cooldown_ms: None,
+        description: None,
+    }))
+}
+
+fn parse_proxy_jump_target(value: Option<&str>) -> Result<Option<(String, u16)>, EngineError> {
+    let Some(value) = value.map(str::trim).filter(|item| !item.is_empty()) else {
+        return Ok(None);
+    };
+    if value.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    if value.contains(',') || value.contains(' ') || value.contains('\t') || value.contains('@') {
+        return Err(EngineError::new(
+            "ssh_proxy_jump_unsupported",
+            "当前仅支持单跳 ProxyJump host[:port]",
+        ));
+    }
+    if let Some(host) = value.strip_prefix('[')
+        && let Some((host, port_text)) = host.split_once("]:")
+    {
+        return Ok(Some((host.to_string(), parse_proxy_jump_port(port_text)?)));
+    }
+    if value.matches(':').count() == 1
+        && let Some((host, port_text)) = value.rsplit_once(':')
+    {
+        return Ok(Some((host.to_string(), parse_proxy_jump_port(port_text)?)));
+    }
+    Ok(Some((value.to_string(), 22)))
+}
+
+fn parse_proxy_jump_port(value: &str) -> Result<u16, EngineError> {
+    value
+        .parse::<u16>()
+        .map_err(|_| EngineError::new("ssh_proxy_jump_invalid_port", "ProxyJump 端口格式无效"))
 }

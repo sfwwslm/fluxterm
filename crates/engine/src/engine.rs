@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::error::EngineError;
 use crate::proxy_backend::{BuiltinProxyBackend, ProxyBackend};
-use crate::session::{ExpectedHostKey, SessionCommand, SessionHandle, run_session_loop};
+use crate::session::{ExpectedHostKeys, SessionCommand, SessionHandle, run_session_loop};
 use crate::telemetry::{TelemetryLevel, log_telemetry};
 use crate::types::{
     EventCallback, HostProfile, ProxyRuntime, ProxySpec, Session, SessionState, SftpEntry,
@@ -45,7 +45,7 @@ impl Engine {
     pub fn connect(
         &self,
         profile: HostProfile,
-        expected_host_key: Option<ExpectedHostKey>,
+        expected_host_keys: ExpectedHostKeys,
         size: TerminalSize,
         on_event: EventCallback,
     ) -> Result<Session, EngineError> {
@@ -78,7 +78,7 @@ impl Engine {
             let result = run_session_loop(
                 session_id_clone.clone(),
                 profile_clone,
-                expected_host_key,
+                expected_host_keys,
                 size,
                 rx,
                 on_event_clone,

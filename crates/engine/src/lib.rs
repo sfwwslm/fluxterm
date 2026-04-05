@@ -16,5 +16,5 @@ pub mod util;
 pub use crate::engine::Engine;
 pub use crate::error::EngineError;
 pub use crate::host_key::{HostKeyProbe, probe_host_key};
-pub use crate::session::ExpectedHostKey;
+pub use crate::session::{ExpectedHostKey, ExpectedHostKeys};
 pub use crate::types::*;

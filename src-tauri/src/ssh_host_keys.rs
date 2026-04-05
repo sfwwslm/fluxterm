@@ -59,6 +59,10 @@ fn parse_known_hosts_line(line: &str) -> Option<(&str, &str, &str)> {
     Some((parts.next()?, parts.next()?, parts.next()?))
 }
 
+fn match_line_host(pattern: &str, host: &str, port: u16) -> bool {
+    pattern == host_pattern(host, port)
+}
+
 fn trust_host_key_path(
     path: &Path,
     host: &str,
@@ -117,7 +121,6 @@ fn match_host_key_path(
     key_algorithm: &str,
     public_key_base64: &str,
 ) -> Result<HostKeyMatch, EngineError> {
-    let pattern = host_pattern(host, port);
     let content = if path.exists() {
         fs::read_to_string(path).map_err(|err| {
             EngineError::with_detail(
@@ -134,7 +137,7 @@ fn match_host_key_path(
         let Some((line_host, line_algorithm, line_key)) = parse_known_hosts_line(line) else {
             continue;
         };
-        if line_host != pattern || line_algorithm != key_algorithm {
+        if !match_line_host(line_host, host, port) || line_algorithm != key_algorithm {
             continue;
         }
         if line_key == public_key_base64 {
@@ -163,6 +166,17 @@ fn match_host_key_path(
         status: HostKeyMatchStatus::Unknown,
         previous_fingerprint_sha256: None,
     })
+}
+
+/// 在指定 known_hosts 文件中按当前支持的最小匹配模型检查 Host Key。
+pub fn match_host_key_in_path(
+    path: &Path,
+    host: &str,
+    port: u16,
+    key_algorithm: &str,
+    public_key_base64: &str,
+) -> Result<HostKeyMatch, EngineError> {
+    match_host_key_path(path, host, port, key_algorithm, public_key_base64)
 }
 
 /// 校验应用私有 known_hosts 中的 Host Key 状态。

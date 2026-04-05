@@ -52,6 +52,13 @@ pub struct ExpectedHostKey {
     pub fingerprint_sha256: String,
 }
 
+/// SSH 连接链路需要校验的 Host Key 集合。
+#[derive(Debug, Clone, Default)]
+pub struct ExpectedHostKeys {
+    pub target: Option<ExpectedHostKey>,
+    pub proxy_jump: Option<ExpectedHostKey>,
+}
+
 /// 会话内部命令。
 pub enum SessionCommand {
     Write(Vec<u8>),
@@ -702,32 +709,25 @@ async fn socks5_connect_handshake(
 pub async fn run_session_loop(
     session_id: String,
     profile: HostProfile,
-    expected_host_key: Option<ExpectedHostKey>,
+    expected_host_keys: ExpectedHostKeys,
     size: TerminalSize,
     mut rx: mpsc::UnboundedReceiver<SessionCommand>,
     on_event: EventCallback,
 ) -> Result<(), EngineError> {
     // 正式 SSH 握手同样需要超时保护，覆盖 HostKeyPolicy::Off 等不走预检的路径。
     const SSH_CONNECT_TIMEOUT_SECS: u64 = 8;
-    let addr = format!("{}:{}", profile.host, profile.port);
     let config = Arc::new(client::Config::default());
-    let host_key_state = HostKeyCheckState {
-        error: Arc::new(StdMutex::new(None)),
-    };
     let remote_routes: Arc<RwLock<HashMap<u16, RemoteRoute>>> =
         Arc::new(RwLock::new(HashMap::new()));
-    let mut session = timeout(
+    let connect_result = timeout(
         Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS),
-        client::connect(
-            config,
-            addr,
-            ClientHandler {
-                expected_host_key,
-                host_key_state: host_key_state.clone(),
-                remote_routes: Arc::clone(&remote_routes),
-                session_id: session_id.clone(),
-                on_event: Some(Arc::clone(&on_event)),
-            },
+        connect_session(
+            Arc::clone(&config),
+            &session_id,
+            &profile,
+            expected_host_keys,
+            Arc::clone(&remote_routes),
+            Arc::clone(&on_event),
         ),
     )
     .await
@@ -740,15 +740,12 @@ pub async fn run_session_loop(
                 profile.host, profile.port, SSH_CONNECT_TIMEOUT_SECS
             ),
         )
-    })?
-    .map_err(|err| {
-        if let Ok(mut guard) = host_key_state.error.lock()
-            && let Some(saved) = guard.take()
-        {
-            return saved;
-        }
-        EngineError::with_detail("ssh_connect_failed", "无法连接到目标主机", err.to_string())
     })?;
+
+    let ConnectedSession {
+        mut session,
+        _proxy_jump_session,
+    } = connect_result?;
 
     authenticate(&mut session, &profile, AuthPurpose::Session).await?;
 
@@ -1069,6 +1066,239 @@ pub async fn run_session_loop(
         error: None,
     });
     Ok(())
+}
+
+struct ConnectedSession {
+    session: client::Handle<ClientHandler>,
+    _proxy_jump_session: Option<Arc<Mutex<client::Handle<ClientHandler>>>>,
+}
+
+async fn connect_session(
+    config: Arc<client::Config>,
+    session_id: &str,
+    profile: &HostProfile,
+    expected_host_keys: ExpectedHostKeys,
+    remote_routes: Arc<RwLock<HashMap<u16, RemoteRoute>>>,
+    on_event: EventCallback,
+) -> Result<ConnectedSession, EngineError> {
+    let Some(proxy_jump) = parse_proxy_jump(profile.proxy_jump.as_deref())? else {
+        let session = connect_handle(
+            config,
+            session_id,
+            &profile.host,
+            profile.port,
+            expected_host_keys.target,
+            remote_routes,
+            Some(on_event),
+        )
+        .await?;
+        return Ok(ConnectedSession {
+            session,
+            _proxy_jump_session: None,
+        });
+    };
+    log_telemetry(
+        TelemetryLevel::Info,
+        "ssh.proxy_jump.start",
+        None,
+        json!({
+            "profileId": profile.id,
+            "host": profile.host,
+            "port": profile.port,
+            "jumpHost": proxy_jump.host,
+            "jumpPort": proxy_jump.port,
+        }),
+    );
+
+    let jump_profile = HostProfile {
+        id: format!("{}::proxy_jump", profile.id),
+        name: format!("{}::proxy_jump", profile.name),
+        host: proxy_jump.host,
+        port: proxy_jump.port,
+        username: profile.username.clone(),
+        auth_type: profile.auth_type.clone(),
+        private_key_path: profile.private_key_path.clone(),
+        identity_files: profile.identity_files.clone(),
+        private_key_passphrase_ref: profile.private_key_passphrase_ref.clone(),
+        password_ref: profile.password_ref.clone(),
+        known_host: None,
+        proxy_command: None,
+        proxy_jump: None,
+        add_keys_to_agent: None,
+        user_known_hosts_file: profile.user_known_hosts_file.clone(),
+        strict_host_key_checking: profile.strict_host_key_checking,
+        tags: None,
+        terminal_type: None,
+        target_system: None,
+        charset: None,
+        word_separators: None,
+        bell_mode: None,
+        bell_cooldown_ms: None,
+        description: None,
+    };
+
+    let mut jump_session = connect_handle(
+        Arc::clone(&config),
+        session_id,
+        &jump_profile.host,
+        jump_profile.port,
+        expected_host_keys.proxy_jump,
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    )
+    .await?;
+    authenticate(&mut jump_session, &jump_profile, AuthPurpose::Session).await?;
+
+    let channel = jump_session
+        .channel_open_direct_tcpip(
+            profile.host.clone(),
+            profile.port as u32,
+            "127.0.0.1".to_string(),
+            0,
+        )
+        .await
+        .map_err(|err| {
+            log_telemetry(
+                TelemetryLevel::Warn,
+                "ssh.proxy_jump.failed",
+                None,
+                json!({
+                    "profileId": profile.id,
+                    "host": profile.host,
+                    "port": profile.port,
+                    "jumpHost": jump_profile.host,
+                    "jumpPort": jump_profile.port,
+                    "detail": err.to_string(),
+                }),
+            );
+            EngineError::with_detail(
+                "ssh_proxy_jump_failed",
+                "无法通过跳板机建立目标连接",
+                err.to_string(),
+            )
+        })?;
+
+    let stream = channel.into_stream();
+    let target_host_key_state = HostKeyCheckState {
+        error: Arc::new(StdMutex::new(None)),
+    };
+    let session = client::connect_stream(
+        config,
+        stream,
+        ClientHandler {
+            expected_host_key: expected_host_keys.target,
+            host_key_state: target_host_key_state.clone(),
+            remote_routes,
+            session_id: session_id.to_string(),
+            on_event: Some(on_event),
+        },
+    )
+    .await
+    .map_err(|err| map_connect_error(err, &target_host_key_state, "ssh_connect_failed"))?;
+    log_telemetry(
+        TelemetryLevel::Info,
+        "ssh.proxy_jump.success",
+        None,
+        json!({
+            "profileId": profile.id,
+            "host": profile.host,
+            "port": profile.port,
+            "jumpHost": jump_profile.host,
+            "jumpPort": jump_profile.port,
+        }),
+    );
+
+    Ok(ConnectedSession {
+        session,
+        _proxy_jump_session: Some(Arc::new(Mutex::new(jump_session))),
+    })
+}
+
+async fn connect_handle(
+    config: Arc<client::Config>,
+    session_id: &str,
+    host: &str,
+    port: u16,
+    expected_host_key: Option<ExpectedHostKey>,
+    remote_routes: Arc<RwLock<HashMap<u16, RemoteRoute>>>,
+    on_event: Option<EventCallback>,
+) -> Result<client::Handle<ClientHandler>, EngineError> {
+    let host_key_state = HostKeyCheckState {
+        error: Arc::new(StdMutex::new(None)),
+    };
+    client::connect(
+        config,
+        format!("{host}:{port}"),
+        ClientHandler {
+            expected_host_key,
+            host_key_state: host_key_state.clone(),
+            remote_routes,
+            session_id: session_id.to_string(),
+            on_event,
+        },
+    )
+    .await
+    .map_err(|err| map_connect_error(err, &host_key_state, "ssh_connect_failed"))
+}
+
+fn map_connect_error(
+    err: anyhow::Error,
+    host_key_state: &HostKeyCheckState,
+    code: &str,
+) -> EngineError {
+    if let Ok(mut guard) = host_key_state.error.lock()
+        && let Some(saved) = guard.take()
+    {
+        return saved;
+    }
+    EngineError::with_detail(code, "无法连接到目标主机", err.to_string())
+}
+
+#[derive(Debug, Clone)]
+struct ProxyJumpTarget {
+    host: String,
+    port: u16,
+}
+
+fn parse_proxy_jump(value: Option<&str>) -> Result<Option<ProxyJumpTarget>, EngineError> {
+    let Some(value) = value.map(str::trim).filter(|item| !item.is_empty()) else {
+        return Ok(None);
+    };
+    if value.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    if value.contains(',') || value.contains(' ') || value.contains('\t') || value.contains('@') {
+        return Err(EngineError::new(
+            "ssh_proxy_jump_unsupported",
+            "当前仅支持单跳 ProxyJump host[:port]",
+        ));
+    }
+    if let Some(host) = value.strip_prefix('[')
+        && let Some((host, port_text)) = host.split_once("]:")
+    {
+        return Ok(Some(ProxyJumpTarget {
+            host: host.to_string(),
+            port: parse_proxy_jump_port(port_text)?,
+        }));
+    }
+    if value.matches(':').count() == 1
+        && let Some((host, port_text)) = value.rsplit_once(':')
+    {
+        return Ok(Some(ProxyJumpTarget {
+            host: host.to_string(),
+            port: parse_proxy_jump_port(port_text)?,
+        }));
+    }
+    Ok(Some(ProxyJumpTarget {
+        host: value.to_string(),
+        port: 22,
+    }))
+}
+
+fn parse_proxy_jump_port(value: &str) -> Result<u16, EngineError> {
+    value
+        .parse::<u16>()
+        .map_err(|_| EngineError::new("ssh_proxy_jump_invalid_port", "ProxyJump 端口格式无效"))
 }
 
 #[cfg(test)]

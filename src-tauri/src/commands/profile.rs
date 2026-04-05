@@ -1,5 +1,6 @@
 //! 主机配置相关命令。
 use engine::{EngineError, HostProfile};
+use serde_json::json;
 use tauri::AppHandle;
 use tauri::State;
 use uuid::Uuid;
@@ -11,6 +12,7 @@ use crate::ssh_profile_store::{
     read_ssh_groups, read_ssh_profiles, write_ssh_groups, write_ssh_profiles,
 };
 use crate::state::SecurityState;
+use crate::telemetry::{TelemetryLevel, log_telemetry};
 
 const GROUP_NAME_MAX_LENGTH: usize = 12;
 /// 会话名称上限与前端 ProfileModal 保持一致，避免前后端校验结果不同。
@@ -77,6 +79,7 @@ pub fn profile_save(
     let secret_store = SecretStore::new(&crypto);
     profile.name = validate_profile_name(profile.name)?;
     profile.tags = normalize_profile_tags(profile.tags)?;
+    profile = normalize_ssh_advanced_fields(profile)?;
     if profile.id.is_empty() {
         profile.id = Uuid::new_v4().to_string();
     }
@@ -189,6 +192,97 @@ pub(crate) fn normalize_profile_tags(
     Ok(Some(vec![normalized.to_string()]))
 }
 
+/// 规范化 SSH 高级字段，确保旧字段与新字段保持一致。
+pub(crate) fn normalize_ssh_advanced_fields(
+    mut profile: HostProfile,
+) -> Result<HostProfile, EngineError> {
+    profile.private_key_path = normalize_optional_string(profile.private_key_path);
+    profile.private_key_passphrase_ref =
+        normalize_optional_string(profile.private_key_passphrase_ref);
+    profile.password_ref = normalize_optional_string(profile.password_ref);
+    profile.known_host = normalize_optional_string(profile.known_host);
+    profile.proxy_command = normalize_optional_string(profile.proxy_command);
+    profile.proxy_jump = normalize_optional_string(profile.proxy_jump);
+    profile.add_keys_to_agent = normalize_optional_string(profile.add_keys_to_agent);
+    profile.user_known_hosts_file = normalize_optional_string(profile.user_known_hosts_file);
+    profile.terminal_type = normalize_optional_string(profile.terminal_type);
+    profile.target_system = normalize_optional_string(profile.target_system);
+    profile.charset = normalize_optional_string(profile.charset);
+    profile.word_separators = normalize_optional_string(profile.word_separators);
+    profile.description = normalize_optional_string(profile.description);
+    profile.identity_files = normalize_identity_files(profile.identity_files)?;
+
+    if profile.identity_files.is_none() && profile.private_key_path.is_some() {
+        profile.identity_files = Some(vec![profile.private_key_path.clone().unwrap_or_default()]);
+    }
+
+    if let Some(identity_files) = profile.identity_files.as_ref() {
+        profile.private_key_path = identity_files.first().cloned();
+    }
+
+    if profile.proxy_jump.is_some() {
+        if profile.proxy_command.is_some() {
+            log_telemetry(
+                TelemetryLevel::Info,
+                "ssh.profile.proxy_command.ignored",
+                None,
+                json!({
+                    "profileId": profile.id,
+                    "reason": "proxy_jump_present",
+                }),
+            );
+        }
+        profile.proxy_command = None;
+    }
+
+    if matches!(profile.auth_type, engine::AuthType::PrivateKey)
+        && profile.private_key_path.is_none()
+        && profile.identity_files.is_none()
+    {
+        return Err(EngineError::new(
+            "profile_identity_files_required",
+            "私钥认证至少需要一个私钥文件",
+        ));
+    }
+
+    Ok(profile)
+}
+
+fn normalize_optional_string(value: Option<String>) -> Option<String> {
+    value.and_then(|item| {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn normalize_identity_files(
+    values: Option<Vec<String>>,
+) -> Result<Option<Vec<String>>, EngineError> {
+    let Some(values) = values else {
+        return Ok(None);
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut normalized = Vec::new();
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = trimmed.to_lowercase();
+        if seen.insert(key) {
+            normalized.push(trimmed.to_string());
+        }
+    }
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(normalized))
+}
+
 fn now_epoch() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -200,4 +294,100 @@ fn redact_profile_secrets(mut profile: HostProfile) -> HostProfile {
     profile.password_ref = None;
     profile.private_key_passphrase_ref = None;
     profile
+}
+
+#[cfg(test)]
+mod tests {
+    use engine::{AuthType, HostProfile};
+
+    use super::normalize_ssh_advanced_fields;
+
+    fn sample_profile() -> HostProfile {
+        HostProfile {
+            id: String::new(),
+            name: "demo".to_string(),
+            host: "example.com".to_string(),
+            port: 22,
+            username: "root".to_string(),
+            auth_type: AuthType::Password,
+            private_key_path: None,
+            identity_files: None,
+            private_key_passphrase_ref: None,
+            password_ref: None,
+            known_host: None,
+            proxy_command: None,
+            proxy_jump: None,
+            add_keys_to_agent: None,
+            user_known_hosts_file: None,
+            strict_host_key_checking: None,
+            tags: None,
+            terminal_type: None,
+            target_system: None,
+            charset: None,
+            word_separators: None,
+            bell_mode: None,
+            bell_cooldown_ms: None,
+            description: None,
+        }
+    }
+
+    #[test]
+    fn normalize_ssh_advanced_fields_syncs_private_key_and_identity_files() {
+        let mut profile = sample_profile();
+        profile.auth_type = AuthType::PrivateKey;
+        profile.private_key_path = Some("  C:/keys/id_ed25519  ".to_string());
+
+        let normalized = normalize_ssh_advanced_fields(profile).expect("normalized");
+
+        assert_eq!(
+            normalized.identity_files,
+            Some(vec!["C:/keys/id_ed25519".to_string()])
+        );
+        assert_eq!(
+            normalized.private_key_path.as_deref(),
+            Some("C:/keys/id_ed25519")
+        );
+    }
+
+    #[test]
+    fn normalize_ssh_advanced_fields_prefers_first_identity_file() {
+        let mut profile = sample_profile();
+        profile.auth_type = AuthType::PrivateKey;
+        profile.private_key_path = Some("C:/keys/legacy".to_string());
+        profile.identity_files = Some(vec![
+            " C:/keys/id_a ".to_string(),
+            "C:/keys/id_b".to_string(),
+            "C:/keys/id_a".to_string(),
+        ]);
+
+        let normalized = normalize_ssh_advanced_fields(profile).expect("normalized");
+
+        assert_eq!(
+            normalized.identity_files,
+            Some(vec!["C:/keys/id_a".to_string(), "C:/keys/id_b".to_string()])
+        );
+        assert_eq!(normalized.private_key_path.as_deref(), Some("C:/keys/id_a"));
+    }
+
+    #[test]
+    fn normalize_ssh_advanced_fields_clears_proxy_command_when_proxy_jump_exists() {
+        let mut profile = sample_profile();
+        profile.proxy_jump = Some("bastion".to_string());
+        profile.proxy_command = Some("ssh -W %h:%p bastion".to_string());
+
+        let normalized = normalize_ssh_advanced_fields(profile).expect("normalized");
+
+        assert_eq!(normalized.proxy_jump.as_deref(), Some("bastion"));
+        assert!(normalized.proxy_command.is_none());
+    }
+
+    #[test]
+    fn normalize_ssh_advanced_fields_rejects_private_key_auth_without_keys() {
+        let mut profile = sample_profile();
+        profile.auth_type = AuthType::PrivateKey;
+
+        let err = normalize_ssh_advanced_fields(profile).expect_err("missing keys");
+
+        assert_eq!(err.code, "profile_identity_files_required");
+    }
 }

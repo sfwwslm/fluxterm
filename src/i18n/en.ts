@@ -584,6 +584,15 @@ export const enUsTranslations = {
   "profile.section.modem": "X/Y/Z Modem",
   "profile.section.sshHint":
     "This section is reserved for low-level SSH parameters such as charset, target system, proxy, key command, and host verification policy.",
+  "profile.ssh.group.auth": "Auth",
+  "profile.ssh.group.authHint":
+    "Configure the primary key, fallback identity files, and private-key auth behavior.",
+  "profile.ssh.group.proxy": "Proxy",
+  "profile.ssh.group.proxyHint":
+    "P1 only executes single-hop ProxyJump; other fields are stored and shown only.",
+  "profile.ssh.group.hostKey": "Host Key",
+  "profile.ssh.group.hostKeyHint":
+    "Add profile-level Host Key overrides and an extra known_hosts source.",
   "profile.terminal.bellMode": "Bell Response",
   "profile.terminal.bellModeHint": "Choose how terminal bells are surfaced.",
   "profile.terminal.bellMode.silent": "Silent",
@@ -619,17 +628,50 @@ export const enUsTranslations = {
   "profile.form.group": "Group",
   "profile.form.password": "Password",
   "profile.form.privateKeyPath": "Private Key File",
+  "profile.form.identityFiles": "Identity Files",
   "profile.form.privateKeyPassphrase": "Private Key Passphrase",
+  "profile.form.proxyJump": "ProxyJump",
+  "profile.form.proxyCommand": "ProxyCommand",
+  "profile.form.userKnownHostsFile": "UserKnownHostsFile",
+  "profile.form.strictHostKeyChecking": "StrictHostKeyChecking",
+  "profile.form.addKeysToAgent": "AddKeysToAgent",
   "profile.nameRequired": "Session name is required",
   "profile.nameTooLong": "Session name must be at most {max} characters",
   "profile.placeholder.name": "Work / Production",
   "profile.placeholder.host": "example.com",
   "profile.placeholder.group": "Production / DC A",
   "profile.placeholder.privateKeyPath": "Select a private key file",
+  "profile.placeholder.proxyJump": "bastion or bastion:2222",
+  "profile.placeholder.proxyCommand": "Stored, but not executed in P1",
+  "profile.placeholder.userKnownHostsFile": "~/.ssh/known_hosts_work",
+  "profile.placeholder.addKeysToAgent": "yes / ask / confirm / no",
   "profile.auth.password": "Password",
   "profile.auth.privateKey": "Private Key",
   "profile.actions.pickKey": "Choose file",
+  "profile.actions.addIdentityFile": "Add Key",
+  "profile.actions.moveUp": "Up",
+  "profile.actions.moveDown": "Down",
   "profile.actions.restoreDefaults": "Restore Defaults",
+  "profile.ssh.identityFilesHint":
+    "The first item is treated as the primary key and the rest are tried in order.",
+  "profile.ssh.identityFilesEmpty": "No extra identity files configured.",
+  "profile.ssh.identityFilesDisabled":
+    "Switch to private-key auth to configure fallback identity files.",
+  "profile.ssh.proxyJumpHint":
+    "Only single-hop `host[:port]` is supported; the jump host reuses this profile's username and auth method.",
+  "profile.ssh.proxyCommandHint":
+    "This field is stored, but not executed in P1.",
+  "profile.ssh.proxyCommandDisabledHint":
+    "Once ProxyJump is set, ProxyCommand is ignored on save.",
+  "profile.ssh.strictHostKeyCheckingHint":
+    "Inherit uses the current terminal-domain Host Key policy.",
+  "profile.ssh.addKeysToAgentHint":
+    "This field is stored, but not executed in P1.",
+  "profile.ssh.userKnownHostsFileHint":
+    "Used only as an extra read-only verification source and never written back.",
+  "profile.ssh.strictHostKeyChecking.inherit": "Inherit Global",
+  "profile.ssh.strictHostKeyChecking.strict": "Strict",
+  "profile.ssh.strictHostKeyChecking.off": "Off",
   "profile.unsavedChangesConfirmTitle": "Discard Changes",
   "profile.unsavedChangesConfirm":
     "You have unsaved session changes. Discard them and close?",
