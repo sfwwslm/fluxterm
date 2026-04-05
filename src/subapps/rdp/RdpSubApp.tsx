@@ -694,6 +694,14 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     workerRef.current?.postMessage({ type: "disconnect", sessionId });
   }, []);
 
+  /** 关闭最后一个标签前先同步清空本地状态，避免统一关窗时重复断开同一会话。 */
+  const clearLastSessionTab = useCallback((sessionId: string) => {
+    setSessions([]);
+    setActiveSessionId(null);
+    sessionsRef.current = [];
+    workerRef.current?.postMessage({ type: "disconnect", sessionId });
+  }, []);
+
   const resizeRuntimeRef = useRef<{
     timer: number | null;
     inFlight: boolean;
@@ -1019,11 +1027,19 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   /** 主动关闭某个会话标签，并同步断开后端会话。 */
   async function handleCloseSession(sessionId: string) {
     setGlobalError("");
+    const isLastSession =
+      sessionsRef.current.length === 1 &&
+      sessionsRef.current[0]?.session.sessionId === sessionId;
     const traceId =
       sessionsRef.current.find((tab) => tab.session.sessionId === sessionId)
         ?.traceId ?? createTraceId();
     try {
       await disconnectRdpSession(sessionId, { traceId });
+      if (isLastSession) {
+        clearLastSessionTab(sessionId);
+        await requestWindowClose();
+        return;
+      }
       removeSessionTab(sessionId);
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : String(error));
