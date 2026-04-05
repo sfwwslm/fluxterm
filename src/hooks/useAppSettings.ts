@@ -116,6 +116,10 @@ function clampBackgroundImageSurfaceAlpha(value: number) {
 /** 规范化并回退不支持的主题 ID。 */
 function normalizeThemeId(value: unknown): ThemeId | null {
   if (value === "dark" || value === "light") return value;
+  if (value === "catppuccin-latte") return value;
+  if (value === "catppuccin-frappe") return value;
+  if (value === "catppuccin-macchiato") return value;
+  if (value === "catppuccin-mocha") return value;
   if (value === "aurora" || value === "sahara") return "dark";
   if (value === "dawn") return "light";
   return null;

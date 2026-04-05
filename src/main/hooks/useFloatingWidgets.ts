@@ -62,6 +62,10 @@ function normalizeWidgetKey(value: unknown): WidgetKey | null {
 
 function normalizeThemeId(value: unknown): ThemeId | null {
   if (value === "dark" || value === "light") return value;
+  if (value === "catppuccin-latte") return value;
+  if (value === "catppuccin-frappe") return value;
+  if (value === "catppuccin-macchiato") return value;
+  if (value === "catppuccin-mocha") return value;
   if (value === "aurora" || value === "sahara") return "dark";
   if (value === "dawn") return "light";
   return null;

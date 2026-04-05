@@ -482,7 +482,13 @@ export type WidgetKey =
 export type WidgetArea = "left" | "right" | "bottom";
 
 /** 主题标识。 */
-export type ThemeId = "dark" | "light";
+export type ThemeId =
+  | "dark"
+  | "light"
+  | "catppuccin-latte"
+  | "catppuccin-frappe"
+  | "catppuccin-macchiato"
+  | "catppuccin-mocha";
 /** 会话 UI 状态。 */
 export type SessionStateUi =
   | "connecting"

@@ -2,7 +2,7 @@
  * 主题契约定义。
  * 职责：约束主题预设的结构化 token 形态，避免主题字段在业务侧随意扩散。
  */
-import type { Locale } from "@/i18n";
+import type { TranslationKey } from "@/i18n";
 
 /** 基础视觉原语集合。 */
 export type FoundationTokens = {
@@ -220,8 +220,8 @@ export type TerminalThemeTokens = {
 
 /** 可持久化的主题定义结构。 */
 export type ThemeDefinition = {
-  /** 多语言主题名称。 */
-  label: Record<Locale, string>;
+  /** 主题名称对应的国际化 key。 */
+  labelKey: TranslationKey;
   /** 基础视觉原语。 */
   foundation: FoundationTokens;
   /** 语义层 token。 */

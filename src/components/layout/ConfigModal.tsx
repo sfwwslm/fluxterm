@@ -40,6 +40,7 @@ import {
   MIN_BACKGROUND_IMAGE_SURFACE_ALPHA,
 } from "@/hooks/useAppSettings";
 import type { ThemeId } from "@/types";
+import type { TranslationKey } from "@/i18n";
 import {
   BUILTIN_WALLPAPERS,
   getBuiltinWallpaperByAsset,
@@ -91,7 +92,7 @@ type ConfigModalProps = {
   themeId: ThemeId;
   shellId: string | null;
   availableShells: Array<{ id: string; label: string }>;
-  themes: Record<ThemeId, { label: Record<Locale, string> }>;
+  themes: Record<ThemeId, { labelKey: TranslationKey }>;
   sftpEnabled?: boolean;
   fileDefaultEditorPath?: string;
   backgroundImageEnabled?: boolean;
@@ -941,7 +942,7 @@ export default function ConfigModal({
                 value={themeId}
                 options={Object.entries(themes).map(([key, theme]) => ({
                   value: key,
-                  label: theme.label[locale],
+                  label: t(theme.labelKey),
                 }))}
                 onChange={(value) => onThemeChange?.(value as ThemeId)}
                 aria-label={t("settings.theme")}

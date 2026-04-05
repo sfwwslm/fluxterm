@@ -254,7 +254,8 @@ html[data-window-surface="detached"][data-window-appearance="pending"] #root {
   --ui-input-bg-hover: var(--chrome-input-bg-hover);
 }
 
-:root[data-theme="light"] {
+:root[data-theme="light"],
+:root[data-theme="catppuccin-latte"] {
   --ui-button-glow: 0 8px 18px rgba(15, 23, 42, 0.08);
   --ui-button-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
   --ui-input-glow: 0 8px 18px rgba(15, 23, 42, 0.06);

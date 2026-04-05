@@ -5,17 +5,309 @@
 import type { ThemeId } from "@/types";
 import type { ThemePreset } from "@/main/theme/themeContracts";
 
+type CatppuccinFlavor = {
+  rosewater: string;
+  flamingo: string;
+  pink: string;
+  mauve: string;
+  red: string;
+  maroon: string;
+  peach: string;
+  yellow: string;
+  green: string;
+  teal: string;
+  sky: string;
+  sapphire: string;
+  blue: string;
+  lavender: string;
+  text: string;
+  subtext1: string;
+  subtext0: string;
+  overlay2: string;
+  overlay1: string;
+  overlay0: string;
+  surface2: string;
+  surface1: string;
+  surface0: string;
+  base: string;
+  mantle: string;
+  crust: string;
+};
+
+const fontFamilyBody = '"IBM Plex Sans", "Segoe UI", sans-serif';
+const fontFamilyMono = '"JetBrains Mono", "Cascadia Mono", monospace';
+
+const catppuccinLatte: CatppuccinFlavor = {
+  rosewater: "#dc8a78",
+  flamingo: "#dd7878",
+  pink: "#ea76cb",
+  mauve: "#8839ef",
+  red: "#d20f39",
+  maroon: "#e64553",
+  peach: "#fe640b",
+  yellow: "#df8e1d",
+  green: "#40a02b",
+  teal: "#179299",
+  sky: "#04a5e5",
+  sapphire: "#209fb5",
+  blue: "#1e66f5",
+  lavender: "#7287fd",
+  text: "#4c4f69",
+  subtext1: "#5c5f77",
+  subtext0: "#6c6f85",
+  overlay2: "#7c7f93",
+  overlay1: "#8c8fa1",
+  overlay0: "#9ca0b0",
+  surface2: "#acb0be",
+  surface1: "#bcc0cc",
+  surface0: "#ccd0da",
+  base: "#eff1f5",
+  mantle: "#e6e9ef",
+  crust: "#dce0e8",
+};
+
+const catppuccinFrappe: CatppuccinFlavor = {
+  rosewater: "#f2d5cf",
+  flamingo: "#eebebe",
+  pink: "#f4b8e4",
+  mauve: "#ca9ee6",
+  red: "#e78284",
+  maroon: "#ea999c",
+  peach: "#ef9f76",
+  yellow: "#e5c890",
+  green: "#a6d189",
+  teal: "#81c8be",
+  sky: "#99d1db",
+  sapphire: "#85c1dc",
+  blue: "#8caaee",
+  lavender: "#babbf1",
+  text: "#c6d0f5",
+  subtext1: "#b5bfe2",
+  subtext0: "#a5adce",
+  overlay2: "#949cbb",
+  overlay1: "#838ba7",
+  overlay0: "#737994",
+  surface2: "#626880",
+  surface1: "#51576d",
+  surface0: "#414559",
+  base: "#303446",
+  mantle: "#292c3c",
+  crust: "#232634",
+};
+
+const catppuccinMacchiato: CatppuccinFlavor = {
+  rosewater: "#f4dbd6",
+  flamingo: "#f0c6c6",
+  pink: "#f5bde6",
+  mauve: "#c6a0f6",
+  red: "#ed8796",
+  maroon: "#ee99a0",
+  peach: "#f5a97f",
+  yellow: "#eed49f",
+  green: "#a6da95",
+  teal: "#8bd5ca",
+  sky: "#91d7e3",
+  sapphire: "#7dc4e4",
+  blue: "#8aadf4",
+  lavender: "#b7bdf8",
+  text: "#cad3f5",
+  subtext1: "#b8c0e0",
+  subtext0: "#a5adcb",
+  overlay2: "#939ab7",
+  overlay1: "#8087a2",
+  overlay0: "#6e738d",
+  surface2: "#5b6078",
+  surface1: "#494d64",
+  surface0: "#363a4f",
+  base: "#24273a",
+  mantle: "#1e2030",
+  crust: "#181926",
+};
+
+const catppuccinMocha: CatppuccinFlavor = {
+  rosewater: "#f5e0dc",
+  flamingo: "#f2cdcd",
+  pink: "#f5c2e7",
+  mauve: "#cba6f7",
+  red: "#f38ba8",
+  maroon: "#eba0ac",
+  peach: "#fab387",
+  yellow: "#f9e2af",
+  green: "#a6e3a1",
+  teal: "#94e2d5",
+  sky: "#89dceb",
+  sapphire: "#74c7ec",
+  blue: "#89b4fa",
+  lavender: "#b4befe",
+  text: "#cdd6f4",
+  subtext1: "#bac2de",
+  subtext0: "#a6adc8",
+  overlay2: "#9399b2",
+  overlay1: "#7f849c",
+  overlay0: "#6c7086",
+  surface2: "#585b70",
+  surface1: "#45475a",
+  surface0: "#313244",
+  base: "#1e1e2e",
+  mantle: "#181825",
+  crust: "#11111b",
+};
+
+/** Catppuccin 系列主题仅复用其公开配色。*/
+function rgbaFromHex(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function createCatppuccinPreset(input: {
+  labelKey:
+    | "theme.catppuccinLatte"
+    | "theme.catppuccinFrappe"
+    | "theme.catppuccinMacchiato"
+    | "theme.catppuccinMocha";
+  flavor: CatppuccinFlavor;
+  mode: "light" | "dark";
+}): ThemePreset {
+  const { labelKey, flavor, mode } = input;
+  const isLight = mode === "light";
+  return {
+    labelKey,
+    foundation: {
+      typography: {
+        fontFamilyBody,
+        fontFamilyMono,
+        textPrimary: flavor.text,
+        textSecondary: flavor.subtext1,
+        textTertiary: flavor.subtext0,
+        textMuted: isLight ? flavor.overlay1 : flavor.overlay0,
+        textSoft: isLight ? flavor.subtext1 : flavor.text,
+        textQuiet: flavor.overlay1,
+      },
+      accent: {
+        default: flavor.blue,
+        strong: flavor.lavender,
+        contrast: isLight ? flavor.base : flavor.crust,
+        soft: rgbaFromHex(flavor.blue, isLight ? 0.2 : 0.24),
+        subtle: rgbaFromHex(flavor.blue, isLight ? 0.1 : 0.14),
+      },
+      effects: {
+        shadowStrong: isLight
+          ? "0 18px 38px rgba(76, 79, 105, 0.12)"
+          : "0 18px 38px rgba(17, 17, 27, 0.42)",
+        brandGlow: `0 0 18px ${rgbaFromHex(flavor.blue, isLight ? 0.2 : 0.18)}`,
+      },
+    },
+    semantic: {
+      background: {
+        appBase: flavor.base,
+        appGradient: isLight
+          ? `linear-gradient(160deg, ${flavor.base} 0%, ${flavor.mantle} 52%, ${flavor.crust} 100%)`
+          : `linear-gradient(160deg, ${flavor.crust} 0%, ${flavor.base} 48%, ${flavor.mantle} 100%)`,
+        appImage: "none",
+        appOverlay: "none",
+      },
+      surface: {
+        canvas: isLight ? flavor.mantle : flavor.crust,
+        base: flavor.mantle,
+        strong: isLight ? flavor.crust : flavor.mantle,
+        alt: flavor.crust,
+        panel: flavor.mantle,
+        elevated: flavor.base,
+        header: flavor.mantle,
+        headerStrong: isLight ? flavor.crust : flavor.mantle,
+        menu: flavor.base,
+      },
+      border: {
+        weak: rgbaFromHex(flavor.overlay2, isLight ? 0.16 : 0.18),
+        soft: rgbaFromHex(flavor.overlay1, isLight ? 0.12 : 0.14),
+        strong: rgbaFromHex(flavor.overlay2, isLight ? 0.24 : 0.26),
+        input: rgbaFromHex(flavor.overlay2, isLight ? 0.22 : 0.24),
+        focus: flavor.blue,
+      },
+      feedback: {
+        success: flavor.green,
+        successSoft: rgbaFromHex(flavor.green, isLight ? 0.14 : 0.18),
+        warning: flavor.yellow,
+        warningSoft: rgbaFromHex(flavor.yellow, isLight ? 0.14 : 0.18),
+        info: flavor.sky,
+        infoSoft: rgbaFromHex(flavor.sky, isLight ? 0.14 : 0.18),
+        danger: flavor.red,
+        dangerSoft: rgbaFromHex(flavor.red, isLight ? 0.14 : 0.18),
+      },
+    },
+    component: {
+      button: {
+        bg: isLight ? flavor.base : flavor.surface0,
+        bgStrong: isLight ? flavor.surface0 : flavor.surface1,
+        text: flavor.text,
+      },
+      input: {
+        bg: isLight ? flavor.base : flavor.surface0,
+        text: flavor.text,
+      },
+      tabs: {
+        bg: isLight ? flavor.base : flavor.surface0,
+        border: rgbaFromHex(flavor.overlay2, isLight ? 0.18 : 0.22),
+      },
+      layout: {
+        resizerBg: rgbaFromHex(flavor.overlay1, isLight ? 0.12 : 0.1),
+      },
+      progress: {
+        gradient: `linear-gradient(120deg, ${flavor.blue}, ${flavor.mauve})`,
+      },
+    },
+    terminal: {
+      background: flavor.base,
+      foreground: flavor.text,
+      selectionBackground: rgbaFromHex(flavor.blue, isLight ? 0.18 : 0.24),
+      selectionForeground: isLight ? flavor.crust : flavor.text,
+      cursor: flavor.rosewater,
+      cursorAccent: flavor.base,
+      searchMatchBackground: rgbaFromHex(flavor.yellow, isLight ? 0.18 : 0.22),
+      searchMatchBorder: flavor.yellow,
+      searchMatchOverviewRuler: flavor.yellow,
+      searchActiveMatchBackground: rgbaFromHex(
+        flavor.blue,
+        isLight ? 0.16 : 0.22,
+      ),
+      searchActiveMatchBorder: flavor.blue,
+      searchActiveMatchOverviewRuler: flavor.blue,
+      ansi: {
+        black: flavor.surface1,
+        red: flavor.red,
+        green: flavor.green,
+        yellow: flavor.yellow,
+        blue: flavor.blue,
+        magenta: flavor.pink,
+        cyan: flavor.teal,
+        white: flavor.subtext1,
+        brightBlack: flavor.surface2,
+        brightRed: flavor.maroon,
+        brightGreen: flavor.green,
+        brightYellow: flavor.peach,
+        brightBlue: flavor.lavender,
+        brightMagenta: flavor.mauve,
+        brightCyan: flavor.sky,
+        brightWhite: flavor.text,
+      },
+    },
+  };
+}
+
 /**
  * 内置主题预设集合。
  * 每个预设都必须完整实现标准主题结构，以便被 CSS 与终端编译器直接消费。
  */
 export const themePresets: Record<ThemeId, ThemePreset> = {
   dark: {
-    label: { "zh-CN": "深色", "en-US": "Dark" },
+    labelKey: "theme.dark",
     foundation: {
       typography: {
-        fontFamilyBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
-        fontFamilyMono: '"JetBrains Mono", "Cascadia Mono", monospace',
+        fontFamilyBody,
+        fontFamilyMono,
         textPrimary: "#f8fafc",
         textSecondary: "#cbd5e1",
         textTertiary: "#94a3b8",
@@ -127,11 +419,11 @@ export const themePresets: Record<ThemeId, ThemePreset> = {
     },
   },
   light: {
-    label: { "zh-CN": "浅色", "en-US": "Light" },
+    labelKey: "theme.light",
     foundation: {
       typography: {
-        fontFamilyBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
-        fontFamilyMono: '"JetBrains Mono", "Cascadia Mono", monospace',
+        fontFamilyBody,
+        fontFamilyMono,
         textPrimary: "#0f172a",
         textSecondary: "#334155",
         textTertiary: "#64748b",
@@ -242,4 +534,24 @@ export const themePresets: Record<ThemeId, ThemePreset> = {
       },
     },
   },
+  "catppuccin-latte": createCatppuccinPreset({
+    labelKey: "theme.catppuccinLatte",
+    flavor: catppuccinLatte,
+    mode: "light",
+  }),
+  "catppuccin-frappe": createCatppuccinPreset({
+    labelKey: "theme.catppuccinFrappe",
+    flavor: catppuccinFrappe,
+    mode: "dark",
+  }),
+  "catppuccin-macchiato": createCatppuccinPreset({
+    labelKey: "theme.catppuccinMacchiato",
+    flavor: catppuccinMacchiato,
+    mode: "dark",
+  }),
+  "catppuccin-mocha": createCatppuccinPreset({
+    labelKey: "theme.catppuccinMocha",
+    flavor: catppuccinMocha,
+    mode: "dark",
+  }),
 };

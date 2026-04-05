@@ -42,12 +42,15 @@
 }
 
 :root[data-theme="light"] .select-menu-button,
-:root[data-theme="light"] .select-menu-list {
+:root[data-theme="light"] .select-menu-list,
+:root[data-theme="catppuccin-latte"] .select-menu-button,
+:root[data-theme="catppuccin-latte"] .select-menu-list {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 
-:root[data-theme="light"] .select-menu-button {
+:root[data-theme="light"] .select-menu-button,
+:root[data-theme="catppuccin-latte"] .select-menu-button {
   text-shadow: none;
   box-shadow:
     0 8px 18px rgba(15, 23, 42, 0.08),
@@ -107,7 +110,8 @@
   pointer-events: none;
 }
 
-:root[data-theme="light"] .select-menu-arrow {
+:root[data-theme="light"] .select-menu-arrow,
+:root[data-theme="catppuccin-latte"] .select-menu-arrow {
   text-shadow: none;
 }
 
