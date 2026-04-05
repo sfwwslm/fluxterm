@@ -128,7 +128,13 @@ type UseSessionStateResult = {
     cols: number,
     rows: number,
   ) => Promise<unknown>;
-  connectProfile: (profile: HostProfile) => Promise<void>;
+  connectProfile: (
+    profile: HostProfile,
+    options?: {
+      onSessionCreated?: (session: Session) => void;
+      shouldSuppressError?: () => boolean;
+    },
+  ) => Promise<void>;
   connectLocalShell: (
     shell: LocalShellProfile | null,
     activate?: boolean,
@@ -716,7 +722,13 @@ export default function useSessionState({
     };
   });
 
-  async function connectProfile(profile: HostProfile) {
+  async function connectProfile(
+    profile: HostProfile,
+    options?: {
+      onSessionCreated?: (session: Session) => void;
+      shouldSuppressError?: () => boolean;
+    },
+  ) {
     clearPendingHostKeyForProfile(profile.id);
     // “正在连接”在发起连接时就记录，避免状态事件先到、会话元数据尚未写入前端时，
     // 日志对象退化成默认的“会话”占位文案。
@@ -745,6 +757,8 @@ export default function useSessionState({
       logError: (message) => {
         void logError(message);
       },
+      onSessionCreated: options?.onSessionCreated,
+      shouldSuppressError: options?.shouldSuppressError,
       openDialog,
     });
   }

@@ -46,6 +46,14 @@ export type Session = {
   } | null;
 };
 
+/** SSH 配置列表中的连接中状态。 */
+export type SshConnectState = {
+  cancellable: boolean;
+};
+
+/** SSH 配置列表中的连接中状态映射。 */
+export type SshConnectStateMap = Record<string, SshConnectState>;
+
 /** 统一的会话输入负载。 */
 export type SessionInput =
   | {

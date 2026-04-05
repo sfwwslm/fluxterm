@@ -62,7 +62,9 @@ import type {
   LocalShellProfile,
   RdpProfile,
   RemoteEditSnapshot,
+  Session,
   SftpEntry,
+  SshConnectStateMap,
   TerminalCwdSupport,
   TerminalPathSyncState,
   TerminalWorkingDirectory,
@@ -207,6 +209,12 @@ function formatMessage(
 function getErrorMessage(error: unknown) {
   return extractErrorMessage(error);
 }
+
+type PendingSshConnectRuntime = {
+  requestId: number;
+  sessionId: string | null;
+  cancelled: boolean;
+};
 
 function normalizeRdpGroupName(value: string) {
   return value.trim();
@@ -619,16 +627,36 @@ export default function AppShell() {
     useState<LocalShellProfile | null>(null);
   const [localShellProfileDraft, setLocalShellProfileDraft] =
     useState<LocalShellConfig>(DEFAULT_LOCAL_SHELL_CONFIG);
-  const [connectingProfileId, setConnectingProfileId] = useState<string | null>(
-    null,
+  const [connectingSshProfiles, setConnectingSshProfiles] =
+    useState<SshConnectStateMap>({});
+  const sshConnectRuntimeRef = useRef<Record<string, PendingSshConnectRuntime>>(
+    {},
   );
-  const latestConnectRequestIdRef = useRef(0);
   const latestRdpConnectRequestIdRef = useRef(0);
+  const nextSshConnectRequestIdRef = useRef(0);
   const isMac = useMemo(() => isMacOS(), []);
 
   const t: Translate = useMemo(
     () => (key, vars) => formatMessage(translations[locale][key] ?? key, vars),
     [locale],
+  );
+  const setSshConnectingState = useCallback(
+    (profileId: string, active: boolean) => {
+      setConnectingSshProfiles((prev) => {
+        if (active) {
+          if (prev[profileId]) return prev;
+          return {
+            ...prev,
+            [profileId]: { cancellable: true },
+          };
+        }
+        if (!prev[profileId]) return prev;
+        const next = { ...prev };
+        delete next[profileId];
+        return next;
+      });
+    },
+    [],
   );
   const aiUnavailableMessage = useMemo(() => {
     if (!aiUnavailableReason) return null;
@@ -2546,36 +2574,75 @@ export default function AppShell() {
 
   const handleConnectProfile = useCallback(
     async (profileInput: HostProfile) => {
-      // 连接流程允许并发触发；用递增 requestId 防止旧请求回写覆盖新状态。
-      const requestId = latestConnectRequestIdRef.current + 1;
-      latestConnectRequestIdRef.current = requestId;
       if (!profileInput.host || !profileInput.username) {
         sessionActions.setBusyMessage(t("messages.missingHostUser"));
         return;
       }
-      if (profileInput.id) {
-        pickProfile(profileInput.id);
-        setConnectingProfileId(profileInput.id);
+      const profileId = profileInput.id;
+      let resolvedProfileId = profileId;
+      const requestId = nextSshConnectRequestIdRef.current + 1;
+      nextSshConnectRequestIdRef.current = requestId;
+      if (profileId) {
+        pickProfile(profileId);
+        sshConnectRuntimeRef.current[profileId] = {
+          requestId,
+          sessionId: null,
+          cancelled: false,
+        };
+        setSshConnectingState(profileId, true);
       }
       sessionActions.setBusyMessage(t("messages.connecting"));
       try {
         const profile = profileInput.id
           ? profileInput
           : await saveProfile(profileInput);
-        setConnectingProfileId(profile.id);
-        await sessionActions.connectProfile(profile);
+        resolvedProfileId = profile.id;
+        sshConnectRuntimeRef.current[profile.id] = {
+          requestId,
+          sessionId: null,
+          cancelled: false,
+        };
+        setSshConnectingState(profile.id, true);
+        await sessionActions.connectProfile(profile, {
+          onSessionCreated: (session: Session) => {
+            const runtime = sshConnectRuntimeRef.current[profile.id];
+            if (!runtime || runtime.requestId !== requestId) return;
+            runtime.sessionId = session.sessionId;
+            if (runtime.cancelled) {
+              void sessionActions
+                .disconnectSession(session.sessionId)
+                .catch(() => {});
+            }
+          },
+          shouldSuppressError: () => {
+            const runtime = sshConnectRuntimeRef.current[profile.id];
+            return Boolean(
+              runtime && runtime.requestId === requestId && runtime.cancelled,
+            );
+          },
+        });
         sessionActions.setBusyMessage(null);
       } catch (error: unknown) {
-        sessionActions.setBusyMessage(
-          translateAppError(error, t) || t("messages.connectFailed"),
-        );
+        const runtime = profileId
+          ? sshConnectRuntimeRef.current[profileId]
+          : undefined;
+        if (!runtime || runtime.requestId !== requestId || !runtime.cancelled) {
+          sessionActions.setBusyMessage(
+            translateAppError(error, t) || t("messages.connectFailed"),
+          );
+        }
       } finally {
-        if (requestId === latestConnectRequestIdRef.current) {
-          setConnectingProfileId(null);
+        const effectiveProfileId = resolvedProfileId || "";
+        const runtime = sshConnectRuntimeRef.current[effectiveProfileId];
+        if (runtime && runtime.requestId === requestId) {
+          delete sshConnectRuntimeRef.current[effectiveProfileId];
+        }
+        if (effectiveProfileId) {
+          setSshConnectingState(effectiveProfileId, false);
         }
       }
     },
-    [pickProfile, saveProfile, sessionActions, t],
+    [pickProfile, saveProfile, sessionActions, setSshConnectingState, t],
   );
 
   const handleConnectRdpProfile = useCallback(
@@ -2593,6 +2660,21 @@ export default function AppShell() {
       }
     },
     [connectRdpProfile],
+  );
+
+  const handleCancelConnectProfile = useCallback(
+    async (profileId: string) => {
+      const runtime = sshConnectRuntimeRef.current[profileId];
+      if (!runtime) return;
+      runtime.cancelled = true;
+      setSshConnectingState(profileId, false);
+      sessionActions.setBusyMessage((prev) =>
+        prev === t("messages.connecting") ? null : prev,
+      );
+      if (!runtime.sessionId) return;
+      await sessionActions.disconnectSession(runtime.sessionId).catch(() => {});
+    },
+    [sessionActions, setSshConnectingState, t],
   );
 
   const handleRemoveRdpProfile = useCallback(
@@ -3202,7 +3284,7 @@ export default function AppShell() {
         rdpGroups,
         sshGroups,
         activeProfileId,
-        connectingProfileId,
+        sshConnectingProfiles: connectingSshProfiles,
         activeRdpProfileId,
         connectingRdpProfileId,
         availableShells,
@@ -3237,6 +3319,7 @@ export default function AppShell() {
         pickProfile,
         pickRdpProfile: setActiveRdpProfileId,
         onConnectProfile: handleConnectProfile,
+        onCancelSshConnectProfile: handleCancelConnectProfile,
         onConnectRdpProfile: handleConnectRdpProfile,
         onOpenNewRdpProfile: openNewRdpProfileModal,
         onOpenEditRdpProfile: openEditRdpProfileModal,
@@ -3307,7 +3390,7 @@ export default function AppShell() {
       rdpGroups,
       sshGroups,
       activeProfileId,
-      connectingProfileId,
+      connectingSshProfiles,
       activeRdpProfileId,
       connectingRdpProfileId,
       availableShells,
@@ -3335,6 +3418,7 @@ export default function AppShell() {
       removeGroup,
       moveProfileToGroup,
       handleConnectProfile,
+      handleCancelConnectProfile,
       handleConnectRdpProfile,
       handleRemoveRdpProfile,
       addRdpGroup,

@@ -21,6 +21,7 @@ import type {
   LocalShellProfile,
   LogEntry,
   RdpProfile,
+  SshConnectStateMap,
   WidgetKey,
   SessionStateUi,
   SftpAvailability,
@@ -36,7 +37,7 @@ type buildWidgetsProps = {
   rdpGroups: string[];
   sshGroups: string[];
   activeProfileId: string | null;
-  connectingProfileId: string | null;
+  sshConnectingProfiles: SshConnectStateMap;
   activeRdpProfileId: string | null;
   connectingRdpProfileId: string | null;
   availableShells: LocalShellProfile[];
@@ -76,6 +77,7 @@ type buildWidgetsProps = {
   pickProfile: (profileId: string) => void;
   pickRdpProfile: (profileId: string) => void;
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
+  onCancelSshConnectProfile: (profileId: string) => Promise<void>;
   onConnectRdpProfile: (profile: RdpProfile) => Promise<void>;
   onOpenNewRdpProfile: () => void;
   onOpenEditRdpProfile: (profile: RdpProfile) => void;
@@ -139,7 +141,7 @@ export function buildWidgets(
     rdpGroups,
     sshGroups,
     activeProfileId,
-    connectingProfileId,
+    sshConnectingProfiles,
     activeRdpProfileId,
     connectingRdpProfileId,
     availableShells,
@@ -174,6 +176,7 @@ export function buildWidgets(
     pickProfile,
     pickRdpProfile,
     onConnectProfile,
+    onCancelSshConnectProfile,
     onConnectRdpProfile,
     onOpenNewRdpProfile,
     onOpenEditRdpProfile,
@@ -227,10 +230,13 @@ export function buildWidgets(
         profiles={profiles}
         sshGroups={sshGroups}
         activeProfileId={activeProfileId}
-        connectingProfileId={connectingProfileId}
+        sshConnectingProfiles={sshConnectingProfiles}
         onPick={pickProfile}
         onConnectProfile={(profile) => {
           void onConnectProfile(profile);
+        }}
+        onCancelSshConnectProfile={(profileId) => {
+          void onCancelSshConnectProfile(profileId);
         }}
         onOpenNewProfile={onOpenNewProfile}
         onImportOpenSshConfig={onImportOpenSshConfig}

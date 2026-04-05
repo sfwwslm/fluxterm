@@ -31,6 +31,8 @@ type ConnectProfileCommandParams = {
   t: Translate;
   logInfo: (message: string) => void;
   logError: (message: string) => void;
+  onSessionCreated?: (session: Session) => void;
+  shouldSuppressError?: () => boolean;
   openDialog: (payload: {
     title: string;
     message: string;
@@ -53,6 +55,8 @@ export async function connectProfileCommand({
   t,
   logInfo,
   logError,
+  onSessionCreated,
+  shouldSuppressError,
   openDialog,
 }: ConnectProfileCommandParams) {
   logInfo(
@@ -73,6 +77,7 @@ export async function connectProfileCommand({
         sessionId: result.sessionId,
       }),
     );
+    onSessionCreated?.(result);
     setSessions((prev) => prev.concat(result));
     attachSessionToWorkspace(result.sessionId);
     if (existingState !== "error" && existingState !== "disconnected") {
@@ -87,6 +92,9 @@ export async function connectProfileCommand({
       return next;
     });
   } catch (err: unknown) {
+    if (shouldSuppressError?.()) {
+      return;
+    }
     const code =
       typeof err === "object" &&
       err !== null &&

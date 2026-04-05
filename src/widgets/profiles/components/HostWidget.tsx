@@ -14,8 +14,13 @@ import {
   FiServer,
   FiTerminal,
   FiTrash2,
+  FiX,
 } from "react-icons/fi";
-import type { HostProfile, LocalShellProfile } from "@/types";
+import type {
+  HostProfile,
+  LocalShellProfile,
+  SshConnectStateMap,
+} from "@/types";
 import type { Translate } from "@/i18n";
 import {
   LOCAL_SHELL_GROUP_VALUE,
@@ -37,9 +42,10 @@ type HostWidgetProps = {
   profiles: HostProfile[];
   sshGroups: string[];
   activeProfileId: string | null;
-  connectingProfileId: string | null;
+  sshConnectingProfiles: SshConnectStateMap;
   onPick: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
+  onCancelSshConnectProfile: (profileId: string) => void;
   onOpenNewProfile: () => void;
   onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
@@ -63,9 +69,10 @@ export default function HostWidget({
   profiles,
   sshGroups,
   activeProfileId,
-  connectingProfileId,
+  sshConnectingProfiles,
   onPick,
   onConnectProfile,
+  onCancelSshConnectProfile,
   onOpenNewProfile,
   onImportOpenSshConfig,
   onOpenEditProfile,
@@ -521,6 +528,37 @@ export default function HostWidget({
     ];
   }
 
+  function renderConnectingChip(profileId: string) {
+    if (!sshConnectingProfiles[profileId]) return null;
+    return (
+      <span className="host-connecting-chip">
+        <FiLoader className="host-connecting-icon" />
+        <span
+          className="host-connecting-cancel"
+          role="button"
+          aria-label={t("actions.cancel")}
+          title={t("actions.cancel")}
+          tabIndex={0}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            onCancelSshConnectProfile(profileId);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            event.stopPropagation();
+            onCancelSshConnectProfile(profileId);
+          }}
+        >
+          <FiX />
+        </span>
+      </span>
+    );
+  }
+
   return (
     <div className="host-widget">
       <div className="host-list">
@@ -621,19 +659,14 @@ export default function HostWidget({
                       }
                       onClick={() => onPick(profile.id)}
                       onDoubleClick={() => {
-                        if (connectingProfileId === profile.id) return;
+                        if (sshConnectingProfiles[profile.id]) return;
                         onConnectProfile(profile);
                       }}
                     >
                       <span className="host-row-label">
                         <FiServer className="host-row-icon" />
                         <span>{profile.name || profile.host}</span>
-                        {connectingProfileId === profile.id && (
-                          <span className="host-connecting-chip">
-                            <FiLoader className="host-connecting-icon" />
-                            <span>{t("session.connecting")}</span>
-                          </span>
-                        )}
+                        {renderConnectingChip(profile.id)}
                       </span>
                     </Button>
                   ))}
@@ -654,7 +687,7 @@ export default function HostWidget({
               }
               onClick={() => onPick(profile.id)}
               onDoubleClick={() => {
-                if (connectingProfileId === profile.id) return;
+                if (sshConnectingProfiles[profile.id]) return;
                 onConnectProfile(profile);
               }}
             >
@@ -662,12 +695,7 @@ export default function HostWidget({
               <span className="host-row-label">
                 <FiServer className="host-row-icon" />
                 <span>{profile.name || profile.host}</span>
-                {connectingProfileId === profile.id && (
-                  <span className="host-connecting-chip">
-                    <FiLoader className="host-connecting-icon" />
-                    <span>{t("session.connecting")}</span>
-                  </span>
-                )}
+                {renderConnectingChip(profile.id)}
               </span>
             </Button>
           ))}
