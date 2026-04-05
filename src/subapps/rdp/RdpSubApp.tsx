@@ -440,14 +440,19 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         return;
       }
       if (payload.type === "clipboard") {
+        const traceId =
+          sessionsRef.current.find((tab) => tab.session.sessionId === sessionId)
+            ?.traceId ?? null;
+        logRdpSubAppEvent("debug", "rdp.clipboard.sync", {
+          traceId,
+          sessionId,
+          direction: payload.direction,
+          textLength: payload.text.length,
+        });
         if (payload.direction === "remote-to-local") {
           lastSyncTextRef.current = payload.text;
           void writeText(payload.text);
         }
-        updateSessionTab(sessionId, (tab) => ({
-          ...tab,
-          statusText: t("rdp.status.clipboardSynced"),
-        }));
         return;
       }
       if (payload.type === "error") {
