@@ -19,6 +19,32 @@ type UseFloatingWidgetSnapshotSyncOptions<Message> = {
   deps: DependencyList;
 };
 
+const floatingSyncDepIds = new WeakMap<object, number>();
+let nextFloatingSyncDepId = 1;
+
+function getFloatingSyncDepToken(value: unknown) {
+  if (typeof value === "object" && value !== null) {
+    let id = floatingSyncDepIds.get(value);
+    if (!id) {
+      id = nextFloatingSyncDepId;
+      nextFloatingSyncDepId += 1;
+      floatingSyncDepIds.set(value, id);
+    }
+    return `object:${id}`;
+  }
+  if (typeof value === "function") {
+    const fn = value as object;
+    let id = floatingSyncDepIds.get(fn);
+    if (!id) {
+      id = nextFloatingSyncDepId;
+      nextFloatingSyncDepId += 1;
+      floatingSyncDepIds.set(fn, id);
+    }
+    return `function:${id}`;
+  }
+  return `${typeof value}:${String(value)}`;
+}
+
 /** 管理浮动面板动作消息通道，并返回稳定的发送函数。 */
 export function useFloatingWidgetMessagePoster<Message>(
   channelName: string,
@@ -58,16 +84,34 @@ export function useFloatingWidgetSnapshotSync<Message>({
   requestSnapshot,
   deps,
 }: UseFloatingWidgetSnapshotSyncOptions<Message>) {
+  const broadcastSnapshotRef = useRef(broadcastSnapshot);
+  const onMainWindowMessageRef = useRef(onMainWindowMessage);
+  const onFloatingWindowMessageRef = useRef(onFloatingWindowMessage);
+  const requestSnapshotRef = useRef(requestSnapshot);
+  const depsSignature = deps.map(getFloatingSyncDepToken).join("|");
+
+  useEffect(() => {
+    broadcastSnapshotRef.current = broadcastSnapshot;
+    onMainWindowMessageRef.current = onMainWindowMessage;
+    onFloatingWindowMessageRef.current = onFloatingWindowMessage;
+    requestSnapshotRef.current = requestSnapshot;
+  }, [
+    broadcastSnapshot,
+    onMainWindowMessage,
+    onFloatingWindowMessage,
+    requestSnapshot,
+  ]);
+
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel(channelName);
 
     if (!floatingWidgetKey) {
-      broadcastSnapshot?.(channel);
+      broadcastSnapshotRef.current?.(channel);
       channel.onmessage = (event) => {
         const message = event.data as Message | undefined;
         if (!message) return;
-        onMainWindowMessage?.(message, channel);
+        onMainWindowMessageRef.current?.(message, channel);
       };
       return () => {
         channel.close();
@@ -78,9 +122,9 @@ export function useFloatingWidgetSnapshotSync<Message>({
       channel.onmessage = (event) => {
         const message = event.data as Message | undefined;
         if (!message) return;
-        onFloatingWindowMessage?.(message);
+        onFloatingWindowMessageRef.current?.(message);
       };
-      requestSnapshot(channel);
+      requestSnapshotRef.current(channel);
       return () => {
         channel.close();
       };
@@ -88,14 +132,5 @@ export function useFloatingWidgetSnapshotSync<Message>({
 
     channel.close();
     return undefined;
-  }, [
-    channelName,
-    floatingWidgetKey,
-    isFloatingWidget,
-    broadcastSnapshot,
-    onMainWindowMessage,
-    onFloatingWindowMessage,
-    requestSnapshot,
-    deps,
-  ]);
+  }, [channelName, floatingWidgetKey, isFloatingWidget, depsSignature]);
 }
