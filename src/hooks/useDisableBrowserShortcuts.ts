@@ -3,23 +3,25 @@ import { useEffect } from "react";
 /**
  * 浏览器快捷键禁用 Hook。
  * 职责：拦截并禁用浏览器常用的原生快捷键（如 F5 刷新、F12 开发者工具、Ctrl+W 关闭窗口等），
- * 确保应用作为桌面终端的交互完整性，防止用户误触导致会话中断。
+ * 确保应用作为桌面终端和远程桌面（RDP）的交互完整性，防止用户误触导致会话中断或本地页面刷新。
  *
- * 与 terminalHostShortcuts 的分工：
- * 1. 本 Hook 只负责窗口级/浏览器级默认行为屏蔽。
- * 2. 一旦焦点已进入 xterm 宿主，应尽量放行给终端，由 terminalHostShortcuts 决定是否接管少量宿主增强快捷键。
- * 3. shell 常用编辑键（如 Ctrl+R、Ctrl+W）不能在这里越权拦截，否则会破坏 SSH/readline/zsh 的原生体验。
+ * 与终端/RDP 容器的分工：
+ * 1. 本 Hook 负责窗口级/浏览器级默认行为屏蔽，但仅在焦点不在输入容器（终端、RDP）时生效。
+ * 2. 一旦焦点进入 xterm 宿主或 RDP 渲染表面，应放行所有按键。
+ * 3. 终端或 RDP 组件层会接管这些按键，通过 preventDefault() 阻止本地浏览器行为，并将其透传给远端。
+ * 4. 确保如 Ctrl+R、Ctrl+W、F5 等强力组合键在远程系统中能正常工作，而不触发本地刷新。
  */
 type Options = {
   enabled?: boolean;
 };
 
 /**
- * 判断事件链路或当前活动元素是否位于终端宿主内。
- * 这里同时检查 composedPath 和 activeElement，减少 xterm 内部 focus target 波动导致的误判。
+ * 判断事件链路或当前活动元素是否位于终端宿主内或 RDP 表面。
+ * 同时检查 composedPath 和 activeElement，减少 focus target 波动导致的误判。
  */
-function isTerminalFocused(event: KeyboardEvent) {
-  const selector = ".terminal-container, .terminal-xterm-host, .xterm";
+function isInputFocused(event: KeyboardEvent) {
+  const selector =
+    ".terminal-container, .terminal-xterm-host, .xterm, .rdp-surface";
   const path = event.composedPath();
 
   if (
@@ -44,10 +46,10 @@ function isTerminalFocused(event: KeyboardEvent) {
 const isBlockedShortcut = (event: KeyboardEvent) => {
   const key = event.key.toLowerCase();
   const ctrlOrMeta = event.ctrlKey || event.metaKey;
-  const terminalFocused = isTerminalFocused(event);
+  const inputFocused = isInputFocused(event);
 
-  // 终端聚焦时由 xterm 宿主层统一处理快捷键路由，这里不再重复抢键。
-  if (terminalFocused) {
+  // 终端或 RDP 聚焦时由相应组件层统一处理快捷键路由，这里不再重复抢键。
+  if (inputFocused) {
     return false;
   }
 
