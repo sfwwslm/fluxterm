@@ -275,47 +275,76 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     activeTab && activeTab.session.state !== "disconnected",
   );
 
-  const syncFullscreenState = useCallback(() => {
-    setIsFullscreen(document.fullscreenElement === shellRef.current);
-  }, []);
-
-  /** 切换页面级全屏，尽量贴近浏览器 F11 的沉浸式行为。 */
-  const toggleFullscreen = useCallback(async () => {
+  /** 统一全屏切换逻辑，确保 Tauri 窗口和 DOM 状态同步 */
+  const handleFullscreenToggle = useCallback(async (toFullscreen: boolean) => {
     const shell = shellRef.current;
+    const appWindow = getCurrentWindow();
     if (!shell) return;
+
     try {
-      if (document.fullscreenElement === shell) {
-        await document.exitFullscreen();
+      if (toFullscreen) {
+        // 进入全屏
+        if (await appWindow.isMaximized()) {
+          await appWindow.unmaximize(); // 解除最大化确保覆盖 Windows 任务栏
+        }
+        await appWindow.setFullscreen(true);
+        // 同步 DOM 全屏状态，以便使用 :fullscreen 伪类并保持浏览器标准行为
+        if (document.fullscreenElement !== shell) {
+          await shell.requestFullscreen().catch(() => {});
+        }
+        setIsFullscreen(true);
       } else {
-        await shell.requestFullscreen();
+        // 退出全屏
+        if (document.fullscreenElement) {
+          await document.exitFullscreen().catch(() => {});
+        }
+        await appWindow.setFullscreen(false);
+        setIsFullscreen(false);
       }
-    } catch {
-      // 宿主环境可能拒绝全屏请求，这里保持静默即可。
+    } catch (err) {
+      logRdpSubAppEvent("error", "rdp.fullscreen.transition.failed", {
+        error:
+          err instanceof Error
+            ? {
+                message: err.message,
+                name: err.name,
+              }
+            : { message: String(err) },
+      });
     }
   }, []);
 
+  const toggleFullscreen = useCallback(() => {
+    void handleFullscreenToggle(!isFullscreen);
+  }, [handleFullscreenToggle, isFullscreen]);
+
+  // 监听 DOM 全屏变化（例如用户按 Esc 退出）
   useEffect(() => {
-    syncFullscreenState();
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-    return () => {
-      document.removeEventListener("fullscreenchange", syncFullscreenState);
+    const onFullscreenChange = () => {
+      const isDomFullscreen = document.fullscreenElement === shellRef.current;
+      // 若 DOM 状态与记录的内部状态不一致（通常是 DOM 侧主动退出），则同步窗口状态
+      if (!isDomFullscreen && isFullscreen) {
+        void handleFullscreenToggle(false);
+      }
     };
-  }, [syncFullscreenState]);
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, [handleFullscreenToggle, isFullscreen]);
 
   useEffect(() => {
     const handleWindowKeyDown = (event: KeyboardEvent) => {
       if (event.key === "F11") {
         if (!canToggleFullscreen) return;
         event.preventDefault();
-        void toggleFullscreen();
+        toggleFullscreen();
         return;
       }
-      if (
-        event.key === "Escape" &&
-        document.fullscreenElement === shellRef.current
-      ) {
+      if (event.key === "Escape" && isFullscreen) {
         event.preventDefault();
-        void document.exitFullscreen().catch(() => {});
+        void handleFullscreenToggle(false);
       }
     };
 
@@ -323,7 +352,12 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     return () => {
       window.removeEventListener("keydown", handleWindowKeyDown);
     };
-  }, [canToggleFullscreen, toggleFullscreen]);
+  }, [
+    canToggleFullscreen,
+    toggleFullscreen,
+    isFullscreen,
+    handleFullscreenToggle,
+  ]);
 
   useEffect(() => {
     if (!isFullscreen) return;
