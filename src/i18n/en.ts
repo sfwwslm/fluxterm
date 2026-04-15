@@ -285,8 +285,12 @@ export const enUsTranslations = {
   "about.openConsole": "Console",
   "about.checkForUpdates": "Check for Updates",
   "about.checkingForUpdates": "Checking...",
+  "about.upToDate": "You're Up to Date",
   "about.updateNow": "Update Now",
   "about.updating": "Downloading...",
+  "about.updateCheckUpToDateToast": "FluxTerm is already up to date",
+  "about.updateCheckFailedToast":
+    "Update check failed. Please try again later.",
   "about.copyDiagnostics": "Copy Diagnostics",
   "about.copyDiagnosticsDone": "Copied",
   "about.copyDiagnosticsFailed": "Copy Failed",

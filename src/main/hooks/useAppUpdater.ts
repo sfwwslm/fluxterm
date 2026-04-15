@@ -1,18 +1,32 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { error as logError, info as logInfo } from "@/shared/logging/telemetry";
 import {
   checkForAppUpdate,
   downloadAndInstallUpdate,
 } from "@/features/updater/core/updaterService";
+import type { ToastLevel } from "@/hooks/useNotices";
 
 export type AppUpdaterStatus =
   | "idle"
   | "checking"
+  | "up-to-date"
   | "update-available"
-  | "downloading";
+  | "downloading"
+  | "error";
 
 export type AppUpdateIndicator = "none" | "success" | "error";
+
+type AppUpdateToastPayload = {
+  level: ToastLevel;
+  message: string;
+};
+
+type UseAppUpdaterOptions = {
+  onToast?: (payload: AppUpdateToastPayload) => void;
+  upToDateMessage?: string;
+  updateCheckFailedMessage?: string;
+};
 
 /** 主窗口更新编排状态。 */
 export type AppUpdaterState = {
@@ -27,7 +41,10 @@ export type AppUpdaterState = {
 };
 
 /** 管理应用更新检查与安装流程。 */
-export default function useAppUpdater(): AppUpdaterState {
+export default function useAppUpdater(
+  options: UseAppUpdaterOptions = {},
+): AppUpdaterState {
+  const { onToast, upToDateMessage, updateCheckFailedMessage } = options;
   const [status, setStatus] = useState<AppUpdaterStatus>("idle");
   const [indicator, setIndicator] = useState<AppUpdateIndicator>("none");
   const [downloadProgressPercent, setDownloadProgressPercent] = useState<
@@ -35,10 +52,28 @@ export default function useAppUpdater(): AppUpdaterState {
   >(null);
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const installRunningRef = useRef(false);
+  const successStateTimerRef = useRef<number | null>(null);
 
   const isChecking = status === "checking";
   const isDownloading = status === "downloading";
   const hasAvailableUpdate = status === "update-available" && !!pendingUpdate;
+
+  const clearSuccessStateTimer = useCallback(() => {
+    if (successStateTimerRef.current == null) return;
+    window.clearTimeout(successStateTimerRef.current);
+    successStateTimerRef.current = null;
+  }, []);
+
+  const scheduleResetFromSuccessState = useCallback(() => {
+    clearSuccessStateTimer();
+    successStateTimerRef.current = window.setTimeout(() => {
+      setIndicator("none");
+      setStatus((prev) => (prev === "up-to-date" ? "idle" : prev));
+      successStateTimerRef.current = null;
+    }, 2600);
+  }, [clearSuccessStateTimer]);
+
+  useEffect(() => clearSuccessStateTimer, [clearSuccessStateTimer]);
 
   const installAvailableUpdate = useCallback(async () => {
     if (
@@ -50,6 +85,7 @@ export default function useAppUpdater(): AppUpdaterState {
       return;
     }
     installRunningRef.current = true;
+    clearSuccessStateTimer();
     setStatus("downloading");
     setDownloadProgressPercent(0);
     try {
@@ -77,6 +113,8 @@ export default function useAppUpdater(): AppUpdaterState {
       });
       setPendingUpdate(null);
       setStatus("idle");
+      setIndicator("none");
+      setDownloadProgressPercent(null);
       await logInfo(
         JSON.stringify({
           event: "app.update.install",
@@ -85,8 +123,13 @@ export default function useAppUpdater(): AppUpdaterState {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus("idle");
+      setStatus("error");
       setIndicator("error");
+      setDownloadProgressPercent(null);
+      onToast?.({
+        level: "error",
+        message,
+      });
       await logError(
         JSON.stringify({
           event: "app.update.install.failed",
@@ -96,17 +139,33 @@ export default function useAppUpdater(): AppUpdaterState {
     } finally {
       installRunningRef.current = false;
     }
-  }, [isChecking, isDownloading, pendingUpdate]);
+  }, [
+    clearSuccessStateTimer,
+    isChecking,
+    isDownloading,
+    onToast,
+    pendingUpdate,
+  ]);
 
   const checkForUpdates = useCallback(async () => {
     if (isChecking || isDownloading || installRunningRef.current) return;
+    clearSuccessStateTimer();
     setStatus("checking");
+    setIndicator("none");
     setDownloadProgressPercent(null);
     try {
       const result = await checkForAppUpdate();
       if (!result.available || !result.update) {
         setPendingUpdate(null);
-        setStatus("idle");
+        setStatus("up-to-date");
+        setIndicator("success");
+        if (upToDateMessage) {
+          onToast?.({
+            level: "success",
+            message: upToDateMessage,
+          });
+        }
+        scheduleResetFromSuccessState();
         await logInfo(
           JSON.stringify({
             event: "app.update.check",
@@ -128,8 +187,14 @@ export default function useAppUpdater(): AppUpdaterState {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setPendingUpdate(null);
-      setStatus("idle");
+      setStatus("error");
       setIndicator("error");
+      if (updateCheckFailedMessage) {
+        onToast?.({
+          level: "error",
+          message: updateCheckFailedMessage,
+        });
+      }
       await logError(
         JSON.stringify({
           event: "app.update.check.failed",
@@ -137,7 +202,15 @@ export default function useAppUpdater(): AppUpdaterState {
         }),
       );
     }
-  }, [isChecking, isDownloading]);
+  }, [
+    clearSuccessStateTimer,
+    isChecking,
+    isDownloading,
+    onToast,
+    upToDateMessage,
+    updateCheckFailedMessage,
+    scheduleResetFromSuccessState,
+  ]);
 
   const triggerUpdateAction = useCallback(async () => {
     if (hasAvailableUpdate) {
@@ -148,13 +221,14 @@ export default function useAppUpdater(): AppUpdaterState {
   }, [checkForUpdates, hasAvailableUpdate, installAvailableUpdate]);
 
   const resetCheckState = useCallback(() => {
+    clearSuccessStateTimer();
     setIndicator("none");
     setDownloadProgressPercent(null);
     if (!isDownloading) {
       setPendingUpdate(null);
       setStatus("idle");
     }
-  }, [isDownloading]);
+  }, [clearSuccessStateTimer, isDownloading]);
 
   return useMemo(
     () => ({

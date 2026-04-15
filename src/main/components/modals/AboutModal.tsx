@@ -13,7 +13,10 @@ import {
 import type { Translate } from "@/i18n";
 import Modal from "@/components/ui/modal/Modal";
 import Button from "@/components/ui/button";
-import type { AppUpdateIndicator } from "@/main/hooks/useAppUpdater";
+import type {
+  AppUpdateIndicator,
+  AppUpdaterStatus,
+} from "@/main/hooks/useAppUpdater";
 import { getSystemInfo } from "@/shared/tauri/commands";
 import {
   APP_VERSION,
@@ -30,6 +33,7 @@ type AboutModalProps = {
   onClose: () => void;
   onOpenDevtools?: () => void;
   onUpdateAction?: () => Promise<void> | void;
+  updateStatus?: AppUpdaterStatus;
   hasAvailableUpdate?: boolean;
   updateIndicator?: AppUpdateIndicator;
   downloadProgressPercent?: number | null;
@@ -44,6 +48,7 @@ export default function AboutModal({
   onClose,
   onOpenDevtools,
   onUpdateAction,
+  updateStatus = "idle",
   hasAvailableUpdate = false,
   updateIndicator = "none",
   downloadProgressPercent = null,
@@ -59,13 +64,16 @@ export default function AboutModal({
   const displayVersion = version.startsWith("v") ? version : `v${version}`;
   const canOpenDevtools = import.meta.env.DEV && !!onOpenDevtools;
   const actionText =
-    updateBusy && typeof downloadProgressPercent === "number"
+    updateStatus === "downloading" &&
+    typeof downloadProgressPercent === "number"
       ? t("about.updating")
-      : updateBusy
+      : updateStatus === "checking"
         ? t("about.checkingForUpdates")
-        : hasAvailableUpdate
-          ? t("about.updateNow")
-          : t("about.checkForUpdates");
+        : updateStatus === "up-to-date"
+          ? t("about.upToDate")
+          : hasAvailableUpdate
+            ? t("about.updateNow")
+            : t("about.checkForUpdates");
   const diagnosticInfo = [
     `${t("about.version")}: ${displayVersion}`,
     `${t("about.hash")}: ${COMMIT_HASH}`,

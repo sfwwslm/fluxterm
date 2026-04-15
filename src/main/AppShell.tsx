@@ -586,12 +586,6 @@ export default function AppShell() {
   } = useSecurity();
   const { pushToast, openDialog } = useNotices();
   const [aboutOpen, setAboutOpen] = useState(false);
-  const appUpdater = useAppUpdater();
-
-  const handleCloseAbout = useCallback(() => {
-    setAboutOpen(false);
-    appUpdater.resetCheckState();
-  }, [appUpdater]);
   useDisableBrowserShortcuts();
   usePreventBrowserDefaults();
   const [quickbarManagerOpen, setQuickbarManagerOpen] = useState(false);
@@ -637,6 +631,17 @@ export default function AppShell() {
     () => (key, vars) => formatMessage(translations[locale][key] ?? key, vars),
     [locale],
   );
+  const appUpdater = useAppUpdater({
+    onToast: ({ level, message }) => {
+      pushToast({ level, message });
+    },
+    upToDateMessage: t("about.updateCheckUpToDateToast"),
+    updateCheckFailedMessage: t("about.updateCheckFailedToast"),
+  });
+  const handleCloseAbout = useCallback(() => {
+    setAboutOpen(false);
+    appUpdater.resetCheckState();
+  }, [appUpdater]);
   const setSshConnectingState = useCallback(
     (profileId: string, active: boolean) => {
       setConnectingSshProfiles((prev) => {
@@ -3655,6 +3660,7 @@ export default function AppShell() {
             onClose={handleCloseAbout}
             onOpenDevtools={handleOpenDevtools}
             onUpdateAction={appUpdater.triggerUpdateAction}
+            updateStatus={appUpdater.status}
             hasAvailableUpdate={appUpdater.hasAvailableUpdate}
             updateIndicator={appUpdater.indicator}
             downloadProgressPercent={appUpdater.downloadProgressPercent}
