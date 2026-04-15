@@ -107,6 +107,7 @@ type ActiveAutocompleteState = {
   input: string;
   items: CommandAutocompleteCandidate[];
   selectedIndex: number;
+  anchorCursorCol: number | null;
 };
 
 type AutocompleteAnchor = {
@@ -674,7 +675,11 @@ export default function useTerminalRuntime({
    * 这里读取的是本地输入缓冲，不直接读取终端显示缓冲；
    * 真实命令采集仍以后面的输入行监听为准。
    */
-  function refreshAutocomplete(sessionId: string, input: string) {
+  function refreshAutocomplete(
+    sessionId: string,
+    input: string,
+    anchorCursorCol?: number | null,
+  ) {
     autocompleteInputBufferRef.current[sessionId] = input;
     if (activeSessionIdRef.current !== sessionId) {
       setActiveAutocomplete((prev) =>
@@ -723,8 +728,27 @@ export default function useTerminalRuntime({
         input,
         items,
         selectedIndex: nextIndex >= 0 ? nextIndex : -1,
+        anchorCursorCol:
+          anchorCursorCol ??
+          (prev?.sessionId === sessionId ? prev.anchorCursorCol : null),
       };
     });
+  }
+
+  function resolvePredictedAutocompleteCursorCol(
+    sessionId: string,
+    currentInput: string,
+    nextInput: string,
+  ) {
+    const bundle = terminalsRef.current[sessionId];
+    const currentCursorCol = bundle?.terminal.buffer.active.cursorX;
+    if (typeof currentCursorCol !== "number" || currentCursorCol < 0) {
+      return null;
+    }
+    return Math.max(
+      0,
+      currentCursorCol + nextInput.length - currentInput.length,
+    );
   }
 
   /** 获取或初始化当前会话的输入行监听元数据。 */
@@ -1567,11 +1591,18 @@ export default function useTerminalRuntime({
             command: "",
             updatedAt: Date.now(),
           });
-          const nextInput = updateCommandInputBuffer(
-            autocompleteInputBufferRef.current[sessionId] ?? "",
-            data,
-          ).buffer;
-          refreshAutocomplete(sessionId, nextInput);
+          const currentInput =
+            autocompleteInputBufferRef.current[sessionId] ?? "";
+          const nextInput = updateCommandInputBuffer(currentInput, data).buffer;
+          refreshAutocomplete(
+            sessionId,
+            nextInput,
+            resolvePredictedAutocompleteCursorCol(
+              sessionId,
+              currentInput,
+              nextInput,
+            ),
+          );
           handlersRef.current
             .sendSessionInput(sessionId, { kind: "text", data })
             .catch(() => {});
@@ -1588,11 +1619,18 @@ export default function useTerminalRuntime({
           scheduleCommandCaptureRefresh(sessionId);
           return;
         }
-        const nextInput = updateCommandInputBuffer(
-          autocompleteInputBufferRef.current[sessionId] ?? "",
-          data,
-        ).buffer;
-        refreshAutocomplete(sessionId, nextInput);
+        const currentInput =
+          autocompleteInputBufferRef.current[sessionId] ?? "";
+        const nextInput = updateCommandInputBuffer(currentInput, data).buffer;
+        refreshAutocomplete(
+          sessionId,
+          nextInput,
+          resolvePredictedAutocompleteCursorCol(
+            sessionId,
+            currentInput,
+            nextInput,
+          ),
+        );
         handlersRef.current
           .sendSessionInput(sessionId, { kind: "text", data })
           .catch(() => {});
@@ -2150,7 +2188,10 @@ export default function useTerminalRuntime({
    * 2. 左侧起点尽量对齐当前光标列
    * 3. 始终保留 pane 内边距，避免浮层溢出
    */
-  function getAutocompleteAnchor(sessionId: string): AutocompleteAnchor | null {
+  function getAutocompleteAnchor(
+    sessionId: string,
+    anchorCursorCol?: number | null,
+  ): AutocompleteAnchor | null {
     const bundle = terminalsRef.current[sessionId];
     if (!bundle) return null;
     const hostWidth = bundle.host.clientWidth;
@@ -2164,7 +2205,8 @@ export default function useTerminalRuntime({
     const cellWidth = hostWidth / cols;
     if (rowHeight <= 0) return null;
     const cursorViewportRow = bundle.terminal.buffer.active.cursorY;
-    const cursorViewportCol = bundle.terminal.buffer.active.cursorX;
+    const cursorViewportCol =
+      anchorCursorCol ?? bundle.terminal.buffer.active.cursorX;
     const lineTop = Math.max(0, cursorViewportRow * rowHeight);
     const promptBottom = Math.min(hostHeight, lineTop + rowHeight);
     const spaceAbove = Math.max(0, lineTop - 8);
@@ -2210,7 +2252,10 @@ export default function useTerminalRuntime({
 
   function getActiveAutocompleteAnchor() {
     if (!activeAutocomplete) return null;
-    return getAutocompleteAnchor(activeAutocomplete.sessionId);
+    return getAutocompleteAnchor(
+      activeAutocomplete.sessionId,
+      activeAutocomplete.anchorCursorCol,
+    );
   }
 
   async function applyActiveAutocompleteSuggestion(command?: string) {
