@@ -452,6 +452,30 @@ button.session-tab {
   background: var(--terminal-surface-raised-bg);
   box-shadow: var(--shadow-strong);
   backdrop-filter: blur(12px);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
+    transparent;
+}
+
+.terminal-autocomplete::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.terminal-autocomplete::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-autocomplete::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+.terminal-autocomplete::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
 }
 
 .terminal-autocomplete-top {
