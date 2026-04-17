@@ -312,10 +312,6 @@ export const enUsTranslations = {
   "subapp.proxy.title": "Proxy",
   "subapp.rdp.menuLabel": "Remote Desktop",
   "subapp.rdp.title": "Remote Desktop",
-  "subapp.menu.app": "App",
-  "subapp.menu.section.window": "Window",
-  "subapp.menu.closeWindow": "Close Window",
-  "subapp.menu.placeholder": "SubApp menu items reserved (WIP)",
   "subapp.unknown.title": "Unknown SubApp",
   "subapp.unknown.description":
     "No available sub-application entry matches this window.",
