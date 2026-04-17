@@ -254,7 +254,6 @@ export default function ProxySubApp({ id, locale, t }: ProxySubAppProps) {
       <main className="subapp-content proxy-subapp-content">
         <article className="proxy-subapp-body">
           <div className="proxy-heading-row">
-            <h2>{t("subapp.proxy.heading")}</h2>
             <div className="proxy-actions">
               <Button
                 className="proxy-action-button"
