@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { FiActivity, FiClipboard, FiX } from "react-icons/fi";
 import type { Locale, Translate } from "@/i18n";
 import {
   createTraceId,
@@ -44,6 +45,8 @@ type RdpPerfSnapshot = {
   fps: number;
   bridgeState: "idle" | "connecting" | "open" | "closed";
 };
+
+type RdpStatusIndicatorTone = "normal" | "degraded" | "error";
 
 type RdpWireEvent =
   | {
@@ -98,6 +101,38 @@ function getSessionResolutionValue(session: RdpSessionSnapshot | null) {
   if (!session) return "--";
   if (session.width <= 0 || session.height <= 0) return "--";
   return `${session.width} × ${session.height}`;
+}
+
+function getStatusIndicatorTone(perf: RdpPerfSnapshot): RdpStatusIndicatorTone {
+  if (perf.bridgeState === "closed") {
+    return "error";
+  }
+  if (perf.bridgeState === "open" && perf.fps > 0) {
+    return "normal";
+  }
+  return "degraded";
+}
+
+function getClipboardStatusValue(
+  profile: Pick<RdpProfile, "clipboardMode"> | null,
+  perf: RdpPerfSnapshot,
+  t: Translate,
+) {
+  if (!profile) return t("rdp.statusPanel.state.unavailable");
+  if (profile.clipboardMode === "disabled") {
+    return t("rdp.statusPanel.state.disabled");
+  }
+  if (perf.bridgeState === "open") {
+    return t("rdp.statusPanel.state.connected");
+  }
+  return t("rdp.statusPanel.state.disconnected");
+}
+
+function getStatusIndicatorToneLabel(
+  tone: RdpStatusIndicatorTone,
+  t: Translate,
+) {
+  return t(`rdp.statusPanel.legend.${tone}`);
 }
 
 /** 判断当前会话是否仍允许前端重新附着桥接。 */
@@ -235,8 +270,10 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [statusPanelOpen, setStatusPanelOpen] = useState(false);
   const sessionsRef = useRef<RdpSessionTab[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
+  const statusPanelRef = useRef<HTMLDivElement | null>(null);
   const frameVersionBySessionRef = useRef<Record<string, number>>({});
   const presentedFpsRuntimeRef = useRef<{
     frameCount: number;
@@ -273,6 +310,12 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   const showDisconnectedOverlay = activeTab?.session.state === "disconnected";
   const canToggleFullscreen = Boolean(
     activeTab && activeTab.session.state !== "disconnected",
+  );
+  const statusIndicatorTone = getStatusIndicatorTone(activePerf);
+  const clipboardStatusValue = getClipboardStatusValue(
+    activeTab?.profile ?? null,
+    activePerf,
+    t,
   );
 
   /** 统一全屏切换逻辑，确保 Tauri 窗口和 DOM 状态同步 */
@@ -342,6 +385,11 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
         toggleFullscreen();
         return;
       }
+      if (event.key === "Escape" && statusPanelOpen) {
+        event.preventDefault();
+        setStatusPanelOpen(false);
+        return;
+      }
       if (event.key === "Escape" && isFullscreen) {
         event.preventDefault();
         void handleFullscreenToggle(false);
@@ -356,8 +404,13 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
     canToggleFullscreen,
     toggleFullscreen,
     isFullscreen,
+    statusPanelOpen,
     handleFullscreenToggle,
   ]);
+
+  useEffect(() => {
+    setStatusPanelOpen(false);
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -1384,18 +1437,103 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
               data-ui="rdp-metrics"
             >
               <span>
-                {t("rdp.metrics.fps", { value: String(activePerf.fps) })}
-              </span>
-              <span>
                 {t("rdp.metrics.resolution", {
                   value: getSessionResolutionValue(activeTab?.session ?? null),
                 })}
               </span>
-              <span>
-                {t("rdp.metrics.bridge", {
-                  value: t(`rdp.metrics.bridgeState.${activePerf.bridgeState}`),
-                })}
-              </span>
+              <div
+                ref={statusPanelRef}
+                className="rdp-status-panel-anchor"
+                data-slot="rdp-status-panel-anchor"
+              >
+                <button
+                  type="button"
+                  className="rdp-status-trigger"
+                  data-ui="rdp-status-trigger"
+                  data-tone={statusIndicatorTone}
+                  aria-label={t("rdp.statusPanel.triggerAriaLabel")}
+                  aria-haspopup="dialog"
+                  aria-expanded={statusPanelOpen}
+                  onClick={() => setStatusPanelOpen((open) => !open)}
+                >
+                  <FiActivity aria-hidden="true" />
+                  <span className="rdp-status-trigger-dot" aria-hidden="true" />
+                </button>
+                {statusPanelOpen ? (
+                  <div
+                    className="rdp-status-panel"
+                    data-ui="rdp-status-panel"
+                    role="dialog"
+                    aria-label={t("rdp.statusPanel.title")}
+                  >
+                    <div className="rdp-status-panel-header">
+                      <span>{t("rdp.statusPanel.title")}</span>
+                      <button
+                        type="button"
+                        className="rdp-status-panel-close"
+                        data-ui="rdp-status-panel-close"
+                        aria-label={t("rdp.statusPanel.closeAriaLabel")}
+                        onClick={() => setStatusPanelOpen(false)}
+                      >
+                        <FiX aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div
+                      className="rdp-status-panel-row"
+                      data-slot="rdp-status-frame-rate"
+                    >
+                      <span className="rdp-status-panel-label">
+                        <FiActivity aria-hidden="true" />
+                        <span>{t("rdp.statusPanel.frameRate")}</span>
+                      </span>
+                      <strong>
+                        {t("rdp.statusPanel.frameRateValue", {
+                          value: String(activePerf.fps),
+                        })}
+                      </strong>
+                    </div>
+                    <div
+                      className="rdp-status-panel-row"
+                      data-slot="rdp-status-clipboard"
+                    >
+                      <span className="rdp-status-panel-label">
+                        <FiClipboard aria-hidden="true" />
+                        <span>{t("rdp.statusPanel.clipboard")}</span>
+                      </span>
+                      <strong>{clipboardStatusValue}</strong>
+                    </div>
+                    <div
+                      className="rdp-status-panel-legend"
+                      data-slot="rdp-status-legend"
+                    >
+                      <div className="rdp-status-panel-legend-title">
+                        {t("rdp.statusPanel.legendTitle")}
+                      </div>
+                      <div className="rdp-status-panel-legend-list">
+                        {(
+                          [
+                            "normal",
+                            "degraded",
+                            "error",
+                          ] as RdpStatusIndicatorTone[]
+                        ).map((tone) => (
+                          <div
+                            key={tone}
+                            className="rdp-status-panel-legend-item"
+                            data-tone={tone}
+                          >
+                            <span
+                              className="rdp-status-panel-legend-dot"
+                              aria-hidden="true"
+                            />
+                            <span>{getStatusIndicatorToneLabel(tone, t)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </article>

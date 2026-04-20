@@ -309,6 +309,7 @@
 
 .rdp-footer-section-right {
   justify-content: flex-end;
+  overflow: visible;
 }
 
 .rdp-status-line {
@@ -341,9 +342,213 @@
   gap: 6px;
   min-width: 0;
   flex-wrap: nowrap;
+  overflow: visible;
 }
 
-.rdp-metrics span {
+.rdp-status-panel-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rdp-status-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.45);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    background-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.rdp-status-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+}
+
+.rdp-status-trigger:focus-visible {
+  outline: 2px solid rgba(124, 195, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.rdp-status-trigger[data-tone="normal"] {
+  color: rgba(110, 231, 183, 0.95);
+}
+
+.rdp-status-trigger[data-tone="degraded"] {
+  color: rgba(250, 204, 21, 0.95);
+}
+
+.rdp-status-trigger[data-tone="error"] {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.rdp-status-trigger-dot {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(10, 14, 20, 0.88);
+}
+
+.rdp-status-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  min-width: 220px;
+  padding: 10px 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(32, 38, 48, 0.96) 0%,
+    rgba(18, 22, 30, 0.98) 100%
+  );
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+}
+
+.rdp-status-panel::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 100%;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 22, 30, 0.98);
+  transform: translateY(-5px) rotate(45deg);
+}
+
+.rdp-status-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rdp-status-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  cursor: pointer;
+}
+
+.rdp-status-panel-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+}
+
+.rdp-status-panel-close:focus-visible {
+  outline: 2px solid rgba(124, 195, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.rdp-status-panel-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 7px 0;
+}
+
+.rdp-status-panel-row + .rdp-status-panel-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rdp-status-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+}
+
+.rdp-status-panel-label svg {
+  flex: 0 0 auto;
+}
+
+.rdp-status-panel-row strong {
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rdp-status-panel-legend {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rdp-status-panel-legend-title {
+  margin-bottom: 8px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.rdp-status-panel-legend-list {
+  display: grid;
+  gap: 6px;
+}
+
+.rdp-status-panel-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-size: 12px;
+}
+
+.rdp-status-panel-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.rdp-status-panel-legend-item[data-tone="normal"] {
+  color: rgba(110, 231, 183, 0.95);
+}
+
+.rdp-status-panel-legend-item[data-tone="degraded"] {
+  color: rgba(250, 204, 21, 0.95);
+}
+
+.rdp-status-panel-legend-item[data-tone="error"] {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.rdp-metrics > span {
   display: inline-flex;
   align-items: center;
   min-width: 0;
