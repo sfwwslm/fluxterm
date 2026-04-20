@@ -98,6 +98,23 @@ struct CursorCache {
     y: Option<u16>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardChannelState {
+    Initializing,
+    Ready,
+    Failed,
+}
+
+impl ClipboardChannelState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Initializing => "initializing",
+            Self::Ready => "ready",
+            Self::Failed => "failed",
+        }
+    }
+}
+
 impl Default for FramePerfWindow {
     fn default() -> Self {
         Self {
@@ -137,6 +154,36 @@ struct ActiveStageContext<'a> {
     sender: &'a broadcast::Sender<Message>,
     session_id: &'a str,
     cliprdr_tx: mpsc::UnboundedSender<CliprdrProxyEvent>,
+}
+
+fn cliprdr_formats_summary(formats: &[ClipboardFormat]) -> String {
+    formats
+        .iter()
+        .map(|format| format!("{:?}", format.id))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn mark_clipboard_channel_failed(
+    session_id: &str,
+    activation_generation: u32,
+    clipboard_state: &mut ClipboardChannelState,
+    operation: &str,
+    error: &str,
+    text_len: Option<usize>,
+) {
+    let was_failed = *clipboard_state == ClipboardChannelState::Failed;
+    *clipboard_state = ClipboardChannelState::Failed;
+    error!(
+        event = "rdp.cliprdr.channel.failed",
+        session_id = %session_id,
+        activation_generation,
+        operation,
+        text_len,
+        repeated = was_failed,
+        error = %error,
+        "clipboard channel entered failed state"
+    );
 }
 
 /// 启动并运行单个 RDP 会话的主异步任务。
@@ -377,6 +424,8 @@ where
     let mut cursor_cache = CursorCache::default();
     // 缓存当前本地剪贴板文本，用于响应远端的获取数据请求。
     let mut current_local_clipboard = String::new();
+    let mut clipboard_channel_state = ClipboardChannelState::Initializing;
+    let mut activation_generation: u32 = 0;
 
     loop {
         let outputs = tokio::select! {
@@ -414,38 +463,135 @@ where
                     None => continue,
                 };
                 match proxy_event {
-                    CliprdrProxyEvent::NeedInitialSync => {
+                    CliprdrProxyEvent::NeedInitialSync { reason } => {
                         // 初始握手：告知服务器我们支持文本格式，这会触发服务器后续的主动推送。
-                        debug!(event = "rdp.cliprdr.initial_sync", session_id = %ctx.session_id, "triggering initial clipboard format list");
-                        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                        if reason == "backend_ready" {
+                            clipboard_channel_state = ClipboardChannelState::Ready;
+                        }
+                        debug!(
+                            event = "rdp.cliprdr.initial_sync",
+                            session_id = %ctx.session_id,
+                            activation_generation,
+                            reason,
+                            clipboard_channel_state = clipboard_channel_state.as_str(),
+                            local_clipboard_len = current_local_clipboard.chars().count(),
+                            "triggering clipboard format list sync"
+                        );
+                        if clipboard_channel_state == ClipboardChannelState::Failed {
+                            warn!(
+                                event = "rdp.cliprdr.initial_sync.skipped",
+                                session_id = %ctx.session_id,
+                                activation_generation,
+                                reason,
+                                "skipping clipboard initial sync because channel is failed"
+                            );
+                            Vec::new()
+                        } else if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
                             let formats = [ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)];
-                            let messages = cliprdr.initiate_copy(&formats)
+                            let messages = cliprdr
+                                .initiate_copy(&formats)
                                 .map_err(|error| format!("cliprdr initial initiate_copy failed: {error}"))?;
-                            let frame = active_stage.process_svc_processor_messages(messages)
-                                .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
-                            vec![ActiveStageOutput::ResponseFrame(frame)]
+                            let messages: Vec<_> = messages.into();
+                            if messages.is_empty() {
+                                mark_clipboard_channel_failed(
+                                    ctx.session_id,
+                                    activation_generation,
+                                    &mut clipboard_channel_state,
+                                    "initial_sync",
+                                    "initiate_copy returned no clipboard svc messages",
+                                    Some(current_local_clipboard.chars().count()),
+                                );
+                                Vec::new()
+                            } else {
+                                let frame = active_stage
+                                    .process_svc_processor_messages::<CliprdrClient>(messages.into())
+                                    .map_err(|error| {
+                                        format!("process_svc_processor_messages failed: {error}")
+                                    })?;
+                                vec![ActiveStageOutput::ResponseFrame(frame)]
+                            }
                         } else {
+                            warn!(
+                                event = "rdp.cliprdr.initial_sync.unavailable",
+                                session_id = %ctx.session_id,
+                                activation_generation,
+                                reason,
+                                "cliprdr processor unavailable during initial sync"
+                            );
                             Vec::new()
                         }
                     }
-                    CliprdrProxyEvent::FormatList(formats) => {
+                    CliprdrProxyEvent::FormatList { reason, formats } => {
                         // 远端告知其剪贴板已更新。如果包含文本格式，则主动发起同步。
-                        if formats.iter().any(|f| f.id == ClipboardFormatId::CF_UNICODETEXT) {
+                        let has_unicode_text =
+                            formats.iter().any(|f| f.id == ClipboardFormatId::CF_UNICODETEXT);
+                        info!(
+                            event = "rdp.cliprdr.remote_format_list",
+                            session_id = %ctx.session_id,
+                            activation_generation,
+                            reason,
+                            clipboard_channel_state = clipboard_channel_state.as_str(),
+                            format_count = formats.len(),
+                            contains_unicode_text = has_unicode_text,
+                            formats = %cliprdr_formats_summary(&formats),
+                            "received remote clipboard format list"
+                        );
+                        if has_unicode_text {
                             if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                                info!(
+                                    event = "rdp.cliprdr.paste.request",
+                                    session_id = %ctx.session_id,
+                                    activation_generation,
+                                    clipboard_channel_state = clipboard_channel_state.as_str(),
+                                    format = ?ClipboardFormatId::CF_UNICODETEXT,
+                                    "requesting remote clipboard unicode text"
+                                );
                                 let messages = cliprdr.initiate_paste(ClipboardFormatId::CF_UNICODETEXT)
                                     .map_err(|error| format!("cliprdr initiate_paste failed: {error}"))?;
-                                let frame = active_stage.process_svc_processor_messages(messages)
-                                    .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
-                                vec![ActiveStageOutput::ResponseFrame(frame)]
+                                let messages: Vec<_> = messages.into();
+                                if messages.is_empty() {
+                                    mark_clipboard_channel_failed(
+                                        ctx.session_id,
+                                        activation_generation,
+                                        &mut clipboard_channel_state,
+                                        "initiate_paste",
+                                        "initiate_paste returned no clipboard svc messages",
+                                        None,
+                                    );
+                                    Vec::new()
+                                } else {
+                                    let frame = active_stage
+                                        .process_svc_processor_messages::<CliprdrClient>(messages.into())
+                                        .map_err(|error| {
+                                            format!("process_svc_processor_messages failed: {error}")
+                                        })?;
+                                    vec![ActiveStageOutput::ResponseFrame(frame)]
+                                }
                             } else {
+                                warn!(
+                                    event = "rdp.cliprdr.paste.request.unavailable",
+                                    session_id = %ctx.session_id,
+                                    activation_generation,
+                                    "cliprdr processor unavailable during paste request"
+                                );
                                 Vec::new()
                             }
                         } else {
                             Vec::new()
                         }
                     }
-                    CliprdrProxyEvent::DataRequest(request) => {
+                    CliprdrProxyEvent::DataRequest { reason, request } => {
                         // 远端用户在远端系统中执行了“粘贴”，请求本地提供剪贴板数据。
+                        info!(
+                            event = "rdp.cliprdr.data_request",
+                            session_id = %ctx.session_id,
+                            activation_generation,
+                            reason,
+                            clipboard_channel_state = clipboard_channel_state.as_str(),
+                            format = ?request.format,
+                            local_clipboard_len = current_local_clipboard.chars().count(),
+                            "remote requested local clipboard data"
+                        );
                         if request.format == ClipboardFormatId::CF_UNICODETEXT {
                             if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
                                 // 将 UTF-8 文本编码为 Windows 标准的 UTF-16 (带有 Null 终止符)。
@@ -453,20 +599,59 @@ where
                                 utf16.push(0); // Null terminator
                                 let data = utf16.iter().flat_map(|&u| u.to_le_bytes()).collect::<Vec<u8>>();
                                 let response = ironrdp_cliprdr::pdu::FormatDataResponse::new_data(data).into_owned();
+                                info!(
+                                    event = "rdp.cliprdr.data_response.submit",
+                                    session_id = %ctx.session_id,
+                                    activation_generation,
+                                    clipboard_channel_state = clipboard_channel_state.as_str(),
+                                    local_clipboard_len = current_local_clipboard.chars().count(),
+                                    "submitting local clipboard data to remote"
+                                );
                                 let messages = cliprdr.submit_format_data(response)
                                     .map_err(|error| format!("cliprdr submit_format_data failed: {error}"))?;
-                                let frame = active_stage.process_svc_processor_messages(messages)
-                                    .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
-                                vec![ActiveStageOutput::ResponseFrame(frame)]
+                                let messages: Vec<_> = messages.into();
+                                if messages.is_empty() {
+                                    mark_clipboard_channel_failed(
+                                        ctx.session_id,
+                                        activation_generation,
+                                        &mut clipboard_channel_state,
+                                        "submit_format_data",
+                                        "submit_format_data returned no clipboard svc messages",
+                                        Some(current_local_clipboard.chars().count()),
+                                    );
+                                    Vec::new()
+                                } else {
+                                    let frame = active_stage
+                                        .process_svc_processor_messages::<CliprdrClient>(messages.into())
+                                        .map_err(|error| {
+                                            format!("process_svc_processor_messages failed: {error}")
+                                        })?;
+                                    vec![ActiveStageOutput::ResponseFrame(frame)]
+                                }
                             } else {
+                                warn!(
+                                    event = "rdp.cliprdr.data_response.unavailable",
+                                    session_id = %ctx.session_id,
+                                    activation_generation,
+                                    "cliprdr processor unavailable during data response submission"
+                                );
                                 Vec::new()
                             }
                         } else {
                             Vec::new()
                         }
                     }
-                    CliprdrProxyEvent::DataResponse(data) => {
+                    CliprdrProxyEvent::DataResponse { reason, data } => {
                         // 远端返回了粘贴请求的数据内容。
+                        info!(
+                            event = "rdp.cliprdr.data_response.received",
+                            session_id = %ctx.session_id,
+                            activation_generation,
+                            reason,
+                            clipboard_channel_state = clipboard_channel_state.as_str(),
+                            data_len = data.len(),
+                            "received remote clipboard data"
+                        );
                         let utf16: Vec<u16> = data.chunks_exact(2)
                             .map(|c| u16::from_le_bytes([c[0], c[1]]))
                             .collect();
@@ -519,16 +704,65 @@ where
                     }
                     RuntimeCommand::Clipboard(text) => {
                         // 前端感知到本地剪贴板变化，推送新文本。
+                        let text_len = text.chars().count();
                         current_local_clipboard = text;
-                        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
+                        info!(
+                            event = "rdp.cliprdr.local_clipboard.forwarded",
+                            session_id = %ctx.session_id,
+                            activation_generation,
+                            clipboard_channel_state = clipboard_channel_state.as_str(),
+                            text_len,
+                            "processing local clipboard update for remote sync"
+                        );
+                        if clipboard_channel_state == ClipboardChannelState::Failed {
+                            warn!(
+                                event = "rdp.cliprdr.local_clipboard.skipped",
+                                session_id = %ctx.session_id,
+                                activation_generation,
+                                text_len,
+                                "skipping local clipboard sync because channel is failed"
+                            );
+                            Vec::new()
+                        } else if let Some(cliprdr) = active_stage.get_svc_processor_mut::<CliprdrClient>() {
                             // 宣告本地有新的文本内容，触发远端剪贴板状态刷新。
                             let formats = [ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)];
+                            info!(
+                                event = "rdp.cliprdr.local_copy.advertise",
+                                session_id = %ctx.session_id,
+                                activation_generation,
+                                clipboard_channel_state = clipboard_channel_state.as_str(),
+                                text_len,
+                                "advertising local clipboard unicode text format"
+                            );
                             let messages = cliprdr.initiate_copy(&formats)
                                 .map_err(|error| format!("cliprdr initiate_copy failed: {error}"))?;
-                            let frame = active_stage.process_svc_processor_messages(messages)
-                                .map_err(|error| format!("process_svc_processor_messages failed: {error}"))?;
-                            vec![ActiveStageOutput::ResponseFrame(frame)]
+                            let messages: Vec<_> = messages.into();
+                            if messages.is_empty() {
+                                mark_clipboard_channel_failed(
+                                    ctx.session_id,
+                                    activation_generation,
+                                    &mut clipboard_channel_state,
+                                    "local_initiate_copy",
+                                    "initiate_copy returned no clipboard svc messages",
+                                    Some(text_len),
+                                );
+                                Vec::new()
+                            } else {
+                                let frame = active_stage
+                                    .process_svc_processor_messages::<CliprdrClient>(messages.into())
+                                    .map_err(|error| {
+                                        format!("process_svc_processor_messages failed: {error}")
+                                    })?;
+                                vec![ActiveStageOutput::ResponseFrame(frame)]
+                            }
                         } else {
+                            warn!(
+                                event = "rdp.cliprdr.local_copy.unavailable",
+                                session_id = %ctx.session_id,
+                                activation_generation,
+                                text_len,
+                                "cliprdr processor unavailable during local clipboard sync"
+                            );
                             Vec::new()
                         }
                     }
@@ -641,8 +875,12 @@ where
                     );
                     image = DecodedImage::new(PixelFormat::RgbA32, width, height);
                     logged_first_frame = false;
+                    activation_generation = activation_generation.saturating_add(1);
+                    clipboard_channel_state = ClipboardChannelState::Initializing;
                     // 重激活后，服务器通常会丢失剪贴板上下文，我们需要重新宣告本地支持的格式。
-                    let _ = ctx.cliprdr_tx.send(CliprdrProxyEvent::NeedInitialSync);
+                    let _ = ctx.cliprdr_tx.send(CliprdrProxyEvent::NeedInitialSync {
+                        reason: "reactivated",
+                    });
                 }
                 ActiveStageOutput::MultitransportRequest(pdu) => {
                     // 上游 IronRDP 当前仍未提供可直接复用的客户端 UDP multitransport

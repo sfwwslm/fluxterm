@@ -12,6 +12,7 @@ use ironrdp_cliprdr::pdu::{
     FormatDataRequest, FormatDataResponse, LockDataId,
 };
 use tokio::sync::mpsc;
+use tracing::{debug, info};
 
 /// FluxTerm 自定义的 RDP 剪贴板后端实现。
 ///
@@ -28,13 +29,19 @@ pub struct FluxCliprdrBackend {
 #[derive(Debug)]
 pub enum CliprdrProxyEvent {
     /// 剪贴板通道已就绪，或者服务器请求初始格式列表。
-    NeedInitialSync,
+    NeedInitialSync { reason: &'static str },
     /// 远端宣告其支持的剪贴板格式列表。
-    FormatList(Vec<ClipboardFormat>),
+    FormatList {
+        reason: &'static str,
+        formats: Vec<ClipboardFormat>,
+    },
     /// 远端返回的具体剪贴板数据内容。
-    DataResponse(Vec<u8>),
+    DataResponse { reason: &'static str, data: Vec<u8> },
     /// 远端请求本地剪贴板的具体格式数据。
-    DataRequest(FormatDataRequest),
+    DataRequest {
+        reason: &'static str,
+        request: FormatDataRequest,
+    },
 }
 
 impl AsAny for FluxCliprdrBackend {
@@ -58,33 +65,65 @@ impl CliprdrBackend for FluxCliprdrBackend {
 
     fn on_ready(&mut self) {
         // 通道建立后，通知主循环进行初始同步
-        let _ = self.proxy_tx.send(CliprdrProxyEvent::NeedInitialSync);
+        info!(
+            event = "rdp.cliprdr.backend.ready",
+            "clipboard backend ready"
+        );
+        let _ = self.proxy_tx.send(CliprdrProxyEvent::NeedInitialSync {
+            reason: "backend_ready",
+        });
     }
 
     fn on_request_format_list(&mut self) {
         // 当服务器主动要求格式列表时，触发同步
-        let _ = self.proxy_tx.send(CliprdrProxyEvent::NeedInitialSync);
+        info!(
+            event = "rdp.cliprdr.backend.request_format_list",
+            "remote requested clipboard format list"
+        );
+        let _ = self.proxy_tx.send(CliprdrProxyEvent::NeedInitialSync {
+            reason: "remote_requested_format_list",
+        });
     }
 
     fn on_process_negotiated_capabilities(&mut self, _: ClipboardGeneralCapabilityFlags) {}
 
     fn on_remote_copy(&mut self, formats: &[ClipboardFormat]) {
         // 当远端执行复制操作时，转发格式列表以触发后续的粘贴请求
-        let _ = self
-            .proxy_tx
-            .send(CliprdrProxyEvent::FormatList(formats.to_vec()));
+        debug!(
+            event = "rdp.cliprdr.backend.remote_copy",
+            format_count = formats.len(),
+            "remote clipboard announced available formats"
+        );
+        let _ = self.proxy_tx.send(CliprdrProxyEvent::FormatList {
+            reason: "remote_copy",
+            formats: formats.to_vec(),
+        });
     }
 
     fn on_format_data_request(&mut self, request: FormatDataRequest) {
         // 当远端执行粘贴操作时，请求本地提供数据
-        let _ = self.proxy_tx.send(CliprdrProxyEvent::DataRequest(request));
+        info!(
+            event = "rdp.cliprdr.backend.data_request",
+            format = ?request.format,
+            "remote requested clipboard data"
+        );
+        let _ = self.proxy_tx.send(CliprdrProxyEvent::DataRequest {
+            reason: "remote_paste_request",
+            request,
+        });
     }
 
     fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
         // 当本地请求的远端数据到达时，转发给前端
-        let _ = self
-            .proxy_tx
-            .send(CliprdrProxyEvent::DataResponse(response.data().to_vec()));
+        info!(
+            event = "rdp.cliprdr.backend.data_response",
+            data_len = response.data().len(),
+            "received clipboard data response from remote"
+        );
+        let _ = self.proxy_tx.send(CliprdrProxyEvent::DataResponse {
+            reason: "remote_data_response",
+            data: response.data().to_vec(),
+        });
     }
 
     fn on_file_contents_request(&mut self, _: FileContentsRequest) {}

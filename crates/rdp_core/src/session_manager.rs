@@ -216,6 +216,8 @@ impl SessionManager {
         info!(
             event = "rdp.session.clipboard.forwarded",
             session_id = %session_id,
+            session_state = %runtime.snapshot.state,
+            command_channel_present = runtime.command_tx.is_some(),
             text_len = text.chars().count(),
             "forwarding clipboard text to runtime"
         );
