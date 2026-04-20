@@ -51,6 +51,7 @@ import {
   type TerminalCursorStyle,
 } from "@/constants/terminalCursorStyle";
 import { resolveTerminalHostKeyAction } from "@/hooks/terminalHostShortcuts";
+import { isMacOS } from "@/utils/platform";
 import type { ResolvedTerminalTheme } from "@/main/theme/buildTerminalTheme";
 
 type UseTerminalRuntimeProps = {
@@ -1398,6 +1399,7 @@ export default function useTerminalRuntime({
     const fit = new modules.FitAddon();
     term.loadAddon(fit);
     term.open(host);
+
     let webglAddon: WebglAddon | null = null;
     // 半透明背景下禁用 WebGL，避免终端画布实色化导致与其它区域透明度不一致。
     const shouldUseWebgl = !hasTranslucentAlpha(themeRef.current.background);
@@ -1470,6 +1472,15 @@ export default function useTerminalRuntime({
     );
 
     term.attachCustomKeyEventHandler((event) => {
+      // 拦截 macOS CapsLock 切换输入法时触发的 Unidentified 事件，防止 IME 内容重复提交。
+      if (
+        isMacOS() &&
+        (event.key === "CapsLock" ||
+          (event.key === "Unidentified" && event.isComposing))
+      ) {
+        return false;
+      }
+
       const action = resolveTerminalHostKeyAction(
         event,
         Boolean(term.getSelection()),
