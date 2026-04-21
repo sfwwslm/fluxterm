@@ -93,7 +93,7 @@ export default function useProfiles(): UseProfilesResult {
       invoke<HostProfile[]>("profile_list"),
       invoke<string[]>("profile_groups_list"),
     ]);
-    const normalized = list.map((profile) => {
+    const normalized: HostProfile[] = list.map((profile) => {
       const rawAuth = profile.authType as string;
       if (
         rawAuth === "key" ||
@@ -102,14 +102,14 @@ export default function useProfiles(): UseProfilesResult {
       ) {
         return {
           ...profile,
-          authType: "privateKey" as HostProfile["authType"],
-        };
+          authType: "privateKey",
+        } satisfies HostProfile;
       }
       if (rawAuth === "agent") {
         return {
           ...profile,
-          authType: "privateKey" as HostProfile["authType"],
-        };
+          authType: "privateKey",
+        } satisfies HostProfile;
       }
       return profile;
     });

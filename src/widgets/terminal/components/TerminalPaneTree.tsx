@@ -377,7 +377,7 @@ function handleSessionPointerDown(
   ) => void,
 ) {
   if (event.button !== 0) return;
-  const sourceElement = event.currentTarget as HTMLElement;
+  const sourceElement = event.currentTarget;
   const startX = event.clientX;
   const startY = event.clientY;
   let moved = false;

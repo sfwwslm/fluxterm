@@ -146,12 +146,7 @@ export default function RdpWidget({
       .map((group) => {
         if (matchesGroup(group.label)) return group;
         const matched = group.items.filter(matchesProfile);
-        return matched.length
-          ? ({ label: group.label, items: matched } as {
-              label: string;
-              items: RdpProfile[];
-            })
-          : null;
+        return matched.length ? { label: group.label, items: matched } : null;
       })
       .filter(
         (

@@ -57,7 +57,6 @@ import useSubApps from "@/main/hooks/useSubApps";
 import { moveWidgetToSlot, widgetKeys } from "@/layout/model";
 import type { WidgetSlotId } from "@/layout/types";
 import type {
-  ConnectingProfileMap,
   HostProfile,
   LocalShellConfig,
   LocalSessionMeta,
@@ -3320,7 +3319,7 @@ export default function AppShell() {
         activeProfileId,
         sshConnectingProfiles: connectingSshProfiles,
         activeRdpProfileId,
-        rdpConnectingProfiles: {} as ConnectingProfileMap,
+        rdpConnectingProfiles: {},
         availableShells,
         activeSessionId: AiWidgetState.activeSessionId,
         activeSessionState: EventsWidgetState.sessionState,

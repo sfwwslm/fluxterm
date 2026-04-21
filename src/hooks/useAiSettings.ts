@@ -15,7 +15,6 @@ import {
 import { extractErrorMessage } from "@/shared/errors/appError";
 import type {
   AiProviderInput,
-  AiProviderMode,
   AiProviderVendor,
   AiSettingsSaveInput,
   AiSettingsView,
@@ -615,7 +614,7 @@ export default function useAiSettings(): UseAiSettingsResult {
         return {
           ...provider,
           vendor,
-          mode: "preset" as AiProviderMode,
+          mode: "preset",
           baseUrl: preset.defaultBaseUrl,
           model: preset.models[0] ?? provider.model,
           name: provider.name.trim() || preset.label,
