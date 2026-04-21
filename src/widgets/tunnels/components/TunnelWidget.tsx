@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 import type { IconType } from "react-icons";
 import type {
   SessionStateUi,
@@ -66,9 +67,10 @@ export default function TunnelWidget({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setSubmitError(null);
     });
+    return cancel;
   }, [activeSessionId]);
 
   const bindWarning = useMemo(

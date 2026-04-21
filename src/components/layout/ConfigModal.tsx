@@ -15,6 +15,7 @@ import Button from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import Tooltip from "@/components/ui/menu/Tooltip";
 import { useNotices } from "@/hooks/useNotices";
+import useKeyedDraftState from "@/hooks/useKeyedDraftState";
 import {
   getAppConfigDir,
   getAppDataDir,
@@ -71,25 +72,6 @@ import type {
 } from "@/main/config/configNavigation";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
-
-function useBoundDraft(sourceKey: string, initialValue: string) {
-  const [draft, setDraft] = useState<{
-    sourceKey: string;
-    value: string;
-  } | null>(null);
-  const value =
-    draft && draft.sourceKey === sourceKey ? draft.value : initialValue;
-
-  function updateValue(next: string) {
-    setDraft({ sourceKey, value: next });
-  }
-
-  function clearValue() {
-    setDraft(null);
-  }
-
-  return [value, updateValue, clearValue] as const;
-}
 
 function getErrorMessage(error: unknown) {
   return extractErrorMessage(error);
@@ -347,39 +329,36 @@ export default function ConfigModal({
   const { pushToast, openDialog } = useNotices();
   const [configDir, setConfigDir] = useState("");
   const [dataDir, setDataDir] = useState("");
-  const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useBoundDraft(
-    fileDefaultEditorPath,
-    fileDefaultEditorPath,
-  );
-  const [aiSelectionMaxCharsDraft, setAiSelectionMaxCharsDraft] = useBoundDraft(
-    String(aiSelectionMaxChars),
-    String(aiSelectionMaxChars),
-  );
+  const [defaultEditorPathDraft, setDefaultEditorPathDraft] =
+    useKeyedDraftState(fileDefaultEditorPath, fileDefaultEditorPath);
+  const [aiSelectionMaxCharsDraft, setAiSelectionMaxCharsDraft] =
+    useKeyedDraftState(
+      String(aiSelectionMaxChars),
+      String(aiSelectionMaxChars),
+    );
   const [
     aiSessionRecentOutputMaxCharsDraft,
     setAiSessionRecentOutputMaxCharsDraft,
-  ] = useBoundDraft(
+  ] = useKeyedDraftState(
     String(aiSessionRecentOutputMaxChars),
     String(aiSessionRecentOutputMaxChars),
   );
-  const [aiRequestTimeoutMsDraft, setAiRequestTimeoutMsDraft] = useBoundDraft(
-    String(aiRequestTimeoutMs),
-    String(aiRequestTimeoutMs),
-  );
+  const [aiRequestTimeoutMsDraft, setAiRequestTimeoutMsDraft] =
+    useKeyedDraftState(String(aiRequestTimeoutMs), String(aiRequestTimeoutMs));
   // 数字输入使用本地草稿字符串，允许用户先清空再继续输入。
-  const [scrollbackDraft, setScrollbackDraft] = useBoundDraft(
+  const [scrollbackDraft, setScrollbackDraft] = useKeyedDraftState(
     String(scrollback),
     String(scrollback),
   );
   const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
-    useBoundDraft(
+    useKeyedDraftState(
       String(resourceMonitorIntervalSec),
       String(resourceMonitorIntervalSec),
     );
   const [
     backgroundVideoReplayIntervalDraft,
     setBackgroundVideoReplayIntervalDraft,
-  ] = useBoundDraft(
+  ] = useKeyedDraftState(
     String(
       clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
     ),
@@ -387,14 +366,14 @@ export default function ConfigModal({
       clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
     ),
   );
-  const [selectedProviderId, setSelectedProviderId] = useBoundDraft(
+  const [selectedProviderId, setSelectedProviderId] = useKeyedDraftState(
     `${aiActiveProviderId || aiProviders[0]?.id || ""}:${aiProviders.map((provider) => provider.id).join("|")}`,
     aiActiveProviderId || aiProviders[0]?.id || "",
   );
   const [quickPresetVendorDraft, setQuickPresetVendorDraft] =
     useState<AiProviderVendor>("deepseek");
   const [quickPresetNameDraft, setQuickPresetNameDraft] = useState("");
-  const [quickPresetModelDraft, setQuickPresetModelDraft] = useBoundDraft(
+  const [quickPresetModelDraft, setQuickPresetModelDraft] = useKeyedDraftState(
     quickPresetVendorDraft,
     getAiProviderPreset(quickPresetVendorDraft)?.models[0] ?? "",
   );
@@ -407,20 +386,20 @@ export default function ConfigModal({
   const [compatibleCreating, setCompatibleCreating] = useState(false);
   const [testingProviderId, setTestingProviderId] = useState("");
   const securityDraftSourceKey = `${activeSection}:${securityStatus.provider}:${securityStatus.locked}`;
-  const [securityPasswordDraft, setSecurityPasswordDraft] = useBoundDraft(
+  const [securityPasswordDraft, setSecurityPasswordDraft] = useKeyedDraftState(
     securityDraftSourceKey,
     "",
   );
   const [securityConfirmPasswordDraft, setSecurityConfirmPasswordDraft] =
-    useBoundDraft(securityDraftSourceKey, "");
+    useKeyedDraftState(securityDraftSourceKey, "");
   const [securityCurrentPasswordDraft, setSecurityCurrentPasswordDraft] =
-    useBoundDraft(securityDraftSourceKey, "");
+    useKeyedDraftState(securityDraftSourceKey, "");
   const [securityNextPasswordDraft, setSecurityNextPasswordDraft] =
-    useBoundDraft(securityDraftSourceKey, "");
+    useKeyedDraftState(securityDraftSourceKey, "");
   const [
     securityNextPasswordConfirmDraft,
     setSecurityNextPasswordConfirmDraft,
-  ] = useBoundDraft(securityDraftSourceKey, "");
+  ] = useKeyedDraftState(securityDraftSourceKey, "");
   const isDeveloperMode = import.meta.env.DEV;
   const normalizedBackgroundMediaType =
     normalizeBackgroundMediaType(backgroundMediaType);

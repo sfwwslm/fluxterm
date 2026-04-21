@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { FiActivity, FiClipboard, FiX } from "react-icons/fi";
 import type { Locale, Translate } from "@/i18n";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 import {
   createTraceId,
   logTelemetry,
@@ -409,9 +410,10 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   ]);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setStatusPanelOpen(false);
     });
+    return cancel;
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -685,13 +687,14 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       workerRef.current?.postMessage({
         type: "set-active",
         sessionId: activeSessionId,
       });
       resetPresentedFpsSampler(activeSessionId);
     });
+    return cancel;
   }, [activeSessionId, resetPresentedFpsSampler]);
 
   useEffect(() => {

@@ -27,6 +27,7 @@ import {
   LEGACY_DEFAULT_QUICKBAR_GROUP_ID,
 } from "@/constants/quickbar";
 import { PERSISTENCE_SAVE_DEBOUNCE_MS } from "@/constants/persistence";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 
 const defaultGroupId = DEFAULT_QUICKBAR_GROUP_ID;
 
@@ -281,14 +282,15 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
 
   // 启动加载与语言跟随。
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       void loadConfig().catch(() => {});
     });
+    return cancel;
   }, [loadConfig]);
 
   useEffect(() => {
     // 默认分组名称始终跟随当前语言切换。
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setGroups((prev) =>
         prev.map((group) =>
           group.id === defaultGroupId
@@ -297,6 +299,7 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
         ),
       );
     });
+    return cancel;
   }, [t]);
 
   // 防抖异步保存逻辑。

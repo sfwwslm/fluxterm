@@ -9,6 +9,7 @@ import {
 } from "@/features/security/core/commands";
 import type { SecurityStatus } from "@/features/security/types";
 import { extractErrorMessage } from "@/shared/errors/appError";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 
 const DEFAULT_SECURITY_STATUS: SecurityStatus = {
   provider: "embedded",
@@ -63,7 +64,7 @@ export default function useSecurity(): UseSecurityResult {
 
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setBusy(true);
       securityStatusGet()
         .then((next) => {
@@ -82,6 +83,7 @@ export default function useSecurity(): UseSecurityResult {
         });
     });
     return () => {
+      cancel();
       active = false;
     };
   }, []);

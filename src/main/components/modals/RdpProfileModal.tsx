@@ -6,6 +6,7 @@ import { ROOT_PROFILE_GROUP_VALUE } from "@/constants/hostGroups";
 import type { Translate, TranslationKey } from "@/i18n";
 import { saveRdpProfile } from "@/features/rdp/core/commands";
 import { translateAppError } from "@/shared/errors/appError";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 import type {
   RdpDisplayStrategy,
   RdpPerformanceFlags,
@@ -249,17 +250,18 @@ export default function RdpProfileModal({
 
   useEffect(() => {
     if (!open) return;
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setActiveSection("connection");
       setErrorMessage("");
       setShowDiscardConfirm(false);
       const initial = resolveInitialDraft();
       setDraftProfile(initial);
       // 延迟记录快照，确保状态已应用。
-      queueMicrotask(() => {
+      scheduleDeferredTask(() => {
         setInitialDraftSnapshot(JSON.stringify(initial));
       });
     });
+    return cancel;
   }, [open, resolveInitialDraft]);
 
   const hasUnsavedChanges =

@@ -16,6 +16,7 @@ import type {
 } from "@/features/ai/types";
 import { translations, type Locale, type TranslationKey } from "@/i18n";
 import { translateAppError } from "@/shared/errors/appError";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 
 /**
  * AI 面板状态管理 Hook。
@@ -248,7 +249,7 @@ export default function useAiState({
   useEffect(() => {
     if (!enabled) return;
     // 会话切换时先取消旧请求，再加载该会话的持久化快照，避免串流写入错误会话。
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       cancelPendingRequest();
       const persisted = readSessionState(activeSessionId);
       setMessages(persisted?.messages ?? []);
@@ -256,6 +257,7 @@ export default function useAiState({
       setWaitingFirstChunk(false);
       setErrorMessage(persisted?.errorMessage ?? null);
     });
+    return cancel;
   }, [activeSessionId, enabled]);
 
   useEffect(() => {

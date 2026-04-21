@@ -45,6 +45,7 @@ import {
 import { registerTerminalOutputListener } from "@/features/terminal/core/listeners";
 import { extractErrorMessage } from "@/shared/errors/appError";
 import { normalizeTerminalWordSeparators } from "@/constants/terminalWordSeparators";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 import {
   DEFAULT_TERMINAL_CURSOR_STYLE,
   normalizeTerminalCursorStyle,
@@ -578,9 +579,10 @@ export default function useTerminalRuntime({
   useEffect(() => {
     webLinksEnabledRef.current = webLinksEnabled;
     if (!webLinksEnabled) {
-      queueMicrotask(() => {
+      const cancel = scheduleDeferredTask(() => {
         setLinkMenu(null);
       });
+      return cancel;
     }
   }, [webLinksEnabled]);
 
@@ -648,12 +650,13 @@ export default function useTerminalRuntime({
   }, [activeAutocomplete]);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setActiveAutocomplete((prev) => {
         if (!prev) return null;
         return prev.sessionId === activeSessionId ? prev : null;
       });
     });
+    return cancel;
   }, [activeSessionId]);
 
   useEffect(() => {

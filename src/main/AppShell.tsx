@@ -33,6 +33,7 @@ import NoticeHost from "@/components/ui/notice-host";
 import { useNotices } from "@/hooks/useNotices";
 import { useDisableBrowserShortcuts } from "@/hooks/useDisableBrowserShortcuts";
 import { usePreventBrowserDefaults } from "@/hooks/usePreventBrowserDefaults";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 import useProfiles from "@/hooks/useProfiles";
 import useAppSettings from "@/hooks/useAppSettings";
 import {
@@ -769,7 +770,7 @@ export default function AppShell() {
     let revokeBlobUrl = () => {};
     const root = document.documentElement;
     const scheduleFloatingWindowReveal = () => {
-      queueMicrotask(() => {
+      scheduleDeferredTask(() => {
         setFloatingWindowAppearanceReady(true);
       });
     };
@@ -782,7 +783,7 @@ export default function AppShell() {
       root.style.setProperty("--app-bg-image-size", "cover");
       root.style.setProperty("--app-bg-image-repeat", "no-repeat");
       root.style.setProperty("--app-bg-image-position", "center center");
-      queueMicrotask(() => {
+      scheduleDeferredTask(() => {
         setBackgroundMediaBlobUrl("");
         setActiveBackgroundMediaType("image");
       });
@@ -835,13 +836,13 @@ export default function AppShell() {
         const resolvedBlobUrl = blobUrl;
         if (normalizedBackgroundMediaType === "video") {
           root.style.setProperty("--app-bg-image", "none");
-          queueMicrotask(() => {
+          scheduleDeferredTask(() => {
             setBackgroundMediaBlobUrl(resolvedBlobUrl);
             setActiveBackgroundMediaType("video");
           });
         } else {
           root.style.setProperty("--app-bg-image", `url("${resolvedBlobUrl}")`);
-          queueMicrotask(() => {
+          scheduleDeferredTask(() => {
             setBackgroundMediaBlobUrl("");
             setActiveBackgroundMediaType("image");
           });
@@ -1020,9 +1021,10 @@ export default function AppShell() {
   }
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       void refreshRdpProfiles().catch(() => {});
     });
+    return cancel;
   }, [refreshRdpProfiles]);
 
   useEffect(() => {
@@ -1196,7 +1198,7 @@ export default function AppShell() {
   ]);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setRemoteEditSessions((current) =>
         Object.fromEntries(
           Object.entries(current).filter(([, item]) => {
@@ -1213,6 +1215,7 @@ export default function AppShell() {
         ),
       );
     });
+    return cancel;
   }, [sessionState.sessionStates]);
 
   useEffect(() => {
@@ -1525,7 +1528,7 @@ export default function AppShell() {
   useEffect(() => {
     const activeSessionId = sessionState.activeSessionId;
     if (!activeSessionId) return;
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setBellPendingBySession((prev) => {
         if (!prev[activeSessionId]) return prev;
         const next = { ...prev };
@@ -1533,6 +1536,7 @@ export default function AppShell() {
         return next;
       });
     });
+    return cancel;
   }, [sessionState.activeSessionId]);
 
   useEffect(() => {
@@ -1540,13 +1544,14 @@ export default function AppShell() {
     if (!activeSessionId) return;
     // 新会话先走保守默认值，只有真正拿到可靠 cwd 后才提升为 supported，
     // 避免首屏短暂闪成绿色联动中。
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setTerminalCwdSupportBySession((prev) =>
         prev[activeSessionId]
           ? prev
           : { ...prev, [activeSessionId]: "unsupported" },
       );
     });
+    return cancel;
   }, [sessionState.activeSessionId]);
 
   const isFloatingFilesWidget = floatingWidgetKey === "files";
@@ -1811,7 +1816,7 @@ export default function AppShell() {
     previousResourceSessionStateRef.current = currentState;
     if (!activeSessionId) return;
     if (currentState !== "connected" || previousState === "connected") return;
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setResourceSnapshotsBySession((prev) => {
         if (prev[activeSessionId]?.status !== "unsupported") {
           return prev;
@@ -1821,6 +1826,7 @@ export default function AppShell() {
         return next;
       });
     });
+    return cancel;
   }, [sessionState.activeSessionId, sessionState.activeSessionState]);
 
   useEffect(() => {
@@ -1985,7 +1991,7 @@ export default function AppShell() {
       loginUsername !== promptUsername
     ) {
       if (syncState !== "paused-mismatch") {
-        queueMicrotask(() => {
+        scheduleDeferredTask(() => {
           setTerminalPathSyncStateBySession((prev) => ({
             ...prev,
             [activeSessionId]: "paused-mismatch",
@@ -2003,7 +2009,7 @@ export default function AppShell() {
       return;
     }
     if (!isLocalSession && syncState === "paused-mismatch") {
-      queueMicrotask(() => {
+      scheduleDeferredTask(() => {
         setTerminalPathSyncStateBySession((prev) => ({
           ...prev,
           [activeSessionId]: "active",
@@ -2031,7 +2037,7 @@ export default function AppShell() {
         ? sftpState.currentPath
         : null);
     if (knownHome && terminalHomeDirs[activeSessionId] !== knownHome) {
-      queueMicrotask(() => {
+      scheduleDeferredTask(() => {
         setTerminalHomeDirs((prev) => ({
           ...prev,
           [activeSessionId]: knownHome,
@@ -2055,7 +2061,7 @@ export default function AppShell() {
     if (effectiveResolvedPath === sftpState.currentPath) {
       // 当文件管理器已经处于终端 cwd 时，记住这次已同步的终端路径。
       // 后续用户手动浏览目录时，只要终端 cwd 没变化，就不要再被这个旧路径覆盖回去。
-      queueMicrotask(() => {
+      scheduleDeferredTask(() => {
         setLastSyncedTerminalPaths((prev) =>
           prev[activeSessionId] === effectiveResolvedPath
             ? prev
@@ -2079,7 +2085,7 @@ export default function AppShell() {
         }),
       );
     });
-    queueMicrotask(() => {
+    scheduleDeferredTask(() => {
       setLastSyncedTerminalPaths((prev) => ({
         ...prev,
         [activeSessionId]: effectiveResolvedPath,

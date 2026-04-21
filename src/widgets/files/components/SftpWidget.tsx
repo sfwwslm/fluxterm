@@ -8,6 +8,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import type { IconType } from "react-icons";
 import type { Locale, Translate } from "@/i18n";
 import type { SftpAvailability, SftpEntry } from "@/types";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 import useSftpDropUpload from "@/hooks/useSftpDropUpload";
 import { formatBytes, formatTime } from "@/utils/format";
 import { isRootPath, parentPath } from "@/utils/path";
@@ -291,9 +292,10 @@ export default function SftpWidget({
     if (!selectedEntryPath) return;
     if (visibleEntries.some((entry) => entry.path === selectedEntryPath))
       return;
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       setSelectedEntryPath(null);
     });
+    return cancel;
   }, [selectedEntryPath, visibleEntries]);
 
   const pathSyncMeta =

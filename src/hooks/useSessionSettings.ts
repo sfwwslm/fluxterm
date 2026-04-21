@@ -28,6 +28,7 @@ import {
   normalizeTerminalCursorStyle,
   type TerminalCursorStyle,
 } from "@/constants/terminalCursorStyle";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 
 /** 终端域全局配置结构。 */
 type SessionSettings = {
@@ -277,12 +278,13 @@ export default function useSessionSettings(): UseSessionSettingsResult {
 
   // 启动初始化。
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       void loadSessionSettings().catch(() => {
         loadedRef.current = true;
         setSessionSettingsLoaded(true);
       });
     });
+    return cancel;
   }, []);
 
   // 防抖异步落盘逻辑。

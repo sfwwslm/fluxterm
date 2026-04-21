@@ -8,6 +8,7 @@ import {
 } from "@/features/proxy/core/commands";
 import { registerProxyListeners } from "@/features/proxy/core/listeners";
 import { createTraceId, logTelemetry } from "@/shared/logging/telemetry";
+import { scheduleDeferredTask } from "@/hooks/useDeferredEffect";
 
 type ProxyTimelineEvent = {
   id: string;
@@ -126,9 +127,10 @@ export default function useProxyState() {
   }, [pushTimeline]);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const cancel = scheduleDeferredTask(() => {
       void refresh().catch(() => {});
     });
+    return cancel;
   }, [refresh]);
 
   const totals = useMemo(() => {
