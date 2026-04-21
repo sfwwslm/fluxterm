@@ -291,7 +291,9 @@ export default function SftpWidget({
     if (!selectedEntryPath) return;
     if (visibleEntries.some((entry) => entry.path === selectedEntryPath))
       return;
-    setSelectedEntryPath(null);
+    queueMicrotask(() => {
+      setSelectedEntryPath(null);
+    });
   }, [selectedEntryPath, visibleEntries]);
 
   const pathSyncMeta =

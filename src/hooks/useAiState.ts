@@ -248,12 +248,14 @@ export default function useAiState({
   useEffect(() => {
     if (!enabled) return;
     // 会话切换时先取消旧请求，再加载该会话的持久化快照，避免串流写入错误会话。
-    cancelPendingRequest();
-    const persisted = readSessionState(activeSessionId);
-    setMessages(persisted?.messages ?? []);
-    setDraftState(persisted?.draft ?? "");
-    setWaitingFirstChunk(false);
-    setErrorMessage(persisted?.errorMessage ?? null);
+    queueMicrotask(() => {
+      cancelPendingRequest();
+      const persisted = readSessionState(activeSessionId);
+      setMessages(persisted?.messages ?? []);
+      setDraftState(persisted?.draft ?? "");
+      setWaitingFirstChunk(false);
+      setErrorMessage(persisted?.errorMessage ?? null);
+    });
   }, [activeSessionId, enabled]);
 
   useEffect(() => {

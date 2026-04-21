@@ -768,6 +768,11 @@ export default function AppShell() {
     let blobUrl: string | null = null;
     let revokeBlobUrl = () => {};
     const root = document.documentElement;
+    const scheduleFloatingWindowReveal = () => {
+      queueMicrotask(() => {
+        setFloatingWindowAppearanceReady(true);
+      });
+    };
     const applyBackgroundImageMode = (enabled: boolean) => {
       root.dataset.backgroundImageMode = enabled ? "on" : "off";
     };
@@ -777,8 +782,10 @@ export default function AppShell() {
       root.style.setProperty("--app-bg-image-size", "cover");
       root.style.setProperty("--app-bg-image-repeat", "no-repeat");
       root.style.setProperty("--app-bg-image-position", "center center");
-      setBackgroundMediaBlobUrl("");
-      setActiveBackgroundMediaType("image");
+      queueMicrotask(() => {
+        setBackgroundMediaBlobUrl("");
+        setActiveBackgroundMediaType("image");
+      });
       applyBackgroundImageMode(false);
     };
 
@@ -789,7 +796,7 @@ export default function AppShell() {
     if (!isBackgroundMediaRequested) {
       applyDefaultBackground();
       if (shouldDeferFloatingWindowReveal) {
-        setFloatingWindowAppearanceReady(true);
+        scheduleFloatingWindowReveal();
       }
       return;
     }
@@ -825,21 +832,26 @@ export default function AppShell() {
         root.style.setProperty("--app-bg-image-size", style.size);
         root.style.setProperty("--app-bg-image-repeat", style.repeat);
         root.style.setProperty("--app-bg-image-position", style.position);
+        const resolvedBlobUrl = blobUrl;
         if (normalizedBackgroundMediaType === "video") {
           root.style.setProperty("--app-bg-image", "none");
-          setBackgroundMediaBlobUrl(blobUrl);
-          setActiveBackgroundMediaType("video");
+          queueMicrotask(() => {
+            setBackgroundMediaBlobUrl(resolvedBlobUrl);
+            setActiveBackgroundMediaType("video");
+          });
         } else {
-          root.style.setProperty("--app-bg-image", `url("${blobUrl}")`);
-          setBackgroundMediaBlobUrl("");
-          setActiveBackgroundMediaType("image");
+          root.style.setProperty("--app-bg-image", `url("${resolvedBlobUrl}")`);
+          queueMicrotask(() => {
+            setBackgroundMediaBlobUrl("");
+            setActiveBackgroundMediaType("image");
+          });
         }
         // 仅在背景图真正可读后启用语义层半透明模式，避免加载失败时界面过透。
         applyBackgroundImageMode(true);
         if (shouldDeferFloatingWindowReveal) {
           await waitForNextPaint(2);
           if (disposed) return;
-          setFloatingWindowAppearanceReady(true);
+          scheduleFloatingWindowReveal();
         }
       } catch (error) {
         if (disposed) return;
@@ -847,7 +859,7 @@ export default function AppShell() {
         if (shouldDeferFloatingWindowReveal) {
           await waitForNextPaint(2);
           if (disposed) return;
-          setFloatingWindowAppearanceReady(true);
+          scheduleFloatingWindowReveal();
         }
         void warn(
           JSON.stringify({
@@ -1008,7 +1020,9 @@ export default function AppShell() {
   }
 
   useEffect(() => {
-    void refreshRdpProfiles().catch(() => {});
+    queueMicrotask(() => {
+      void refreshRdpProfiles().catch(() => {});
+    });
   }, [refreshRdpProfiles]);
 
   useEffect(() => {
@@ -1182,21 +1196,23 @@ export default function AppShell() {
   ]);
 
   useEffect(() => {
-    setRemoteEditSessions((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([, item]) => {
-          return sessionState.sessionStates[item.sessionId] === "connected";
-        }),
-      ),
-    );
-    setRemoteEditAutoUploadBySession((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(
-          ([sessionId]) =>
-            sessionState.sessionStates[sessionId] === "connected",
+    queueMicrotask(() => {
+      setRemoteEditSessions((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([, item]) => {
+            return sessionState.sessionStates[item.sessionId] === "connected";
+          }),
         ),
-      ),
-    );
+      );
+      setRemoteEditAutoUploadBySession((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([sessionId]) =>
+              sessionState.sessionStates[sessionId] === "connected",
+          ),
+        ),
+      );
+    });
   }, [sessionState.sessionStates]);
 
   useEffect(() => {
@@ -1502,16 +1518,20 @@ export default function AppShell() {
       );
     },
   });
-  focusActiveTerminalRef.current = terminalActions.focusActiveTerminal;
+  useEffect(() => {
+    focusActiveTerminalRef.current = terminalActions.focusActiveTerminal;
+  }, [terminalActions.focusActiveTerminal]);
 
   useEffect(() => {
     const activeSessionId = sessionState.activeSessionId;
     if (!activeSessionId) return;
-    setBellPendingBySession((prev) => {
-      if (!prev[activeSessionId]) return prev;
-      const next = { ...prev };
-      delete next[activeSessionId];
-      return next;
+    queueMicrotask(() => {
+      setBellPendingBySession((prev) => {
+        if (!prev[activeSessionId]) return prev;
+        const next = { ...prev };
+        delete next[activeSessionId];
+        return next;
+      });
     });
   }, [sessionState.activeSessionId]);
 
@@ -1520,11 +1540,13 @@ export default function AppShell() {
     if (!activeSessionId) return;
     // 新会话先走保守默认值，只有真正拿到可靠 cwd 后才提升为 supported，
     // 避免首屏短暂闪成绿色联动中。
-    setTerminalCwdSupportBySession((prev) =>
-      prev[activeSessionId]
-        ? prev
-        : { ...prev, [activeSessionId]: "unsupported" },
-    );
+    queueMicrotask(() => {
+      setTerminalCwdSupportBySession((prev) =>
+        prev[activeSessionId]
+          ? prev
+          : { ...prev, [activeSessionId]: "unsupported" },
+      );
+    });
   }, [sessionState.activeSessionId]);
 
   const isFloatingFilesWidget = floatingWidgetKey === "files";
@@ -1789,13 +1811,15 @@ export default function AppShell() {
     previousResourceSessionStateRef.current = currentState;
     if (!activeSessionId) return;
     if (currentState !== "connected" || previousState === "connected") return;
-    setResourceSnapshotsBySession((prev) => {
-      if (prev[activeSessionId]?.status !== "unsupported") {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[activeSessionId];
-      return next;
+    queueMicrotask(() => {
+      setResourceSnapshotsBySession((prev) => {
+        if (prev[activeSessionId]?.status !== "unsupported") {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[activeSessionId];
+        return next;
+      });
     });
   }, [sessionState.activeSessionId, sessionState.activeSessionState]);
 
@@ -1961,10 +1985,12 @@ export default function AppShell() {
       loginUsername !== promptUsername
     ) {
       if (syncState !== "paused-mismatch") {
-        setTerminalPathSyncStateBySession((prev) => ({
-          ...prev,
-          [activeSessionId]: "paused-mismatch",
-        }));
+        queueMicrotask(() => {
+          setTerminalPathSyncStateBySession((prev) => ({
+            ...prev,
+            [activeSessionId]: "paused-mismatch",
+          }));
+        });
         void warn(
           JSON.stringify({
             event: "terminal:cwd-sync-paused-user-mismatch",
@@ -1977,10 +2003,12 @@ export default function AppShell() {
       return;
     }
     if (!isLocalSession && syncState === "paused-mismatch") {
-      setTerminalPathSyncStateBySession((prev) => ({
-        ...prev,
-        [activeSessionId]: "active",
-      }));
+      queueMicrotask(() => {
+        setTerminalPathSyncStateBySession((prev) => ({
+          ...prev,
+          [activeSessionId]: "active",
+        }));
+      });
       info(
         JSON.stringify({
           event: "terminal:cwd-sync-resumed-user-match",
@@ -2003,10 +2031,12 @@ export default function AppShell() {
         ? sftpState.currentPath
         : null);
     if (knownHome && terminalHomeDirs[activeSessionId] !== knownHome) {
-      setTerminalHomeDirs((prev) => ({
-        ...prev,
-        [activeSessionId]: knownHome,
-      }));
+      queueMicrotask(() => {
+        setTerminalHomeDirs((prev) => ({
+          ...prev,
+          [activeSessionId]: knownHome,
+        }));
+      });
     }
     const resolvedPath = resolveTrackedWorkingDirectory(
       trackedPath,
@@ -2025,11 +2055,13 @@ export default function AppShell() {
     if (effectiveResolvedPath === sftpState.currentPath) {
       // 当文件管理器已经处于终端 cwd 时，记住这次已同步的终端路径。
       // 后续用户手动浏览目录时，只要终端 cwd 没变化，就不要再被这个旧路径覆盖回去。
-      setLastSyncedTerminalPaths((prev) =>
-        prev[activeSessionId] === effectiveResolvedPath
-          ? prev
-          : { ...prev, [activeSessionId]: effectiveResolvedPath },
-      );
+      queueMicrotask(() => {
+        setLastSyncedTerminalPaths((prev) =>
+          prev[activeSessionId] === effectiveResolvedPath
+            ? prev
+            : { ...prev, [activeSessionId]: effectiveResolvedPath },
+        );
+      });
       return;
     }
     if (lastSyncedTerminalPaths[activeSessionId] === effectiveResolvedPath)
@@ -2047,10 +2079,12 @@ export default function AppShell() {
         }),
       );
     });
-    setLastSyncedTerminalPaths((prev) => ({
-      ...prev,
-      [activeSessionId]: effectiveResolvedPath,
-    }));
+    queueMicrotask(() => {
+      setLastSyncedTerminalPaths((prev) => ({
+        ...prev,
+        [activeSessionId]: effectiveResolvedPath,
+      }));
+    });
   }, [
     lastSyncedTerminalPaths,
     openRemoteDir,

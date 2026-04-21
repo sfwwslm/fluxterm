@@ -67,6 +67,9 @@ type UseLayoutStateProps = {
 export default function useLayoutState({
   floatingWidgetKey,
 }: UseLayoutStateProps): LayoutState {
+  const [resizeMode, setResizeMode] = useState<
+    "left" | "right" | "bottom" | null
+  >(null);
   const [layoutCollapsed, setLayoutCollapsed] = useState(
     defaultWidgetLayout.collapsed,
   );
@@ -262,11 +265,7 @@ export default function useLayoutState({
       startRight: widgetSizes.right,
       startBottom: widgetSizes.bottom,
     };
-    document.body.style.userSelect = "none";
-    document.body.style.cursor =
-      mode === "bottom" ? "row-resize" : "col-resize";
-    window.addEventListener("mousemove", handleResizeMove);
-    window.addEventListener("mouseup", stopResize);
+    setResizeMode(mode);
   }
 
   function handleResizeMove(event: MouseEvent) {
@@ -301,10 +300,7 @@ export default function useLayoutState({
 
   function stopResize() {
     dragState.current = null;
-    document.body.style.userSelect = "";
-    document.body.style.cursor = "";
-    window.removeEventListener("mousemove", handleResizeMove);
-    window.removeEventListener("mouseup", stopResize);
+    setResizeMode(null);
   }
 
   const leftVisible = !layoutCollapsed.left;
@@ -328,8 +324,25 @@ export default function useLayoutState({
 
   // 初始化加载布局。
   useEffect(() => {
-    loadLayoutConfig().catch(() => {});
+    queueMicrotask(() => {
+      void loadLayoutConfig().catch(() => {});
+    });
   }, []);
+
+  useEffect(() => {
+    if (!resizeMode) return;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor =
+      resizeMode === "bottom" ? "row-resize" : "col-resize";
+    window.addEventListener("mousemove", handleResizeMove);
+    window.addEventListener("mouseup", stopResize);
+    return () => {
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      window.removeEventListener("mousemove", handleResizeMove);
+      window.removeEventListener("mouseup", stopResize);
+    };
+  }, [resizeMode]);
 
   // 防抖异步落盘逻辑。
   useEffect(() => {

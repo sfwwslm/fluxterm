@@ -409,7 +409,9 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   ]);
 
   useEffect(() => {
-    setStatusPanelOpen(false);
+    queueMicrotask(() => {
+      setStatusPanelOpen(false);
+    });
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -683,11 +685,13 @@ export default function RdpSubApp({ id, locale, t }: RdpSubAppProps) {
   }, []);
 
   useEffect(() => {
-    workerRef.current?.postMessage({
-      type: "set-active",
-      sessionId: activeSessionId,
+    queueMicrotask(() => {
+      workerRef.current?.postMessage({
+        type: "set-active",
+        sessionId: activeSessionId,
+      });
+      resetPresentedFpsSampler(activeSessionId);
     });
-    resetPresentedFpsSampler(activeSessionId);
   }, [activeSessionId, resetPresentedFpsSampler]);
 
   useEffect(() => {

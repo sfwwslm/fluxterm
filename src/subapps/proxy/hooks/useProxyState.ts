@@ -126,7 +126,9 @@ export default function useProxyState() {
   }, [pushTimeline]);
 
   useEffect(() => {
-    refresh().catch(() => {});
+    queueMicrotask(() => {
+      void refresh().catch(() => {});
+    });
   }, [refresh]);
 
   const totals = useMemo(() => {

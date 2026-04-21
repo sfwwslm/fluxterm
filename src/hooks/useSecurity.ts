@@ -63,22 +63,24 @@ export default function useSecurity(): UseSecurityResult {
 
   useEffect(() => {
     let active = true;
-    setBusy(true);
-    securityStatusGet()
-      .then((next) => {
-        if (!active) return;
-        setStatus(next);
-        setError(null);
-      })
-      .catch((loadError) => {
-        if (!active) return;
-        setError(extractErrorMessage(loadError));
-      })
-      .finally(() => {
-        if (!active) return;
-        setBusy(false);
-        setLoaded(true);
-      });
+    queueMicrotask(() => {
+      setBusy(true);
+      securityStatusGet()
+        .then((next) => {
+          if (!active) return;
+          setStatus(next);
+          setError(null);
+        })
+        .catch((loadError) => {
+          if (!active) return;
+          setError(extractErrorMessage(loadError));
+        })
+        .finally(() => {
+          if (!active) return;
+          setBusy(false);
+          setLoaded(true);
+        });
+    });
     return () => {
       active = false;
     };

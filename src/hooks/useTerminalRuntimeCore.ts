@@ -578,7 +578,9 @@ export default function useTerminalRuntime({
   useEffect(() => {
     webLinksEnabledRef.current = webLinksEnabled;
     if (!webLinksEnabled) {
-      setLinkMenu(null);
+      queueMicrotask(() => {
+        setLinkMenu(null);
+      });
     }
   }, [webLinksEnabled]);
 
@@ -646,9 +648,11 @@ export default function useTerminalRuntime({
   }, [activeAutocomplete]);
 
   useEffect(() => {
-    setActiveAutocomplete((prev) => {
-      if (!prev) return null;
-      return prev.sessionId === activeSessionId ? prev : null;
+    queueMicrotask(() => {
+      setActiveAutocomplete((prev) => {
+        if (!prev) return null;
+        return prev.sessionId === activeSessionId ? prev : null;
+      });
     });
   }, [activeSessionId]);
 

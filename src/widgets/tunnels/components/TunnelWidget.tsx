@@ -66,7 +66,9 @@ export default function TunnelWidget({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSubmitError(null);
+    queueMicrotask(() => {
+      setSubmitError(null);
+    });
   }, [activeSessionId]);
 
   const bindWarning = useMemo(

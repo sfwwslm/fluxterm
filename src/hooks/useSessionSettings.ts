@@ -277,9 +277,11 @@ export default function useSessionSettings(): UseSessionSettingsResult {
 
   // 启动初始化。
   useEffect(() => {
-    loadSessionSettings().catch(() => {
-      loadedRef.current = true;
-      setSessionSettingsLoaded(true);
+    queueMicrotask(() => {
+      void loadSessionSettings().catch(() => {
+        loadedRef.current = true;
+        setSessionSettingsLoaded(true);
+      });
     });
   }, []);
 

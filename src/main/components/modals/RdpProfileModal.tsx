@@ -249,14 +249,16 @@ export default function RdpProfileModal({
 
   useEffect(() => {
     if (!open) return;
-    setActiveSection("connection");
-    setErrorMessage("");
-    setShowDiscardConfirm(false);
-    const initial = resolveInitialDraft();
-    setDraftProfile(initial);
-    // 延迟记录快照，确保状态已应用。
     queueMicrotask(() => {
-      setInitialDraftSnapshot(JSON.stringify(initial));
+      setActiveSection("connection");
+      setErrorMessage("");
+      setShowDiscardConfirm(false);
+      const initial = resolveInitialDraft();
+      setDraftProfile(initial);
+      // 延迟记录快照，确保状态已应用。
+      queueMicrotask(() => {
+        setInitialDraftSnapshot(JSON.stringify(initial));
+      });
     });
   }, [open, resolveInitialDraft]);
 

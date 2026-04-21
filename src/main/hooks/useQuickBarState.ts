@@ -281,18 +281,22 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
 
   // 启动加载与语言跟随。
   useEffect(() => {
-    loadConfig().catch(() => {});
+    queueMicrotask(() => {
+      void loadConfig().catch(() => {});
+    });
   }, [loadConfig]);
 
   useEffect(() => {
     // 默认分组名称始终跟随当前语言切换。
-    setGroups((prev) =>
-      prev.map((group) =>
-        group.id === defaultGroupId
-          ? { ...group, name: getDefaultGroupName(t) }
-          : group,
-      ),
-    );
+    queueMicrotask(() => {
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === defaultGroupId
+            ? { ...group, name: getDefaultGroupName(t) }
+            : group,
+        ),
+      );
+    });
   }, [t]);
 
   // 防抖异步保存逻辑。

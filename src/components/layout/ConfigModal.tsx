@@ -72,6 +72,25 @@ import type {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+function useBoundDraft(sourceKey: string, initialValue: string) {
+  const [draft, setDraft] = useState<{
+    sourceKey: string;
+    value: string;
+  } | null>(null);
+  const value =
+    draft && draft.sourceKey === sourceKey ? draft.value : initialValue;
+
+  function updateValue(next: string) {
+    setDraft({ sourceKey, value: next });
+  }
+
+  function clearValue() {
+    setDraft(null);
+  }
+
+  return [value, updateValue, clearValue] as const;
+}
+
 function getErrorMessage(error: unknown) {
   return extractErrorMessage(error);
 }
@@ -328,41 +347,56 @@ export default function ConfigModal({
   const { pushToast, openDialog } = useNotices();
   const [configDir, setConfigDir] = useState("");
   const [dataDir, setDataDir] = useState("");
-  const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useState(
+  const [defaultEditorPathDraft, setDefaultEditorPathDraft] = useBoundDraft(
+    fileDefaultEditorPath,
     fileDefaultEditorPath,
   );
-  const [aiSelectionMaxCharsDraft, setAiSelectionMaxCharsDraft] = useState(() =>
+  const [aiSelectionMaxCharsDraft, setAiSelectionMaxCharsDraft] = useBoundDraft(
+    String(aiSelectionMaxChars),
     String(aiSelectionMaxChars),
   );
   const [
     aiSessionRecentOutputMaxCharsDraft,
     setAiSessionRecentOutputMaxCharsDraft,
-  ] = useState(() => String(aiSessionRecentOutputMaxChars));
-  const [aiRequestTimeoutMsDraft, setAiRequestTimeoutMsDraft] = useState(() =>
+  ] = useBoundDraft(
+    String(aiSessionRecentOutputMaxChars),
+    String(aiSessionRecentOutputMaxChars),
+  );
+  const [aiRequestTimeoutMsDraft, setAiRequestTimeoutMsDraft] = useBoundDraft(
+    String(aiRequestTimeoutMs),
     String(aiRequestTimeoutMs),
   );
   // 数字输入使用本地草稿字符串，允许用户先清空再继续输入。
-  const [scrollbackDraft, setScrollbackDraft] = useState(() =>
+  const [scrollbackDraft, setScrollbackDraft] = useBoundDraft(
+    String(scrollback),
     String(scrollback),
   );
   const [resourceMonitorIntervalDraft, setResourceMonitorIntervalDraft] =
-    useState(() => String(resourceMonitorIntervalSec));
+    useBoundDraft(
+      String(resourceMonitorIntervalSec),
+      String(resourceMonitorIntervalSec),
+    );
   const [
     backgroundVideoReplayIntervalDraft,
     setBackgroundVideoReplayIntervalDraft,
-  ] = useState(() =>
+  ] = useBoundDraft(
+    String(
+      clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
+    ),
     String(
       clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
     ),
   );
-  const [selectedProviderId, setSelectedProviderId] = useState(
+  const [selectedProviderId, setSelectedProviderId] = useBoundDraft(
+    `${aiActiveProviderId || aiProviders[0]?.id || ""}:${aiProviders.map((provider) => provider.id).join("|")}`,
     aiActiveProviderId || aiProviders[0]?.id || "",
   );
   const [quickPresetVendorDraft, setQuickPresetVendorDraft] =
     useState<AiProviderVendor>("deepseek");
   const [quickPresetNameDraft, setQuickPresetNameDraft] = useState("");
-  const [quickPresetModelDraft, setQuickPresetModelDraft] = useState(
-    getAiProviderPreset("deepseek")?.models[0] ?? "",
+  const [quickPresetModelDraft, setQuickPresetModelDraft] = useBoundDraft(
+    quickPresetVendorDraft,
+    getAiProviderPreset(quickPresetVendorDraft)?.models[0] ?? "",
   );
   const [quickPresetApiKeyDraft, setQuickPresetApiKeyDraft] = useState("");
   const [quickPresetCreating, setQuickPresetCreating] = useState(false);
@@ -372,17 +406,21 @@ export default function ConfigModal({
   const [compatibleApiKeyDraft, setCompatibleApiKeyDraft] = useState("");
   const [compatibleCreating, setCompatibleCreating] = useState(false);
   const [testingProviderId, setTestingProviderId] = useState("");
-  const [securityPasswordDraft, setSecurityPasswordDraft] = useState("");
+  const securityDraftSourceKey = `${activeSection}:${securityStatus.provider}:${securityStatus.locked}`;
+  const [securityPasswordDraft, setSecurityPasswordDraft] = useBoundDraft(
+    securityDraftSourceKey,
+    "",
+  );
   const [securityConfirmPasswordDraft, setSecurityConfirmPasswordDraft] =
-    useState("");
+    useBoundDraft(securityDraftSourceKey, "");
   const [securityCurrentPasswordDraft, setSecurityCurrentPasswordDraft] =
-    useState("");
+    useBoundDraft(securityDraftSourceKey, "");
   const [securityNextPasswordDraft, setSecurityNextPasswordDraft] =
-    useState("");
+    useBoundDraft(securityDraftSourceKey, "");
   const [
     securityNextPasswordConfirmDraft,
     setSecurityNextPasswordConfirmDraft,
-  ] = useState("");
+  ] = useBoundDraft(securityDraftSourceKey, "");
   const isDeveloperMode = import.meta.env.DEV;
   const normalizedBackgroundMediaType =
     normalizeBackgroundMediaType(backgroundMediaType);
@@ -428,62 +466,6 @@ export default function ConfigModal({
         setDataDir("");
       });
   }, [activeSection, open]);
-
-  useEffect(() => {
-    setDefaultEditorPathDraft(fileDefaultEditorPath);
-  }, [fileDefaultEditorPath]);
-
-  useEffect(() => {
-    setAiSelectionMaxCharsDraft(String(aiSelectionMaxChars));
-  }, [aiSelectionMaxChars]);
-
-  useEffect(() => {
-    setAiSessionRecentOutputMaxCharsDraft(
-      String(aiSessionRecentOutputMaxChars),
-    );
-  }, [aiSessionRecentOutputMaxChars]);
-
-  useEffect(() => {
-    setAiRequestTimeoutMsDraft(String(aiRequestTimeoutMs));
-  }, [aiRequestTimeoutMs]);
-
-  useEffect(() => {
-    setScrollbackDraft(String(scrollback));
-  }, [scrollback]);
-
-  useEffect(() => {
-    setBackgroundVideoReplayIntervalDraft(
-      String(normalizedBackgroundVideoReplayIntervalSec),
-    );
-  }, [normalizedBackgroundVideoReplayIntervalSec]);
-
-  useEffect(() => {
-    setResourceMonitorIntervalDraft(String(resourceMonitorIntervalSec));
-  }, [resourceMonitorIntervalSec]);
-
-  useEffect(() => {
-    if (
-      selectedProviderId &&
-      aiProviders.some((provider) => provider.id === selectedProviderId)
-    ) {
-      return;
-    }
-    setSelectedProviderId(aiActiveProviderId || aiProviders[0]?.id || "");
-  }, [aiActiveProviderId, aiProviders, selectedProviderId]);
-
-  useEffect(() => {
-    const preset = getAiProviderPreset(quickPresetVendorDraft);
-    setQuickPresetModelDraft(preset?.models[0] ?? "");
-  }, [quickPresetVendorDraft]);
-
-  useEffect(() => {
-    if (activeSection !== "security") return;
-    setSecurityPasswordDraft("");
-    setSecurityConfirmPasswordDraft("");
-    setSecurityCurrentPasswordDraft("");
-    setSecurityNextPasswordDraft("");
-    setSecurityNextPasswordConfirmDraft("");
-  }, [activeSection, securityStatus.provider, securityStatus.locked]);
 
   async function pickBackgroundMedia() {
     try {
