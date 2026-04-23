@@ -283,6 +283,7 @@ pub struct ResourceCpuSnapshot {
     pub system_percent: f32,
     pub idle_percent: f32,
     pub iowait_percent: f32,
+    pub logical_cpu_count: Option<u32>,
 }
 
 /// 内存资源快照。
@@ -305,6 +306,7 @@ pub struct SessionResourceSnapshot {
     pub source: String,
     pub status: ResourceMonitorStatus,
     pub unsupported_reason: Option<ResourceMonitorUnsupportedReason>,
+    pub uptime_seconds: Option<u64>,
     pub cpu: Option<ResourceCpuSnapshot>,
     pub memory: Option<ResourceMemorySnapshot>,
 }

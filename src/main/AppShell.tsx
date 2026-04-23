@@ -1923,6 +1923,7 @@ export default function AppShell() {
             sampledAt: Date.now(),
             source: isLocalActiveSession ? "local" : "ssh-linux",
             status: "checking",
+            uptimeSeconds: null,
             cpu: null,
             memory: null,
           },

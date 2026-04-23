@@ -400,6 +400,7 @@ export type ResourceCpuSnapshot = {
   systemPercent: number;
   idlePercent: number;
   iowaitPercent: number;
+  logicalCpuCount?: number;
 };
 
 /** 内存资源快照。 */
@@ -418,6 +419,7 @@ export type SessionResourceSnapshot = {
   source: "local" | "ssh-linux";
   status: ResourceMonitorStatus;
   unsupportedReason?: ResourceMonitorUnsupportedReason | null;
+  uptimeSeconds?: number | null;
   cpu?: ResourceCpuSnapshot | null;
   memory?: ResourceMemorySnapshot | null;
 };

@@ -17,8 +17,7 @@ use crate::types::{
 };
 use crate::util::now_epoch;
 
-const REMOTE_RESOURCE_COMMAND: &str =
-    "cat /proc/stat 2>/dev/null; printf '\\n'; cat /proc/meminfo 2>/dev/null";
+const REMOTE_RESOURCE_COMMAND: &str = "cat /proc/stat 2>/dev/null; printf '\\n'; cat /proc/meminfo 2>/dev/null; printf '\\n'; cat /proc/uptime 2>/dev/null";
 
 #[derive(Clone, Copy)]
 struct CpuCounters {
@@ -97,6 +96,7 @@ pub async fn run_ssh_resource_monitor(
                             unsupported_reason: Some(
                                 ResourceMonitorUnsupportedReason::UnsupportedPlatform,
                             ),
+                            uptime_seconds: None,
                             cpu: None,
                             memory: None,
                         }));
@@ -132,15 +132,23 @@ async fn sample_linux_resource_snapshot(
 ) -> Result<(SessionResourceSnapshot, CpuCounters), EngineError> {
     let first_output = exec_remote_resource_command(session).await?;
     let first_cpu = parse_cpu_counters(&first_output)?;
+    let logical_cpu_count = parse_logical_cpu_count(&first_output)?;
     let memory = parse_memory_snapshot(&first_output)?;
+    let uptime_seconds = parse_uptime_seconds(&first_output)?;
 
     let (cpu_snapshot, current_cpu) = if let Some(previous) = previous_cpu {
-        (calculate_cpu_snapshot(previous, first_cpu), first_cpu)
+        (
+            calculate_cpu_snapshot(previous, first_cpu, logical_cpu_count),
+            first_cpu,
+        )
     } else {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let second_output = exec_remote_resource_command(session).await?;
         let second_cpu = parse_cpu_counters(&second_output)?;
-        (calculate_cpu_snapshot(first_cpu, second_cpu), second_cpu)
+        (
+            calculate_cpu_snapshot(first_cpu, second_cpu, logical_cpu_count),
+            second_cpu,
+        )
     };
 
     Ok((
@@ -150,6 +158,7 @@ async fn sample_linux_resource_snapshot(
             source: "ssh-linux".to_string(),
             status: ResourceMonitorStatus::Ready,
             unsupported_reason: None,
+            uptime_seconds: Some(uptime_seconds),
             cpu: Some(cpu_snapshot),
             memory: Some(memory),
         },
@@ -291,7 +300,77 @@ fn parse_memory_snapshot(output: &str) -> Result<ResourceMemorySnapshot, EngineE
     })
 }
 
-fn calculate_cpu_snapshot(previous: CpuCounters, current: CpuCounters) -> ResourceCpuSnapshot {
+fn parse_logical_cpu_count(output: &str) -> Result<u32, EngineError> {
+    let count = output
+        .lines()
+        .filter(|line| {
+            line.strip_prefix("cpu")
+                .map(|suffix| {
+                    !suffix.is_empty()
+                        && suffix
+                            .chars()
+                            .next()
+                            .map(|ch| ch.is_ascii_digit())
+                            .unwrap_or(false)
+                })
+                .unwrap_or(false)
+        })
+        .count();
+
+    if count == 0 {
+        return Err(EngineError::new(
+            "resource_monitor_unsupported",
+            "当前远端系统不支持资源监控",
+        ));
+    }
+
+    u32::try_from(count).map_err(|err| {
+        EngineError::with_detail(
+            "resource_monitor_parse_failed",
+            "无法解析 CPU 数量",
+            err.to_string(),
+        )
+    })
+}
+
+fn parse_uptime_seconds(output: &str) -> Result<u64, EngineError> {
+    let line = output
+        .lines()
+        .find(|line| {
+            let mut parts = line.split_whitespace();
+            matches!(
+                (parts.next(), parts.next(), parts.next()),
+                (Some(first), Some(second), None)
+                    if first.parse::<f64>().is_ok() && second.parse::<f64>().is_ok()
+            )
+        })
+        .ok_or_else(|| {
+            EngineError::new("resource_monitor_unsupported", "当前远端系统不支持资源监控")
+        })?;
+
+    let seconds = line
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| {
+            EngineError::new("resource_monitor_unsupported", "当前远端系统不支持资源监控")
+        })?
+        .parse::<f64>()
+        .map_err(|err| {
+            EngineError::with_detail(
+                "resource_monitor_parse_failed",
+                "无法解析系统运行时长",
+                err.to_string(),
+            )
+        })?;
+
+    Ok(seconds.max(0.0).floor() as u64)
+}
+
+fn calculate_cpu_snapshot(
+    previous: CpuCounters,
+    current: CpuCounters,
+    logical_cpu_count: u32,
+) -> ResourceCpuSnapshot {
     let total_diff = current.total().saturating_sub(previous.total()).max(1) as f32;
     let user_diff = current.user.saturating_sub(previous.user) as f32;
     let nice_diff = current.nice.saturating_sub(previous.nice) as f32;
@@ -311,5 +390,6 @@ fn calculate_cpu_snapshot(previous: CpuCounters, current: CpuCounters) -> Resour
         system_percent: ((system_diff + irq_diff + softirq_diff + steal_diff) / total_diff) * 100.0,
         idle_percent: (idle_diff / total_diff) * 100.0,
         iowait_percent: (iowait_diff / total_diff) * 100.0,
+        logical_cpu_count: Some(logical_cpu_count),
     }
 }

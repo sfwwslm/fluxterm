@@ -104,6 +104,31 @@ function formatBytes(value: number) {
   return `${size.toFixed(precision)} ${units[index]}`;
 }
 
+function formatUptime(value?: number | null) {
+  if (value == null || !Number.isFinite(value) || value < 0) return "--";
+  const totalSeconds = Math.floor(value);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts: string[] = [];
+
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (!parts.length || (parts.length < 2 && seconds > 0 && days === 0)) {
+    parts.push(`${seconds}s`);
+  }
+
+  return parts.slice(0, 3).join(" ");
+}
+
+function resolveResourceSeverity(value: number) {
+  if (!Number.isFinite(value) || value < 60) return "success";
+  if (value < 85) return "warning";
+  return "danger";
+}
+
 function resolveResourceUnsupportedMessage(
   t: Translate,
   reason?: ResourceMonitorUnsupportedReason | null,
@@ -439,6 +464,20 @@ export default function BottomArea({
     resourceStatus === "ready" && Boolean(resourceCpu && resourceMemory);
   const readyResourceCpu = allowResourcePopover ? resourceCpu : null;
   const readyResourceMemory = allowResourcePopover ? resourceMemory : null;
+  const readyResourceCpuCount = readyResourceCpu?.logicalCpuCount ?? null;
+  const readyResourceUptime = allowResourcePopover
+    ? (resourceSnapshot?.uptimeSeconds ?? null)
+    : null;
+  const resourceMemoryPercent =
+    resourceMemory && resourceMemory.totalBytes > 0
+      ? (resourceMemory.usedBytes / resourceMemory.totalBytes) * 100
+      : 0;
+  const cpuSeverity = resourceCpu
+    ? resolveResourceSeverity(resourceCpu.totalPercent)
+    : "success";
+  const memorySeverity = resourceMemory
+    ? resolveResourceSeverity(resourceMemoryPercent)
+    : "success";
 
   return (
     <>
@@ -559,24 +598,22 @@ export default function BottomArea({
                     resourceCpu &&
                     resourceMemory ? (
                       <>
-                        <span className="statusbar-resource-chip">
+                        <span
+                          className={`statusbar-resource-chip ${cpuSeverity}`.trim()}
+                        >
                           <FiActivity />
                           <span>
                             {t("status.resource.cpu")}{" "}
                             {formatPercent(resourceCpu.totalPercent)}
                           </span>
                         </span>
-                        <span className="statusbar-resource-chip">
+                        <span
+                          className={`statusbar-resource-chip ${memorySeverity}`.trim()}
+                        >
                           <FiDatabase />
                           <span>
                             {t("status.resource.memory")}{" "}
-                            {formatPercent(
-                              resourceMemory.totalBytes > 0
-                                ? (resourceMemory.usedBytes /
-                                    resourceMemory.totalBytes) *
-                                    100
-                                : 0,
-                            )}
+                            {formatPercent(resourceMemoryPercent)}
                           </span>
                         </span>
                       </>
@@ -590,17 +627,34 @@ export default function BottomArea({
                       </span>
                     )}
                     {allowResourcePopover && resourcePopoverOpen && (
-                      <div className="statusbar-resource-popover">
+                      <div
+                        className="statusbar-resource-popover"
+                        data-ui="statusbar-resource-popover"
+                      >
                         <>
-                          <div className="statusbar-resource-block">
-                            <div className="statusbar-resource-title">
+                          <div className="statusbar-resource-block cpu">
+                            <div className="statusbar-resource-title cpu">
                               {t("status.resource.cpu")}
                             </div>
                             <div className="statusbar-resource-grid">
-                              <span>{t("status.resource.total")}</span>
+                              <span>{t("status.resource.usage")}</span>
                               <strong>
                                 {formatPercent(readyResourceCpu!.totalPercent)}
                               </strong>
+                              {readyResourceCpuCount !== null && (
+                                <>
+                                  <span>{t("status.resource.cpuLogicalCores")}</span>
+                                  <strong>{readyResourceCpuCount}</strong>
+                                </>
+                              )}
+                              {readyResourceUptime !== null && (
+                                <>
+                                  <span>{t("status.resource.uptime")}</span>
+                                  <strong>
+                                    {formatUptime(readyResourceUptime)}
+                                  </strong>
+                                </>
+                              )}
                               {resourceSnapshot?.source === "ssh-linux" && (
                                 <>
                                   <span>{t("status.resource.user")}</span>
@@ -631,8 +685,8 @@ export default function BottomArea({
                               )}
                             </div>
                           </div>
-                          <div className="statusbar-resource-block">
-                            <div className="statusbar-resource-title">
+                          <div className="statusbar-resource-block memory">
+                            <div className="statusbar-resource-title memory">
                               {t("status.resource.memory")}
                             </div>
                             <div className="statusbar-resource-grid">

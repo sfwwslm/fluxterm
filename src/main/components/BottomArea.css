@@ -214,6 +214,18 @@
   cursor: pointer;
 }
 
+.statusbar-resource-chip.success {
+  color: color-mix(in srgb, var(--success, #4ade80) 78%, var(--text-primary));
+}
+
+.statusbar-resource-chip.warning {
+  color: color-mix(in srgb, var(--warning, #fbbf24) 72%, var(--text-primary));
+}
+
+.statusbar-resource-chip.danger {
+  color: color-mix(in srgb, var(--danger, #f87171) 78%, var(--text-primary));
+}
+
 .statusbar-link-chip:hover {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent) 32%, var(--border-soft));
@@ -311,18 +323,45 @@
       color-mix(in srgb, var(--text-primary) 10%, transparent) 0%,
       transparent 58%
     ),
-    color-mix(in srgb, var(--surface-menu) 92%, transparent);
+    color-mix(
+      in srgb,
+      var(--surface-menu) var(--chrome-surface-alpha-raised),
+      transparent
+    );
   box-shadow: var(--chrome-flyout-shadow);
+  backdrop-filter: blur(18px) saturate(130%);
 }
 
 .statusbar-resource-block {
   display: grid;
   gap: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.statusbar-resource-block.cpu,
+.statusbar-resource-block.memory {
+  border-color: color-mix(
+    in srgb,
+    var(--info-soft, rgba(96, 165, 250, 0.18)) 82%,
+    var(--border-soft)
+  );
+  background: color-mix(
+    in srgb,
+    var(--info-soft, rgba(96, 165, 250, 0.18)) 46%,
+    transparent
+  );
 }
 
 .statusbar-resource-title {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.statusbar-resource-title.cpu,
+.statusbar-resource-title.memory {
+  color: color-mix(in srgb, var(--info, #60a5fa) 80%, var(--text-soft));
 }
 
 .statusbar-resource-grid {

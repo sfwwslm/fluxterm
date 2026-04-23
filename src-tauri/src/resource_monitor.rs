@@ -224,12 +224,14 @@ async fn run_local_resource_monitor(
                     source: "local".to_string(),
                     status: ResourceMonitorStatus::Ready,
                     unsupported_reason: None,
+                    uptime_seconds: Some(System::uptime()),
                     cpu: Some(ResourceCpuSnapshot {
                         total_percent: system.global_cpu_usage(),
                         user_percent: 0.0,
                         system_percent: 0.0,
                         idle_percent: 0.0,
                         iowait_percent: 0.0,
+                        logical_cpu_count: u32::try_from(system.cpus().len()).ok(),
                     }),
                     memory: Some(ResourceMemorySnapshot {
                         total_bytes: system.total_memory(),
@@ -277,6 +279,7 @@ fn build_unsupported_resource_snapshot(
         source: source.to_string(),
         status: ResourceMonitorStatus::Unsupported,
         unsupported_reason: Some(reason),
+        uptime_seconds: None,
         cpu: None,
         memory: None,
     }
