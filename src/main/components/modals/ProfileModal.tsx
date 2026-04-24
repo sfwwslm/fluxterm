@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { FiServer } from "react-icons/fi";
 import type { Translate } from "@/i18n";
 import type { HostProfile } from "@/types";
 import { ROOT_PROFILE_GROUP_VALUE } from "@/constants/hostGroups";
@@ -17,6 +18,10 @@ import {
   TERMINAL_WORD_SEPARATORS_PRESET_A,
   TERMINAL_WORD_SEPARATORS_PRESET_B,
 } from "@/constants/terminalWordSeparators";
+import {
+  PROFILE_ICON_OPTIONS,
+  resolveProfileIcon,
+} from "@/features/profile/profileIcons";
 import "@/main/components/modals/ProfileModal.css";
 
 // 与后端 profile_save 的名称校验保持一致，避免保存前后出现不同结果。
@@ -53,8 +58,8 @@ export default function ProfileModal({
     useState<ProfileModalSection>("session");
   const [nameError, setNameError] = useState<string | null>(null);
   const [initialDraftSnapshot, setInitialDraftSnapshot] = useState("");
-
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   useEffect(() => {
     const becameOpen = open && !wasOpenRef.current;
@@ -63,6 +68,7 @@ export default function ProfileModal({
       autoFilledRef.current = false;
       queueMicrotask(() => {
         setShowDiscardConfirm(false);
+        setIconPickerOpen(false);
         setInitialDraftSnapshot(JSON.stringify(draft));
         setActiveSection("session");
         setNameError(null);
@@ -118,6 +124,7 @@ export default function ProfileModal({
   const canSubmit = true;
   const hasUnsavedChanges =
     open && JSON.stringify(draft) !== initialDraftSnapshot;
+  const CurrentProfileIcon = resolveProfileIcon(draft.iconKey);
 
   /** 统一处理关闭请求：有未保存草稿时显示 UI 确认框而非阻塞式系统对话框。 */
   function handleRequestClose() {
@@ -134,6 +141,7 @@ export default function ProfileModal({
     onDraftChange({
       id: draft.id,
       name: "",
+      iconKey: null,
       host: "",
       port: 22,
       username: "",
@@ -198,21 +206,32 @@ export default function ProfileModal({
         <label className="form-label" htmlFor={nameInputId}>
           {t("profile.form.name")}
         </label>
-        <input
-          id={nameInputId}
-          value={draft.name}
-          maxLength={PROFILE_NAME_MAX_LENGTH}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          onChange={(event) => {
-            onDraftChange({ ...draft, name: event.target.value });
-            if (nameError) {
-              setNameError(null);
-            }
-          }}
-          placeholder={t("profile.placeholder.name")}
-        />
+        <div className="profile-name-field">
+          <input
+            id={nameInputId}
+            value={draft.name}
+            maxLength={PROFILE_NAME_MAX_LENGTH}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            onChange={(event) => {
+              onDraftChange({ ...draft, name: event.target.value });
+              if (nameError) {
+                setNameError(null);
+              }
+            }}
+            placeholder={t("profile.placeholder.name")}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="profile-name-icon-trigger"
+            aria-label={t("profile.icon.currentPreview")}
+            onClick={() => setIconPickerOpen(true)}
+          >
+            <CurrentProfileIcon />
+          </Button>
+        </div>
         {nameError ? (
           <div className="profile-form-error">{nameError}</div>
         ) : null}
@@ -660,6 +679,84 @@ export default function ProfileModal({
           </div>
         </div>
       </Modal>
+
+      {iconPickerOpen && (
+        <Modal
+          open
+          title={t("profile.icon.pickerTitle")}
+          closeLabel={t("actions.close")}
+          bodyClassName="profile-icon-picker-body"
+          onClose={() => setIconPickerOpen(false)}
+          actions={
+            <div className="profile-icon-picker-actions">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onDraftChange({ ...draft, iconKey: null });
+                  setIconPickerOpen(false);
+                }}
+              >
+                {t("profile.icon.clear")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIconPickerOpen(false)}
+              >
+                {t("actions.close")}
+              </Button>
+            </div>
+          }
+        >
+          <div className="profile-icon-picker" data-ui="profile-icon-picker">
+            <div className="profile-icon-picker-scroll">
+              <div className="profile-icon-grid" data-slot="icon-grid">
+                <button
+                  type="button"
+                  className={`profile-icon-option${
+                    !draft.iconKey ? " selected" : ""
+                  }`}
+                  onClick={() => {
+                    onDraftChange({ ...draft, iconKey: null });
+                    setIconPickerOpen(false);
+                  }}
+                >
+                  <span className="profile-icon-option-glyph">
+                    <FiServer />
+                  </span>
+                  <span className="profile-icon-option-label">
+                    {t("profile.icon.default")}
+                  </span>
+                </button>
+                {PROFILE_ICON_OPTIONS.map((item) => {
+                  const Icon = item.Icon;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`profile-icon-option${
+                        draft.iconKey === item.key ? " selected" : ""
+                      }`}
+                      onClick={() => {
+                        onDraftChange({ ...draft, iconKey: item.key });
+                        setIconPickerOpen(false);
+                      }}
+                    >
+                      <span className="profile-icon-option-glyph">
+                        <Icon />
+                      </span>
+                      <span className="profile-icon-option-label">
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showDiscardConfirm && (
         <Modal

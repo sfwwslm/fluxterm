@@ -250,6 +250,7 @@ fn map_host_target_to_profile(
     Ok(HostProfile {
         id: Uuid::new_v4().to_string(),
         name: validate_profile_name(truncate_profile_name(&target.alias))?,
+        icon_key: None,
         host: resolved.host().to_string(),
         port: resolved.port(),
         username: resolved.host_config.user.clone().unwrap_or_default(),
@@ -441,6 +442,7 @@ mod tests {
         HostProfile {
             id: Uuid::new_v4().to_string(),
             name: name.to_string(),
+            icon_key: None,
             host: host.to_string(),
             port,
             username: username.to_string(),

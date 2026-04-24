@@ -39,6 +39,7 @@ type UseProfilesResult = {
 const defaultProfile: HostProfile = {
   id: "",
   name: "",
+  iconKey: null,
   host: "",
   port: 22,
   username: "",

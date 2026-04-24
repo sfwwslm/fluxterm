@@ -8,6 +8,7 @@ export type TerminalBellMode = "silent" | "sound";
 export type HostProfile = {
   id: string;
   name: string;
+  iconKey?: string | null;
   host: string;
   port: number;
   username: string;

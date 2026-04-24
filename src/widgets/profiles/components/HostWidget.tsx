@@ -33,6 +33,7 @@ import Button from "@/components/ui/button";
 import InputDialog from "@/components/ui/InputDialog";
 import PathViewDialog from "@/components/ui/PathViewDialog";
 import Select from "@/components/ui/select";
+import { resolveProfileIcon } from "@/features/profile/profileIcons";
 import "@/widgets/profiles/components/HostWidget.css";
 
 const GROUP_NAME_MAX_LENGTH = 12;
@@ -554,6 +555,11 @@ export default function HostWidget({
     );
   }
 
+  function renderProfileIcon(profile: HostProfile) {
+    const Icon = resolveProfileIcon(profile.iconKey);
+    return <Icon className="host-row-icon" />;
+  }
+
   return (
     <div className="host-widget">
       <div className="host-list">
@@ -659,7 +665,7 @@ export default function HostWidget({
                       }}
                     >
                       <span className="host-row-label">
-                        <FiServer className="host-row-icon" />
+                        {renderProfileIcon(profile)}
                         <span>{profile.name || profile.host}</span>
                         {renderConnectingChip(profile.id)}
                       </span>
@@ -688,7 +694,7 @@ export default function HostWidget({
             >
               {/* 根级会话固定排在所有分组之后。 */}
               <span className="host-row-label">
-                <FiServer className="host-row-icon" />
+                {renderProfileIcon(profile)}
                 <span>{profile.name || profile.host}</span>
                 {renderConnectingChip(profile.id)}
               </span>

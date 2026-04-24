@@ -21,6 +21,7 @@ pub enum AuthType {
 pub struct HostProfile {
     pub id: String,
     pub name: String,
+    pub icon_key: Option<String>,
     pub host: String,
     pub port: u16,
     pub username: String,

@@ -643,7 +643,9 @@ export default function BottomArea({
                               </strong>
                               {readyResourceCpuCount !== null && (
                                 <>
-                                  <span>{t("status.resource.cpuLogicalCores")}</span>
+                                  <span>
+                                    {t("status.resource.cpuLogicalCores")}
+                                  </span>
                                   <strong>{readyResourceCpuCount}</strong>
                                 </>
                               )}

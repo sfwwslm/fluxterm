@@ -15,6 +15,50 @@ use crate::state::SecurityState;
 const GROUP_NAME_MAX_LENGTH: usize = 12;
 /// 会话名称上限与前端 ProfileModal 保持一致，避免前后端校验结果不同。
 const PROFILE_NAME_MAX_LENGTH: usize = 14;
+/// 允许的会话图标键集合；修改这里时，需要同步更新前端 `profileIcons.tsx` 中的图标清单。
+const ALLOWED_PROFILE_ICON_KEYS: &[&str] = &[
+    "linux",
+    "ubuntu",
+    "debian",
+    "centos",
+    "almalinux",
+    "alpinelinux",
+    "archlinux",
+    "kali",
+    "kubuntu",
+    "opensuse",
+    "redhat",
+    "docker",
+    "kubernetes",
+    "nginx",
+    "apache",
+    "cloudflare",
+    "mysql",
+    "postgresql",
+    "mongodb",
+    "redis",
+    "rabbitmq",
+    "elasticsearch",
+    "wordpress",
+    "truenas",
+    "unraid",
+    "synology",
+    "vmware",
+    "laravel",
+    "grafana",
+    "prometheus",
+    "jenkins",
+    "gitlab",
+    "laragon",
+    "mariadb",
+    "nodedotjs",
+    "ollama",
+    "openvpn",
+    "steam",
+    "proxmox",
+    "webmin",
+    "1panel",
+];
 
 #[tauri::command]
 /// 读取主机配置列表。
@@ -76,6 +120,7 @@ pub fn profile_save(
     let crypto = CryptoService::new(security_config.as_ref(), session.as_ref())?;
     let secret_store = SecretStore::new(&crypto);
     profile.name = validate_profile_name(profile.name)?;
+    profile.icon_key = normalize_profile_icon_key(profile.icon_key)?;
     profile.tags = normalize_profile_tags(profile.tags)?;
     if profile.id.is_empty() {
         profile.id = Uuid::new_v4().to_string();
@@ -189,6 +234,23 @@ pub(crate) fn normalize_profile_tags(
     Ok(Some(vec![normalized.to_string()]))
 }
 
+/// 规范化主机配置中的图标键：空值移除，非空值必须命中允许集合。
+pub(crate) fn normalize_profile_icon_key(
+    icon_key: Option<String>,
+) -> Result<Option<String>, EngineError> {
+    let Some(value) = icon_key else {
+        return Ok(None);
+    };
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+    if ALLOWED_PROFILE_ICON_KEYS.contains(&normalized) {
+        return Ok(Some(normalized.to_string()));
+    }
+    Err(EngineError::new("profile_icon_invalid", "会话图标无效"))
+}
+
 fn now_epoch() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -200,4 +262,65 @@ fn redact_profile_secrets(mut profile: HostProfile) -> HostProfile {
     profile.password_ref = None;
     profile.private_key_passphrase_ref = None;
     profile
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ALLOWED_PROFILE_ICON_KEYS, normalize_profile_icon_key};
+    use std::collections::HashSet;
+
+    fn frontend_profile_icon_keys() -> Vec<String> {
+        let manifest_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../src/features/profile/profileIcons.tsx"
+        );
+        let source = std::fs::read_to_string(manifest_path)
+            .expect("should read frontend profile icon manifest");
+        source
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                trimmed
+                    .strip_prefix("key: \"")
+                    .and_then(|rest| rest.split_once('"'))
+                    .map(|(key, _)| key.to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn normalize_profile_icon_key_accepts_known_value() {
+        assert_eq!(
+            normalize_profile_icon_key(Some("docker".to_string())).unwrap(),
+            Some("docker".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_profile_icon_key_converts_blank_to_none() {
+        assert_eq!(
+            normalize_profile_icon_key(Some("  ".to_string())).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn normalize_profile_icon_key_rejects_unknown_value() {
+        assert!(normalize_profile_icon_key(Some("unknown-app".to_string())).is_err());
+    }
+
+    #[test]
+    fn backend_icon_keys_match_frontend_manifest() {
+        let frontend_keys = frontend_profile_icon_keys();
+        let backend_keys = ALLOWED_PROFILE_ICON_KEYS
+            .iter()
+            .map(|item| item.to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(frontend_keys, backend_keys);
+        assert_eq!(
+            frontend_keys.len(),
+            frontend_keys.iter().collect::<HashSet<_>>().len()
+        );
+    }
 }
