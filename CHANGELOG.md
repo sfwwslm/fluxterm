@@ -1,8 +1,33 @@
-# 更新日志
+# Changelog
 
 本文档记录 FluxTerm 各版本已发布的用户可见更新。
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，并遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [0.2.0] - 2026-04-25
+
+本次更新主要聚焦于 SSH 会话个性化、状态栏资源监控信息强化、RDP 运行状态可视化，以及若干 macOS 与远程桌面细节修复。
+
+### Added
+
+- **SSH 会话自定义图标**: 支持为 SSH 会话配置自定义图标，方便在多连接场景下快速识别不同主机。
+- **RDP 运行状态面板**: 新增 RDP 运行状态面板，可更直观地查看当前远程桌面的运行信息。
+
+### Changed
+
+- **状态栏资源监控增强**: 优化状态栏资源监控展示方式，并加入动态告警颜色，便于更快识别异常负载。
+- **RDP 底部状态栏精简**: 简化 RDP 底部状态展示，减少无关信息对远程桌面操作的干扰。
+- **前端依赖升级**: 升级 TypeScript、Vite 与相关前端依赖，为后续功能开发和兼容性维护提供更稳定基础。
+
+### Fixed
+
+- **macOS 配置窗口尺寸一致性**: 修复 macOS 下配置窗口尺寸不一致的问题，减少界面跳变。
+- **macOS 中文输入重复字符**: 修复 macOS 中文输入法场景下按下 `CapsLock` 可能产生重复字符的问题。
+- **RDP 剪贴板异常兜底**: 为 RDP 剪贴板异常补充诊断点和失败兜底状态，降低异常场景下的状态不明确问题。
+
+### Documentation
+
+- **许可证补充**: 补充 Apache 与 MIT 许可证文件，完善项目发布与使用说明。
 
 ## [0.1.1] - 2026-04-18
 
@@ -506,6 +531,7 @@
 
 - 该版本为 Alpha 阶段版本，重点在于完成 SSH、终端、SFTP 与桌面交互的基础闭环。
 
+[0.2.0]: https://github.com/sfwwslm/fluxterm/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/sfwwslm/fluxterm/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/sfwwslm/fluxterm/compare/0.1.0-beta.13...0.1.0
 [0.1.0-beta.13]: https://github.com/sfwwslm/fluxterm/compare/0.1.0-beta.12...0.1.0-beta.13
