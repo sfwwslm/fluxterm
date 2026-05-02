@@ -5,7 +5,7 @@ import "./Modal.css";
 /**
  * 通用模态框组件。
  * 职责：提供一个居中的对话框容器，包含标题栏、内容区和可选的操作按钮区。
- * 交互：支持点击遮罩层关闭，内容区具有独立滚动条。
+ * 交互：仅支持点击关闭按钮关闭，内容区具有独立滚动条。
  */
 type ModalProps = {
   /** 是否打开模态框。 */
@@ -22,7 +22,7 @@ type ModalProps = {
   closeLabel: string;
   /** 内容区的额外类名。 */
   bodyClassName?: string;
-  /** 点击关闭按钮或遮罩层时的回调函数。 */
+  /** 点击关闭按钮时的回调函数。 */
   onClose: () => void;
   /** 模态框主体内容。 */
   children: React.ReactNode;
@@ -42,8 +42,8 @@ export default function Modal({
 }: ModalProps) {
   if (!open) return null;
   return (
-    <div className="modal-overlay" onMouseDown={busy ? undefined : onClose}>
-      <div className="modal" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal">
         <div className="modal-header">
           <span>{title}</span>
           <Button className="ghost" variant="ghost" size="sm" onClick={onClose}>
