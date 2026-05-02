@@ -51,7 +51,7 @@ type UseQuickBarStateResult = {
     label: string;
     command: string;
     groupId?: string | null;
-  }) => void;
+  }) => string | null;
   updateCommand: (
     commandId: string,
     payload: Partial<QuickCommandItem>,
@@ -432,24 +432,26 @@ export default function useQuickBarState(t: Translate): UseQuickBarStateResult {
     );
   }
 
-  /** 新增快捷命令。 */
+  /** 新增快捷命令并返回新命令 ID。 */
   function addCommand(payload: {
     label: string;
     command: string;
     groupId?: string | null;
-  }) {
+  }): string | null {
     const label = payload.label.trim();
     const command = payload.command;
-    if (!label) return;
+    if (!label) return null;
     const groupIds = new Set(groups.map((group) => group.id));
     const groupId =
       payload.groupId && groupIds.has(payload.groupId)
         ? payload.groupId
         : defaultGroupId;
+    const id = createId();
     setCommands((prev) => [
       ...prev,
-      { id: createId(), label, command, groupId, type: "sendText" },
+      { id, label, command, groupId, type: "sendText" },
     ]);
+    return id;
   }
 
   /** 更新快捷命令内容。 */

@@ -65,7 +65,7 @@ type BottomAreaProps = {
     label: string;
     command: string;
     groupId?: string | null;
-  }) => void;
+  }) => string | null;
   onUpdateCommand: (
     commandId: string,
     payload: Partial<QuickCommandItem>,
@@ -230,6 +230,7 @@ export default function BottomArea({
   >(null);
   const now = useMinuteClock();
   const quickbarMenuRef = useRef<HTMLDivElement | null>(null);
+  const commandLabelInputRef = useRef<HTMLInputElement | null>(null);
   const getActiveTerminalStatsRef = useRef(getActiveTerminalStats);
   const [quickbarMenuOpen, setQuickbarMenuOpen] = useState(false);
   const [resourcePopoverOpen, setResourcePopoverOpen] = useState(false);
@@ -357,7 +358,6 @@ export default function BottomArea({
       queueMicrotask(() => {
         setSelectedGroupId(focusCommand.groupId);
         setSelectedCommandId(focusCommand.id);
-        setPendingFocusCommandId(null);
       });
       return;
     }
@@ -393,6 +393,16 @@ export default function BottomArea({
     });
   }, [selectedGroupId, groupCommands, selectedCommandId]);
 
+  useEffect(() => {
+    if (!managerOpen || !pendingFocusCommandId) return;
+    if (selectedCommand?.id !== pendingFocusCommandId) return;
+    const input = commandLabelInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+    setPendingFocusCommandId(null);
+  }, [managerOpen, pendingFocusCommandId, selectedCommand?.id]);
+
   function handleAddGroup() {
     setGroupDialogMode("add");
   }
@@ -411,11 +421,14 @@ export default function BottomArea({
 
   function handleAddCommand() {
     if (!selectedGroupId) return;
-    onAddCommand({
+    const commandId = onAddCommand({
       label: t("quickbar.manager.newLabel"),
       command: "",
       groupId: selectedGroupId,
     });
+    if (!commandId) return;
+    setSelectedCommandId(commandId);
+    setPendingFocusCommandId(commandId);
   }
 
   function handleDeleteCommand() {
@@ -925,6 +938,7 @@ export default function BottomArea({
                 <label>
                   <span>{t("quickbar.manager.commandLabel")}</span>
                   <input
+                    ref={commandLabelInputRef}
                     value={selectedCommand.label}
                     autoComplete="off"
                     autoCorrect="off"
