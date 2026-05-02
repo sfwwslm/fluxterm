@@ -784,7 +784,7 @@ export default function ConfigModal({
               </span>
               <span className="config-openai-item-actions">
                 {isActive ? (
-                  <span className="config-openai-badge">
+                  <span className="config-openai-status">
                     {t("config.ai.providerCurrentBadge")}
                   </span>
                 ) : null}

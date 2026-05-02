@@ -480,6 +480,25 @@
   font-weight: 600;
 }
 
+.config-openai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.config-openai-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 18%, transparent);
+}
+
 .config-openai-item-actions [role="button"] {
   cursor: pointer;
 }
