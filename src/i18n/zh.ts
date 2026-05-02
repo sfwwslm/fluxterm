@@ -159,7 +159,7 @@ export const zhCnTranslations = {
   "config.ai.providerApiKeyCleared": "API Key 已清除",
   "config.ai.providerApiKeyClear": "清除密钥",
   "config.ai.providerCurrentBadge": "当前使用",
-  "config.ai.providerRemove": "删除接入",
+  "config.ai.providerRemove": "删除",
   "config.ai.providerEdit": "编辑",
   "config.ai.providerEditTitle": "修改接入",
   "config.ai.providerEditSave": "保存修改",

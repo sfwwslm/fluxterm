@@ -172,7 +172,7 @@ export const enUsTranslations = {
   "config.ai.providerApiKeyCleared": "API key cleared",
   "config.ai.providerApiKeyClear": "Clear Key",
   "config.ai.providerCurrentBadge": "In Use",
-  "config.ai.providerRemove": "Delete Access",
+  "config.ai.providerRemove": "Delete",
   "config.ai.providerEdit": "Edit",
   "config.ai.providerEditTitle": "Edit Access",
   "config.ai.providerEditSave": "Save Changes",
