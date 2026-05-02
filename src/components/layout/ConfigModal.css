@@ -444,42 +444,21 @@
   background: color-mix(in srgb, var(--surface-header) 78%, transparent);
   color: var(--text-primary);
   text-align: left;
-  cursor: pointer;
   transition:
     border-color 0.2s ease,
     background-color 0.2s ease,
-    transform 0.2s ease,
     box-shadow 0.2s ease;
-}
-
-.config-openai-item:hover {
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border-input));
-  transform: translateY(-1px);
-}
-
-.config-openai-item.active {
-  border-color: color-mix(in srgb, var(--accent) 72%, var(--border-input));
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .config-openai-item-main {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
   min-width: 0;
 }
 
 .config-openai-item-title {
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.config-openai-item-meta {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-  word-break: break-all;
 }
 
 .config-openai-item-actions {
@@ -499,6 +478,14 @@
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
+}
+
+.config-openai-item-actions [role="button"] {
+  cursor: pointer;
+}
+
+.config-openai-item-actions [role="button"]:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
 .config-provider-edit-dialog {

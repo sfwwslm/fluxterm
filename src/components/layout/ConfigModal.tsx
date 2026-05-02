@@ -384,10 +384,6 @@ export default function ConfigModal({
       clampBackgroundVideoReplayIntervalSec(backgroundVideoReplayIntervalSec),
     ),
   );
-  const [selectedProviderId, setSelectedProviderId] = useKeyedDraftState(
-    `${aiActiveProviderId || aiProviders[0]?.id || ""}:${aiProviders.map((provider) => provider.id).join("|")}`,
-    aiActiveProviderId || aiProviders[0]?.id || "",
-  );
   const [editingProviderId, setEditingProviderId] = useState("");
   const [editingProviderDraftKey, setEditingProviderDraftKey] = useState(0);
   const editingProvider =
@@ -669,7 +665,6 @@ export default function ConfigModal({
   }
 
   function openProviderEditor(provider: AiProviderView) {
-    setSelectedProviderId(provider.id);
     setEditingProviderDraftKey((current) => current + 1);
     setEditingProviderId(provider.id);
   }
@@ -779,21 +774,12 @@ export default function ConfigModal({
     return (
       <div className="config-openai-list">
         {list.map((provider) => {
-          const isSelected = provider.id === selectedProviderId;
           const isActive = provider.id === aiActiveProviderId;
           return (
-            <button
-              key={provider.id}
-              type="button"
-              className={`config-openai-item ${isSelected ? "active" : ""}`.trim()}
-              onClick={() => setSelectedProviderId(provider.id)}
-            >
+            <div key={provider.id} className="config-openai-item">
               <span className="config-openai-item-main">
                 <span className="config-openai-item-title">
                   {provider.name || t("config.ai.providerUnnamed")}
-                </span>
-                <span className="config-openai-item-meta">
-                  {provider.baseUrl || t("config.ai.providerBaseUrlEmpty")}
                 </span>
               </span>
               <span className="config-openai-item-actions">
@@ -828,9 +814,6 @@ export default function ConfigModal({
                       const isRemovingActive =
                         provider.id === aiActiveProviderId;
                       onAiProviderRemove?.(provider.id);
-                      if (selectedProviderId === provider.id) {
-                        setSelectedProviderId("");
-                      }
                       if (editingProviderId === provider.id) {
                         setEditingProviderId("");
                       }
@@ -844,9 +827,6 @@ export default function ConfigModal({
                       const isRemovingActive =
                         provider.id === aiActiveProviderId;
                       onAiProviderRemove?.(provider.id);
-                      if (selectedProviderId === provider.id) {
-                        setSelectedProviderId("");
-                      }
                       if (editingProviderId === provider.id) {
                         setEditingProviderId("");
                       }
@@ -859,7 +839,7 @@ export default function ConfigModal({
                   </span>
                 ) : null}
               </span>
-            </button>
+            </div>
           );
         })}
       </div>
