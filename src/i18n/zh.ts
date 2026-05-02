@@ -681,7 +681,7 @@ export const zhCnTranslations = {
   "quickbar.manager.emptyGroup": "当前分组暂无命令",
   "quickbar.manager.addCommand": "添加",
   "quickbar.manager.deleteCommand": "删除",
-  "quickbar.manager.copyCommand": "复制快速命令",
+  "quickbar.manager.copyCommand": "复制",
   "quickbar.manager.detail": "命令详情",
   "quickbar.manager.commandType": "类型",
   "quickbar.manager.sendText": "发送文本",

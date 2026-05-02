@@ -727,7 +727,7 @@ export const enUsTranslations = {
   "quickbar.manager.emptyGroup": "No commands in this group",
   "quickbar.manager.addCommand": "Add",
   "quickbar.manager.deleteCommand": "Delete",
-  "quickbar.manager.copyCommand": "Copy Quick Command",
+  "quickbar.manager.copyCommand": "Copy",
   "quickbar.manager.detail": "Command Detail",
   "quickbar.manager.commandType": "Type",
   "quickbar.manager.sendText": "Send Text",
