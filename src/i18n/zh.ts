@@ -153,8 +153,6 @@ export const zhCnTranslations = {
   "config.ai.providerApiKey": "API Key",
   "config.ai.providerApiKeyConfigured":
     "当前已配置 API Key，重新输入会覆盖原值。",
-  "config.ai.providerApiKeyEmpty":
-    "当前未配置 API Key，若接入端不要求鉴权可留空。",
   "config.ai.providerApiKeyPlaceholder": "请输入 API Key",
   "config.ai.confirmAdd": "确认添加",
   "config.ai.providerApiKeySaved": "API Key 已保存",
@@ -162,6 +160,9 @@ export const zhCnTranslations = {
   "config.ai.providerApiKeyClear": "清除密钥",
   "config.ai.providerCurrentBadge": "当前使用",
   "config.ai.providerRemove": "删除接入",
+  "config.ai.providerEdit": "编辑",
+  "config.ai.providerEditTitle": "修改接入",
+  "config.ai.providerEditSave": "保存修改",
   "config.ai.testCurrentProvider": "测试当前接入",
   "config.ai.removeCurrentProvider": "删除当前接入",
   "config.ai.providerTest": "测试",

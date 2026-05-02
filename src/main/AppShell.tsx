@@ -477,10 +477,16 @@ export default function AppShell() {
     setRequestTimeoutMs: setAiRequestTimeoutMs,
     setDebugLoggingEnabled: setAiDebugLoggingEnabled,
     setActiveProviderId: setAiActiveProviderId,
+    updateProviderName,
+    updateProviderBaseUrl,
+    updateProviderModel,
+    updateProviderVendor,
     addPresetProviderWithConfig,
     addCompatibleProviderWithConfig,
     removeProvider,
     testProviderConnection,
+    replaceProviderApiKey,
+    clearProviderApiKey,
     saveState: aiSaveState,
     saveError: aiSaveError,
     retrySave: retryAiSave,
@@ -3807,6 +3813,12 @@ export default function AppShell() {
         onAiActiveProviderIdChange={setAiActiveProviderId}
         onAiPresetProviderCreate={addPresetProviderWithConfig}
         onAiCompatibleProviderCreate={addCompatibleProviderWithConfig}
+        onAiProviderNameChange={updateProviderName}
+        onAiProviderBaseUrlChange={updateProviderBaseUrl}
+        onAiProviderModelChange={updateProviderModel}
+        onAiProviderVendorChange={updateProviderVendor}
+        onAiProviderApiKeyReplace={replaceProviderApiKey}
+        onAiProviderApiKeyClear={clearProviderApiKey}
         onAiProviderRemove={removeProvider}
         onAiProviderTest={testProviderConnection}
         onSecurityUnlock={(password) =>

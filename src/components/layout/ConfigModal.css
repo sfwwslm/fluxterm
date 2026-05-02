@@ -482,6 +482,15 @@
   word-break: break-all;
 }
 
+.config-openai-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
 .config-openai-badge {
   flex: none;
   padding: 5px 9px;
@@ -490,6 +499,42 @@
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
+}
+
+.config-provider-edit-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-provider-edit-row {
+  padding: 12px 14px;
+}
+
+.config-provider-edit-row .config-toggle-copy {
+  width: 128px;
+  flex: none;
+}
+
+.config-provider-edit-row .config-text-input,
+.config-provider-edit-row .config-select-control {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.config-provider-edit-secret-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.config-provider-edit-secret-control .config-text-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
 }
 
 .config-file-picker-actions button:hover {

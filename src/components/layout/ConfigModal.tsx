@@ -154,6 +154,18 @@ type ConfigModalProps = {
     model: string;
     apiKey: string;
   }) => Promise<string | void> | string | void;
+  onAiProviderNameChange?: (providerId: string, value: string) => void;
+  onAiProviderBaseUrlChange?: (providerId: string, value: string) => void;
+  onAiProviderModelChange?: (providerId: string, value: string) => void;
+  onAiProviderVendorChange?: (
+    providerId: string,
+    vendor: AiProviderVendor,
+  ) => void;
+  onAiProviderApiKeyReplace?: (
+    providerId: string,
+    value: string,
+  ) => Promise<void> | void;
+  onAiProviderApiKeyClear?: (providerId: string) => Promise<void> | void;
   onAiProviderRemove?: (providerId: string) => void;
   onAiProviderTest?: (providerId: string) => Promise<void> | void;
   onSecurityUnlock?: (password: string) => Promise<void> | void;
@@ -295,6 +307,12 @@ export default function ConfigModal({
   onAiActiveProviderIdChange,
   onAiPresetProviderCreate,
   onAiCompatibleProviderCreate,
+  onAiProviderNameChange,
+  onAiProviderBaseUrlChange,
+  onAiProviderModelChange,
+  onAiProviderVendorChange,
+  onAiProviderApiKeyReplace,
+  onAiProviderApiKeyClear,
   onAiProviderRemove,
   onAiProviderTest,
   onSecurityUnlock,
@@ -370,6 +388,35 @@ export default function ConfigModal({
     `${aiActiveProviderId || aiProviders[0]?.id || ""}:${aiProviders.map((provider) => provider.id).join("|")}`,
     aiActiveProviderId || aiProviders[0]?.id || "",
   );
+  const [editingProviderId, setEditingProviderId] = useState("");
+  const [editingProviderDraftKey, setEditingProviderDraftKey] = useState(0);
+  const editingProvider =
+    aiProviders.find((provider) => provider.id === editingProviderId) ?? null;
+  const [editingProviderNameDraft, setEditingProviderNameDraft] =
+    useKeyedDraftState(
+      `${editingProviderDraftKey}:${editingProvider?.id ?? ""}:name:${editingProvider?.name ?? ""}`,
+      editingProvider?.name ?? "",
+    );
+  const [editingProviderBaseUrlDraft, setEditingProviderBaseUrlDraft] =
+    useKeyedDraftState(
+      `${editingProviderDraftKey}:${editingProvider?.id ?? ""}:baseUrl:${editingProvider?.baseUrl ?? ""}`,
+      editingProvider?.baseUrl ?? "",
+    );
+  const [editingProviderModelDraft, setEditingProviderModelDraft] =
+    useKeyedDraftState(
+      `${editingProviderDraftKey}:${editingProvider?.id ?? ""}:model:${editingProvider?.model ?? ""}`,
+      editingProvider?.model ?? "",
+    );
+  const [editingProviderVendorDraft, setEditingProviderVendorDraft] =
+    useKeyedDraftState(
+      `${editingProviderDraftKey}:${editingProvider?.id ?? ""}:vendor:${editingProvider?.vendor ?? ""}`,
+      editingProvider?.vendor ?? "deepseek",
+    );
+  const [editingProviderApiKeyDraft, setEditingProviderApiKeyDraft] =
+    useKeyedDraftState(
+      `${editingProviderDraftKey}:${editingProvider?.id ?? ""}:apiKey`,
+      "",
+    );
   const [quickPresetVendorDraft, setQuickPresetVendorDraft] =
     useState<AiProviderVendor>("deepseek");
   const [quickPresetNameDraft, setQuickPresetNameDraft] = useState("");
@@ -385,6 +432,7 @@ export default function ConfigModal({
   const [compatibleApiKeyDraft, setCompatibleApiKeyDraft] = useState("");
   const [compatibleCreating, setCompatibleCreating] = useState(false);
   const [testingProviderId, setTestingProviderId] = useState("");
+  const [updatingProviderSecretId, setUpdatingProviderSecretId] = useState("");
   const securityDraftSourceKey = `${activeSection}:${securityStatus.provider}:${securityStatus.locked}`;
   const [securityPasswordDraft, setSecurityPasswordDraft] = useKeyedDraftState(
     securityDraftSourceKey,
@@ -620,6 +668,109 @@ export default function ConfigModal({
     );
   }
 
+  function openProviderEditor(provider: AiProviderView) {
+    setSelectedProviderId(provider.id);
+    setEditingProviderDraftKey((current) => current + 1);
+    setEditingProviderId(provider.id);
+  }
+
+  async function saveEditingProvider() {
+    if (!editingProvider) return;
+    const nextName = editingProviderNameDraft.trim();
+    if (!nextName) {
+      pushToast({
+        level: "error",
+        message: t("config.ai.providerNameRequired"),
+      });
+      return;
+    }
+    if (isProviderNameDuplicate(nextName, editingProvider.id)) {
+      pushToast({
+        level: "error",
+        message: t("config.ai.providerNameDuplicate"),
+      });
+      return;
+    }
+
+    const nextModel = editingProviderModelDraft.trim();
+    if (!nextModel) {
+      pushToast({
+        level: "error",
+        message: t("config.ai.providerModelRequired"),
+      });
+      return;
+    }
+
+    const nextBaseUrl = editingProviderBaseUrlDraft.trim();
+    if (editingProvider.mode === "compatible" && !nextBaseUrl) {
+      pushToast({
+        level: "error",
+        message: t("config.ai.providerBaseUrlRequired"),
+      });
+      return;
+    }
+
+    const nextVendor = editingProviderVendorDraft as AiProviderVendor;
+    const nextApiKey = editingProviderApiKeyDraft.trim();
+    setUpdatingProviderSecretId(editingProvider.id);
+    try {
+      if (nextName !== editingProvider.name.trim()) {
+        onAiProviderNameChange?.(editingProvider.id, nextName);
+      }
+      if (
+        editingProvider.mode === "preset" &&
+        nextVendor !== editingProvider.vendor
+      ) {
+        onAiProviderVendorChange?.(editingProvider.id, nextVendor);
+      }
+      if (
+        editingProvider.mode === "compatible" &&
+        nextBaseUrl !== editingProvider.baseUrl.trim()
+      ) {
+        onAiProviderBaseUrlChange?.(editingProvider.id, nextBaseUrl);
+      }
+      if (nextModel !== editingProvider.model.trim()) {
+        onAiProviderModelChange?.(editingProvider.id, nextModel);
+      }
+      if (nextApiKey) {
+        await onAiProviderApiKeyReplace?.(editingProvider.id, nextApiKey);
+        pushToast({
+          level: "success",
+          message: t("config.ai.providerApiKeySaved"),
+        });
+      }
+      setEditingProviderApiKeyDraft("");
+      setEditingProviderId("");
+    } catch (error) {
+      pushToast({
+        level: "error",
+        message: getErrorMessage(error),
+      });
+    } finally {
+      setUpdatingProviderSecretId("");
+    }
+  }
+
+  async function clearEditingProviderApiKey() {
+    if (!editingProvider) return;
+    setUpdatingProviderSecretId(editingProvider.id);
+    try {
+      await onAiProviderApiKeyClear?.(editingProvider.id);
+      setEditingProviderApiKeyDraft("");
+      pushToast({
+        level: "success",
+        message: t("config.ai.providerApiKeyCleared"),
+      });
+    } catch (error) {
+      pushToast({
+        level: "error",
+        message: getErrorMessage(error),
+      });
+    } finally {
+      setUpdatingProviderSecretId("");
+    }
+  }
+
   function renderProviderList(
     list: AiProviderView[],
     options?: { removable?: boolean },
@@ -645,43 +796,69 @@ export default function ConfigModal({
                   {provider.baseUrl || t("config.ai.providerBaseUrlEmpty")}
                 </span>
               </span>
-              {isActive ? (
-                <span className="config-openai-badge">
-                  {t("config.ai.providerCurrentBadge")}
-                </span>
-              ) : null}
-              {options?.removable ? (
+              <span className="config-openai-item-actions">
+                {isActive ? (
+                  <span className="config-openai-badge">
+                    {t("config.ai.providerCurrentBadge")}
+                  </span>
+                ) : null}
                 <span
                   role="button"
                   tabIndex={0}
                   className="config-openai-badge"
                   onClick={(event) => {
                     event.stopPropagation();
-                    const isRemovingActive = provider.id === aiActiveProviderId;
-                    onAiProviderRemove?.(provider.id);
-                    if (selectedProviderId === provider.id) {
-                      setSelectedProviderId("");
-                    }
-                    if (isRemovingActive) {
-                      onAiActiveProviderIdChange?.("");
-                    }
+                    openProviderEditor(provider);
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
                     event.preventDefault();
-                    const isRemovingActive = provider.id === aiActiveProviderId;
-                    onAiProviderRemove?.(provider.id);
-                    if (selectedProviderId === provider.id) {
-                      setSelectedProviderId("");
-                    }
-                    if (isRemovingActive) {
-                      onAiActiveProviderIdChange?.("");
-                    }
+                    openProviderEditor(provider);
                   }}
                 >
-                  {t("config.ai.providerRemove")}
+                  {t("config.ai.providerEdit")}
                 </span>
-              ) : null}
+                {options?.removable ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="config-openai-badge"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const isRemovingActive =
+                        provider.id === aiActiveProviderId;
+                      onAiProviderRemove?.(provider.id);
+                      if (selectedProviderId === provider.id) {
+                        setSelectedProviderId("");
+                      }
+                      if (editingProviderId === provider.id) {
+                        setEditingProviderId("");
+                      }
+                      if (isRemovingActive) {
+                        onAiActiveProviderIdChange?.("");
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      const isRemovingActive =
+                        provider.id === aiActiveProviderId;
+                      onAiProviderRemove?.(provider.id);
+                      if (selectedProviderId === provider.id) {
+                        setSelectedProviderId("");
+                      }
+                      if (editingProviderId === provider.id) {
+                        setEditingProviderId("");
+                      }
+                      if (isRemovingActive) {
+                        onAiActiveProviderIdChange?.("");
+                      }
+                    }}
+                  >
+                    {t("config.ai.providerRemove")}
+                  </span>
+                ) : null}
+              </span>
             </button>
           );
         })}
@@ -2384,6 +2561,159 @@ export default function ConfigModal({
         >
           <div className="profile-discard-confirm-dialog">
             <p>{t("config.unsavedChangesConfirm")}</p>
+          </div>
+        </Modal>
+      )}
+      {editingProvider && (
+        <Modal
+          open
+          title={t("config.ai.providerEditTitle")}
+          closeLabel={t("actions.close")}
+          onClose={() => setEditingProviderId("")}
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingProviderId("")}
+              >
+                {t("actions.cancel")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={updatingProviderSecretId === editingProvider.id}
+                onClick={() => {
+                  void saveEditingProvider();
+                }}
+              >
+                {t("config.ai.providerEditSave")}
+              </Button>
+            </>
+          }
+        >
+          <div
+            className="config-provider-edit-dialog"
+            data-ui="ai-provider-edit-dialog"
+          >
+            <div className="config-toggle-card config-provider-edit-row">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.ai.providerName")}
+                </span>
+              </div>
+              <input
+                type="text"
+                className="config-text-input"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                value={editingProviderNameDraft}
+                placeholder={t("config.ai.providerNamePlaceholder")}
+                data-ui="ai-provider-edit-name"
+                onChange={(event) =>
+                  setEditingProviderNameDraft(event.target.value)
+                }
+              />
+            </div>
+            {editingProvider.mode === "preset" ? (
+              <label className="config-toggle-card config-provider-edit-row">
+                <div className="config-toggle-copy">
+                  <span className="config-toggle-title">
+                    {t("config.ai.providerVendor")}
+                  </span>
+                  <span className="config-toggle-desc">
+                    {editingProvider.baseUrl ||
+                      t("config.ai.providerBaseUrlEmpty")}
+                  </span>
+                </div>
+                <div className="config-select-control">
+                  <Select
+                    value={editingProviderVendorDraft}
+                    options={AI_PROVIDER_PRESETS.map((preset) => ({
+                      value: preset.vendor,
+                      label: preset.label,
+                    }))}
+                    onChange={setEditingProviderVendorDraft}
+                    aria-label={t("config.ai.providerVendor")}
+                  />
+                </div>
+              </label>
+            ) : (
+              <div className="config-toggle-card config-provider-edit-row">
+                <div className="config-toggle-copy">
+                  <span className="config-toggle-title">
+                    {t("config.ai.providerBaseUrl")}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  className="config-text-input"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={editingProviderBaseUrlDraft}
+                  placeholder={t("config.openai.baseUrlPlaceholder")}
+                  data-ui="ai-provider-edit-base-url"
+                  onChange={(event) =>
+                    setEditingProviderBaseUrlDraft(event.target.value)
+                  }
+                />
+              </div>
+            )}
+            <div className="config-toggle-card config-provider-edit-row">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.ai.providerModel")}
+                </span>
+              </div>
+              <input
+                type="text"
+                className="config-text-input"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                value={editingProviderModelDraft}
+                placeholder={t("config.ai.providerModelPlaceholder")}
+                data-ui="ai-provider-edit-model"
+                onChange={(event) =>
+                  setEditingProviderModelDraft(event.target.value)
+                }
+              />
+            </div>
+            <div className="config-toggle-card config-provider-edit-row">
+              <div className="config-toggle-copy">
+                <span className="config-toggle-title">
+                  {t("config.ai.providerApiKey")}
+                </span>
+              </div>
+              <div className="config-provider-edit-secret-control">
+                <input
+                  type="password"
+                  className="config-text-input"
+                  autoComplete="off"
+                  value={editingProviderApiKeyDraft}
+                  placeholder={t("config.ai.providerApiKeyPlaceholder")}
+                  data-ui="ai-provider-edit-api-key"
+                  onChange={(event) =>
+                    setEditingProviderApiKeyDraft(event.target.value)
+                  }
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={
+                    updatingProviderSecretId === editingProvider.id ||
+                    !editingProvider.apiKeyConfigured
+                  }
+                  onClick={() => {
+                    void clearEditingProviderApiKey();
+                  }}
+                >
+                  {t("config.ai.providerApiKeyClear")}
+                </Button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

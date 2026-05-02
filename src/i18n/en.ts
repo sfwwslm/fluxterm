@@ -166,8 +166,6 @@ export const enUsTranslations = {
   "config.ai.providerApiKey": "API Key",
   "config.ai.providerApiKeyConfigured":
     "An API key is configured. Entering a new one replaces it.",
-  "config.ai.providerApiKeyEmpty":
-    "No API key is configured. Keep empty if endpoint does not require auth.",
   "config.ai.providerApiKeyPlaceholder": "Enter API Key",
   "config.ai.confirmAdd": "Confirm Add",
   "config.ai.providerApiKeySaved": "API key saved",
@@ -175,6 +173,9 @@ export const enUsTranslations = {
   "config.ai.providerApiKeyClear": "Clear Key",
   "config.ai.providerCurrentBadge": "In Use",
   "config.ai.providerRemove": "Delete Access",
+  "config.ai.providerEdit": "Edit",
+  "config.ai.providerEditTitle": "Edit Access",
+  "config.ai.providerEditSave": "Save Changes",
   "config.ai.testCurrentProvider": "Test Current Access",
   "config.ai.removeCurrentProvider": "Delete Current Access",
   "config.ai.providerTest": "Test",
