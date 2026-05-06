@@ -1,3 +1,5 @@
+@import "@/styles/scrollbar.css";
+
 html,
 body,
 #root {
@@ -546,53 +548,6 @@ button:disabled {
   overflow: auto;
   height: 100%;
   min-height: 0;
-}
-
-:where(.widget-body, .modal-body, .host-list-body, .proxy-subapp-content) {
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
-    transparent;
-}
-
-:where(
-  .widget-body,
-  .modal-body,
-  .host-list-body,
-  .proxy-subapp-content
-)::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-:where(
-  .widget-body,
-  .modal-body,
-  .host-list-body,
-  .proxy-subapp-content
-)::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-:where(
-  .widget-body,
-  .modal-body,
-  .host-list-body,
-  .proxy-subapp-content
-)::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
-}
-
-:where(
-    .widget-body,
-    .modal-body,
-    .host-list-body,
-    .proxy-subapp-content
-  )::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
 }
 
 input,

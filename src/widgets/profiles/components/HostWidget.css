@@ -24,16 +24,6 @@
     var(--accent-soft) var(--chrome-surface-alpha-base),
     transparent
   );
-  --host-scrollbar-thumb-bg: color-mix(
-    in srgb,
-    var(--text-muted) var(--chrome-surface-alpha-raised),
-    transparent
-  );
-  --host-scrollbar-thumb-hover-bg: color-mix(
-    in srgb,
-    var(--text-primary) var(--chrome-surface-alpha-base),
-    transparent
-  );
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -298,26 +288,4 @@
 .host-move-dialog .select-menu-list {
   max-height: 260px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
-    transparent;
-}
-
-.host-move-dialog .select-menu-list::-webkit-scrollbar {
-  width: 10px;
-}
-
-.host-move-dialog .select-menu-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.host-move-dialog .select-menu-list::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  background: var(--host-scrollbar-thumb-bg);
-}
-
-.host-move-dialog .select-menu-list::-webkit-scrollbar-thumb:hover {
-  background: var(--host-scrollbar-thumb-hover-bg);
 }

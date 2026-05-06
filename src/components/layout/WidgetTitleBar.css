@@ -56,30 +56,6 @@
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-muted) 60%, transparent)
-    transparent;
-}
-
-.widget-settings-menu::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.widget-settings-menu::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.widget-settings-menu::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
-}
-
-.widget-settings-menu::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-primary) 45%, transparent);
 }
 
 .widget-settings-group {
