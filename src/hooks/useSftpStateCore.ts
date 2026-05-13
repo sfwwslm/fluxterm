@@ -122,6 +122,7 @@ export default function useSftpState({
     titleKey: TranslationKey;
     name: string;
     failed?: number;
+    details?: Record<string, unknown>;
   }) {
     const isFailure =
       input.state === "failed" || input.state === "partial_success";
@@ -141,6 +142,13 @@ export default function useSftpState({
         input.failed === undefined
           ? { name: input.name }
           : { name: input.name, failed: input.failed },
+      details: {
+        op: input.op,
+        state: input.state,
+        sessionId: activeSession?.sessionId ?? activeSessionId,
+        profileId: activeSessionProfile?.id ?? null,
+        ...input.details,
+      },
     });
   }
 
@@ -369,6 +377,10 @@ export default function useSftpState({
       state: "started",
       titleKey: "log.event.uploadStart",
       name: fileName,
+      details: {
+        localPath: file,
+        remoteDirectory: currentPath,
+      },
     });
     setBusyMessage(t("messages.uploading"));
     try {
@@ -383,6 +395,11 @@ export default function useSftpState({
           state: "cancelled",
           titleKey: "log.event.uploadCancelled",
           name: fileName,
+          details: {
+            transferId: latestProgress.transferId,
+            localPath: file,
+            remoteDirectory: currentPath,
+          },
         });
       } else {
         appendTransferEvent({
@@ -390,6 +407,13 @@ export default function useSftpState({
           state: "success",
           titleKey: "log.event.uploadDone",
           name: fileName,
+          details: {
+            transferId: latestProgress?.transferId ?? null,
+            localPath: file,
+            remoteDirectory: currentPath,
+            transferred: latestProgress?.transferred ?? null,
+            total: latestProgress?.total ?? null,
+          },
         });
       }
     } catch {
@@ -399,6 +423,10 @@ export default function useSftpState({
         state: "failed",
         titleKey: "log.event.uploadFailed",
         name: fileName,
+        details: {
+          localPath: file,
+          remoteDirectory: currentPath,
+        },
       });
     }
   }
@@ -417,6 +445,11 @@ export default function useSftpState({
       state: "started",
       titleKey: "log.event.uploadStart",
       name: uploadLabel,
+      details: {
+        localPaths: normalizedPaths,
+        remoteDirectory: currentPath,
+        totalItems: normalizedPaths.length,
+      },
     });
     setBusyMessage(t("messages.uploading"));
     try {
@@ -435,13 +468,29 @@ export default function useSftpState({
           state: "cancelled",
           titleKey: "log.event.uploadCancelled",
           name: uploadLabel,
+          details: {
+            transferId: latestProgress.transferId,
+            localPaths: normalizedPaths,
+            remoteDirectory: currentPath,
+            completedItems: latestProgress.completedItems,
+            totalItems: latestProgress.totalItems ?? normalizedPaths.length,
+          },
         });
       } else if (latestProgress?.status === "partial_success") {
         appendTransferEvent({
           op: "upload",
           state: "partial_success",
-          titleKey: "log.event.uploadFailed",
+          titleKey: "log.event.uploadPartial",
           name: uploadLabel,
+          failed: latestProgress.failedItems,
+          details: {
+            transferId: latestProgress.transferId,
+            localPaths: normalizedPaths,
+            remoteDirectory: currentPath,
+            completedItems: latestProgress.completedItems,
+            totalItems: latestProgress.totalItems ?? normalizedPaths.length,
+            failedItems: latestProgress.failedItems,
+          },
         });
       } else {
         appendTransferEvent({
@@ -449,6 +498,15 @@ export default function useSftpState({
           state: "success",
           titleKey: "log.event.uploadDone",
           name: uploadLabel,
+          details: {
+            transferId: latestProgress?.transferId ?? null,
+            localPaths: normalizedPaths,
+            remoteDirectory: currentPath,
+            completedItems: latestProgress?.completedItems ?? null,
+            totalItems: latestProgress?.totalItems ?? normalizedPaths.length,
+            transferred: latestProgress?.transferred ?? null,
+            total: latestProgress?.total ?? null,
+          },
         });
       }
     } catch {
@@ -458,6 +516,11 @@ export default function useSftpState({
         state: "failed",
         titleKey: "log.event.uploadFailed",
         name: uploadLabel,
+        details: {
+          localPaths: normalizedPaths,
+          remoteDirectory: currentPath,
+          totalItems: normalizedPaths.length,
+        },
       });
     }
   }
@@ -478,6 +541,12 @@ export default function useSftpState({
       state: "started",
       titleKey: "log.event.downloadStart",
       name: entry.name,
+      details: {
+        remotePath: entry.path,
+        targetDirectory: Array.isArray(target) ? null : target,
+        kind: entry.kind,
+        size: entry.size ?? null,
+      },
     });
     setBusyMessage(t("messages.downloading"));
     try {
@@ -504,6 +573,14 @@ export default function useSftpState({
             latestProgress.totalItems && latestProgress.totalItems > 1
               ? t("log.itemsCount", { count: latestProgress.totalItems })
               : entry.name,
+          details: {
+            transferId: latestProgress.transferId,
+            remotePath: entry.path,
+            targetDirectory: Array.isArray(target) ? null : target,
+            kind: entry.kind,
+            completedItems: latestProgress.completedItems,
+            totalItems: latestProgress.totalItems ?? null,
+          },
         });
       } else if (latestProgress?.status === "partial_success") {
         appendTransferEvent({
@@ -515,6 +592,15 @@ export default function useSftpState({
               ? t("log.itemsCount", { count: latestProgress.totalItems })
               : entry.name,
           failed: latestProgress.failedItems,
+          details: {
+            transferId: latestProgress.transferId,
+            remotePath: entry.path,
+            targetDirectory: Array.isArray(target) ? null : target,
+            kind: entry.kind,
+            completedItems: latestProgress.completedItems,
+            totalItems: latestProgress.totalItems ?? null,
+            failedItems: latestProgress.failedItems,
+          },
         });
       } else {
         appendTransferEvent({
@@ -525,6 +611,21 @@ export default function useSftpState({
             latestProgress?.totalItems && latestProgress.totalItems > 1
               ? t("log.itemsCount", { count: latestProgress.totalItems })
               : entry.name,
+          details: {
+            transferId: latestProgress?.transferId ?? null,
+            remotePath: entry.path,
+            targetDirectory: Array.isArray(target) ? null : target,
+            localPath: Array.isArray(target)
+              ? null
+              : entry.kind === "dir"
+                ? target
+                : joinLocalTargetPath(target, entry.name),
+            kind: entry.kind,
+            completedItems: latestProgress?.completedItems ?? null,
+            totalItems: latestProgress?.totalItems ?? null,
+            transferred: latestProgress?.transferred ?? null,
+            total: latestProgress?.total ?? entry.size ?? null,
+          },
         });
       }
     } catch {
@@ -534,6 +635,12 @@ export default function useSftpState({
         state: "failed",
         titleKey: "log.event.downloadFailed",
         name: entry.name,
+        details: {
+          remotePath: entry.path,
+          targetDirectory: Array.isArray(target) ? null : target,
+          kind: entry.kind,
+          size: entry.size ?? null,
+        },
       });
     }
   }

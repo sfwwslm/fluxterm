@@ -808,6 +808,7 @@ export const zhCnTranslations = {
   "log.event.uploadStart": "开始上传 {name}",
   "log.event.uploadDone": "上传完成 {name}",
   "log.event.uploadFailed": "上传失败 {name}",
+  "log.event.uploadPartial": "上传完成 {name}，其中 {failed} 项失败",
   "log.event.uploadCancelled": "已取消上传 {name}",
   "log.event.downloadStart": "开始下载 {name}",
   "log.event.downloadDone": "下载完成 {name}",

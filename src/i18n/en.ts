@@ -862,6 +862,7 @@ export const enUsTranslations = {
   "log.event.uploadStart": "Upload started: {name}",
   "log.event.uploadDone": "Upload finished: {name}",
   "log.event.uploadFailed": "Upload failed: {name}",
+  "log.event.uploadPartial": "Upload finished: {name}, {failed} items failed",
   "log.event.uploadCancelled": "Upload cancelled: {name}",
   "log.event.downloadStart": "Download started: {name}",
   "log.event.downloadDone": "Download finished: {name}",

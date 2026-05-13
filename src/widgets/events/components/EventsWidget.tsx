@@ -12,7 +12,7 @@ type EventsWidgetProps = {
 };
 
 function isVisibleActivityEvent(event: AppEvent) {
-  return event.scope === "session" || event.type === "sftp.unsupported";
+  return event.scope === "session" || event.scope === "sftp";
 }
 
 function normalizeEventVars(event: AppEvent) {
