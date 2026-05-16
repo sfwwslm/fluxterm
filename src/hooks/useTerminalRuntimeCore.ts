@@ -231,6 +231,12 @@ type PromptParseState = {
   carry: string;
 };
 
+type MacCapsImeCompositionState = {
+  composing: boolean;
+  typedText: string;
+  capsLockCommitPending: boolean;
+};
+
 /** 终端链接点击后的临时菜单状态。 */
 type LinkMenuState = {
   sessionId: string;
@@ -315,6 +321,27 @@ function stripAnsiForPromptParsing(text: string) {
     .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
     .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
     .replace(/\u001b[@-_]/g, "");
+}
+
+/** 判断按键是否是中文输入法组合态下需要保留的拉丁字母输入。 */
+function isTrackableMacCapsImeKey(event: KeyboardEvent) {
+  return (
+    event.type === "keydown" &&
+    event.isComposing &&
+    !event.repeat &&
+    /^[A-Za-z]$/.test(event.key)
+  );
+}
+
+/** 判断 macOS CapsLock 结束中文输入法组合时提交的文本是否包含异常插入空格。 */
+function shouldNormalizeMacCapsImeCommit(data: string, typedText: string) {
+  return (
+    typedText.length > 1 &&
+    /^[A-Za-z]+$/.test(typedText) &&
+    /^[A-Za-z ]+$/.test(data) &&
+    data.includes(" ") &&
+    data.replace(/ /g, "") === typedText
+  );
 }
 
 /**
@@ -500,6 +527,9 @@ export default function useTerminalRuntime({
   const commandCaptureMetaRef = useRef<Record<string, CommandCaptureMeta>>({});
   const commandCaptureTimersRef = useRef<Record<string, number>>({});
   const lastBellAtBySessionRef = useRef<Record<string, number>>({});
+  const macCapsImeCompositionRef = useRef<
+    Record<string, MacCapsImeCompositionState>
+  >({});
   const bellAudioContextRef = useRef<AudioContext | null>(null);
   const activeCommandCaptureBySessionRef = useRef<
     Record<string, CommandHistoryLiveCapture>
@@ -1478,13 +1508,60 @@ export default function useTerminalRuntime({
       }),
     );
 
+    const handleCompositionStart = () => {
+      if (!isMacOS()) return;
+      macCapsImeCompositionRef.current[sessionId] = {
+        composing: true,
+        typedText: "",
+        capsLockCommitPending: false,
+      };
+    };
+    const handleCompositionEnd = () => {
+      if (!isMacOS()) return;
+      const state = macCapsImeCompositionRef.current[sessionId];
+      if (!state) return;
+      state.composing = false;
+    };
+    host.addEventListener("compositionstart", handleCompositionStart, true);
+    host.addEventListener("compositionend", handleCompositionEnd, true);
+    bundle.disposables.push({
+      dispose: () => {
+        host.removeEventListener(
+          "compositionstart",
+          handleCompositionStart,
+          true,
+        );
+        host.removeEventListener("compositionend", handleCompositionEnd, true);
+        delete macCapsImeCompositionRef.current[sessionId];
+      },
+    });
+
     term.attachCustomKeyEventHandler((event) => {
-      // 拦截 macOS CapsLock 切换输入法时触发的 Unidentified 事件，防止 IME 内容重复提交。
-      if (
+      const shouldBlockMacCapsImeEvent =
         isMacOS() &&
         (event.key === "CapsLock" ||
-          (event.key === "Unidentified" && event.isComposing))
-      ) {
+          (event.key === "Unidentified" && event.isComposing));
+      if (isMacOS() && isTrackableMacCapsImeKey(event)) {
+        const state = macCapsImeCompositionRef.current[sessionId] ?? {
+          composing: true,
+          typedText: "",
+          capsLockCommitPending: false,
+        };
+        state.typedText += event.key;
+        macCapsImeCompositionRef.current[sessionId] = state;
+      }
+      if (shouldBlockMacCapsImeEvent) {
+        const state = macCapsImeCompositionRef.current[sessionId] ?? {
+          composing: event.isComposing,
+          typedText: "",
+          capsLockCommitPending: false,
+        };
+        state.capsLockCommitPending = true;
+        macCapsImeCompositionRef.current[sessionId] = state;
+      }
+
+      // 拦截 macOS CapsLock 切换输入法时触发的 Unidentified 事件，防止 IME 内容重复提交。
+      if (shouldBlockMacCapsImeEvent) {
         return false;
       }
 
@@ -1522,6 +1599,19 @@ export default function useTerminalRuntime({
 
     bundle.disposables.push(
       term.onData((data) => {
+        const macCapsImeState = macCapsImeCompositionRef.current[sessionId];
+        const effectiveData =
+          isMacOS() &&
+          macCapsImeState?.capsLockCommitPending &&
+          shouldNormalizeMacCapsImeCommit(data, macCapsImeState.typedText)
+            ? macCapsImeState.typedText
+            : data;
+        if (
+          macCapsImeState &&
+          (macCapsImeState.capsLockCommitPending || !macCapsImeState.composing)
+        ) {
+          delete macCapsImeCompositionRef.current[sessionId];
+        }
         restoreCursorAfterStreamingOutput(sessionId);
         // 聚焦行只用于“查看/复制这一行”。
         // 一旦用户继续键盘输入，就恢复提示符光标闪烁，表示输入焦点仍在 shell prompt。
@@ -1529,7 +1619,8 @@ export default function useTerminalRuntime({
           syncCursorBlink(sessionId, true);
         }
         const state = sessionStatesRef.current[sessionId];
-        const requestReconnect = data.includes("\r") || data.includes("\n");
+        const requestReconnect =
+          effectiveData.includes("\r") || effectiveData.includes("\n");
         if (state === "disconnected") {
           if (requestReconnect) {
             if (handlersRef.current.isLocalSession(sessionId)) {
@@ -1557,13 +1648,16 @@ export default function useTerminalRuntime({
           !!activeAutocomplete?.items.length &&
           !!autocompleteInput.trim() &&
           !ensureCommandCaptureMeta(sessionId).waitingForNextPrompt;
-        if (autocompleteReady && (data === "\u001b[A" || data === "\u001b[B")) {
+        if (
+          autocompleteReady &&
+          (effectiveData === "\u001b[A" || effectiveData === "\u001b[B")
+        ) {
           setActiveAutocomplete((prev) => {
             if (!prev || prev.sessionId !== sessionId || !prev.items.length) {
               return prev;
             }
             let nextIndex: number;
-            if (data === "\u001b[A") {
+            if (effectiveData === "\u001b[A") {
               nextIndex =
                 prev.selectedIndex < 0
                   ? prev.items.length - 1
@@ -1579,15 +1673,18 @@ export default function useTerminalRuntime({
           });
           return;
         }
-        if (autocompleteReady && (data === "\u001b[C" || data === "\u001b[D")) {
+        if (
+          autocompleteReady &&
+          (effectiveData === "\u001b[C" || effectiveData === "\u001b[D")
+        ) {
           setActiveAutocomplete(null);
           handlersRef.current
-            .sendSessionInput(sessionId, { kind: "text", data })
+            .sendSessionInput(sessionId, { kind: "text", data: effectiveData })
             .catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
           return;
         }
-        if (data === "\r" || data === "\n") {
+        if (effectiveData === "\r" || effectiveData === "\n") {
           if (
             (activeAutocomplete?.selectedIndex ?? -1) >= 0 &&
             autocompleteReady
@@ -1611,7 +1708,10 @@ export default function useTerminalRuntime({
           });
           const currentInput =
             autocompleteInputBufferRef.current[sessionId] ?? "";
-          const nextInput = updateCommandInputBuffer(currentInput, data).buffer;
+          const nextInput = updateCommandInputBuffer(
+            currentInput,
+            effectiveData,
+          ).buffer;
           refreshAutocomplete(
             sessionId,
             nextInput,
@@ -1622,24 +1722,27 @@ export default function useTerminalRuntime({
             ),
           );
           handlersRef.current
-            .sendSessionInput(sessionId, { kind: "text", data })
+            .sendSessionInput(sessionId, { kind: "text", data: effectiveData })
             .catch(() => {});
           return;
         }
-        if (data === "\u001b") {
+        if (effectiveData === "\u001b") {
           setActiveAutocomplete((prev) =>
             prev?.sessionId === sessionId ? null : prev,
           );
           // Esc 既要关闭联想面板，也必须透传到 PTY，保证 vim 等 TUI 能正确退出插入模式。
           handlersRef.current
-            .sendSessionInput(sessionId, { kind: "text", data })
+            .sendSessionInput(sessionId, { kind: "text", data: effectiveData })
             .catch(() => {});
           scheduleCommandCaptureRefresh(sessionId);
           return;
         }
         const currentInput =
           autocompleteInputBufferRef.current[sessionId] ?? "";
-        const nextInput = updateCommandInputBuffer(currentInput, data).buffer;
+        const nextInput = updateCommandInputBuffer(
+          currentInput,
+          effectiveData,
+        ).buffer;
         refreshAutocomplete(
           sessionId,
           nextInput,
@@ -1650,7 +1753,7 @@ export default function useTerminalRuntime({
           ),
         );
         handlersRef.current
-          .sendSessionInput(sessionId, { kind: "text", data })
+          .sendSessionInput(sessionId, { kind: "text", data: effectiveData })
           .catch(() => {});
         scheduleCommandCaptureRefresh(sessionId);
       }),
