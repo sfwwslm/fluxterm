@@ -50,6 +50,10 @@ const TERMINAL_EOF_EXIT_GRACE_MS = 1500;
 
 type TerminalSize = { cols: number; rows: number };
 
+type ClosePaneSessionOptions = {
+  suppressDisconnectBanner?: boolean;
+};
+
 function markTerminalEofRequested(
   requestAt: Record<string, number>,
   sessionId: string,
@@ -150,7 +154,11 @@ type UseSessionStateResult = {
     targetSessionId: string,
   ) => void;
   splitActivePane: (axis: "horizontal" | "vertical") => Promise<void>;
-  closePaneSession: (paneId: string, sessionId: string) => Promise<void>;
+  closePaneSession: (
+    paneId: string,
+    sessionId: string,
+    options?: ClosePaneSessionOptions,
+  ) => Promise<void>;
   resizePaneSplit: (paneId: string, ratio: number) => void;
   closeOtherSessionsInPane: (
     paneId: string,
@@ -226,6 +234,9 @@ export default function useSessionState({
   const reconnectTimersRef = useRef<Record<string, number>>({});
   const reconnectAttemptsRef = useRef<Record<string, number>>({});
   const sessionCloseHandledRef = useRef<Record<string, boolean>>({});
+  const suppressDisconnectBannerSessionRef = useRef<Record<string, boolean>>(
+    {},
+  );
   const terminalEofRequestAtRef = useRef<Record<string, number>>({});
   const errorDialogShownRef = useRef<Record<string, boolean>>({});
   // 按 profile 记录待确认的 Host Key 重连链路。
@@ -535,6 +546,7 @@ export default function useSessionState({
 
   function handleSessionDisconnected(sessionId: string) {
     if (sessionCloseHandledRef.current[sessionId]) return;
+    if (suppressDisconnectBannerSessionRef.current[sessionId]) return;
     const session = sessionsRef.current.find(
       (item) => item.sessionId === sessionId,
     );
@@ -944,10 +956,21 @@ export default function useSessionState({
     return pane?.sessionIds ?? [];
   }
 
-  async function closePaneSession(paneId: string, sessionId: string) {
+  async function closePaneSession(
+    paneId: string,
+    sessionId: string,
+    options?: ClosePaneSessionOptions,
+  ) {
     const paneSessions = getPaneSessions(paneId);
     if (!paneSessions.includes(sessionId)) return;
-    await disconnectSession(sessionId);
+    if (options?.suppressDisconnectBanner) {
+      suppressDisconnectBannerSessionRef.current[sessionId] = true;
+    }
+    try {
+      await disconnectSession(sessionId);
+    } finally {
+      delete suppressDisconnectBannerSessionRef.current[sessionId];
+    }
   }
 
   async function closeOtherSessionsInPane(paneId: string, sessionId: string) {

@@ -99,7 +99,11 @@ type TerminalWidgetProps = {
   onReconnectSession: (sessionId: string) => Promise<void>;
   onSaveSession: (sessionId: string) => Promise<void>;
   onSplitActivePane: (axis: "horizontal" | "vertical") => Promise<void>;
-  onClosePaneSession: (paneId: string, sessionId: string) => Promise<void>;
+  onClosePaneSession: (
+    paneId: string,
+    sessionId: string,
+    options?: { suppressDisconnectBanner?: boolean },
+  ) => Promise<void>;
   onResizePaneSplit: (paneId: string, ratio: number) => void;
   onCloseOtherSessionsInPane: (
     paneId: string,
@@ -312,11 +316,11 @@ export default function TerminalWidget({
             onSwitchSession={onSwitchSession}
             onReorderPaneSessions={onReorderPaneSessions}
             onOpenSessionMenu={openSessionMenu}
-            onClosePaneSession={(paneId, sessionId) => {
+            onClosePaneSession={(paneId, sessionId, options) => {
               if (activeSessionId !== sessionId) {
                 onSwitchSession(sessionId);
               }
-              onClosePaneSession(paneId, sessionId).catch(() => {});
+              onClosePaneSession(paneId, sessionId, options).catch(() => {});
             }}
             onResizePaneSplit={onResizePaneSplit}
             onPaneMouseDown={(sessionId, event) => {

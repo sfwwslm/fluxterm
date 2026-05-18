@@ -38,7 +38,11 @@ type TerminalPaneTreeProps = {
     paneId: string;
     sessionId: string;
   }) => void;
-  onClosePaneSession: (paneId: string, sessionId: string) => void;
+  onClosePaneSession: (
+    paneId: string,
+    sessionId: string,
+    options?: { suppressDisconnectBanner?: boolean },
+  ) => void;
   onResizePaneSplit: (paneId: string, ratio: number) => void;
   onPaneMouseDown: (
     sessionId: string,
@@ -410,7 +414,9 @@ function LeafPaneView({
                       aria-label="close-pane-session"
                       onClick={(event) => {
                         event.stopPropagation();
-                        onClosePaneSession(node.paneId, sessionId);
+                        onClosePaneSession(node.paneId, sessionId, {
+                          suppressDisconnectBanner: true,
+                        });
                       }}
                     >
                       <FiX />
