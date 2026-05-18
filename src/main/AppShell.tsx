@@ -613,6 +613,8 @@ export default function AppShell() {
   const [rdpProfileModalProfileId, setRdpProfileModalProfileId] = useState<
     string | null
   >(null);
+  const [rdpProfileModalDefaultGroup, setRdpProfileModalDefaultGroup] =
+    useState<string | null>(null);
   const [rdpProfiles, setRdpProfiles] = useState<RdpProfile[]>([]);
   const [rdpGroups, setRdpGroups] = useState<string[]>([]);
   const [activeRdpProfileId, setActiveRdpProfileId] = useState<string | null>(
@@ -975,14 +977,19 @@ export default function AppShell() {
     });
   }, [floatingWindowAppearanceReady, shouldDeferFloatingWindowReveal]);
 
-  const openNewProfile = useCallback(() => {
-    setProfileModalMode("new");
-    setProfileDraft({
-      ...defaultProfile,
-      id: "",
-    });
-    setProfileModalOpen(true);
-  }, [defaultProfile]);
+  const openNewProfile = useCallback(
+    (defaultGroup?: string | null) => {
+      const normalizedDefaultGroup = defaultGroup?.trim() ?? "";
+      setProfileModalMode("new");
+      setProfileDraft({
+        ...defaultProfile,
+        id: "",
+        tags: normalizedDefaultGroup ? [normalizedDefaultGroup] : null,
+      });
+      setProfileModalOpen(true);
+    },
+    [defaultProfile],
+  );
 
   function closeProfileModal() {
     setProfileModalOpen(false);
@@ -1007,9 +1014,10 @@ export default function AppShell() {
     return next;
   }, []);
 
-  const openNewRdpProfileModal = useCallback(() => {
+  const openNewRdpProfileModal = useCallback((defaultGroup?: string | null) => {
     setRdpProfileModalMode("new");
     setRdpProfileModalProfileId(null);
+    setRdpProfileModalDefaultGroup(defaultGroup?.trim() || null);
     setRdpProfileModalOpen(true);
   }, []);
 
@@ -1017,12 +1025,14 @@ export default function AppShell() {
     setActiveRdpProfileId(profile.id);
     setRdpProfileModalMode("edit");
     setRdpProfileModalProfileId(profile.id);
+    setRdpProfileModalDefaultGroup(null);
     setRdpProfileModalOpen(true);
   }, []);
 
   function closeRdpProfileModal() {
     setRdpProfileModalOpen(false);
     setRdpProfileModalProfileId(null);
+    setRdpProfileModalDefaultGroup(null);
   }
 
   useEffect(() => {
@@ -3747,6 +3757,7 @@ export default function AppShell() {
               ) ?? null)
             : null
         }
+        defaultGroup={rdpProfileModalDefaultGroup}
         groups={rdpGroups}
         onClose={closeRdpProfileModal}
         onProfilesChange={() => refreshRdpProfiles().then(() => {})}

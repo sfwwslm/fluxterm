@@ -76,7 +76,7 @@ type buildWidgetsProps = {
   onConnectProfile: (profileInput: HostProfile) => Promise<void>;
   onCancelSshConnectProfile: (profileId: string) => Promise<void>;
   onConnectRdpProfile: (profile: RdpProfile) => Promise<void>;
-  onOpenNewRdpProfile: () => void;
+  onOpenNewRdpProfile: (defaultGroup?: string | null) => void;
   onOpenEditRdpProfile: (profile: RdpProfile) => void;
   onRemoveRdpProfile: (profile: RdpProfile) => Promise<void>;
   onAddRdpGroup: (groupName: string) => boolean;
@@ -86,7 +86,7 @@ type buildWidgetsProps = {
     profileId: string,
     targetGroup: string | null,
   ) => Promise<boolean>;
-  onOpenNewProfile: () => void;
+  onOpenNewProfile: (defaultGroup?: string | null) => void;
   onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
   onRemoveProfile: (profile: HostProfile) => void;

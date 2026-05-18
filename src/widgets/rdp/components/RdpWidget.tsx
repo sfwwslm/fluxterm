@@ -32,7 +32,7 @@ type RdpWidgetProps = {
   connectingProfiles: ConnectingProfileMap;
   onPick: (id: string) => void;
   onConnectProfile: (profile: RdpProfile) => Promise<void>;
-  onOpenNewProfile: () => void;
+  onOpenNewProfile: (defaultGroup?: string | null) => void;
   onOpenEditProfile: (profile: RdpProfile) => void;
   onRemoveProfile: (profile: RdpProfile) => Promise<void>;
   onAddGroup: (groupName: string) => boolean;
@@ -344,7 +344,7 @@ export default function RdpWidget({
         disabled: busy,
         onClick: () => {
           setMenu(null);
-          onOpenNewProfile();
+          onOpenNewProfile(groupLabel);
         },
       },
       {

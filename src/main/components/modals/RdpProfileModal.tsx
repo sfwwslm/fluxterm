@@ -19,6 +19,7 @@ type RdpProfileModalProps = {
   open: boolean;
   mode: "new" | "edit";
   initialProfile?: RdpProfile | null;
+  defaultGroup?: string | null;
   groups: string[];
   onClose: () => void;
   onProfilesChange?: () => Promise<void> | void;
@@ -220,6 +221,7 @@ export default function RdpProfileModal({
   open,
   mode,
   initialProfile = null,
+  defaultGroup = null,
   groups,
   onClose,
   onProfilesChange,
@@ -245,8 +247,12 @@ export default function RdpProfileModal({
         ),
       };
     }
-    return buildDefaultProfile();
-  }, [initialProfile, mode]);
+    const normalizedDefaultGroup = defaultGroup?.trim() ?? "";
+    return {
+      ...buildDefaultProfile(),
+      tags: normalizedDefaultGroup ? [normalizedDefaultGroup] : null,
+    };
+  }, [defaultGroup, initialProfile, mode]);
 
   useEffect(() => {
     if (!open) return;

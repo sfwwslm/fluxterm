@@ -47,7 +47,7 @@ type HostWidgetProps = {
   onPick: (id: string) => void;
   onConnectProfile: (profile: HostProfile) => void;
   onCancelSshConnectProfile: (profileId: string) => void;
-  onOpenNewProfile: () => void;
+  onOpenNewProfile: (defaultGroup?: string | null) => void;
   onImportOpenSshConfig: () => void;
   onOpenEditProfile: (profile: HostProfile) => void;
   onRemoveProfile: (profile: HostProfile) => void;
@@ -399,7 +399,7 @@ export default function HostWidget({
         disabled: false,
         onClick: () => {
           setMenu(null);
-          onOpenNewProfile();
+          onOpenNewProfile(groupLabel);
         },
       },
       {
